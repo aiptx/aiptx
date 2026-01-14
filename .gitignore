@@ -1,0 +1,85 @@
+# Environment and Secrets
+.env
+.env.*
+!.env.example
+.secrets.baseline
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Virtual Environments
+.venv/
+venv/
+ENV/
+env/
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.py,cover
+.hypothesis/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+
+# Logs & Runtime
+*.log
+*.pid
+*.seed
+*.pid.lock
+logs/
+
+# Build artifacts
+*.manifest
+*.spec
+
+# Local data
+aipt_runs/
+reports/
+*.db
+*.sqlite3
+
+# Jupyter (if used)
+.ipynb_checkpoints/
+results/

@@ -1,0 +1,126 @@
+# AIPT v2 Pre-commit Configuration
+# ==================================
+#
+# Pre-commit hooks for code quality and security.
+#
+# Installation:
+#   pip install pre-commit
+#   pre-commit install
+#
+# Manual run:
+#   pre-commit run --all-files
+#
+
+repos:
+  # ============== General Checks ==============
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        name: Trim trailing whitespace
+      - id: end-of-file-fixer
+        name: Fix end of files
+      - id: check-yaml
+        name: Check YAML syntax
+      - id: check-json
+        name: Check JSON syntax
+      - id: check-toml
+        name: Check TOML syntax
+      - id: check-added-large-files
+        name: Check for large files
+        args: ['--maxkb=1000']
+      - id: check-merge-conflict
+        name: Check for merge conflicts
+      - id: check-case-conflict
+        name: Check for case conflicts
+      - id: detect-private-key
+        name: Detect private keys
+      - id: debug-statements
+        name: Check for debug statements
+
+  # ============== Python Code Formatting ==============
+  - repo: https://github.com/psf/black
+    rev: 24.3.0
+    hooks:
+      - id: black
+        name: Black formatter
+        language_version: python3
+        args: ['--line-length=100']
+
+  # ============== Import Sorting ==============
+  - repo: https://github.com/pycqa/isort
+    rev: 5.13.2
+    hooks:
+      - id: isort
+        name: Sort imports
+        args: ['--profile=black', '--line-length=100']
+
+  # ============== Linting with Ruff ==============
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.4
+    hooks:
+      - id: ruff
+        name: Ruff linter
+        args: ['--fix', '--exit-non-zero-on-fix']
+      - id: ruff-format
+        name: Ruff formatter
+
+  # ============== Type Checking ==============
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.9.0
+    hooks:
+      - id: mypy
+        name: MyPy type checker
+        additional_dependencies:
+          - pydantic>=2.0
+          - fastapi>=0.100
+          - types-requests
+        args: ['--ignore-missing-imports', '--no-error-summary']
+        exclude: ^tests/
+
+  # ============== Security Scanning ==============
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.7.8
+    hooks:
+      - id: bandit
+        name: Bandit security scanner
+        args: ['-c', 'pyproject.toml', '-r', '-ll']
+        additional_dependencies: ['bandit[toml]']
+        exclude: ^tests/
+
+  # ============== Secrets Detection ==============
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        name: Detect secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: (\.env\.example|requirements.*\.txt|poetry\.lock)$
+
+  # ============== Commit Message ==============
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v3.21.3
+    hooks:
+      - id: commitizen
+        name: Check commit message
+        stages: [commit-msg]
+
+# Configuration for specific tools
+default_language_version:
+  python: python3.11
+
+# Files to exclude globally
+exclude: |
+  (?x)^(
+    \.git/|
+    \.venv/|
+    venv/|
+    __pycache__/|
+    \.mypy_cache/|
+    \.pytest_cache/|
+    \.ruff_cache/|
+    dist/|
+    build/|
+    .*\.egg-info/|
+    node_modules/
+  )$

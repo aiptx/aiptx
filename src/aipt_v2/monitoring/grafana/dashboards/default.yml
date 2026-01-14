@@ -1,0 +1,17 @@
+# =============================================================================
+# Grafana Dashboard Provisioning
+# =============================================================================
+
+apiVersion: 1
+
+providers:
+  - name: 'AIPT Dashboards'
+    orgId: 1
+    folder: ''
+    folderUid: ''
+    type: file
+    disableDeletion: false
+    editable: true
+    updateIntervalSeconds: 10
+    options:
+      path: /etc/grafana/provisioning/dashboards

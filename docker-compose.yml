@@ -1,0 +1,234 @@
+# =============================================================================
+# AIPT v2 Docker Compose Configuration
+# =============================================================================
+#
+# Usage:
+#   Production:  docker-compose up -d
+#   Development: docker-compose --profile dev up -d
+#   With tools:  docker-compose --profile tools up -d
+#   Full stack:  docker-compose --profile dev --profile tools up -d
+#
+# Services:
+#   - aipt-api: Main REST API server
+#   - aipt-db: PostgreSQL database
+#   - aipt-redis: Redis for caching and rate limiting
+#   - aipt-worker: Background task worker (optional)
+# =============================================================================
+
+version: "3.9"
+
+services:
+  # ===========================================================================
+  # Core Services
+  # ===========================================================================
+
+  aipt-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    image: aipt-v2:latest
+    container_name: aipt-api
+    restart: unless-stopped
+    ports:
+      - "${AIPT_API_PORT:-8000}:8000"
+    environment:
+      # Database
+      - DATABASE_URL=postgresql://aipt:${POSTGRES_PASSWORD:-aipt_secret}@aipt-db:5432/aipt
+      # Redis
+      - REDIS_URL=redis://aipt-redis:6379/0
+      # Logging
+      - AIPT_LOG_LEVEL=${AIPT_LOG_LEVEL:-INFO}
+      - AIPT_LOG_FORMAT=${AIPT_LOG_FORMAT:-json}
+      # Security
+      - AIPT_CORS_ORIGINS=${AIPT_CORS_ORIGINS:-http://localhost:3000}
+      # LLM Configuration
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - LLM_API_KEY=${LLM_API_KEY:-}
+      # Scanner Configuration (optional)
+      - ACUNETIX_URL=${ACUNETIX_URL:-}
+      - ACUNETIX_API_KEY=${ACUNETIX_API_KEY:-}
+      - BURP_URL=${BURP_URL:-}
+      - BURP_API_KEY=${BURP_API_KEY:-}
+    volumes:
+      - aipt-data:/app/data
+      - aipt-reports:/app/reports
+      - aipt-logs:/app/logs
+    depends_on:
+      aipt-db:
+        condition: service_healthy
+      aipt-redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - aipt-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.aipt.rule=Host(`aipt.localhost`)"
+      - "traefik.http.services.aipt.loadbalancer.server.port=8000"
+
+  aipt-db:
+    image: postgres:15-alpine
+    container_name: aipt-db
+    restart: unless-stopped
+    environment:
+      - POSTGRES_USER=aipt
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-aipt_secret}
+      - POSTGRES_DB=aipt
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    volumes:
+      - aipt-postgres:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U aipt -d aipt"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aipt-network
+
+  aipt-redis:
+    image: redis:7-alpine
+    container_name: aipt-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - aipt-redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aipt-network
+
+  # ===========================================================================
+  # Development Services (--profile dev)
+  # ===========================================================================
+
+  aipt-api-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: aipt-api-dev
+    profiles: ["dev"]
+    ports:
+      - "${AIPT_API_PORT:-8000}:8000"
+    environment:
+      - DATABASE_URL=postgresql://aipt:${POSTGRES_PASSWORD:-aipt_secret}@aipt-db:5432/aipt
+      - REDIS_URL=redis://aipt-redis:6379/0
+      - AIPT_LOG_LEVEL=DEBUG
+      - AIPT_LOG_FORMAT=console
+      - AIPT_CORS_ORIGINS=*
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - .:/app:cached
+      - aipt-data:/app/data
+      - aipt-reports:/app/reports
+    depends_on:
+      - aipt-db
+      - aipt-redis
+    networks:
+      - aipt-network
+
+  # ===========================================================================
+  # Background Worker (--profile worker)
+  # ===========================================================================
+
+  aipt-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    container_name: aipt-worker
+    profiles: ["worker"]
+    restart: unless-stopped
+    command: ["python", "-m", "aipt_v2.worker"]
+    environment:
+      - DATABASE_URL=postgresql://aipt:${POSTGRES_PASSWORD:-aipt_secret}@aipt-db:5432/aipt
+      - REDIS_URL=redis://aipt-redis:6379/0
+      - AIPT_LOG_LEVEL=${AIPT_LOG_LEVEL:-INFO}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+    volumes:
+      - aipt-data:/app/data
+      - aipt-reports:/app/reports
+    depends_on:
+      - aipt-db
+      - aipt-redis
+    networks:
+      - aipt-network
+
+  # ===========================================================================
+  # Monitoring (--profile monitoring)
+  # ===========================================================================
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: aipt-prometheus
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - aipt-prometheus:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.enable-lifecycle'
+    networks:
+      - aipt-network
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: aipt-grafana
+    profiles: ["monitoring"]
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-admin}
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - aipt-grafana:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./monitoring/grafana/datasources:/etc/grafana/provisioning/datasources:ro
+    depends_on:
+      - prometheus
+    networks:
+      - aipt-network
+
+# =============================================================================
+# Networks
+# =============================================================================
+networks:
+  aipt-network:
+    driver: bridge
+    name: aipt-network
+
+# =============================================================================
+# Volumes
+# =============================================================================
+volumes:
+  aipt-postgres:
+    name: aipt-postgres
+  aipt-redis:
+    name: aipt-redis
+  aipt-data:
+    name: aipt-data
+  aipt-reports:
+    name: aipt-reports
+  aipt-logs:
+    name: aipt-logs
+  aipt-prometheus:
+    name: aipt-prometheus
+  aipt-grafana:
+    name: aipt-grafana
