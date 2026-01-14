@@ -384,29 +384,66 @@ def run_interactive_mode():
 
     console = Console()
 
+    # ASCII Art Logo
+    logo = """
+[bold cyan]     █████╗ ██╗██████╗ ████████╗██╗  ██╗[/bold cyan]
+[bold cyan]    ██╔══██╗██║██╔══██╗╚══██╔══╝╚██╗██╔╝[/bold cyan]
+[bold blue]    ███████║██║██████╔╝   ██║    ╚███╔╝ [/bold blue]
+[bold blue]    ██╔══██║██║██╔═══╝    ██║    ██╔██╗ [/bold blue]
+[bold magenta]    ██║  ██║██║██║        ██║   ██╔╝ ██╗[/bold magenta]
+[bold magenta]    ╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝[/bold magenta]
+"""
+
     # Show welcome banner
     console.print()
-    console.print(Panel(
-        "[bold cyan]AIPTX Interactive Shell[/bold cyan]\n\n"
-        "AI-Powered Penetration Testing Framework\n\n"
-        "[bold]Commands:[/bold]\n"
-        "  [green]scan[/green] <target>      - Run security scan\n"
-        "  [green]ai[/green] <command>       - AI security testing\n"
-        "  [green]vps[/green] <command>      - VPS management\n"
-        "  [green]setup[/green]              - Configure AIPTX\n"
-        "  [green]status[/green]             - Show configuration\n"
-        "  [green]help[/green]               - Show all commands\n"
-        "  [green]exit[/green] / [green]quit[/green]        - Exit AIPTX\n\n"
-        "[dim]Type a command or 'help' for more options[/dim]",
-        title="🚀 AIPTX v" + __version__,
-        border_style="cyan",
-    ))
+    console.print(logo)
+    console.print("[bold white]         AI-Powered Penetration Testing Framework[/bold white]")
+    console.print(f"[dim]                      v{__version__} • [link=https://aiptx.io]aiptx.io[/link][/dim]")
+    console.print()
+
+    # Stylish separator
+    console.print("[dim cyan]" + "━" * 60 + "[/dim cyan]")
+    console.print()
+
+    # Quick commands in a nice table format
+    commands_table = Table(
+        show_header=False,
+        box=box.SIMPLE,
+        padding=(0, 2),
+        collapse_padding=True,
+    )
+    commands_table.add_column("Command", style="bold green", width=18)
+    commands_table.add_column("Description", style="white")
+
+    commands_table.add_row("scan <target>", "🔍 Run security scan")
+    commands_table.add_row("scan <target> --ai", "🤖 AI-guided intelligent scanning")
+    commands_table.add_row("scan <target> --full", "🎯 Comprehensive assessment")
+    commands_table.add_row("ai <command>", "🧠 AI security testing")
+    commands_table.add_row("vps <command>", "☁️  Remote VPS execution")
+    commands_table.add_row("setup", "⚙️  Configure AIPTX")
+    commands_table.add_row("status", "📊 Show configuration")
+    commands_table.add_row("help", "❓ Show all commands")
+    commands_table.add_row("exit", "👋 Exit AIPTX")
+
+    console.print(commands_table)
+    console.print()
+    console.print("[dim cyan]" + "━" * 60 + "[/dim cyan]")
+    console.print()
+    console.print("[dim]💡 Tip: Type [bold green]scan example.com --ai[/bold green] to start AI-guided scanning[/dim]")
+    console.print("[dim]🌐 Docs: [link=https://aiptx.io/docs]https://aiptx.io/docs[/link][/dim]")
+    console.print()
 
     # Check configuration status
     if not is_configured():
+        console.print(Panel(
+            "[yellow]⚠️  AIPTX is not configured yet![/yellow]\n\n"
+            "Run [bold green]setup[/bold green] to configure your API keys and scanners.\n"
+            "Or set environment variable: [dim]export ANTHROPIC_API_KEY=your-key[/dim]",
+            border_style="yellow",
+            title="[bold yellow]Setup Required[/bold yellow]",
+            title_align="left",
+        ))
         console.print()
-        console.print("[yellow]⚠ Not configured.[/yellow] Run [bold green]setup[/bold green] to configure AIPTX.")
-    console.print()
 
     # Interactive loop
     while True:
@@ -427,8 +464,8 @@ def run_interactive_mode():
                     while select.select([sys.stdin], [], [], 0)[0]:
                         sys.stdin.read(1)
 
-            # Get user input
-            user_input = Prompt.ask("[bold cyan]aiptx[/bold cyan]", default="").strip()
+            # Get user input with stylish prompt
+            user_input = Prompt.ask("[bold cyan]aiptx[/bold cyan] [dim]→[/dim]", default="").strip()
 
             if not user_input:
                 continue
@@ -440,7 +477,10 @@ def run_interactive_mode():
 
             # Handle commands
             if cmd in ("exit", "quit", "q"):
-                console.print("[dim]Goodbye![/dim]")
+                console.print()
+                console.print("[bold cyan]Thanks for using AIPTX![/bold cyan] 🚀")
+                console.print("[dim]Visit [link=https://aiptx.io]aiptx.io[/link] for docs & updates[/dim]")
+                console.print()
                 break
 
             elif cmd == "help":
