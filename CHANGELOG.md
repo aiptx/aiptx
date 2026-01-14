@@ -5,6 +5,27 @@ All notable changes to AIPTX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.3] - 2025-01-14
+
+### Improved
+- **First-run user experience** - Clean, helpful guidance for new users
+  - Removed noisy urllib3/deprecation warnings
+  - Default log level changed from INFO to WARNING for cleaner output
+  - Beautiful Rich panels with clear setup instructions
+  - First-run detection shows welcome message with quick start guide
+
+### Fixed
+- **Configuration errors** - No longer truncated or cryptic
+  - Full error messages with actionable fix instructions
+  - Clear guidance to run `aiptx setup` or set environment variables
+  - Proper Rich formatting for all error displays
+
+### Changed
+- **CLI output** - Professional, clean interface
+  - `aiptx scan` shows elegant progress and completion messages
+  - `aiptx status` displays configuration tables without log noise
+  - Verbose mode (`-v`, `-vv`) enables INFO/DEBUG logging when needed
+
 ## [2.0.1] - 2024-12-16
 
 ### Added
