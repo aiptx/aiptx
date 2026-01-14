@@ -1,12 +1,22 @@
+<div align="center">
+
 # AIPTX - AI-Powered Penetration Testing Framework
 
-[![PyPI version](https://badge.fury.io/py/aiptx.svg)](https://badge.fury.io/py/aiptx)
-[![Downloads](https://static.pepy.tech/badge/aiptx)](https://pepy.tech/project/aiptx)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+### 🌐 **[aiptx.io](https://aiptx.io)** — Official Website
 
-> **AI-Powered Security Assessment & Vulnerability Discovery Platform**
+[![Website](https://img.shields.io/badge/Website-aiptx.io-blue?style=for-the-badge&logo=safari)](https://aiptx.io)
+[![PyPI version](https://img.shields.io/pypi/v/aiptx?style=for-the-badge&logo=pypi&logoColor=white)](https://pypi.org/project/aiptx/)
+[![Downloads](https://img.shields.io/pepy/dt/aiptx?style=for-the-badge&logo=python&logoColor=white)](https://pepy.tech/project/aiptx)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg?style=for-the-badge&logo=python&logoColor=white)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=for-the-badge)](https://opensource.org/licenses/MIT)
+
+**AI-Powered Security Assessment & Vulnerability Discovery Platform**
+
+[Getting Started](https://aiptx.io/docs) • [Documentation](https://aiptx.io/docs) • [API Reference](https://aiptx.io/api) • [Community](https://aiptx.io/community)
+
+</div>
+
+---
 
 **AIPTX** is an intelligent penetration testing framework that leverages Large Language Models (LLMs) to autonomously conduct security assessments. It orchestrates comprehensive vulnerability discovery through AI-guided decision making, smart prioritization, and automated reporting.
 
@@ -196,12 +206,19 @@ MIT License — Free for commercial and personal use.
 
 ## Links
 
-- [PyPI Package](https://pypi.org/project/aiptx/)
-- [GitHub Repository](https://github.com/satyamrastogi/aiptx)
-- [Changelog](https://github.com/satyamrastogi/aiptx/blob/main/CHANGELOG.md)
+- 🌐 **[aiptx.io](https://aiptx.io)** — Official Website & Documentation
+- 📦 [PyPI Package](https://pypi.org/project/aiptx/)
+- 💻 [GitHub Repository](https://github.com/satyamrastogi/aiptx)
+- 📋 [Changelog](https://github.com/satyamrastogi/aiptx/blob/main/CHANGELOG.md)
+- 📖 [Documentation](https://aiptx.io/docs)
+- 💬 [Community & Support](https://aiptx.io/community)
 
 ---
 
-<p align="center">
-  <b>Intelligent Security Assessment, Simplified.</b>
-</p>
+<div align="center">
+
+**[aiptx.io](https://aiptx.io)** — Intelligent Security Assessment, Simplified.
+
+Made with ❤️ by [Satyam Rastogi](https://aiptx.io)
+
+</div>

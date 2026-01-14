@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "2.0.3"
+version = "2.0.4"
 description = "AI-Powered Penetration Testing Framework - Autonomous security assessment with LLM intelligence"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -197,11 +197,12 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/satyamrastogi/aiptx"
+Homepage = "https://aiptx.io"
 Documentation = "https://aiptx.io/docs"
 Repository = "https://github.com/satyamrastogi/aiptx"
 Issues = "https://github.com/satyamrastogi/aiptx/issues"
 Changelog = "https://github.com/satyamrastogi/aiptx/blob/main/CHANGELOG.md"
+Community = "https://aiptx.io/community"
 
 [project.scripts]
 # Main CLI entry point - this is what pipx will install

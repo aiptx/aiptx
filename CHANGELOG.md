@@ -5,6 +5,21 @@ All notable changes to AIPTX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.4] - 2025-01-15
+
+### Added
+- **Official Website** - [aiptx.io](https://aiptx.io) now featured prominently
+  - Updated README with website badges and links
+  - Added documentation, community, and support links
+  - Homepage URL updated to aiptx.io in package metadata
+
+### Changed
+- **README.md** - Enhanced branding and presentation
+  - Centered header with official website link
+  - Modern badge styling with logos
+  - Quick navigation links to docs, API, and community
+  - Updated footer with website attribution
+
 ## [2.0.3] - 2025-01-14
 
 ### Improved
