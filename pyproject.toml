@@ -151,6 +151,11 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+# VPS remote execution
+vps = [
+    "asyncssh>=2.14.0",
+]
+
 # Full installation with all features
 full = [
     # ML/Embeddings
@@ -168,6 +173,7 @@ full = [
     "docker>=7.0.0",
     "pexpect>=4.8.0",
     "paramiko>=3.4.0",
+    "asyncssh>=2.14.0",
 
     # Intelligence module
     "langchain-core>=0.1.0",

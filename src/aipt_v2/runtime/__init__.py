@@ -1,18 +1,27 @@
 """
-AIPT Runtime Module - Docker sandbox and execution environment
+AIPT Runtime Module - Docker sandbox, VPS, and local execution environments
 """
 
 from aipt_v2.runtime.base import AbstractRuntime, SandboxInfo
 
-# Lazy import for DockerRuntime to avoid Docker dependency issues
+# Lazy import for DockerRuntime and VPSRuntime to avoid dependency issues
 _runtime = None
 
 
 def __getattr__(name):
-    """Lazy import for optional Docker dependency"""
+    """Lazy import for optional dependencies"""
     if name == "DockerRuntime":
         from aipt_v2.runtime.docker import DockerRuntime
         return DockerRuntime
+    elif name == "VPSRuntime":
+        from aipt_v2.runtime.vps import VPSRuntime
+        return VPSRuntime
+    elif name == "LocalRuntime":
+        from aipt_v2.runtime.local import LocalRuntime
+        return LocalRuntime
+    elif name == "generate_vps_setup_script":
+        from aipt_v2.runtime.vps import generate_vps_setup_script
+        return generate_vps_setup_script
     raise AttributeError(f"module 'aipt_v2.runtime' has no attribute '{name}'")
 
 
