@@ -208,6 +208,10 @@ class OrchestratorConfig:
     # Scan mode
     full_mode: bool = False  # Enable all tools including exploitation
 
+    # Output control
+    verbose: bool = True  # Show verbose output and command results in real-time
+    show_command_output: bool = True  # Display command stdout/stderr as it runs
+
     # Phase control
     skip_recon: bool = False
     skip_scan: bool = False
@@ -396,29 +400,94 @@ class Orchestrator:
 
     def _log_phase(self, phase: Phase, message: str):
         """Log a phase message."""
-        print(f"\n{'='*60}")
-        print(f"  [{phase.value.upper()}] {message}")
-        print(f"{'='*60}\n")
+        print(f"\n{'='*60}", flush=True)
+        print(f"  [{phase.value.upper()}] {message}", flush=True)
+        print(f"{'='*60}\n", flush=True)
 
-    def _log_tool(self, tool: str, status: str = "running"):
-        """Log tool execution."""
+    def _log_tool(self, tool: str, status: str = "running", elapsed: float = None, error: str = None):
+        """Log tool execution with status indicator and elapsed time."""
         icon = "◉" if status == "running" else "✓" if status == "done" else "✗"
-        print(f"  [{icon}] {tool}")
+        color_start = "\033[33m" if status == "running" else "\033[32m" if status == "done" else "\033[31m"
+        color_end = "\033[0m"
+
+        # Build status line with optional elapsed time
+        status_line = f"  [{color_start}{icon}{color_end}] {tool}"
+        if elapsed is not None and status != "running":
+            status_line += f" \033[90m({elapsed:.1f}s)\033[0m"
+
+        print(status_line, flush=True)
+
+        if status == "running" and self.config.verbose:
+            print(f"      → Executing...", flush=True)
+        elif status == "error" and error:
+            print(f"      \033[31m→ Error: {error[:100]}\033[0m", flush=True)
+        elif status == "done" and self.config.verbose:
+            pass  # Output already shown during execution
 
     async def _run_command(self, cmd: str, timeout: int = 300) -> tuple[int, str]:
-        """Run a shell command asynchronously."""
+        """
+        Run a shell command asynchronously with optional real-time output.
+
+        In verbose mode, streams output to console as it's produced.
+        Always captures output for return value.
+        """
         try:
-            proc = await asyncio.create_subprocess_shell(
-                cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=timeout
-            )
-            output = (stdout.decode() if stdout else "") + (stderr.decode() if stderr else "")
-            return proc.returncode or 0, output
+            if self.config.show_command_output:
+                # Stream output in real-time while also capturing it
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT  # Merge stderr into stdout
+                )
+
+                output_lines = []
+
+                async def read_stream():
+                    """Read and display output line by line with heartbeat."""
+                    import sys
+                    last_output_time = time.time()
+                    heartbeat_interval = 30  # Show heartbeat every 30 seconds if no output
+
+                    while True:
+                        try:
+                            # Use wait_for to enable heartbeat checking
+                            line = await asyncio.wait_for(proc.stdout.readline(), timeout=heartbeat_interval)
+                            if not line:
+                                break
+                            decoded = line.decode('utf-8', errors='replace').rstrip()
+                            output_lines.append(decoded)
+                            last_output_time = time.time()
+                            if self.config.verbose:
+                                # Print with indentation for readability
+                                print(f"      {decoded}", flush=True)
+                        except asyncio.TimeoutError:
+                            # No output for a while, show heartbeat
+                            elapsed = time.time() - last_output_time
+                            if self.config.verbose:
+                                print(f"      \033[90m... still running ({elapsed:.0f}s since last output)\033[0m", flush=True)
+
+                try:
+                    await asyncio.wait_for(read_stream(), timeout=timeout)
+                    await proc.wait()
+                except asyncio.TimeoutError:
+                    proc.kill()
+                    return -1, f"Command timed out after {timeout}s"
+
+                output = "\n".join(output_lines)
+                return proc.returncode or 0, output
+            else:
+                # Silent mode - capture output without displaying
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await asyncio.wait_for(
+                    proc.communicate(),
+                    timeout=timeout
+                )
+                output = (stdout.decode() if stdout else "") + (stderr.decode() if stderr else "")
+                return proc.returncode or 0, output
         except asyncio.TimeoutError:
             return -1, f"Command timed out after {timeout}s"
         except Exception as e:
@@ -452,30 +521,40 @@ class Orchestrator:
         # Subfinder
         if "subfinder" in self.config.recon_tools:
             self._log_tool("subfinder", "running")
+            tool_start = time.time()
             # Security: Use safe_domain to prevent command injection
             ret, output = await self._run_command(
-                f"subfinder -d {self.safe_domain} -silent 2>/dev/null"
+                f"subfinder -d {self.safe_domain} -silent"
             )
+            tool_elapsed = time.time() - tool_start
             if ret == 0:
                 subs = [s.strip() for s in output.split("\n") if s.strip()]
                 self.subdomains.extend(subs)
                 (self.output_dir / f"subfinder_{self.domain}.txt").write_text(output)
                 tools_run.append("subfinder")
-                self._log_tool(f"subfinder - {len(subs)} subdomains", "done")
+                self._log_tool(f"subfinder - {len(subs)} subdomains", "done", tool_elapsed)
+            else:
+                errors.append(f"subfinder failed: {output[:100] if output else 'unknown error'}")
+                self._log_tool("subfinder", "error", tool_elapsed, output[:100] if output else "command failed")
 
         # Assetfinder
         if "assetfinder" in self.config.recon_tools:
             self._log_tool("assetfinder", "running")
+            tool_start = time.time()
             # Security: Use safe_domain to prevent command injection
             ret, output = await self._run_command(
-                f"assetfinder --subs-only {self.safe_domain} 2>/dev/null"
+                f"assetfinder --subs-only {self.safe_domain}"
             )
+            tool_elapsed = time.time() - tool_start
             if ret == 0:
                 subs = [s.strip() for s in output.split("\n") if s.strip()]
                 self.subdomains.extend(subs)
                 (self.output_dir / f"assetfinder_{self.domain}.txt").write_text(output)
                 tools_run.append("assetfinder")
-                self._log_tool(f"assetfinder - {len(subs)} assets", "done")
+                self._log_tool(f"assetfinder - {len(subs)} assets", "done", tool_elapsed)
+            else:
+                errors.append(f"assetfinder failed: {output[:100] if output else 'unknown error'}")
+                self._log_tool("assetfinder", "error", tool_elapsed, output[:100] if output else "command failed")
 
         # Deduplicate subdomains
         self.subdomains = list(set(self.subdomains))
@@ -563,29 +642,39 @@ class Orchestrator:
         # 4. Wayback URLs
         if "waybackurls" in self.config.recon_tools:
             self._log_tool("waybackurls", "running")
+            tool_start = time.time()
             # Security: Use safe_domain to prevent command injection
             ret, output = await self._run_command(
-                f"echo {self.safe_domain} | waybackurls 2>/dev/null | head -5000"
+                f"echo {self.safe_domain} | waybackurls | head -5000"
             )
+            tool_elapsed = time.time() - tool_start
             if ret == 0:
                 (self.output_dir / f"wayback_{self.domain}.txt").write_text(output)
                 url_count = len([u for u in output.split("\n") if u.strip()])
                 tools_run.append("waybackurls")
-                self._log_tool(f"waybackurls - {url_count} URLs", "done")
+                self._log_tool(f"waybackurls - {url_count} URLs", "done", tool_elapsed)
+            else:
+                errors.append(f"waybackurls failed: {output[:100] if output else 'unknown error'}")
+                self._log_tool("waybackurls", "error", tool_elapsed, output[:100] if output else "command failed")
 
         # 5. Amass - Advanced Subdomain Enumeration (NEW)
         if "amass" in self.config.recon_tools:
             self._log_tool("amass", "running")
+            tool_start = time.time()
             ret, output = await self._run_command(
-                f"amass enum -passive -d {self.safe_domain} -timeout 5 2>/dev/null",
+                f"amass enum -passive -d {self.safe_domain} -timeout 5",
                 timeout=360
             )
+            tool_elapsed = time.time() - tool_start
             if ret == 0:
                 subs = [s.strip() for s in output.split("\n") if s.strip()]
                 self.subdomains.extend(subs)
                 (self.output_dir / f"amass_{self.domain}.txt").write_text(output)
                 tools_run.append("amass")
-                self._log_tool(f"amass - {len(subs)} subdomains", "done")
+                self._log_tool(f"amass - {len(subs)} subdomains", "done", tool_elapsed)
+            else:
+                errors.append(f"amass failed: {output[:100] if output else 'unknown error'}")
+                self._log_tool("amass", "error", tool_elapsed, output[:100] if output else "command failed")
 
         # 6. theHarvester - OSINT Email & Subdomain Gathering (NEW)
         if "theHarvester" in self.config.recon_tools:
