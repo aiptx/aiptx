@@ -1,0 +1,60 @@
+# =============================================================================
+# Prometheus Configuration for AIPT v2
+# =============================================================================
+# Scrape configuration for AIPT metrics
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+  # Attach these labels to any time series or alerts
+  external_labels:
+    monitor: 'aipt-monitor'
+    environment: 'production'
+
+# Alertmanager configuration (optional)
+# alerting:
+#   alertmanagers:
+#     - static_configs:
+#         - targets:
+#           - alertmanager:9093
+
+# Rule files (optional)
+# rule_files:
+#   - "alerts/*.yml"
+
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # AIPT API metrics
+  - job_name: 'aipt-api'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['aipt-api:8000']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'aipt-api'
+
+  # AIPT Worker metrics (if enabled)
+  - job_name: 'aipt-worker'
+    metrics_path: '/metrics'
+    static_configs:
+      - targets: ['aipt-worker:8001']
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: instance
+        replacement: 'aipt-worker'
+
+  # PostgreSQL metrics (if using postgres_exporter)
+  # - job_name: 'postgres'
+  #   static_configs:
+  #     - targets: ['postgres-exporter:9187']
+
+  # Redis metrics (if using redis_exporter)
+  # - job_name: 'redis'
+  #   static_configs:
+  #     - targets: ['redis-exporter:9121']
