@@ -16,7 +16,17 @@ Usage:
 import argparse
 import asyncio
 import sys
+import os
+import warnings
 from pathlib import Path
+
+# Suppress noisy warnings for cleaner user experience
+warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", message=".*urllib3.*OpenSSL.*")
+warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
+
+# Set default log level to WARNING before any imports that might log
+os.environ.setdefault("AIPT_LOG_LEVEL", "WARNING")
 
 # Handle imports for both installed package and local development
 try:
@@ -26,7 +36,6 @@ try:
     from .setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
 except ImportError:
     # Local development fallback
-    import os
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from __init__ import __version__
     from config import get_config, validate_config_for_features
@@ -49,6 +58,9 @@ Examples:
   aiptx status                             Check configuration status
   aiptx version                            Show version information
 
+First-time setup:
+  aiptx setup                              Interactive configuration wizard
+
 Installation:
   pipx install aiptx                       Zero-click install
   pip install aiptx[full]                  Install with all features
@@ -58,7 +70,7 @@ Installation:
     parser.add_argument(
         "--version", "-V",
         action="version",
-        version=f"AIPT v{__version__}",
+        version=f"AIPTX v{__version__}",
     )
 
     parser.add_argument(
@@ -107,7 +119,7 @@ Installation:
     # Version command
     subparsers.add_parser("version", help="Show detailed version information")
 
-    # Setup command (new!)
+    # Setup command
     setup_parser = subparsers.add_parser("setup", help="Run interactive setup wizard")
     setup_parser.add_argument(
         "--force", "-f",
@@ -117,7 +129,7 @@ Installation:
 
     args = parser.parse_args()
 
-    # Setup logging
+    # Setup logging based on verbosity
     log_level = "DEBUG" if args.verbose >= 2 else "INFO" if args.verbose == 1 else "WARNING"
     setup_logging(level=log_level, json_format=args.json)
 
@@ -133,8 +145,38 @@ Installation:
     elif args.command == "version":
         return show_version()
     else:
+        # No command given - check if first run and guide user
+        if not is_configured():
+            return show_first_run_help()
         parser.print_help()
         return 0
+
+
+def show_first_run_help():
+    """Show helpful guidance for first-time users."""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    console = Console()
+
+    console.print()
+    console.print(Panel(
+        "[bold cyan]Welcome to AIPTX![/bold cyan]\n\n"
+        "[bold yellow]First-time setup required[/bold yellow]\n\n"
+        "AIPTX needs an LLM API key to power AI-guided security testing.\n\n"
+        "[bold]Quick Start:[/bold]\n"
+        "  1. Run [bold green]aiptx setup[/bold green] to configure interactively\n"
+        "  2. Or set environment variable:\n"
+        "     [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]\n\n"
+        "[bold]Then run:[/bold]\n"
+        "  [bold green]aiptx scan example.com[/bold green]",
+        title="🚀 AIPTX - AI-Powered Penetration Testing",
+        border_style="cyan",
+        padding=(1, 2),
+    ))
+    console.print()
+
+    return 0
 
 
 def run_setup(args):
@@ -146,6 +188,11 @@ def run_setup(args):
 
 def run_scan(args):
     """Run security scan."""
+    from rich.console import Console
+    from rich.panel import Panel
+
+    console = Console()
+
     try:
         from .orchestrator import Orchestrator, OrchestratorConfig
     except ImportError:
@@ -168,13 +215,20 @@ def run_scan(args):
 
     errors = validate_config_for_features(features)
     if errors:
-        from rich.console import Console
-        console = Console()
-        console.print("\n[bold red]Configuration Error[/bold red]")
-        console.print("The following issues need to be resolved:\n")
-        for error in errors:
-            console.print(f"  [yellow]•[/yellow] {error}")
-        console.print("\n[dim]Run 'aiptx setup' to reconfigure.[/dim]\n")
+        console.print()
+        console.print(Panel(
+            "[bold red]Configuration Error[/bold red]\n\n"
+            "The following issues need to be resolved:\n\n" +
+            "\n".join(f"  [yellow]•[/yellow] {error}" for error in errors) +
+            "\n\n[bold]To fix:[/bold]\n"
+            "  Run [bold green]aiptx setup[/bold green] to configure interactively\n\n"
+            "[bold]Or set environment variables:[/bold]\n"
+            "  [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]",
+            title="⚠️  Setup Required",
+            border_style="yellow",
+            padding=(1, 2),
+        ))
+        console.print()
         return 1
 
     # Create config
@@ -196,20 +250,29 @@ def run_scan(args):
     else:
         mode = "standard"
 
-    logger.info(f"Starting {mode} scan on {args.target}")
+    # Show scan starting message
+    console.print()
+    console.print(f"[bold cyan]Starting {mode} scan on[/bold cyan] [bold]{args.target}[/bold]")
+    console.print()
 
     # Run orchestrator
     orchestrator = Orchestrator(args.target, config)
 
     try:
         asyncio.run(orchestrator.run())
-        logger.info("Scan completed successfully")
+        console.print()
+        console.print("[bold green]✓ Scan completed successfully[/bold green]")
         return 0
     except KeyboardInterrupt:
-        logger.warning("Scan interrupted by user")
+        console.print()
+        console.print("[yellow]Scan interrupted by user[/yellow]")
         return 130
     except Exception as e:
-        logger.error(f"Scan failed: {e}")
+        console.print()
+        console.print(f"[bold red]✗ Scan failed:[/bold red] {e}")
+        if args.verbose:
+            import traceback
+            console.print(f"[dim]{traceback.format_exc()}[/dim]")
         return 1
 
 

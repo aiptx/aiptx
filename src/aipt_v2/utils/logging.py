@@ -128,7 +128,8 @@ def setup_logging(
 @lru_cache(maxsize=1)
 def get_logger() -> Any:
     """Get or create the global logger instance."""
-    log_level = os.getenv("AIPT_LOG_LEVEL", "INFO")
+    # Default to WARNING for cleaner first-run experience
+    log_level = os.getenv("AIPT_LOG_LEVEL", "WARNING")
     json_format = os.getenv("AIPT_LOG_FORMAT", "console").lower() == "json"
     redact = os.getenv("AIPT_REDACT_SECRETS", "true").lower() == "true"
 

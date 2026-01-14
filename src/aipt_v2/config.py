@@ -197,14 +197,14 @@ def get_config() -> AIPTConfig:
             url=os.getenv("DATABASE_URL", "sqlite:///./aipt.db"),
         ),
         logging=LoggingSettings(
-            level=os.getenv("AIPT_LOG_LEVEL", "INFO"),
+            level=os.getenv("AIPT_LOG_LEVEL", "WARNING"),  # Default to WARNING for cleaner output
             format=os.getenv("AIPT_LOG_FORMAT", "console"),
         ),
         sandbox_mode=os.getenv("AIPT_SANDBOX_MODE", "false").lower() == "true",
     )
 
-    # Log configuration (without secrets)
-    logger.info(
+    # Only log configuration details at DEBUG level for cleaner default output
+    logger.debug(
         "Configuration loaded",
         llm_provider=config.llm.provider,
         llm_model=config.llm.model,
