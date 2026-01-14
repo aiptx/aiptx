@@ -5,6 +5,23 @@ All notable changes to AIPTX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.6] - 2025-01-15
+
+### Added
+- **Stunning Terminal UI** - Beautiful branded interactive shell experience
+  - ASCII art AIPTX logo with gradient colors (cyan → blue → magenta)
+  - Stylish command table with emoji icons
+  - Quick links to aiptx.io documentation and community
+  - Modern prompt style with `aiptx →` indicator
+  - Branded goodbye message with website link
+  - Version and website displayed prominently in banner
+
+### Changed
+- **Interactive shell** - Complete visual overhaul
+  - Professional, eye-catching welcome screen
+  - Quick reference command table for new users
+  - Consistent branding throughout the experience
+
 ## [2.0.5] - 2025-01-15
 
 ### Fixed

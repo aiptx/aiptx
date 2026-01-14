@@ -24,7 +24,7 @@ Features:
 - FastAPI REST API
 """
 
-__version__ = "2.0.5"
+__version__ = "2.0.6"
 __author__ = "AIPT Team"
 
 # Available submodules (direct import)
