@@ -413,11 +413,19 @@ def run_interactive_mode():
         try:
             # Flush stdin to avoid stale input from previous commands
             import sys
-            import select
+            import platform
             if sys.stdin.isatty():
-                # Clear any buffered input
-                while select.select([sys.stdin], [], [], 0)[0]:
-                    sys.stdin.read(1)
+                # Clear any buffered input (platform-specific)
+                if platform.system() == "Windows":
+                    # Windows: use msvcrt for non-blocking input check
+                    import msvcrt
+                    while msvcrt.kbhit():
+                        msvcrt.getch()
+                else:
+                    # Unix/Linux/macOS: use select
+                    import select
+                    while select.select([sys.stdin], [], [], 0)[0]:
+                        sys.stdin.read(1)
 
             # Get user input
             user_input = Prompt.ask("[bold cyan]aiptx[/bold cyan]", default="").strip()
