@@ -1350,19 +1350,57 @@ class Orchestrator:
         # =====================================================================
         self._log_tool("Vulnerability Chaining", "running")
         try:
-            # Convert findings to format expected by chainer
-            finding_dicts = []
-            for f in self.findings:
-                finding_dicts.append({
-                    "title": f.value,
-                    "type": f.type,
-                    "severity": f.severity,
-                    "url": f.target or self.target,
-                    "description": f.description,
-                    "tool": f.tool,
-                })
+            # Convert orchestrator findings to models.Finding format for intelligence modules
+            from aipt_v2.models.findings import Finding as ModelsFinding, Severity as ModelsSeverity, VulnerabilityType
 
-            chains = self._vuln_chainer.find_chains(finding_dicts)
+            models_findings = []
+            for f in self.findings:
+                try:
+                    # Map severity string to enum
+                    severity_map = {
+                        "critical": ModelsSeverity.CRITICAL,
+                        "high": ModelsSeverity.HIGH,
+                        "medium": ModelsSeverity.MEDIUM,
+                        "low": ModelsSeverity.LOW,
+                        "info": ModelsSeverity.INFO,
+                        "informational": ModelsSeverity.INFO,
+                    }
+                    severity = severity_map.get(f.severity.lower(), ModelsSeverity.INFO)
+
+                    # Map finding type to vulnerability type
+                    vuln_type_map = {
+                        "sqli": VulnerabilityType.SQL_INJECTION,
+                        "sql_injection": VulnerabilityType.SQL_INJECTION,
+                        "xss": VulnerabilityType.XSS_REFLECTED,
+                        "xss_stored": VulnerabilityType.XSS_STORED,
+                        "xss_reflected": VulnerabilityType.XSS_REFLECTED,
+                        "ssrf": VulnerabilityType.SSRF,
+                        "rce": VulnerabilityType.RCE,
+                        "lfi": VulnerabilityType.FILE_INCLUSION,
+                        "file_inclusion": VulnerabilityType.FILE_INCLUSION,
+                        "open_redirect": VulnerabilityType.OPEN_REDIRECT,
+                        "csrf": VulnerabilityType.CSRF,
+                        "idor": VulnerabilityType.BROKEN_ACCESS_CONTROL,
+                        "info_disclosure": VulnerabilityType.INFORMATION_DISCLOSURE,
+                        "information_disclosure": VulnerabilityType.INFORMATION_DISCLOSURE,
+                        "misconfig": VulnerabilityType.SECURITY_MISCONFIGURATION,
+                        "misconfiguration": VulnerabilityType.SECURITY_MISCONFIGURATION,
+                    }
+                    vuln_type = vuln_type_map.get(f.type.lower(), VulnerabilityType.OTHER)
+
+                    models_findings.append(ModelsFinding(
+                        title=f.value,
+                        severity=severity,
+                        vuln_type=vuln_type,
+                        url=f.target or self.target,
+                        description=f.description,
+                        source=f.tool,
+                    ))
+                except Exception as conv_err:
+                    logger.debug(f"Could not convert finding for chaining: {conv_err}")
+                    continue
+
+            chains = self._vuln_chainer.find_chains(models_findings)
             self.attack_chains = chains
 
             if chains:
@@ -1409,18 +1447,33 @@ class Orchestrator:
         # =====================================================================
         self._log_tool("AI Triage", "running")
         try:
-            finding_dicts = []
-            for f in self.findings:
-                finding_dicts.append({
-                    "title": f.value,
-                    "type": f.type,
-                    "severity": f.severity,
-                    "url": f.target or self.target,
-                    "description": f.description,
-                    "tool": f.tool,
-                })
+            # Reuse models_findings from chaining if available, otherwise convert now
+            if not models_findings:
+                from aipt_v2.models.findings import Finding as ModelsFinding, Severity as ModelsSeverity, VulnerabilityType
+                models_findings = []
+                for f in self.findings:
+                    try:
+                        severity_map = {
+                            "critical": ModelsSeverity.CRITICAL,
+                            "high": ModelsSeverity.HIGH,
+                            "medium": ModelsSeverity.MEDIUM,
+                            "low": ModelsSeverity.LOW,
+                            "info": ModelsSeverity.INFO,
+                        }
+                        severity = severity_map.get(f.severity.lower(), ModelsSeverity.INFO)
+                        models_findings.append(ModelsFinding(
+                            title=f.value,
+                            severity=severity,
+                            vuln_type=VulnerabilityType.OTHER,
+                            url=f.target or self.target,
+                            description=f.description,
+                            source=f.tool,
+                        ))
+                    except Exception:
+                        continue
 
-            triage_result = self._ai_triage.triage(finding_dicts)
+            # Call the analyze() method (not triage())
+            triage_result = await self._ai_triage.analyze(models_findings)
             self.triage_result = triage_result
 
             tools_run.append("ai_triage")
@@ -1433,9 +1486,10 @@ class Orchestrator:
             # Save executive summary
             (self.output_dir / "EXECUTIVE_SUMMARY.md").write_text(triage_result.executive_summary)
 
-            # Log top priorities
-            if triage_result.top_priorities:
-                top_titles = [f["title"] for f in triage_result.top_priorities[:3]]
+            # Log top priorities using get_top_priority() method
+            top_assessments = triage_result.get_top_priority(3)
+            if top_assessments:
+                top_titles = [a.finding.title for a in top_assessments]
                 self._log_tool(f"AI Triage - Top priorities: {', '.join(top_titles)}", "done")
             else:
                 self._log_tool("AI Triage - No high-priority findings", "done")
@@ -1475,7 +1529,7 @@ class Orchestrator:
             errors=errors,
             metadata={
                 "attack_chains_count": len(self.attack_chains),
-                "top_priorities_count": len(self.triage_result.top_priorities) if self.triage_result else 0,
+                "top_priorities_count": len(self.triage_result.get_top_priority(10)) if self.triage_result else 0,
                 "scope_violations": len(self._scope_enforcer.get_violations()) if self._scope_enforcer else 0
             }
         )

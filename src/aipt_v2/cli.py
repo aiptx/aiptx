@@ -411,6 +411,14 @@ def run_interactive_mode():
     # Interactive loop
     while True:
         try:
+            # Flush stdin to avoid stale input from previous commands
+            import sys
+            import select
+            if sys.stdin.isatty():
+                # Clear any buffered input
+                while select.select([sys.stdin], [], [], 0)[0]:
+                    sys.stdin.read(1)
+
             # Get user input
             user_input = Prompt.ask("[bold cyan]aiptx[/bold cyan]", default="").strip()
 
@@ -795,7 +803,24 @@ def run_scan(args):
     orchestrator = Orchestrator(args.target, config)
 
     try:
-        asyncio.run(orchestrator.run())
+        # Use custom event loop handling to avoid cleanup warnings
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            loop.run_until_complete(orchestrator.run())
+        finally:
+            # Clean up pending tasks before closing the loop
+            try:
+                pending = asyncio.all_tasks(loop)
+                for task in pending:
+                    task.cancel()
+                # Give tasks a chance to respond to cancellation
+                if pending:
+                    loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
+            except Exception:
+                pass  # Ignore cleanup errors
+            loop.close()
+
         console.print()
         console.print("[bold green]✓ Scan completed successfully[/bold green]")
         return 0
