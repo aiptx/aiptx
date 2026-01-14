@@ -345,63 +345,69 @@ def run_setup_wizard(force: bool = False) -> bool:
     Returns:
         True if setup completed successfully
     """
-    # Check if already configured
-    if not force and is_configured():
-        console.print("[yellow]AIPTX is already configured.[/yellow]")
-        if not Confirm.ask("Do you want to reconfigure?", default=False):
+    try:
+        # Check if already configured
+        if not force and is_configured():
+            console.print("[yellow]AIPTX is already configured.[/yellow]")
+            if not Confirm.ask("Do you want to reconfigure?", default=False):
+                return False
+
+        print_welcome()
+
+        # Collect configuration
+        config = load_existing_config()  # Start with existing config
+
+        # Step 1: LLM (required)
+        llm_config = setup_llm()
+        config.update(llm_config)
+
+        # Check if we got an API key
+        has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
+        if not has_key:
+            console.print("\n[bold red]Error:[/bold red] An LLM API key is required to use AIPTX.")
+            console.print("Please run [bold]aiptx setup[/bold] again with a valid API key.")
             return False
 
-    print_welcome()
+        # Step 2: Scanners (optional)
+        scanner_config = setup_scanners()
+        config.update(scanner_config)
 
-    # Collect configuration
-    config = load_existing_config()  # Start with existing config
+        # Step 3: VPS (optional)
+        vps_config = setup_vps()
+        config.update(vps_config)
 
-    # Step 1: LLM (required)
-    llm_config = setup_llm()
-    config.update(llm_config)
+        # Show summary
+        console.print()
+        show_summary(config)
 
-    # Check if we got an API key
-    has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
-    if not has_key:
-        console.print("\n[bold red]Error:[/bold red] An LLM API key is required to use AIPTX.")
-        console.print("Please run [bold]aiptx setup[/bold] again with a valid API key.")
-        return False
+        # Confirm and save
+        console.print()
+        if Confirm.ask("[bold]Save this configuration?[/bold]", default=True):
+            config_path = save_config(config)
 
-    # Step 2: Scanners (optional)
-    scanner_config = setup_scanners()
-    config.update(scanner_config)
+            console.print(Panel(
+                f"[bold green]✓ Configuration saved![/bold green]\n\n"
+                f"Config file: [cyan]{config_path}[/cyan]\n\n"
+                f"You can now run:\n"
+                f"  [bold]aiptx scan example.com[/bold]     - Run a security scan\n"
+                f"  [bold]aiptx status[/bold]              - Check configuration\n"
+                f"  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
+                title="🎉 Setup Complete",
+                border_style="green"
+            ))
 
-    # Step 3: VPS (optional)
-    vps_config = setup_vps()
-    config.update(vps_config)
+            # Load the config into environment for immediate use
+            for key, value in config.items():
+                os.environ[key] = value
 
-    # Show summary
-    console.print()
-    show_summary(config)
+            return True
+        else:
+            console.print("[yellow]Setup cancelled. No changes saved.[/yellow]")
+            return False
 
-    # Confirm and save
-    console.print()
-    if Confirm.ask("[bold]Save this configuration?[/bold]", default=True):
-        config_path = save_config(config)
-
-        console.print(Panel(
-            f"[bold green]✓ Configuration saved![/bold green]\n\n"
-            f"Config file: [cyan]{config_path}[/cyan]\n\n"
-            f"You can now run:\n"
-            f"  [bold]aiptx scan example.com[/bold]     - Run a security scan\n"
-            f"  [bold]aiptx status[/bold]              - Check configuration\n"
-            f"  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
-            title="🎉 Setup Complete",
-            border_style="green"
-        ))
-
-        # Load the config into environment for immediate use
-        for key, value in config.items():
-            os.environ[key] = value
-
-        return True
-    else:
-        console.print("[yellow]Setup cancelled. No changes saved.[/yellow]")
+    except KeyboardInterrupt:
+        # Handle Ctrl+C gracefully
+        console.print("\n[yellow]Setup cancelled.[/yellow]")
         return False
 
 
@@ -412,20 +418,24 @@ def prompt_first_run_setup() -> bool:
     Returns:
         True if setup completed and user can proceed
     """
-    console.print(Panel(
-        "[bold yellow]⚠ AIPTX is not configured![/bold yellow]\n\n"
-        "This appears to be your first time running AIPTX.\n"
-        "You need to configure at least an LLM API key to proceed.",
-        title="First Run Setup Required",
-        border_style="yellow"
-    ))
+    try:
+        console.print(Panel(
+            "[bold yellow]⚠ AIPTX is not configured![/bold yellow]\n\n"
+            "This appears to be your first time running AIPTX.\n"
+            "You need to configure at least an LLM API key to proceed.",
+            title="First Run Setup Required",
+            border_style="yellow"
+        ))
 
-    if Confirm.ask("\nWould you like to run the setup wizard now?", default=True):
-        return run_setup_wizard(force=True)
-    else:
-        console.print("\n[dim]You can run setup later with: [bold]aiptx setup[/bold][/dim]")
-        console.print("[dim]Or set environment variables manually:[/dim]")
-        console.print("[dim]  export ANTHROPIC_API_KEY=your-key-here[/dim]\n")
+        if Confirm.ask("\nWould you like to run the setup wizard now?", default=True):
+            return run_setup_wizard(force=True)
+        else:
+            console.print("\n[dim]You can run setup later with: [bold]aiptx setup[/bold][/dim]")
+            console.print("[dim]Or set environment variables manually:[/dim]")
+            console.print("[dim]  export ANTHROPIC_API_KEY=your-key-here[/dim]\n")
+            return False
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Cancelled.[/yellow]")
         return False
 
 

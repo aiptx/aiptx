@@ -4,6 +4,7 @@ AIPT v2 Configuration Management
 
 Centralized configuration with validation using Pydantic.
 Loads from environment variables with sensible defaults.
+Also loads from ~/.aiptx/.env file created by the setup wizard.
 """
 
 import os
@@ -11,10 +12,35 @@ from typing import List, Optional
 from functools import lru_cache
 from pathlib import Path
 
+from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from .utils.logging import logger
+
+
+def _load_config_files():
+    """
+    Load configuration from .env files.
+
+    Priority (highest to lowest):
+    1. Environment variables (already set in shell)
+    2. Local .env file in current directory
+    3. Global ~/.aiptx/.env file from setup wizard
+    """
+    # Load global config first (lowest priority)
+    global_env = Path.home() / ".aiptx" / ".env"
+    if global_env.exists():
+        load_dotenv(global_env, override=False)
+
+    # Load local .env file (higher priority, but doesn't override existing env vars)
+    local_env = Path(".env")
+    if local_env.exists():
+        load_dotenv(local_env, override=False)
+
+
+# Load config files on module import
+_load_config_files()
 
 
 class LLMSettings(BaseModel):
@@ -65,7 +91,8 @@ class ScannerSettings(BaseModel):
     @classmethod
     def validate_url(cls, v):
         if v and not v.startswith(("http://", "https://")):
-            raise ValueError(f"Invalid URL format: {v}")
+            # Auto-prepend http:// if no scheme provided (user-friendly)
+            v = f"http://{v}"
         return v
 
 
@@ -166,28 +193,30 @@ def get_config() -> AIPTConfig:
         AIPTConfig instance loaded from environment
     """
     # Load from environment
+    # Note: Setup wizard saves with AIPT_ prefix and __ delimiter (e.g., AIPT_LLM__PROVIDER)
+    # We check both formats for backwards compatibility
     config = AIPTConfig(
         llm=LLMSettings(
-            provider=os.getenv("AIPT_LLM_PROVIDER", "anthropic"),
-            model=os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
-            api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY"),
-            timeout=int(os.getenv("AIPT_LLM_TIMEOUT", "120")),
+            provider=os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER", "anthropic"),
+            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
+            api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
+            timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),
         ),
         scanners=ScannerSettings(
-            acunetix_url=os.getenv("ACUNETIX_URL"),
-            acunetix_api_key=os.getenv("ACUNETIX_API_KEY"),
-            burp_url=os.getenv("BURP_URL"),
-            burp_api_key=os.getenv("BURP_API_KEY"),
-            nessus_url=os.getenv("NESSUS_URL"),
-            nessus_access_key=os.getenv("NESSUS_ACCESS_KEY"),
-            nessus_secret_key=os.getenv("NESSUS_SECRET_KEY"),
-            zap_url=os.getenv("ZAP_URL"),
-            zap_api_key=os.getenv("ZAP_API_KEY"),
+            acunetix_url=os.getenv("AIPT_SCANNERS__ACUNETIX_URL") or os.getenv("ACUNETIX_URL"),
+            acunetix_api_key=os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY") or os.getenv("ACUNETIX_API_KEY"),
+            burp_url=os.getenv("AIPT_SCANNERS__BURP_URL") or os.getenv("BURP_URL"),
+            burp_api_key=os.getenv("AIPT_SCANNERS__BURP_API_KEY") or os.getenv("BURP_API_KEY"),
+            nessus_url=os.getenv("AIPT_SCANNERS__NESSUS_URL") or os.getenv("NESSUS_URL"),
+            nessus_access_key=os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY") or os.getenv("NESSUS_ACCESS_KEY"),
+            nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY"),
+            zap_url=os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL"),
+            zap_api_key=os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY"),
         ),
         vps=VPSSettings(
-            host=os.getenv("VPS_HOST"),
-            user=os.getenv("VPS_USER", "ubuntu"),
-            key_path=os.getenv("VPS_KEY"),
+            host=os.getenv("AIPT_VPS__HOST") or os.getenv("VPS_HOST"),
+            user=os.getenv("AIPT_VPS__USER") or os.getenv("VPS_USER", "ubuntu"),
+            key_path=os.getenv("AIPT_VPS__KEY_PATH") or os.getenv("VPS_KEY"),
         ),
         api=APISettings(
             cors_origins=os.getenv("AIPT_CORS_ORIGINS", "http://localhost:3000").split(","),
@@ -217,6 +246,30 @@ def get_config() -> AIPTConfig:
     )
 
     return config
+
+
+def reload_config() -> AIPTConfig:
+    """
+    Reload configuration from files and environment.
+
+    This clears the cached config and reloads from:
+    - ~/.aiptx/.env (setup wizard config)
+    - ./.env (local project config)
+    - Environment variables
+
+    Useful after running the setup wizard.
+
+    Returns:
+        Fresh AIPTConfig instance
+    """
+    # Clear the cached config
+    get_config.cache_clear()
+
+    # Reload .env files
+    _load_config_files()
+
+    # Return fresh config
+    return get_config()
 
 
 def validate_config_for_features(features: List[str]) -> List[str]:
