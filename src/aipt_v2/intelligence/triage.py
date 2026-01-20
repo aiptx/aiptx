@@ -23,6 +23,7 @@ from typing import Any
 
 # Import VulnerabilityType from chaining module
 from aipt_v2.intelligence.chaining import VulnerabilityType
+from aipt_v2.models.findings import Finding, Severity
 
 
 logger = logging.getLogger(__name__)

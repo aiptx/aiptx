@@ -83,3 +83,7 @@ reports/
 # Jupyter (if used)
 .ipynb_checkpoints/
 results/
+node_modules/
+__pycache__/
+dist/
+*.egg-info/

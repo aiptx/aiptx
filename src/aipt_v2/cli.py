@@ -34,6 +34,7 @@ try:
     from .config import get_config, validate_config_for_features, reload_config
     from .utils.logging import setup_logging, logger
     from .setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
+    from .interface.icons import icon, supports_emoji
 except ImportError:
     # Local development fallback
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -41,6 +42,7 @@ except ImportError:
     from config import get_config, validate_config_for_features, reload_config
     from utils.logging import setup_logging, logger
     from setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
+    from interface.icons import icon, supports_emoji
 
 
 def main():
@@ -131,6 +133,29 @@ Installation:
 
     # Status command
     subparsers.add_parser("status", help="Check configuration and dependencies")
+
+    # Check command - Enterprise prerequisites validation
+    check_parser = subparsers.add_parser("check", help="Run enterprise prerequisites check before operations")
+    check_parser.add_argument(
+        "--strict", "-s",
+        action="store_true",
+        help="Fail on warnings (for CI/CD pipelines)"
+    )
+    check_parser.add_argument(
+        "--json", "-j",
+        action="store_true",
+        help="Output JSON format for automation"
+    )
+    check_parser.add_argument(
+        "--verbose", "-v",
+        action="store_true",
+        help="Show all checks including passed ones"
+    )
+    check_parser.add_argument(
+        "--minimal", "-m",
+        action="store_true",
+        help="Skip optional dependency checks"
+    )
 
     # Test command - validate all configurations
     test_parser = subparsers.add_parser("test", help="Test and validate all configurations")
@@ -415,6 +440,8 @@ Installation:
             return run_api(args)
         elif args.command == "status":
             return show_status(args)
+        elif args.command == "check":
+            return run_check(args)
         elif args.command == "test":
             return run_config_test(args)
         elif args.command == "version":
@@ -457,7 +484,7 @@ def show_first_run_help():
         "     [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]\n\n"
         "[bold]Then run:[/bold]\n"
         "  [bold green]aiptx scan example.com[/bold green]",
-        title="🚀 AIPTX - AI-Powered Penetration Testing",
+        title=f"{icon('rocket')} AIPTX - AI-Powered Penetration Testing",
         border_style="cyan",
         padding=(1, 2),
     ))
@@ -507,28 +534,28 @@ def run_interactive_mode():
     commands_table.add_column("Command", style="bold green", width=18)
     commands_table.add_column("Description", style="white")
 
-    commands_table.add_row("scan <target>", "🔍 Run security scan")
-    commands_table.add_row("scan <target> --ai", "🤖 AI-guided intelligent scanning")
-    commands_table.add_row("scan <target> --full", "🎯 Comprehensive assessment")
-    commands_table.add_row("ai <command>", "🧠 AI security testing")
-    commands_table.add_row("vps <command>", "☁️  Remote VPS execution")
-    commands_table.add_row("setup", "⚙️  Configure AIPTX")
-    commands_table.add_row("status", "📊 Show configuration")
-    commands_table.add_row("help", "❓ Show all commands")
-    commands_table.add_row("exit", "👋 Exit AIPTX")
+    commands_table.add_row("scan <target>", f"{icon('search')} Run security scan")
+    commands_table.add_row("scan <target> --ai", f"{icon('robot')} AI-guided intelligent scanning")
+    commands_table.add_row("scan <target> --full", f"{icon('target')} Comprehensive assessment")
+    commands_table.add_row("ai <command>", f"{icon('brain')} AI security testing")
+    commands_table.add_row("vps <command>", f"{icon('cloud')} Remote VPS execution")
+    commands_table.add_row("setup", f"{icon('gear')} Configure AIPTX")
+    commands_table.add_row("status", f"{icon('chart')} Show configuration")
+    commands_table.add_row("help", f"{icon('info')} Show all commands")
+    commands_table.add_row("exit", f"{icon('arrow')} Exit AIPTX")
 
     console.print(commands_table)
     console.print()
     console.print("[dim cyan]" + "━" * 60 + "[/dim cyan]")
     console.print()
-    console.print("[dim]💡 Tip: Type [bold green]scan example.com --ai[/bold green] to start AI-guided scanning[/dim]")
-    console.print("[dim]🌐 Docs: [link=https://aiptx.io/docs]https://aiptx.io/docs[/link][/dim]")
+    console.print(f"[dim]{icon('lightbulb')} Tip: Type [bold green]scan example.com --ai[/bold green] to start AI-guided scanning[/dim]")
+    console.print(f"[dim]{icon('globe')} Docs: [link=https://aiptx.io/docs]https://aiptx.io/docs[/link][/dim]")
     console.print()
 
     # Check configuration status
     if not is_configured():
         console.print(Panel(
-            "[yellow]⚠️  AIPTX is not configured yet![/yellow]\n\n"
+            f"[yellow]{icon('warning')} AIPTX is not configured yet![/yellow]\n\n"
             "Run [bold green]setup[/bold green] to configure your API keys and scanners.\n"
             "Or set environment variable: [dim]export ANTHROPIC_API_KEY=your-key[/dim]",
             border_style="yellow",
@@ -557,7 +584,7 @@ def run_interactive_mode():
                         sys.stdin.read(1)
 
             # Get user input with stylish prompt
-            user_input = Prompt.ask("[bold cyan]aiptx[/bold cyan] [dim]→[/dim]", default="").strip()
+            user_input = Prompt.ask(f"[bold cyan]aiptx[/bold cyan] [dim]{icon('arrow')}[/dim]", default="").strip()
 
             if not user_input:
                 continue
@@ -570,7 +597,7 @@ def run_interactive_mode():
             # Handle commands
             if cmd in ("exit", "quit", "q"):
                 console.print()
-                console.print("[bold cyan]Thanks for using AIPTX![/bold cyan] 🚀")
+                console.print(f"[bold cyan]Thanks for using AIPTX![/bold cyan] {icon('rocket')}")
                 console.print("[dim]Visit [link=https://aiptx.io]aiptx.io[/link] for docs & updates[/dim]")
                 console.print()
                 break
@@ -865,7 +892,7 @@ def run_scan(args):
             "  [bold green]pip install aiptx[full][/bold green]\n\n"
             "[bold]Or install specific dependencies:[/bold]\n"
             "  [dim]pip install sentence-transformers torch langchain-core[/dim]",
-            title="⚠️  Scan Module Not Available",
+            title=f"{icon('warning')} Scan Module Not Available",
             border_style="yellow",
             padding=(1, 2),
         ))
@@ -893,19 +920,43 @@ def run_scan(args):
         console.print(Panel(
             "[bold red]Configuration Error[/bold red]\n\n"
             "The following issues need to be resolved:\n\n" +
-            "\n".join(f"  [yellow]•[/yellow] {error}" for error in errors) +
+            "\n".join(f"  [yellow]{icon('bullet')}[/yellow] {error}" for error in errors) +
             "\n\n[bold]To fix:[/bold]\n"
             "  Run [bold green]aiptx setup[/bold green] to configure interactively\n\n"
             "[bold]Or set environment variables:[/bold]\n"
             "  [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]",
-            title="⚠️  Setup Required",
+            title=f"{icon('warning')} Setup Required",
             border_style="yellow",
             padding=(1, 2),
         ))
         console.print()
         return 1
 
-    # Run pre-flight checks if requested
+    # Run quick prerequisites check (always runs, but non-blocking for core features)
+    from .prerequisites import check_prerequisites_sync
+    is_ready, prereq_errors = check_prerequisites_sync(
+        require_llm=True,
+        require_tools=False,  # Tools are optional for basic scan
+    )
+
+    if not is_ready:
+        console.print()
+        console.print(Panel(
+            "[bold red]Prerequisites Check Failed[/bold red]\n\n" +
+            "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors) +
+            "\n\n[bold]To diagnose:[/bold]\n"
+            "  Run [bold green]aiptx check[/bold green] for detailed report\n\n"
+            "[bold]To fix common issues:[/bold]\n"
+            "  [dim]aiptx setup          # Configure API keys[/dim]\n"
+            "  [dim]pip install aiptx[full]  # Install all dependencies[/dim]",
+            title=f"{icon('warning')} System Not Ready",
+            border_style="red",
+            padding=(1, 2),
+        ))
+        console.print()
+        return 1
+
+    # Run pre-flight checks if requested (connection validation)
     if getattr(args, 'check', False):
         ai_mode = args.ai or args.mode == "ai"
         checks_passed = run_preflight_check(
@@ -978,7 +1029,7 @@ def run_scan(args):
             loop.close()
 
         console.print()
-        console.print("[bold green]✓ Scan completed successfully[/bold green]")
+        console.print(f"[bold green]{icon('check')} Scan completed successfully[/bold green]")
         return 0
     except KeyboardInterrupt:
         console.print()
@@ -986,7 +1037,7 @@ def run_scan(args):
         return 130
     except Exception as e:
         console.print()
-        console.print(f"[bold red]✗ Scan failed:[/bold red] {e}")
+        console.print(f"[bold red]{icon('cross')} Scan failed:[/bold red] {e}")
         if args.verbose:
             import traceback
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
@@ -1022,7 +1073,9 @@ def run_api(args):
 
 
 def show_status(args):
-    """Show configuration status."""
+    """Show configuration status with actual connection validation."""
+    import asyncio
+    import time
     from rich.console import Console
     from rich.table import Table
 
@@ -1031,70 +1084,328 @@ def show_status(args):
 
     console.print("\n[bold cyan]AIPT v2 Configuration Status[/bold cyan]\n")
 
-    # LLM Status
+    # Store validation results for summary
+    validation_results = {}
+
+    # ==================== LLM Configuration ====================
+    llm_status = None
+    llm_error = None
+
+    if config.llm.api_key:
+        with console.status("[yellow]Validating LLM connection...[/yellow]"):
+            try:
+                import litellm
+
+                provider = config.llm.provider.lower()
+                model = config.llm.model
+
+                if provider == "anthropic":
+                    model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    litellm.api_key = config.llm.api_key
+                elif provider == "openai":
+                    model_str = f"openai/{model}" if not model.startswith("openai/") else model
+                    litellm.api_key = config.llm.api_key
+                elif provider == "deepseek":
+                    model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
+                    litellm.api_key = config.llm.api_key
+                else:
+                    model_str = model
+
+                start = time.time()
+                response = litellm.completion(
+                    model=model_str,
+                    messages=[{"role": "user", "content": "Reply with only: OK"}],
+                    max_tokens=10,
+                    timeout=30,
+                )
+                elapsed = time.time() - start
+                llm_status = True
+                validation_results['llm'] = (True, f"Connected ({elapsed:.1f}s)")
+
+            except ImportError:
+                llm_status = None
+                llm_error = "litellm not installed"
+                validation_results['llm'] = (None, "litellm not installed")
+            except Exception as e:
+                llm_status = False
+                llm_error = str(e)[:50]
+                validation_results['llm'] = (False, str(e)[:50])
+    else:
+        llm_status = False
+        llm_error = "API key not configured"
+        validation_results['llm'] = (False, "API key not configured")
+
+    # LLM Status Table
     table = Table(title="LLM Configuration")
     table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
-    table.add_column("Status", style="yellow")
+    table.add_column("Value")
+    table.add_column("Status")
 
-    table.add_row("Provider", config.llm.provider, "✓" if config.llm.provider else "✗")
-    table.add_row("Model", config.llm.model, "✓" if config.llm.model else "✗")
-    table.add_row("API Key", "****" if config.llm.api_key else "Not set", "✓" if config.llm.api_key else "✗")
+    # Color-coded status
+    if llm_status is True:
+        provider_status = "[green][OK][/green]"
+        model_status = "[green][OK][/green]"
+        key_status = "[green][OK][/green]"
+    elif llm_status is None:
+        provider_status = "[yellow][?][/yellow]"
+        model_status = "[yellow][?][/yellow]"
+        key_status = "[yellow][?][/yellow]"
+    else:
+        provider_status = "[red][X][/red]" if not config.llm.provider else "[green][OK][/green]"
+        model_status = "[red][X][/red]" if not config.llm.model else "[green][OK][/green]"
+        key_status = "[red][X][/red]"
+
+    table.add_row("Provider", config.llm.provider or "Not set", provider_status)
+    table.add_row("Model", config.llm.model or "Not set", model_status)
+    table.add_row("API Key", "****" if config.llm.api_key else "Not set", key_status)
 
     console.print(table)
 
-    # Scanner Status
+    # ==================== Scanner Configuration ====================
+    console.print()
+
+    # Test each scanner connection
+    scanner_results = {}
+
+    async def test_scanner_connection(name, url, test_endpoint, headers):
+        """Test scanner connectivity."""
+        if not url:
+            return None, "Not configured"
+        try:
+            import httpx
+            async with httpx.AsyncClient(verify=False, timeout=10) as client:
+                response = await client.get(f"{url}{test_endpoint}", headers=headers)
+                if response.status_code == 200:
+                    return True, "Connected"
+                else:
+                    return False, f"HTTP {response.status_code}"
+        except Exception as e:
+            return False, str(e)[:30]
+
+    async def test_all_scanners():
+        results = {}
+
+        # Acunetix
+        if config.scanners.acunetix_url:
+            with console.status("[yellow]Testing Acunetix...[/yellow]"):
+                results['acunetix'] = await test_scanner_connection(
+                    "Acunetix",
+                    config.scanners.acunetix_url,
+                    "/api/v1/me",
+                    {"X-Auth": config.scanners.acunetix_api_key or ""}
+                )
+        else:
+            results['acunetix'] = (None, "Not configured")
+
+        # Burp Suite
+        if config.scanners.burp_url:
+            with console.status("[yellow]Testing Burp Suite...[/yellow]"):
+                results['burp'] = await test_scanner_connection(
+                    "Burp Suite",
+                    config.scanners.burp_url,
+                    "/api-internal/versions",
+                    {"Authorization": f"Bearer {config.scanners.burp_api_key or ''}"}
+                )
+        else:
+            results['burp'] = (None, "Not configured")
+
+        # Nessus
+        if config.scanners.nessus_url:
+            with console.status("[yellow]Testing Nessus...[/yellow]"):
+                results['nessus'] = await test_scanner_connection(
+                    "Nessus",
+                    config.scanners.nessus_url,
+                    "/server/status",
+                    {"X-ApiKeys": f"accessKey={config.scanners.nessus_access_key or ''};secretKey={config.scanners.nessus_secret_key or ''}"}
+                )
+        else:
+            results['nessus'] = (None, "Not configured")
+
+        # OWASP ZAP
+        if config.scanners.zap_url:
+            with console.status("[yellow]Testing OWASP ZAP...[/yellow]"):
+                zap_endpoint = "/JSON/core/view/version/"
+                if config.scanners.zap_api_key:
+                    zap_endpoint += f"?apikey={config.scanners.zap_api_key}"
+                results['zap'] = await test_scanner_connection(
+                    "OWASP ZAP",
+                    config.scanners.zap_url,
+                    zap_endpoint,
+                    {}
+                )
+        else:
+            results['zap'] = (None, "Not configured")
+
+        return results
+
+    scanner_results = asyncio.run(test_all_scanners())
+    validation_results.update({f"scanner_{k}": v for k, v in scanner_results.items()})
+
+    # Scanner Status Table
     table = Table(title="Scanner Configuration")
     table.add_column("Scanner", style="cyan")
-    table.add_column("URL", style="green")
-    table.add_column("API Key", style="yellow")
+    table.add_column("URL")
+    table.add_column("Status")
+
+    def get_scanner_status_display(result):
+        """Get colored status display for scanner."""
+        status, msg = result
+        if status is True:
+            return "[green][OK][/green]"
+        elif status is None:
+            return "[dim][--][/dim]"
+        else:
+            return "[red][X][/red]"
 
     table.add_row(
         "Acunetix",
         config.scanners.acunetix_url or "Not configured",
-        "✓" if config.scanners.acunetix_api_key else "✗",
+        get_scanner_status_display(scanner_results['acunetix']),
     )
     table.add_row(
         "Burp Suite",
         config.scanners.burp_url or "Not configured",
-        "✓" if config.scanners.burp_api_key else "✗",
+        get_scanner_status_display(scanner_results['burp']),
     )
     table.add_row(
         "Nessus",
         config.scanners.nessus_url or "Not configured",
-        "✓" if config.scanners.nessus_access_key else "✗",
+        get_scanner_status_display(scanner_results['nessus']),
     )
     table.add_row(
         "OWASP ZAP",
         config.scanners.zap_url or "Not configured",
-        "✓" if config.scanners.zap_api_key else "✗",
+        get_scanner_status_display(scanner_results['zap']),
     )
 
     console.print(table)
 
-    # VPS Status
+    # ==================== VPS Configuration ====================
+    console.print()
+
+    vps_status = None
+    vps_error = None
+
+    if config.vps.host and config.vps.key_path:
+        with console.status("[yellow]Testing VPS connection...[/yellow]"):
+            try:
+                from pathlib import Path
+                key_path = Path(config.vps.key_path).expanduser()
+
+                if not key_path.exists():
+                    vps_status = False
+                    vps_error = "SSH key not found"
+                else:
+                    async def test_vps():
+                        import asyncssh
+                        conn = await asyncssh.connect(
+                            config.vps.host,
+                            port=config.vps.port,
+                            username=config.vps.user,
+                            client_keys=[str(key_path)],
+                            known_hosts=None,
+                        )
+                        result = await conn.run("echo 'OK'", check=True)
+                        await conn.close()
+                        return "OK" in result.stdout
+
+                    if asyncio.run(test_vps()):
+                        vps_status = True
+                    else:
+                        vps_status = False
+                        vps_error = "Connection test failed"
+
+            except ImportError:
+                vps_status = None
+                vps_error = "asyncssh not installed"
+            except Exception as e:
+                vps_status = False
+                vps_error = str(e)[:30]
+
+        validation_results['vps'] = (vps_status, vps_error if vps_error else "Connected")
+    elif config.vps.host:
+        vps_status = False
+        vps_error = "SSH key not configured"
+        validation_results['vps'] = (False, vps_error)
+    else:
+        vps_status = None
+        validation_results['vps'] = (None, "Not configured")
+
+    # VPS Status Table
     table = Table(title="VPS Configuration")
     table.add_column("Setting", style="cyan")
-    table.add_column("Value", style="green")
+    table.add_column("Value")
 
-    table.add_row("Host", config.vps.host or "Not configured")
+    if vps_status is True:
+        host_display = f"[green]{config.vps.host}[/green]"
+    elif vps_status is False:
+        host_display = f"[red]{config.vps.host or 'Not configured'}[/red]"
+    else:
+        host_display = config.vps.host or "Not configured"
+
+    table.add_row("Host", host_display)
     table.add_row("User", config.vps.user)
     table.add_row("SSH Key", config.vps.key_path or "Not configured")
 
     console.print(table)
 
-    # Check for issues
+    # ==================== Configuration Validation Summary ====================
     console.print("\n[bold]Configuration Validation:[/bold]")
 
-    all_features = ["llm", "acunetix", "burp", "nessus", "vps"]
-    for feature in all_features:
-        errors = validate_config_for_features([feature])
-        if errors:
-            console.print(f"  [yellow]⚠[/yellow] {feature}: {errors[0]}")
+    # LLM
+    llm_result = validation_results.get('llm', (False, "Unknown"))
+    if llm_result[0] is True:
+        console.print(f"  [green]{icon('check')}[/green] llm: {llm_result[1]}")
+    elif llm_result[0] is None:
+        console.print(f"  [yellow]{icon('warning')}[/yellow] llm: {llm_result[1]}")
+    else:
+        console.print(f"  [red]{icon('cross')}[/red] llm: {llm_result[1]}")
+
+    # Scanners - only show configured ones
+    for scanner_name in ['acunetix', 'burp', 'nessus', 'zap']:
+        result = scanner_results.get(scanner_name, (None, "Unknown"))
+        if result[0] is True:
+            console.print(f"  [green]{icon('check')}[/green] {scanner_name}: {result[1]}")
+        elif result[0] is None:
+            # Don't show unconfigured scanners as errors
+            pass
         else:
-            console.print(f"  [green]✓[/green] {feature}: Ready")
+            console.print(f"  [red]{icon('cross')}[/red] {scanner_name}: {result[1]}")
+
+    # VPS
+    vps_result = validation_results.get('vps', (None, "Unknown"))
+    if vps_result[0] is True:
+        console.print(f"  [green]{icon('check')}[/green] vps: {vps_result[1]}")
+    elif vps_result[0] is None:
+        console.print(f"  [dim]{icon('circle_empty')}[/dim] vps: {vps_result[1]} (optional)")
+    else:
+        console.print(f"  [red]{icon('cross')}[/red] vps: {vps_result[1]}")
 
     return 0
+
+
+def run_check(args):
+    """
+    Run enterprise-level prerequisites check.
+
+    Validates all system requirements, dependencies, and configurations
+    before allowing security operations to proceed. This is the recommended
+    way to validate system readiness for enterprise deployments.
+    """
+    import asyncio
+    from .prerequisites import run_prerequisites_check
+
+    verbose = getattr(args, 'verbose', False)
+    strict = getattr(args, 'strict', False)
+    json_output = getattr(args, 'json', False)
+    minimal = getattr(args, 'minimal', False)
+
+    return asyncio.run(run_prerequisites_check(
+        verbose=verbose,
+        strict=strict,
+        json_output=json_output,
+        include_optional=not minimal,
+    ))
 
 
 def run_config_test(args):
@@ -1120,7 +1431,7 @@ def run_config_test(args):
     console.print(Panel(
         "[bold]AIPTX Configuration Validator[/bold]\n\n"
         "Testing all configured services and credentials...",
-        title="🔍 Self-Test",
+        title=f"{icon('search')} Self-Test",
         border_style="cyan"
     ))
     console.print()
@@ -1138,7 +1449,7 @@ def run_config_test(args):
         console.print("[bold cyan]━━━ LLM API Test ━━━[/bold cyan]")
 
         if not config.llm.api_key:
-            console.print("  [red]✗[/red] No API key configured")
+            console.print(f"  [red]{icon('cross')}[/red] No API key configured")
             console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
             results['llm'] = False
         else:
@@ -1171,18 +1482,18 @@ def run_config_test(args):
                     )
                     elapsed = time.time() - start
 
-                    console.print(f"  [green]✓[/green] LLM API connection successful")
+                    console.print(f"  [green]{icon('check')}[/green] LLM API connection successful")
                     console.print(f"    [dim]Provider: {provider}[/dim]")
                     console.print(f"    [dim]Model: {model}[/dim]")
                     console.print(f"    [dim]Response time: {elapsed:.2f}s[/dim]")
                     results['llm'] = True
 
                 except ImportError:
-                    console.print("  [yellow]⚠[/yellow] litellm not installed")
+                    console.print(f"  [yellow]{icon('warning')}[/yellow] litellm not installed")
                     console.print("    [dim]Install with: pip install litellm[/dim]")
                     results['llm'] = None
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] LLM API test failed")
+                    console.print(f"  [red]{icon('cross')}[/red] LLM API test failed")
                     console.print(f"    [dim]Error: {str(e)[:100]}[/dim]")
                     results['llm'] = False
 
@@ -1193,10 +1504,10 @@ def run_config_test(args):
         console.print("[bold cyan]━━━ VPS Connection Test ━━━[/bold cyan]")
 
         if not config.vps.host:
-            console.print("  [yellow]○[/yellow] VPS not configured (optional)")
+            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] VPS not configured (optional)")
             results['vps'] = None
         elif not config.vps.key_path:
-            console.print("  [red]✗[/red] SSH key path not configured")
+            console.print(f"  [red]{icon('cross')}[/red] SSH key path not configured")
             results['vps'] = False
         else:
             with console.status("[yellow]Testing SSH connection to VPS...[/yellow]"):
@@ -1205,7 +1516,7 @@ def run_config_test(args):
 
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
-                        console.print(f"  [red]✗[/red] SSH key not found: {key_path}")
+                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {key_path}")
                         results['vps'] = False
                     else:
                         # Test SSH connection using asyncssh
@@ -1229,21 +1540,21 @@ def run_config_test(args):
 
                         if "AIPTX_TEST_OK" in output:
                             uname = output.replace("AIPTX_TEST_OK", "").strip()
-                            console.print(f"  [green]✓[/green] VPS connection successful")
+                            console.print(f"  [green]{icon('check')}[/green] VPS connection successful")
                             console.print(f"    [dim]Host: {config.vps.user}@{config.vps.host}:{config.vps.port}[/dim]")
                             console.print(f"    [dim]System: {uname[:60]}...[/dim]" if len(uname) > 60 else f"    [dim]System: {uname}[/dim]")
                             console.print(f"    [dim]Response time: {elapsed:.2f}s[/dim]")
                             results['vps'] = True
                         else:
-                            console.print(f"  [red]✗[/red] VPS connection failed - unexpected response")
+                            console.print(f"  [red]{icon('cross')}[/red] VPS connection failed - unexpected response")
                             results['vps'] = False
 
                 except ImportError:
-                    console.print("  [yellow]⚠[/yellow] asyncssh not installed")
+                    console.print(f"  [yellow]{icon('warning')}[/yellow] asyncssh not installed")
                     console.print("    [dim]Install with: pip install asyncssh[/dim]")
                     results['vps'] = None
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] VPS connection failed")
+                    console.print(f"  [red]{icon('cross')}[/red] VPS connection failed")
                     console.print(f"    [dim]Error: {str(e)[:100]}[/dim]")
                     results['vps'] = False
 
@@ -1268,14 +1579,14 @@ def run_config_test(args):
                         timeout=10,
                     )
                     if response.status_code == 200:
-                        console.print(f"  [green]✓[/green] Acunetix connected")
+                        console.print(f"  [green]{icon('check')}[/green] Acunetix connected")
                         console.print(f"    [dim]URL: {config.scanners.acunetix_url}[/dim]")
                         results['acunetix'] = True
                     else:
-                        console.print(f"  [red]✗[/red] Acunetix auth failed (HTTP {response.status_code})")
+                        console.print(f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})")
                         results['acunetix'] = False
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] Acunetix connection failed: {str(e)[:50]}")
+                    console.print(f"  [red]{icon('cross')}[/red] Acunetix connection failed: {str(e)[:50]}")
                     results['acunetix'] = False
 
         # Burp Suite
@@ -1291,14 +1602,14 @@ def run_config_test(args):
                         timeout=10,
                     )
                     if response.status_code == 200:
-                        console.print(f"  [green]✓[/green] Burp Suite connected")
+                        console.print(f"  [green]{icon('check')}[/green] Burp Suite connected")
                         console.print(f"    [dim]URL: {config.scanners.burp_url}[/dim]")
                         results['burp'] = True
                     else:
-                        console.print(f"  [red]✗[/red] Burp Suite auth failed (HTTP {response.status_code})")
+                        console.print(f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})")
                         results['burp'] = False
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] Burp Suite connection failed: {str(e)[:50]}")
+                    console.print(f"  [red]{icon('cross')}[/red] Burp Suite connection failed: {str(e)[:50]}")
                     results['burp'] = False
 
         # Nessus
@@ -1316,14 +1627,14 @@ def run_config_test(args):
                         timeout=10,
                     )
                     if response.status_code == 200:
-                        console.print(f"  [green]✓[/green] Nessus connected")
+                        console.print(f"  [green]{icon('check')}[/green] Nessus connected")
                         console.print(f"    [dim]URL: {config.scanners.nessus_url}[/dim]")
                         results['nessus'] = True
                     else:
-                        console.print(f"  [red]✗[/red] Nessus auth failed (HTTP {response.status_code})")
+                        console.print(f"  [red]{icon('cross')}[/red] Nessus auth failed (HTTP {response.status_code})")
                         results['nessus'] = False
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] Nessus connection failed: {str(e)[:50]}")
+                    console.print(f"  [red]{icon('cross')}[/red] Nessus connection failed: {str(e)[:50]}")
                     results['nessus'] = False
 
         # ZAP
@@ -1338,18 +1649,18 @@ def run_config_test(args):
                     response = httpx.get(url, timeout=10)
                     if response.status_code == 200:
                         version = response.json().get("version", "unknown")
-                        console.print(f"  [green]✓[/green] OWASP ZAP connected (v{version})")
+                        console.print(f"  [green]{icon('check')}[/green] OWASP ZAP connected (v{version})")
                         console.print(f"    [dim]URL: {config.scanners.zap_url}[/dim]")
                         results['zap'] = True
                     else:
-                        console.print(f"  [red]✗[/red] ZAP connection failed (HTTP {response.status_code})")
+                        console.print(f"  [red]{icon('cross')}[/red] ZAP connection failed (HTTP {response.status_code})")
                         results['zap'] = False
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] ZAP connection failed: {str(e)[:50]}")
+                    console.print(f"  [red]{icon('cross')}[/red] ZAP connection failed: {str(e)[:50]}")
                     results['zap'] = False
 
         if scanners_tested == 0:
-            console.print("  [yellow]○[/yellow] No scanners configured (optional)")
+            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] No scanners configured (optional)")
 
         console.print()
 
@@ -1380,10 +1691,10 @@ def run_config_test(args):
                 missing_tools.append(tool)
 
         if found_tools:
-            console.print(f"  [green]✓[/green] Available: {', '.join(found_tools)}")
+            console.print(f"  [green]{icon('check')}[/green] Available: {', '.join(found_tools)}")
 
         if missing_tools:
-            console.print(f"  [yellow]○[/yellow] Not found: {', '.join(missing_tools)}")
+            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] Not found: {', '.join(missing_tools)}")
             console.print("    [dim]Install missing tools or use --use-vps to run on VPS[/dim]")
 
         results['tools'] = len(found_tools)
@@ -1399,16 +1710,16 @@ def run_config_test(args):
 
     for component, status in results.items():
         if status is True:
-            status_str = "[green]✓ PASS[/green]"
+            status_str = f"[green]{icon('check')} PASS[/green]"
             details = "Working correctly"
         elif status is False:
-            status_str = "[red]✗ FAIL[/red]"
+            status_str = f"[red]{icon('cross')} FAIL[/red]"
             details = "Check configuration"
         elif status is None:
-            status_str = "[yellow]○ SKIP[/yellow]"
+            status_str = f"[yellow]{icon('circle_empty')} SKIP[/yellow]"
             details = "Not configured"
         elif isinstance(status, int):
-            status_str = f"[green]✓ {status}[/green]"
+            status_str = f"[green]{icon('check')} {status}[/green]"
             details = f"{status} tools available"
         else:
             status_str = "[dim]?[/dim]"
@@ -1421,10 +1732,10 @@ def run_config_test(args):
     # Overall result
     failures = sum(1 for v in results.values() if v is False)
     if failures == 0:
-        console.print("\n[bold green]✓ All tests passed![/bold green]")
+        console.print(f"\n[bold green]{icon('check')} All tests passed![/bold green]")
         return 0
     else:
-        console.print(f"\n[bold yellow]⚠ {failures} test(s) failed. Run 'aiptx setup' to fix.[/bold yellow]")
+        console.print(f"\n[bold yellow]{icon('warning')} {failures} test(s) failed. Run 'aiptx setup' to fix.[/bold yellow]")
         return 1
 
 
@@ -1460,7 +1771,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     console.print(Panel(
         "[bold]Pre-flight Configuration Check[/bold]\n\n"
         "Validating all required services before scan...",
-        title="✈️  Pre-flight Check",
+        title=f"{icon('airplane')} Pre-flight Check",
         border_style="cyan"
     ))
     console.print()
@@ -1469,7 +1780,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     console.print("[bold cyan]━━━ LLM API ━━━[/bold cyan]")
 
     if not config.llm.api_key:
-        console.print("  [red]✗[/red] No API key configured")
+        console.print(f"  [red]{icon('cross')}[/red] No API key configured")
         console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
         results['llm'] = False
         all_passed = False
@@ -1499,14 +1810,14 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                 )
                 elapsed = time.time() - start
 
-                console.print(f"  [green]✓[/green] LLM ready ({provider}/{model}) - {elapsed:.1f}s")
+                console.print(f"  [green]{icon('check')}[/green] LLM ready ({provider}/{model}) - {elapsed:.1f}s")
                 results['llm'] = True
 
             except ImportError:
-                console.print("  [yellow]⚠[/yellow] litellm not installed")
+                console.print(f"  [yellow]{icon('warning')}[/yellow] litellm not installed")
                 results['llm'] = None
             except Exception as e:
-                console.print(f"  [red]✗[/red] LLM connection failed: {str(e)[:60]}")
+                console.print(f"  [red]{icon('cross')}[/red] LLM connection failed: {str(e)[:60]}")
                 results['llm'] = False
                 all_passed = False
 
@@ -1517,12 +1828,12 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         console.print("[bold cyan]━━━ VPS Connection ━━━[/bold cyan]")
 
         if not config.vps.host:
-            console.print("  [red]✗[/red] VPS not configured")
+            console.print(f"  [red]{icon('cross')}[/red] VPS not configured")
             console.print("    [dim]Run 'aiptx setup' to configure VPS[/dim]")
             results['vps'] = False
             all_passed = False
         elif not config.vps.key_path:
-            console.print("  [red]✗[/red] SSH key path not configured")
+            console.print(f"  [red]{icon('cross')}[/red] SSH key path not configured")
             results['vps'] = False
             all_passed = False
         else:
@@ -1533,7 +1844,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
-                        console.print(f"  [red]✗[/red] SSH key not found: {key_path}")
+                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {key_path}")
                         results['vps'] = False
                         all_passed = False
                     else:
@@ -1550,15 +1861,15 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                             return time.time() - start
 
                         elapsed = asyncio.run(test_ssh())
-                        console.print(f"  [green]✓[/green] VPS connected ({config.vps.user}@{config.vps.host}) - {elapsed:.1f}s")
+                        console.print(f"  [green]{icon('check')}[/green] VPS connected ({config.vps.user}@{config.vps.host}) - {elapsed:.1f}s")
                         results['vps'] = True
 
                 except ImportError:
-                    console.print("  [yellow]⚠[/yellow] asyncssh not installed")
+                    console.print(f"  [yellow]{icon('warning')}[/yellow] asyncssh not installed")
                     console.print("    [dim]Install with: pip install asyncssh[/dim]")
                     results['vps'] = None
                 except Exception as e:
-                    console.print(f"  [red]✗[/red] VPS connection failed: {str(e)[:60]}")
+                    console.print(f"  [red]{icon('cross')}[/red] VPS connection failed: {str(e)[:60]}")
                     results['vps'] = False
                     all_passed = False
 
@@ -1571,7 +1882,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         # Acunetix
         if use_acunetix:
             if not config.scanners.acunetix_url:
-                console.print("  [red]✗[/red] Acunetix URL not configured")
+                console.print(f"  [red]{icon('cross')}[/red] Acunetix URL not configured")
                 results['acunetix'] = False
                 all_passed = False
             else:
@@ -1585,21 +1896,21 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                             timeout=10,
                         )
                         if response.status_code == 200:
-                            console.print(f"  [green]✓[/green] Acunetix connected")
+                            console.print(f"  [green]{icon('check')}[/green] Acunetix connected")
                             results['acunetix'] = True
                         else:
-                            console.print(f"  [red]✗[/red] Acunetix auth failed (HTTP {response.status_code})")
+                            console.print(f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})")
                             results['acunetix'] = False
                             all_passed = False
                     except Exception as e:
-                        console.print(f"  [red]✗[/red] Acunetix failed: {str(e)[:50]}")
+                        console.print(f"  [red]{icon('cross')}[/red] Acunetix failed: {str(e)[:50]}")
                         results['acunetix'] = False
                         all_passed = False
 
         # Burp Suite
         if use_burp:
             if not config.scanners.burp_url:
-                console.print("  [red]✗[/red] Burp Suite URL not configured")
+                console.print(f"  [red]{icon('cross')}[/red] Burp Suite URL not configured")
                 results['burp'] = False
                 all_passed = False
             else:
@@ -1613,14 +1924,14 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                             timeout=10,
                         )
                         if response.status_code == 200:
-                            console.print(f"  [green]✓[/green] Burp Suite connected")
+                            console.print(f"  [green]{icon('check')}[/green] Burp Suite connected")
                             results['burp'] = True
                         else:
-                            console.print(f"  [red]✗[/red] Burp Suite auth failed (HTTP {response.status_code})")
+                            console.print(f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})")
                             results['burp'] = False
                             all_passed = False
                     except Exception as e:
-                        console.print(f"  [red]✗[/red] Burp Suite failed: {str(e)[:50]}")
+                        console.print(f"  [red]{icon('cross')}[/red] Burp Suite failed: {str(e)[:50]}")
                         results['burp'] = False
                         all_passed = False
 
@@ -1644,13 +1955,13 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     found_optional = [t for t in optional_tools if shutil.which(t)]
 
     if found_essential:
-        console.print(f"  [green]✓[/green] Essential: {', '.join(found_essential)}")
+        console.print(f"  [green]{icon('check')}[/green] Essential: {', '.join(found_essential)}")
     if missing_essential:
-        console.print(f"  [yellow]⚠[/yellow] Missing essential: {', '.join(missing_essential)}")
+        console.print(f"  [yellow]{icon('warning')}[/yellow] Missing essential: {', '.join(missing_essential)}")
         if not use_vps:
             console.print("    [dim]Consider using --use-vps or install locally[/dim]")
     if found_optional:
-        console.print(f"  [dim]○[/dim] Optional available: {', '.join(found_optional)}")
+        console.print(f"  [dim]{icon('circle_empty')}[/dim] Optional available: {', '.join(found_optional)}")
 
     results['tools'] = len(missing_essential) == 0 or use_vps
 
@@ -1665,11 +1976,11 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
     for component, status in results.items():
         if status is True:
-            status_str = "[green]✓ READY[/green]"
+            status_str = f"[green]{icon('check')} READY[/green]"
         elif status is False:
-            status_str = "[red]✗ FAILED[/red]"
+            status_str = f"[red]{icon('cross')} FAILED[/red]"
         elif status is None:
-            status_str = "[yellow]○ SKIPPED[/yellow]"
+            status_str = f"[yellow]{icon('circle_empty')} SKIPPED[/yellow]"
         else:
             status_str = "[dim]?[/dim]"
         table.add_row(component.upper(), status_str)
@@ -1678,9 +1989,9 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     console.print()
 
     if all_passed:
-        console.print("[bold green]✓ All pre-flight checks passed! Ready to scan.[/bold green]")
+        console.print(f"[bold green]{icon('check')} All pre-flight checks passed! Ready to scan.[/bold green]")
     else:
-        console.print("[bold red]✗ Some checks failed. Fix issues above before scanning.[/bold red]")
+        console.print(f"[bold red]{icon('cross')} Some checks failed. Fix issues above before scanning.[/bold red]")
         console.print("[dim]Run 'aiptx setup' to configure missing components.[/dim]")
 
     console.print()
@@ -1778,7 +2089,7 @@ def run_tools_command(args):
             "  aiptx tools install --core          # Install core tools\n"
             "  aiptx tools install -c recon scan   # Install by category\n"
             "  aiptx tools install -t nmap nuclei  # Install specific tools",
-            title="🔧 Local Security Tools",
+            title=f"{icon('wrench')} Local Security Tools",
             border_style="cyan",
         ))
         return 0
@@ -1794,7 +2105,7 @@ def run_tools_install(args, console):
         "[bold cyan]Local Tool Installation[/bold cyan]\n\n"
         "Installing security tools on your local system.\n"
         "Some tools may require sudo/admin privileges.",
-        title="🔧 Installation",
+        title=f"{icon('wrench')} Installation",
         border_style="cyan",
     ))
     console.print()
@@ -1879,8 +2190,8 @@ def run_tools_list(args, console):
                 if installed_only and not is_installed:
                     continue
 
-                status = "[green]✓ Installed[/green]" if is_installed else "[dim]○ Not installed[/dim]"
-                core_badge = " [yellow]★[/yellow]" if tool_def.is_core else ""
+                status = f"[green]{icon('check')} Installed[/green]" if is_installed else f"[dim]{icon('circle_empty')} Not installed[/dim]"
+                core_badge = f" [yellow]{icon('sparkles')}[/yellow]" if tool_def.is_core else ""
 
                 table.add_row(
                     f"{tool_name}{core_badge}",
@@ -1892,7 +2203,7 @@ def run_tools_list(args, console):
             console.print()
             console.print(table)
             console.print()
-            console.print("[dim]Legend: [yellow]★[/yellow] = Core tool (recommended)[/dim]")
+            console.print(f"[dim]Legend: [yellow]{icon('sparkles')}[/yellow] = Core tool (recommended)[/dim]")
 
             return 0
 
@@ -1975,7 +2286,7 @@ def run_tools_check(args, console):
                 console.print(Panel(
                     "[yellow]Many security tools are not installed.[/yellow]\n\n"
                     "Run [bold]aiptx tools install --core[/bold] to install essential tools.",
-                    title="💡 Recommendation",
+                    title=f"{icon('lightbulb')} Recommendation",
                     border_style="yellow"
                 ))
 
@@ -2012,7 +2323,7 @@ def run_vps_command(args):
             "  • VPS_HOST - VPS IP or hostname\n"
             "  • VPS_USER - SSH username (default: ubuntu)\n"
             "  • VPS_KEY  - Path to SSH private key",
-            title="⚠️  VPS Configuration Required",
+            title=f"{icon('warning')} VPS Configuration Required",
             border_style="yellow",
         ))
         return 1
@@ -2034,7 +2345,7 @@ def run_vps_command(args):
             "[bold]aiptx vps status[/bold]  - Check VPS connection and tools\n"
             "[bold]aiptx vps scan[/bold]    - Run security scan from VPS\n"
             "[bold]aiptx vps script[/bold]  - Generate setup script",
-            title="🖥️  VPS Remote Execution",
+            title=f"{icon('desktop')} VPS Remote Execution",
             border_style="cyan",
         ))
         return 0
@@ -2064,7 +2375,7 @@ def run_vps_setup(args, console):
             "  [green]pip install aiptx[vps][/green]\n"
             "  [dim]or[/dim]\n"
             "  [green]pip install aiptx[full][/green]",
-            title="⚠️  Dependency Required",
+            title=f"{icon('warning')} Dependency Required",
             border_style="yellow",
         ))
         console.print()
@@ -2077,7 +2388,7 @@ def run_vps_setup(args, console):
         "[bold cyan]VPS Tool Installation[/bold cyan]\n\n"
         "Installing security tools on your VPS.\n"
         "This may take 10-30 minutes depending on your VPS speed.",
-        title="🔧 Setup",
+        title=f"{icon('wrench')} Setup",
         border_style="cyan",
     ))
     console.print()
@@ -2114,7 +2425,7 @@ def run_vps_setup(args, console):
 
         # Status line
         status_text = Text()
-        status_text.append("⚡ ", style="yellow")
+        status_text.append(f"{icon('bolt')} ", style="yellow")
         status_text.append(state["status"], style="bold cyan")
         lines.append(status_text)
 
@@ -2133,7 +2444,7 @@ def run_vps_setup(args, console):
         # Current tool
         if state["current_tool"]:
             tool_text = Text()
-            tool_text.append("   → Installing: ", style="dim")
+            tool_text.append(f"   {icon('arrow')} Installing: ", style="dim")
             tool_text.append(state["current_tool"], style="bold green")
             lines.append(tool_text)
 
@@ -2159,7 +2470,7 @@ def run_vps_setup(args, console):
         live.update(make_display())
         await runtime.connect()
         state["status"] = f"Connected to {runtime.host}"
-        state["output"].append(f"✓ Connected to {runtime.host}")
+        state["output"].append(f"{icon('check')} Connected to {runtime.host}")
         live.update(make_display())
 
         # Setup base dependencies first
@@ -2177,7 +2488,7 @@ def run_vps_setup(args, console):
         echo 'Base dependencies installed'
         """
         stdout, stderr, code = await runtime._run_command(f"sudo bash -c '{setup_script}'", timeout=300)
-        state["output"].append("✓ Base dependencies installed")
+        state["output"].append(f"{icon('check')} Base dependencies installed")
         live.update(make_display())
 
         # Install each tool
@@ -2193,9 +2504,9 @@ def run_vps_setup(args, console):
             state["completed"] += 1
 
             if success:
-                state["output"].append(f"✓ {tool_name} installed")
+                state["output"].append(f"{icon('check')} {tool_name} installed")
             else:
-                state["output"].append(f"✗ {tool_name} failed")
+                state["output"].append(f"{icon('cross')} {tool_name} failed")
 
             live.update(make_display())
 
@@ -2224,10 +2535,10 @@ def run_vps_setup(args, console):
     failed = 0
     for tool, success in sorted(results.items()):
         if success:
-            table.add_row(tool, "[green]✓ Installed[/green]")
+            table.add_row(tool, f"[green]{icon('check')} Installed[/green]")
             installed += 1
         else:
-            table.add_row(tool, "[red]✗ Failed[/red]")
+            table.add_row(tool, f"[red]{icon('cross')} Failed[/red]")
             failed += 1
 
     console.print(table)
@@ -2235,10 +2546,10 @@ def run_vps_setup(args, console):
 
     if failed == 0:
         console.print(Panel(
-            f"[bold green]✓ All {installed} tools installed successfully![/bold green]\n\n"
+            f"[bold green]{icon('check')} All {installed} tools installed successfully![/bold green]\n\n"
             "You can now run:\n"
             "  [bold]aiptx vps scan target.com[/bold]",
-            title="🎉 Setup Complete",
+            title=f"{icon('sparkles')} Setup Complete",
             border_style="green",
         ))
     else:
@@ -2269,7 +2580,7 @@ def run_vps_status(args, console):
             "  [green]pip install asyncssh[/green]\n"
             "  [dim]or[/dim]\n"
             "  [green]pip install aiptx[vps][/green]",
-            title="⚠️  Dependency Required",
+            title=f"{icon('warning')} Dependency Required",
             border_style="yellow",
         ))
         console.print()
@@ -2284,7 +2595,7 @@ def run_vps_status(args, console):
 
     def make_status():
         text = Text()
-        text.append("⚡ ", style="yellow")
+        text.append(f"{icon('bolt')} ", style="yellow")
         text.append(state["status"], style="bold cyan")
         if state["tool"]:
             text.append(f" - checking {state['tool']}", style="dim")
@@ -2344,9 +2655,9 @@ def run_vps_status(args, console):
     # Connection status
     console.print()
     if connected:
-        console.print(f"[green]✓[/green] Connected to [bold]{config.vps.host}[/bold]")
+        console.print(f"[green]{icon('check')}[/green] Connected to [bold]{config.vps.host}[/bold]")
     else:
-        console.print(f"[red]✗[/red] Failed to connect: {message}")
+        console.print(f"[red]{icon('cross')}[/red] Failed to connect: {message}")
         return 1
 
     # Tool status table
@@ -2359,7 +2670,7 @@ def run_vps_status(args, console):
     for category, tools in VPS_TOOLS.items():
         for tool_name in tools:
             status = tools_status.get(tool_name, False)
-            status_str = "[green]✓ Installed[/green]" if status else "[dim]○ Not installed[/dim]"
+            status_str = f"[green]{icon('check')} Installed[/green]" if status else f"[dim]{icon('circle_empty')} Not installed[/dim]"
             table.add_row(category, tool_name, status_str)
 
     console.print(table)
@@ -2371,10 +2682,10 @@ def run_vps_status(args, console):
 
     if installed == total:
         console.print(Panel(
-            f"[bold green]✓ All {total} tools installed![/bold green]\n\n"
+            f"[bold green]{icon('check')} All {total} tools installed![/bold green]\n\n"
             "Your VPS is ready for scanning.\n"
             "Run: [bold]aiptx vps scan target.com[/bold]",
-            title="🎉 VPS Ready",
+            title=f"{icon('sparkles')} VPS Ready",
             border_style="green",
         ))
     else:
@@ -2402,7 +2713,7 @@ def run_vps_scan(args, console):
             "  [green]pip install asyncssh[/green]\n"
             "  [dim]or[/dim]\n"
             "  [green]pip install aiptx[vps][/green]",
-            title="⚠️  Dependency Required",
+            title=f"{icon('warning')} Dependency Required",
             border_style="yellow",
         ))
         console.print()
@@ -2417,7 +2728,7 @@ def run_vps_scan(args, console):
         f"[bold]Target:[/bold] {target}\n"
         f"[bold]Mode:[/bold] {mode}\n"
         f"[bold]Tools:[/bold] {', '.join(tools) if tools else 'Auto-selected'}",
-        title="🎯 VPS Scan Configuration",
+        title=f"{icon('target')} VPS Scan Configuration",
         border_style="cyan",
     ))
     console.print()
@@ -2447,7 +2758,7 @@ def run_vps_scan(args, console):
 
     # Display results
     console.print()
-    console.print("[bold green]✓ Scan complete![/bold green]")
+    console.print(f"[bold green]{icon('check')} Scan complete![/bold green]")
     console.print()
     console.print(f"[bold]Results saved to:[/bold] {results.get('local_results_path', 'N/A')}")
     console.print()
@@ -2463,7 +2774,7 @@ def run_vps_scan(args, console):
 
         for tool, output in tool_outputs.items():
             exit_code = output.get('exit_code', -1)
-            status = "[green]✓[/green]" if exit_code == 0 else f"[red]{exit_code}[/red]"
+            status = "[green]{icon('check')}[/green]" if exit_code == 0 else f"[red]{exit_code}[/red]"
             stdout_len = len(output.get('stdout', ''))
             table.add_row(tool, status, f"{stdout_len} bytes")
 
@@ -2484,7 +2795,7 @@ def run_vps_script(args, console):
     if output_file:
         with open(output_file, 'w') as f:
             f.write(script)
-        console.print(f"[green]✓[/green] Script saved to: {output_file}")
+        console.print(f"[green]{icon('check')}[/green] Script saved to: {output_file}")
         console.print(f"[dim]Run on VPS: curl -sL <url> | sudo bash[/dim]")
     else:
         console.print(script)
@@ -2504,6 +2815,32 @@ def run_ai_command(args):
     console = Console()
 
     ai_cmd = getattr(args, 'ai_command', None)
+
+    # Run prerequisites check for AI commands (requires LLM key)
+    if ai_cmd in ("code-review", "api-test", "web-pentest", "full"):
+        from .prerequisites import check_prerequisites_sync
+        is_ready, prereq_errors = check_prerequisites_sync(
+            require_llm=True,
+            require_tools=False,
+        )
+
+        if not is_ready:
+            console.print()
+            console.print(Panel(
+                "[bold red]Prerequisites Check Failed[/bold red]\n\n"
+                "AI security testing requires an LLM API key.\n\n" +
+                "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors) +
+                "\n\n[bold]To fix:[/bold]\n"
+                "  Run [bold green]aiptx setup[/bold green] to configure\n"
+                "  Or set: [dim]export ANTHROPIC_API_KEY=your-key[/dim]\n\n"
+                "[bold]For detailed diagnostics:[/bold]\n"
+                "  Run [bold green]aiptx check[/bold green]",
+                title=f"{icon('warning')} Configuration Required",
+                border_style="red",
+                padding=(1, 2),
+            ))
+            console.print()
+            return 1
 
     if ai_cmd == "code-review":
         return run_ai_code_review(args, console)
@@ -2527,7 +2864,7 @@ def run_ai_command(args):
             "  aiptx ai code-review ./src --focus sqli xss\n"
             "  aiptx ai api-test https://api.example.com --openapi swagger.json\n"
             "  aiptx ai web-pentest https://example.com --quick",
-            title="🤖 AI Security Testing",
+            title=f"{icon('robot')} AI Security Testing",
             border_style="cyan",
         ))
         console.print()
@@ -2562,7 +2899,7 @@ def run_ai_code_review(args, console):
         f"[bold]Model:[/bold] {model}\n"
         f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full review'}\n"
         f"[bold]Focus:[/bold] {', '.join(focus) if focus else 'All vulnerabilities'}",
-        title="🔍 AI Code Review",
+        title=f"{icon('search')} AI Code Review",
         border_style="cyan",
     ))
     console.print()
@@ -2611,7 +2948,7 @@ def run_ai_code_review(args, console):
     if output_file:
         with open(output_file, 'w') as f:
             json.dump(result.to_dict(), f, indent=2)
-        console.print(f"\n[green]✓[/green] Results saved to: {output_file}")
+        console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
     return 0 if result.success else 1
 
@@ -2682,7 +3019,7 @@ def run_ai_api_test(args, console):
     if output_file:
         with open(output_file, 'w') as f:
             json.dump(result.to_dict(), f, indent=2)
-        console.print(f"\n[green]✓[/green] Results saved to: {output_file}")
+        console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
     return 0 if result.success else 1
 
@@ -2714,7 +3051,7 @@ def run_ai_web_pentest(args, console):
         f"[bold]Model:[/bold] {model}\n"
         f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full pentest'}\n"
         f"[bold]Authentication:[/bold] {'Token + Cookies' if auth_token and cookies else 'Token' if auth_token else 'Cookies' if cookies else 'None'}",
-        title="🌐 AI Web Penetration Test",
+        title=f"{icon('globe')} AI Web Penetration Test",
         border_style="cyan",
     ))
     console.print()
@@ -2764,7 +3101,7 @@ def run_ai_web_pentest(args, console):
     if output_file:
         with open(output_file, 'w') as f:
             json.dump(result.to_dict(), f, indent=2)
-        console.print(f"\n[green]✓[/green] Results saved to: {output_file}")
+        console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
     return 0 if result.success else 1
 
@@ -2785,7 +3122,7 @@ def run_ai_full_assessment(args, console):
         f"[bold]Target:[/bold] {target}\n"
         f"[bold]Model:[/bold] {model}\n"
         f"[bold]Test Types:[/bold] {', '.join(test_types)}",
-        title="🎯 Full AI Security Assessment",
+        title=f"{icon('target')} Full AI Security Assessment",
         border_style="cyan",
     ))
     console.print()
@@ -2837,7 +3174,7 @@ def run_ai_full_assessment(args, console):
     if output_file:
         with open(output_file, 'w') as f:
             json.dump(combined.to_dict(), f, indent=2)
-        console.print(f"\n[green]✓[/green] Results saved to: {output_file}")
+        console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
     return 0 if combined.success else 1
 
@@ -2878,7 +3215,7 @@ def display_ai_results(console, result, test_name):
         f"[bold]Steps:[/bold] {result.total_steps}\n"
         f"[bold]Time:[/bold] {result.execution_time:.1f}s\n"
         f"[bold]Model:[/bold] {result.model_used}",
-        title=f"📊 {test_name} Results",
+        title=f"{icon('chart')} {test_name} Results",
         border_style="green" if result.success else "red",
     ))
 
@@ -2920,7 +3257,7 @@ def display_ai_results(console, result, test_name):
         console.print()
         console.print("[bold red]Errors:[/bold red]")
         for error in result.errors:
-            console.print(f"  [red]•[/red] {error}")
+            console.print(f"  [red]{icon('bullet')}[/red] {error}")
 
 
 if __name__ == "__main__":

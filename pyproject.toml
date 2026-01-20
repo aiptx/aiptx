@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "2.0.7"
+version = "2.0.10"
 description = "AI-Powered Penetration Testing Framework - Autonomous security assessment with LLM intelligence"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -194,6 +194,11 @@ dev = [
     "bandit>=1.7.0",
     "pre-commit>=3.5.0",
     "safety>=2.3.0",
+]
+
+# Windows-specific enhancements (optional)
+windows = [
+    "pyreadline3>=3.4.0",  # Tab completion in interactive shell
 ]
 
 [project.urls]
