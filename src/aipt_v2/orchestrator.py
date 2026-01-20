@@ -1045,7 +1045,7 @@ class Orchestrator:
                         "started_at": datetime.now(timezone.utc).isoformat(),
                         "dashboard_url": f"{acunetix.config.base_url}/#/scans/{scan_id}"
                     }
-                    (self.output_dir / "acunetix_scan.json").write_text(json.dumps(scan_info, indent=2))
+                    (self.output_dir / "acunetix_scan.json").write_text(json.dumps(scan_info, indent=2), encoding="utf-8")
 
                     tools_run.append("acunetix")
                     self._log_tool(f"Acunetix - Scan started: {scan_id[:8]}...", "done")
@@ -1434,7 +1434,7 @@ class Orchestrator:
 
                 # Save chains to file
                 chains_data = [c.to_dict() for c in chains]
-                (self.output_dir / "attack_chains.json").write_text(json.dumps(chains_data, indent=2))
+                (self.output_dir / "attack_chains.json").write_text(json.dumps(chains_data, indent=2), encoding="utf-8")
             else:
                 self._log_tool("Vulnerability Chaining - No chains found", "done")
 
@@ -1480,11 +1480,11 @@ class Orchestrator:
 
             # Save triage results
             (self.output_dir / "triage_result.json").write_text(
-                json.dumps(triage_result.to_dict(), indent=2)
+                json.dumps(triage_result.to_dict(), indent=2), encoding="utf-8"
             )
 
             # Save executive summary
-            (self.output_dir / "EXECUTIVE_SUMMARY.md").write_text(triage_result.executive_summary)
+            (self.output_dir / "EXECUTIVE_SUMMARY.md").write_text(triage_result.executive_summary, encoding="utf-8")
 
             # Log top priorities using get_top_priority() method
             top_assessments = triage_result.get_top_priority(3)
@@ -1508,7 +1508,7 @@ class Orchestrator:
                 self._log_tool(f"Scope Audit - {len(violations)} violations detected!", "done")
                 # Save audit log
                 audit_log = self._scope_enforcer.get_audit_log()
-                (self.output_dir / "scope_audit.json").write_text(json.dumps(audit_log, indent=2))
+                (self.output_dir / "scope_audit.json").write_text(json.dumps(audit_log, indent=2), encoding="utf-8")
             else:
                 self._log_tool("Scope Audit - All requests within scope", "done")
             tools_run.append("scope_audit")
@@ -1598,7 +1598,7 @@ class Orchestrator:
             timeout=10
         )
         waf_detected = "403" in output or "406" in output or "429" in output
-        (self.output_dir / "waf_test.txt").write_text(f"WAF Test Response: {output}\nWAF Detected: {waf_detected}")
+        (self.output_dir / "waf_test.txt").write_text(f"WAF Test Response: {output}\nWAF Detected: {waf_detected}", encoding="utf-8")
         tools_run.append("waf_detection")
 
         if not waf_detected:
@@ -1999,7 +1999,7 @@ class Orchestrator:
                 "Look for SUID binaries (Linux) or service misconfigurations (Windows)"
             ]
         }
-        (self.output_dir / "post_exploit_report.json").write_text(json.dumps(post_exploit_report, indent=2))
+        (self.output_dir / "post_exploit_report.json").write_text(json.dumps(post_exploit_report, indent=2), encoding="utf-8")
 
         # Add findings to global list
         for f in findings:
@@ -2045,7 +2045,7 @@ class Orchestrator:
 
         # 1. Generate Summary
         summary = self._generate_summary()
-        (self.output_dir / "SUMMARY.md").write_text(summary)
+        (self.output_dir / "SUMMARY.md").write_text(summary, encoding="utf-8")
         tools_run.append("summary_generator")
         self._log_tool("Summary generated", "done")
 
@@ -2064,7 +2064,7 @@ class Orchestrator:
             }
             for f in self.findings
         ]
-        (self.output_dir / "findings.json").write_text(json.dumps(findings_data, indent=2))
+        (self.output_dir / "findings.json").write_text(json.dumps(findings_data, indent=2), encoding="utf-8")
         tools_run.append("findings_export")
         self._log_tool("Findings exported", "done")
 
@@ -2072,7 +2072,7 @@ class Orchestrator:
         if self.config.report_format == "html":
             html_report = self._generate_html_report()
             report_file = self.output_dir / f"VAPT_Report_{self.domain.replace('.', '_')}.html"
-            report_file.write_text(html_report)
+            report_file.write_text(html_report, encoding="utf-8")
             tools_run.append("html_report")
             self._log_tool(f"HTML Report: {report_file.name}", "done")
 

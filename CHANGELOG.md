@@ -5,6 +5,27 @@ All notable changes to AIPTX will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.0.8] - 2025-01-20
+
+### Added
+- **Cross-platform icons module** - New `interface/icons.py` module for terminal compatibility
+  - Automatic detection of Unicode/emoji support
+  - Smart fallbacks for Windows Command Prompt and limited terminals
+  - Works on Windows Terminal, PowerShell, macOS, Linux terminals
+  - ASCII alternatives for all icons when needed
+
+### Fixed
+- **Windows terminal compatibility** - All emoji/icons now work across all platforms
+  - Replaced 50+ direct emoji usages with cross-platform icon functions
+  - Status icons (✓/✗) fall back to `[OK]`/`[X]` on basic terminals
+  - Panel titles use text fallbacks on Windows CMD
+  - Progress indicators work in all environments
+
+### Changed
+- **CLI output** - Consistent icons across all terminal emulators
+  - Uses Rich library's capabilities while providing fallbacks
+  - Cleaner output on terminals without full Unicode support
+
 ## [2.0.7] - 2025-01-20
 
 ### Fixed
