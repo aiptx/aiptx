@@ -5,25 +5,45 @@ AIPTX Interactive Setup Wizard
 First-run setup wizard that guides users through configuration.
 Collects API keys and settings interactively with a beautiful TUI.
 
+NEW in v2.1:
+- Automatic system detection (OS, package manager, architecture)
+- Local security tool installation
+- Ollama/local LLM support for offline operation
+- Prerequisites verification and installation
+
 Usage:
     aiptx setup              # Run setup wizard
     aiptx scan example.com   # Auto-triggers if not configured
 """
 
+import asyncio
 import os
+import shutil
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional, Tuple, Dict, List
 
 from rich.console import Console
 from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
 
 console = Console()
+
+
+# Lazy imports to avoid circular dependencies
+def _get_system_detector():
+    from aipt_v2.system_detector import SystemDetector, SystemInfo
+    return SystemDetector, SystemInfo
+
+
+def _get_tool_installer():
+    from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS, ToolCategory
+    return LocalToolInstaller, TOOLS, ToolCategory
 
 
 # ============================================================================
@@ -80,8 +100,10 @@ def save_config(config: dict, path: Optional[Path] = None) -> Path:
 
     # Group settings
     sections = {
-        "LLM": ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY",
-                "AIPT_LLM__PROVIDER", "AIPT_LLM__MODEL"],
+        "LLM": [
+            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY",
+            "AIPT_LLM__PROVIDER", "AIPT_LLM__MODEL", "AIPT_LLM__OLLAMA_BASE_URL"
+        ],
         "Acunetix": ["AIPT_SCANNERS__ACUNETIX_URL", "AIPT_SCANNERS__ACUNETIX_API_KEY"],
         "Burp Suite": ["AIPT_SCANNERS__BURP_URL", "AIPT_SCANNERS__BURP_API_KEY"],
         "Nessus": ["AIPT_SCANNERS__NESSUS_URL", "AIPT_SCANNERS__NESSUS_ACCESS_KEY",
@@ -148,28 +170,155 @@ def print_welcome():
     console.print("This wizard will help you configure AIPTX for first use.\n")
 
 
+async def detect_system() -> Optional[object]:
+    """
+    Detect and display system information.
+
+    Returns:
+        SystemInfo object or None if detection fails
+    """
+    console.print(Panel(
+        "[bold]System Detection[/bold]\n\n"
+        "Detecting your system configuration to optimize installation...",
+        title="🔍 Auto-Detection",
+        border_style="cyan"
+    ))
+
+    try:
+        SystemDetector, SystemInfo = _get_system_detector()
+        detector = SystemDetector()
+
+        with console.status("[bold cyan]Detecting system...[/bold cyan]"):
+            system_info = await detector.detect()
+
+        # Display results
+        table = Table(box=box.ROUNDED, show_header=False)
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="green")
+
+        table.add_row("Operating System", system_info.os_name)
+        table.add_row("Version", f"{system_info.os_version}" +
+                     (f" ({system_info.os_codename})" if system_info.os_codename else ""))
+        table.add_row("Architecture", system_info.architecture.value)
+        table.add_row("Package Manager", system_info.package_manager.value)
+
+        if system_info.is_wsl:
+            table.add_row("Environment", "WSL")
+        elif system_info.is_container:
+            table.add_row("Environment", "Container")
+
+        console.print(table)
+
+        # Show capabilities summary
+        caps = system_info.capabilities
+        cap_status = []
+        if caps.has_python3:
+            cap_status.append("[green]Python3[/green]")
+        if caps.has_go:
+            cap_status.append("[green]Go[/green]")
+        else:
+            cap_status.append("[yellow]Go (will install)[/yellow]")
+        if caps.has_docker:
+            cap_status.append("[green]Docker[/green]")
+        if caps.has_git:
+            cap_status.append("[green]Git[/green]")
+
+        console.print(f"\n[bold]Available runtimes:[/bold] {', '.join(cap_status)}")
+
+        return system_info
+
+    except Exception as e:
+        console.print(f"[yellow]Warning: Could not fully detect system: {e}[/yellow]")
+        return None
+
+
+def check_ollama_installed() -> Tuple[bool, str]:
+    """Check if Ollama is installed and get version."""
+    ollama_path = shutil.which("ollama")
+    if ollama_path:
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["ollama", "--version"],
+                capture_output=True,
+                text=True,
+                timeout=5
+            )
+            version = result.stdout.strip() or result.stderr.strip()
+            return True, version
+        except Exception:
+            return True, "unknown version"
+    return False, ""
+
+
+async def check_ollama_running() -> bool:
+    """Check if Ollama server is running."""
+    try:
+        import asyncio
+        proc = await asyncio.create_subprocess_shell(
+            "curl -s http://localhost:11434/api/version",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=5)
+        return proc.returncode == 0 and b"version" in stdout
+    except Exception:
+        return False
+
+
+async def get_ollama_models() -> List[str]:
+    """Get list of available Ollama models."""
+    try:
+        proc = await asyncio.create_subprocess_shell(
+            "ollama list",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=10)
+        if proc.returncode == 0:
+            lines = stdout.decode().strip().split("\n")[1:]  # Skip header
+            models = []
+            for line in lines:
+                if line.strip():
+                    model_name = line.split()[0]
+                    models.append(model_name)
+            return models
+    except Exception:
+        pass
+    return []
+
+
 def setup_llm() -> dict:
     """Configure LLM provider and API key."""
     config = {}
 
     console.print(Panel(
-        "[bold]Step 1: LLM Configuration[/bold]\n\n"
+        "[bold]Step 2: LLM Configuration[/bold]\n\n"
         "AIPTX uses AI to guide penetration testing.\n"
-        "You need an API key from one of the supported providers.",
+        "Choose a cloud provider or run locally with Ollama.",
         title="🤖 AI Provider",
         border_style="cyan"
     ))
 
+    # Check Ollama status
+    ollama_installed, ollama_version = check_ollama_installed()
+
     # Choose provider
     console.print("\n[bold]Select your LLM provider:[/bold]")
-    console.print("  [1] Anthropic (Claude) - [green]Recommended[/green]")
+    console.print("  [1] Anthropic (Claude) - [green]Recommended for best results[/green]")
     console.print("  [2] OpenAI (GPT-4)")
-    console.print("  [3] DeepSeek")
-    console.print("  [4] Other (custom)")
+    console.print("  [3] DeepSeek - [dim]Cost-effective option[/dim]")
+
+    if ollama_installed:
+        console.print(f"  [4] Ollama (Local) - [green]✓ Installed ({ollama_version})[/green] - [bold]FREE, runs offline[/bold]")
+    else:
+        console.print("  [4] Ollama (Local) - [yellow]○ Not installed[/yellow] - [dim]Will install[/dim]")
+
+    console.print("  [5] Other (custom)")
 
     choice = Prompt.ask(
         "\nEnter choice",
-        choices=["1", "2", "3", "4"],
+        choices=["1", "2", "3", "4", "5"],
         default="1"
     )
 
@@ -177,14 +326,21 @@ def setup_llm() -> dict:
         "1": ("anthropic", "claude-sonnet-4-20250514", "ANTHROPIC_API_KEY"),
         "2": ("openai", "gpt-4o", "OPENAI_API_KEY"),
         "3": ("deepseek", "deepseek-chat", "DEEPSEEK_API_KEY"),
-        "4": ("custom", "", "LLM_API_KEY"),
+        "4": ("ollama", "llama3.2", None),  # No API key needed
+        "5": ("custom", "", "LLM_API_KEY"),
     }
 
     provider, model, key_name = providers[choice]
 
+    # Handle Ollama setup
     if choice == "4":
+        config.update(_setup_ollama(ollama_installed))
+        return config
+
+    if choice == "5":
         provider = Prompt.ask("Enter provider name")
         model = Prompt.ask("Enter model name")
+        key_name = "LLM_API_KEY"
 
     config["AIPT_LLM__PROVIDER"] = provider
     config["AIPT_LLM__MODEL"] = model
@@ -201,10 +357,166 @@ def setup_llm() -> dict:
 
     api_key = Prompt.ask("API Key", password=True)
 
-    if api_key:
+    if api_key and key_name:
         config[key_name] = api_key
 
     return config
+
+
+def _setup_ollama(ollama_installed: bool) -> dict:
+    """Configure Ollama for local LLM."""
+    config = {}
+
+    console.print("\n[bold cyan]═══ Ollama Local LLM Setup ═══[/bold cyan]")
+
+    if not ollama_installed:
+        console.print("\n[yellow]Ollama is not installed.[/yellow]")
+        console.print("Ollama allows you to run LLMs locally for FREE and offline.")
+
+        if Confirm.ask("\nWould you like to install Ollama now?", default=True):
+            _install_ollama()
+        else:
+            console.print("[dim]You can install Ollama later from: https://ollama.ai[/dim]")
+            console.print("[yellow]Falling back to cloud provider...[/yellow]")
+            return setup_llm()  # Restart LLM setup
+
+    # Check if Ollama is running
+    loop = asyncio.new_event_loop()
+    try:
+        is_running = loop.run_until_complete(check_ollama_running())
+    finally:
+        loop.close()
+
+    if not is_running:
+        console.print("\n[yellow]Ollama server is not running.[/yellow]")
+        console.print("Start it with: [bold]ollama serve[/bold]")
+
+        if Confirm.ask("\nWould you like to start Ollama now?", default=True):
+            import subprocess
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            console.print("[green]✓ Ollama server started[/green]")
+            import time
+            time.sleep(2)  # Wait for server to start
+
+    # Get available models
+    loop = asyncio.new_event_loop()
+    try:
+        models = loop.run_until_complete(get_ollama_models())
+    finally:
+        loop.close()
+
+    # Recommended models for pentesting
+    recommended_models = [
+        ("llama3.2", "Meta Llama 3.2 - Fast, good balance"),
+        ("qwen2.5:14b", "Qwen 2.5 14B - Excellent for code/reasoning"),
+        ("deepseek-r1:8b", "DeepSeek R1 8B - Strong reasoning"),
+        ("codellama:13b", "Code Llama 13B - Optimized for code"),
+    ]
+
+    console.print("\n[bold]Select a model:[/bold]")
+
+    # Show installed models first
+    if models:
+        console.print("\n[dim]Installed models:[/dim]")
+        for i, model in enumerate(models[:5], 1):
+            console.print(f"  [{i}] {model} [green]✓ Ready[/green]")
+
+    console.print("\n[dim]Recommended models (will download):[/dim]")
+    offset = len(models[:5]) + 1
+    for i, (model, desc) in enumerate(recommended_models, offset):
+        installed = model.split(":")[0] in [m.split(":")[0] for m in models]
+        status = "[green]✓[/green]" if installed else "[dim]↓[/dim]"
+        console.print(f"  [{i}] {model} - {desc} {status}")
+
+    # Let user choose
+    max_choice = offset + len(recommended_models) - 1
+    model_choice = Prompt.ask(
+        f"\nEnter choice (1-{max_choice}) or model name",
+        default="1"
+    )
+
+    try:
+        idx = int(model_choice)
+        if idx <= len(models[:5]):
+            selected_model = models[idx - 1]
+        else:
+            selected_model = recommended_models[idx - offset][0]
+    except ValueError:
+        selected_model = model_choice
+
+    # Check if model needs to be pulled
+    if selected_model not in models:
+        console.print(f"\n[cyan]Downloading model: {selected_model}[/cyan]")
+        console.print("[dim]This may take a few minutes...[/dim]")
+
+        import subprocess
+        try:
+            subprocess.run(
+                ["ollama", "pull", selected_model],
+                check=True
+            )
+            console.print(f"[green]✓ Model {selected_model} downloaded[/green]")
+        except subprocess.CalledProcessError:
+            console.print(f"[red]Failed to download {selected_model}[/red]")
+            console.print("[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
+
+    config["AIPT_LLM__PROVIDER"] = "ollama"
+    config["AIPT_LLM__MODEL"] = selected_model
+    config["AIPT_LLM__OLLAMA_BASE_URL"] = "http://localhost:11434"
+
+    console.print(Panel(
+        f"[green]✓ Ollama configured![/green]\n\n"
+        f"Model: [bold]{selected_model}[/bold]\n"
+        f"Server: http://localhost:11434\n\n"
+        f"[dim]Benefits: Free, runs offline, no API limits[/dim]",
+        title="🦙 Local LLM Ready",
+        border_style="green"
+    ))
+
+    return config
+
+
+def _install_ollama():
+    """Install Ollama on the system."""
+    import platform
+    import subprocess
+
+    system = platform.system().lower()
+
+    console.print("\n[cyan]Installing Ollama...[/cyan]")
+
+    try:
+        if system == "darwin":  # macOS
+            # Check if Homebrew is available
+            if shutil.which("brew"):
+                subprocess.run(["brew", "install", "ollama"], check=True)
+            else:
+                # Use curl installer
+                subprocess.run(
+                    ["curl", "-fsSL", "https://ollama.ai/install.sh"],
+                    stdout=subprocess.PIPE,
+                    check=True
+                )
+        elif system == "linux":
+            subprocess.run(
+                "curl -fsSL https://ollama.ai/install.sh | sh",
+                shell=True,
+                check=True
+            )
+        elif system == "windows":
+            console.print("[yellow]Please install Ollama manually from: https://ollama.ai[/yellow]")
+            console.print("[dim]After installation, run 'ollama serve' to start the server[/dim]")
+            return
+
+        console.print("[green]✓ Ollama installed successfully[/green]")
+
+    except subprocess.CalledProcessError as e:
+        console.print(f"[red]Failed to install Ollama: {e}[/red]")
+        console.print("[dim]Please install manually from: https://ollama.ai[/dim]")
 
 
 def setup_scanners() -> dict:
@@ -300,7 +612,127 @@ def setup_vps() -> dict:
     return config
 
 
-def show_summary(config: dict):
+async def setup_security_tools(system_info=None) -> Dict[str, bool]:
+    """
+    Install security tools on the local system.
+
+    Args:
+        system_info: Pre-detected system info
+
+    Returns:
+        Dict mapping tool names to installation status
+    """
+    console.print(Panel(
+        "[bold]Step 4: Security Tools Installation[/bold]\n\n"
+        "AIPTX uses various security tools for penetration testing.\n"
+        "These tools will be installed on your local system.",
+        title="🔧 Security Tools",
+        border_style="cyan"
+    ))
+
+    try:
+        LocalToolInstaller, TOOLS, ToolCategory = _get_tool_installer()
+    except ImportError:
+        console.print("[yellow]Tool installer not available. Skipping...[/yellow]")
+        return {}
+
+    # Show what will be installed
+    core_tools = [name for name, tool in TOOLS.items() if tool.is_core]
+
+    console.print("\n[bold]Core tools to install:[/bold]")
+    for tool_name in core_tools[:8]:
+        tool = TOOLS.get(tool_name)
+        console.print(f"  • {tool_name} - [dim]{tool.description[:50]}...[/dim]")
+
+    console.print(f"\n[dim]Total: {len(core_tools)} core tools, {len(TOOLS)} available[/dim]")
+
+    # Choose installation scope
+    console.print("\n[bold]Installation options:[/bold]")
+    console.print("  [1] Core tools only - [green]Recommended[/green] - Quick install of essential tools")
+    console.print("  [2] Full installation - Install all available security tools")
+    console.print("  [3] Custom selection - Choose categories to install")
+    console.print("  [4] Skip - Don't install any tools now")
+
+    choice = Prompt.ask("\nEnter choice", choices=["1", "2", "3", "4"], default="1")
+
+    if choice == "4":
+        console.print("[dim]Skipping tool installation. You can install later with: aiptx tools install[/dim]")
+        return {}
+
+    installer = LocalToolInstaller(system_info)
+
+    # Check if we need sudo
+    has_sudo = system_info.capabilities.has_sudo if system_info else True
+    if not has_sudo:
+        console.print("\n[yellow]Note: Some tools may require sudo/admin privileges.[/yellow]")
+        console.print("[dim]You may be prompted for your password.[/dim]")
+
+    results = {}
+
+    if choice == "1":
+        # Core tools only
+        console.print("\n[cyan]Installing core security tools...[/cyan]")
+        results = await installer.install_core_tools()
+
+    elif choice == "2":
+        # Full installation
+        console.print("\n[cyan]Installing all security tools...[/cyan]")
+        console.print("[dim]This may take 10-20 minutes...[/dim]")
+        results = await installer.install_all()
+
+    elif choice == "3":
+        # Custom selection
+        console.print("\n[bold]Select categories to install:[/bold]")
+        console.print("  [1] Recon - Subdomain discovery, port scanning, fingerprinting")
+        console.print("  [2] Scan - Vulnerability scanning, fuzzing, content discovery")
+        console.print("  [3] Exploit - SQL injection, brute forcing, exploitation")
+        console.print("  [4] Network - Fast port scanning, network analysis")
+        console.print("  [5] API - API security testing tools")
+
+        cat_choice = Prompt.ask(
+            "\nEnter categories (comma-separated, e.g., 1,2,3)",
+            default="1,2"
+        )
+
+        category_map = {
+            "1": "recon",
+            "2": "scan",
+            "3": "exploit",
+            "4": "network",
+            "5": "api",
+        }
+
+        categories = [
+            category_map[c.strip()]
+            for c in cat_choice.split(",")
+            if c.strip() in category_map
+        ]
+
+        if categories:
+            console.print(f"\n[cyan]Installing {', '.join(categories)} tools...[/cyan]")
+            results = await installer.install_tools(categories=categories)
+        else:
+            console.print("[yellow]No valid categories selected.[/yellow]")
+
+    # Show summary
+    if results:
+        installed = sum(1 for r in results.values() if r.success and not r.already_installed)
+        already = sum(1 for r in results.values() if r.already_installed)
+        failed = sum(1 for r in results.values() if not r.success)
+
+        console.print(Panel(
+            f"[bold]Installation Complete[/bold]\n\n"
+            f"[green]✓ Installed:[/green] {installed}\n"
+            f"[dim]○ Already installed:[/dim] {already}\n"
+            f"[red]✗ Failed:[/red] {failed}",
+            title="📊 Tool Installation Summary",
+            border_style="green" if failed == 0 else "yellow"
+        ))
+
+    return {name: result.success for name, result in results.items()} if results else {}
+
+
+def show_summary(config: dict, tools_installed: Dict[str, bool] = None):
     """Show configuration summary."""
     console.print(Panel(
         "[bold]Configuration Summary[/bold]",
@@ -316,10 +748,14 @@ def show_summary(config: dict):
     provider = config.get("AIPT_LLM__PROVIDER", "Not set")
     model = config.get("AIPT_LLM__MODEL", "Not set")
     has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
+    is_ollama = provider == "ollama"
 
     table.add_row("LLM Provider", provider)
     table.add_row("LLM Model", model)
-    table.add_row("LLM API Key", "✓ Configured" if has_key else "✗ Not set")
+    if is_ollama:
+        table.add_row("LLM Mode", "✓ Local (Ollama)")
+    else:
+        table.add_row("LLM API Key", "✓ Configured" if has_key else "✗ Not set")
 
     # Scanners
     table.add_row("─" * 20, "─" * 20)
@@ -332,12 +768,41 @@ def show_summary(config: dict):
     table.add_row("─" * 20, "─" * 20)
     table.add_row("VPS", "✓ " + config.get("AIPT_VPS__HOST", "") if config.get("AIPT_VPS__HOST") else "○ Not configured")
 
+    # Tools
+    if tools_installed:
+        table.add_row("─" * 20, "─" * 20)
+        installed_count = sum(1 for v in tools_installed.values() if v)
+        table.add_row("Security Tools", f"✓ {installed_count} tools installed")
+
     console.print(table)
 
 
 def run_setup_wizard(force: bool = False) -> bool:
     """
     Run the interactive setup wizard.
+
+    Args:
+        force: Run even if already configured
+
+    Returns:
+        True if setup completed successfully
+    """
+    # Use asyncio to run the async version
+    try:
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        try:
+            return loop.run_until_complete(_run_setup_wizard_async(force))
+        finally:
+            loop.close()
+    except KeyboardInterrupt:
+        console.print("\n[yellow]Setup cancelled.[/yellow]")
+        return False
+
+
+async def _run_setup_wizard_async(force: bool = False) -> bool:
+    """
+    Async implementation of the setup wizard.
 
     Args:
         force: Run even if already configured
@@ -356,42 +821,66 @@ def run_setup_wizard(force: bool = False) -> bool:
 
         # Collect configuration
         config = load_existing_config()  # Start with existing config
+        tools_installed = {}
 
-        # Step 1: LLM (required)
+        # Step 1: System Detection (NEW)
+        console.print()
+        system_info = await detect_system()
+
+        # Step 2: LLM Configuration
+        console.print()
         llm_config = setup_llm()
         config.update(llm_config)
 
-        # Check if we got an API key
+        # Check if we got an API key or using Ollama
+        is_ollama = config.get("AIPT_LLM__PROVIDER") == "ollama"
         has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
-        if not has_key:
+
+        if not has_key and not is_ollama:
             console.print("\n[bold red]Error:[/bold red] An LLM API key is required to use AIPTX.")
             console.print("Please run [bold]aiptx setup[/bold] again with a valid API key.")
             return False
 
-        # Step 2: Scanners (optional)
+        # Step 3: Scanners (optional)
+        console.print()
         scanner_config = setup_scanners()
         config.update(scanner_config)
 
-        # Step 3: VPS (optional)
+        # Step 4: Security Tools Installation (NEW)
+        console.print()
+        if Confirm.ask("\nWould you like to install security tools now?", default=True):
+            tools_installed = await setup_security_tools(system_info)
+
+        # Step 5: VPS (optional)
+        console.print()
         vps_config = setup_vps()
         config.update(vps_config)
 
         # Show summary
         console.print()
-        show_summary(config)
+        show_summary(config, tools_installed)
 
         # Confirm and save
         console.print()
         if Confirm.ask("[bold]Save this configuration?[/bold]", default=True):
             config_path = save_config(config)
 
+            # Build dynamic completion message
+            next_steps = []
+            if is_ollama:
+                next_steps.append("  [bold]ollama serve[/bold]             - Start Ollama (if not running)")
+            next_steps.extend([
+                "  [bold]aiptx scan example.com[/bold]     - Run a security scan",
+                "  [bold]aiptx status[/bold]              - Check configuration",
+                "  [bold]aiptx tools install[/bold]       - Install more security tools",
+                "  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
+            ])
+
             console.print(Panel(
                 f"[bold green]✓ Configuration saved![/bold green]\n\n"
                 f"Config file: [cyan]{config_path}[/cyan]\n\n"
-                f"You can now run:\n"
-                f"  [bold]aiptx scan example.com[/bold]     - Run a security scan\n"
-                f"  [bold]aiptx status[/bold]              - Check configuration\n"
-                f"  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
+                f"[bold]Next steps:[/bold]\n" +
+                "\n".join(next_steps),
                 title="🎉 Setup Complete",
                 border_style="green"
             ))
