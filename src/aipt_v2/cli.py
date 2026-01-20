@@ -199,6 +199,92 @@ Installation:
         help="Tool categories to include"
     )
 
+    # Verify command - Installation verification
+    verify_parser = subparsers.add_parser("verify", help="Verify installation and configuration")
+    verify_parser.add_argument(
+        "--quick", "-q",
+        action="store_true",
+        help="Run quick checks only"
+    )
+    verify_parser.add_argument(
+        "--fix",
+        action="store_true",
+        help="Attempt to auto-fix issues"
+    )
+    verify_parser.add_argument(
+        "--report", "-r",
+        help="Save markdown report to file"
+    )
+
+    # Shell command - Interactive shell
+    shell_parser = subparsers.add_parser("shell", help="Start interactive security shell")
+    shell_parser.add_argument(
+        "--log", "-l",
+        help="Log session to file"
+    )
+    shell_parser.add_argument(
+        "--dir", "-d",
+        help="Working directory"
+    )
+
+    # Tools command with subcommands
+    tools_parser = subparsers.add_parser("tools", help="Manage local security tools")
+    tools_subparsers = tools_parser.add_subparsers(dest="tools_command", help="Tools commands")
+
+    # tools install - Install security tools
+    tools_install = tools_subparsers.add_parser("install", help="Install security tools on local system")
+    tools_install.add_argument(
+        "--categories", "-c",
+        nargs="+",
+        choices=[
+            "recon", "scan", "exploit", "post_exploit", "api", "network",
+            "prerequisite", "active_directory", "cloud", "container",
+            "osint", "wireless", "web", "secrets", "mobile"
+        ],
+        help="Tool categories to install (default: core tools)"
+    )
+    tools_install.add_argument(
+        "--tools", "-t",
+        nargs="+",
+        help="Specific tools to install"
+    )
+    tools_install.add_argument(
+        "--all", "-a",
+        action="store_true",
+        help="Install all available tools"
+    )
+    tools_install.add_argument(
+        "--core",
+        action="store_true",
+        help="Install only core essential tools (default)"
+    )
+    tools_install.add_argument(
+        "--no-sudo",
+        action="store_true",
+        help="Don't use sudo for installation"
+    )
+
+    # tools list - List available/installed tools
+    tools_list = tools_subparsers.add_parser("list", help="List available and installed tools")
+    tools_list.add_argument(
+        "--category", "-c",
+        choices=[
+            "recon", "scan", "exploit", "post_exploit", "api", "network",
+            "prerequisite", "active_directory", "cloud", "container",
+            "osint", "wireless", "web", "secrets", "mobile", "all"
+        ],
+        default="all",
+        help="Filter by category"
+    )
+    tools_list.add_argument(
+        "--installed-only",
+        action="store_true",
+        help="Show only installed tools"
+    )
+
+    # tools check - Check tool availability
+    tools_subparsers.add_parser("check", help="Check which tools are installed")
+
     # AI Skills command with subcommands
     ai_parser = subparsers.add_parser("ai", help="AI-powered security testing (code review, API testing, web pentesting)")
     ai_subparsers = ai_parser.add_subparsers(dest="ai_command", help="AI testing commands")
@@ -335,6 +421,12 @@ Installation:
             return show_version()
         elif args.command == "vps":
             return run_vps_command(args)
+        elif args.command == "tools":
+            return run_tools_command(args)
+        elif args.command == "shell":
+            return run_shell(args)
+        elif args.command == "verify":
+            return run_verify(args)
         elif args.command == "ai":
             return run_ai_command(args)
         else:
@@ -761,8 +853,24 @@ def run_scan(args):
 
     try:
         from .orchestrator import Orchestrator, OrchestratorConfig
-    except ImportError:
-        from orchestrator import Orchestrator, OrchestratorConfig
+    except ImportError as e:
+        # Provide helpful error message for missing dependencies
+        error_msg = str(e)
+        console.print()
+        console.print(Panel(
+            "[bold red]Missing Dependencies[/bold red]\n\n"
+            f"[dim]Import error: {error_msg}[/dim]\n\n"
+            "The scan module requires additional dependencies.\n\n"
+            "[bold]To fix, install the full package:[/bold]\n"
+            "  [bold green]pip install aiptx[full][/bold green]\n\n"
+            "[bold]Or install specific dependencies:[/bold]\n"
+            "  [dim]pip install sentence-transformers torch langchain-core[/dim]",
+            title="⚠️  Scan Module Not Available",
+            border_style="yellow",
+            padding=(1, 2),
+        ))
+        console.print()
+        return 1
 
     # Check if configured - prompt for setup if not
     if not is_configured():
@@ -1608,6 +1716,281 @@ Version: {__version__}
     console.print(Panel(info, title="Version Information", border_style="cyan"))
 
     return 0
+
+
+def run_verify(args):
+    """Verify AIPTX installation."""
+    import asyncio
+
+    from aipt_v2.verify_install import verify_installation
+
+    quick = getattr(args, 'quick', False)
+    auto_fix = getattr(args, 'fix', False)
+    report_file = getattr(args, 'report', None)
+
+    return asyncio.run(verify_installation(
+        quick=quick,
+        auto_fix=auto_fix,
+        report_file=report_file,
+    ))
+
+
+def run_shell(args):
+    """Start the interactive security shell."""
+    import asyncio
+
+    from aipt_v2.interactive_shell import start_interactive_shell
+
+    log_file = getattr(args, 'log', None)
+    working_dir = getattr(args, 'dir', None)
+
+    return asyncio.run(start_interactive_shell(
+        log_file=log_file,
+        working_dir=working_dir,
+    ))
+
+
+def run_tools_command(args):
+    """Handle tools subcommands for local tool management."""
+    import asyncio
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+
+    tools_cmd = getattr(args, 'tools_command', None)
+
+    if tools_cmd == "install":
+        return run_tools_install(args, console)
+    elif tools_cmd == "list":
+        return run_tools_list(args, console)
+    elif tools_cmd == "check":
+        return run_tools_check(args, console)
+    else:
+        console.print(Panel(
+            "[bold cyan]AIPTX Local Tools Management[/bold cyan]\n\n"
+            "[bold]aiptx tools install[/bold]  - Install security tools locally\n"
+            "[bold]aiptx tools list[/bold]     - List available/installed tools\n"
+            "[bold]aiptx tools check[/bold]    - Check installed tool status\n\n"
+            "[dim]Examples:[/dim]\n"
+            "  aiptx tools install --core          # Install core tools\n"
+            "  aiptx tools install -c recon scan   # Install by category\n"
+            "  aiptx tools install -t nmap nuclei  # Install specific tools",
+            title="🔧 Local Security Tools",
+            border_style="cyan",
+        ))
+        return 0
+
+
+def run_tools_install(args, console):
+    """Install security tools on local system."""
+    import asyncio
+    from rich.panel import Panel
+
+    console.print()
+    console.print(Panel(
+        "[bold cyan]Local Tool Installation[/bold cyan]\n\n"
+        "Installing security tools on your local system.\n"
+        "Some tools may require sudo/admin privileges.",
+        title="🔧 Installation",
+        border_style="cyan",
+    ))
+    console.print()
+
+    async def _install():
+        try:
+            from aipt_v2.system_detector import SystemDetector
+            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
+
+            # Detect system first
+            detector = SystemDetector()
+            with console.status("[bold cyan]Detecting system...[/bold cyan]"):
+                system_info = await detector.detect()
+
+            console.print(f"[dim]Detected: {system_info.os_name} with {system_info.package_manager.value}[/dim]")
+
+            installer = LocalToolInstaller(system_info)
+            use_sudo = not getattr(args, 'no_sudo', False)
+
+            # Determine what to install
+            if getattr(args, 'all', False):
+                console.print("[cyan]Installing all available tools...[/cyan]")
+                results = await installer.install_all()
+            elif getattr(args, 'tools', None):
+                console.print(f"[cyan]Installing specific tools: {', '.join(args.tools)}[/cyan]")
+                results = await installer.install_tools(tools=args.tools, use_sudo=use_sudo)
+            elif getattr(args, 'categories', None):
+                console.print(f"[cyan]Installing categories: {', '.join(args.categories)}[/cyan]")
+                results = await installer.install_tools(categories=args.categories, use_sudo=use_sudo)
+            else:
+                # Default: core tools
+                console.print("[cyan]Installing core security tools...[/cyan]")
+                results = await installer.install_core_tools()
+
+            # Show summary
+            installer.print_tool_status(results)
+            return 0
+
+        except ImportError as e:
+            console.print(f"[red]Error: Missing dependency - {e}[/red]")
+            return 1
+        except Exception as e:
+            console.print(f"[red]Error during installation: {e}[/red]")
+            return 1
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_install())
+    finally:
+        loop.close()
+
+
+def run_tools_list(args, console):
+    """List available and installed tools."""
+    import asyncio
+    from rich.table import Table
+    from rich import box
+
+    async def _list():
+        try:
+            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
+
+            installer = LocalToolInstaller()
+            installed = await installer.get_installed_tools()
+
+            category = getattr(args, 'category', 'all')
+            installed_only = getattr(args, 'installed_only', False)
+
+            table = Table(title="Security Tools", box=box.ROUNDED)
+            table.add_column("Tool", style="cyan")
+            table.add_column("Category", style="dim")
+            table.add_column("Status", justify="center")
+            table.add_column("Description")
+
+            for tool_name, tool_def in sorted(TOOLS.items()):
+                if category != 'all' and tool_def.category.value != category:
+                    continue
+
+                is_installed = installed.get(tool_name, False)
+
+                if installed_only and not is_installed:
+                    continue
+
+                status = "[green]✓ Installed[/green]" if is_installed else "[dim]○ Not installed[/dim]"
+                core_badge = " [yellow]★[/yellow]" if tool_def.is_core else ""
+
+                table.add_row(
+                    f"{tool_name}{core_badge}",
+                    tool_def.category.value,
+                    status,
+                    tool_def.description[:50] + "..." if len(tool_def.description) > 50 else tool_def.description
+                )
+
+            console.print()
+            console.print(table)
+            console.print()
+            console.print("[dim]Legend: [yellow]★[/yellow] = Core tool (recommended)[/dim]")
+
+            return 0
+
+        except ImportError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_list())
+    finally:
+        loop.close()
+
+
+def run_tools_check(args, console):
+    """Check installed tool status."""
+    import asyncio
+    from rich.table import Table
+    from rich.panel import Panel
+    from rich import box
+
+    async def _check():
+        try:
+            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
+
+            console.print()
+            with console.status("[bold cyan]Checking installed tools...[/bold cyan]"):
+                installer = LocalToolInstaller()
+                installed = await installer.get_installed_tools()
+
+            # Count by category
+            categories = {}
+            for tool_name, tool_def in TOOLS.items():
+                cat = tool_def.category.value
+                if cat not in categories:
+                    categories[cat] = {"total": 0, "installed": 0}
+                categories[cat]["total"] += 1
+                if installed.get(tool_name, False):
+                    categories[cat]["installed"] += 1
+
+            # Summary table
+            table = Table(box=box.ROUNDED)
+            table.add_column("Category", style="cyan")
+            table.add_column("Installed", justify="right", style="green")
+            table.add_column("Total", justify="right")
+            table.add_column("Coverage", justify="right")
+
+            total_installed = 0
+            total_tools = 0
+
+            for cat, counts in sorted(categories.items()):
+                coverage = (counts["installed"] / counts["total"] * 100) if counts["total"] > 0 else 0
+                coverage_color = "green" if coverage >= 75 else "yellow" if coverage >= 50 else "red"
+
+                table.add_row(
+                    cat,
+                    str(counts["installed"]),
+                    str(counts["total"]),
+                    f"[{coverage_color}]{coverage:.0f}%[/{coverage_color}]"
+                )
+
+                total_installed += counts["installed"]
+                total_tools += counts["total"]
+
+            table.add_row("─" * 15, "─" * 5, "─" * 5, "─" * 7)
+            total_coverage = (total_installed / total_tools * 100) if total_tools > 0 else 0
+            table.add_row(
+                "[bold]Total[/bold]",
+                f"[bold]{total_installed}[/bold]",
+                f"[bold]{total_tools}[/bold]",
+                f"[bold]{total_coverage:.0f}%[/bold]"
+            )
+
+            console.print()
+            console.print(table)
+            console.print()
+
+            if total_coverage < 50:
+                console.print(Panel(
+                    "[yellow]Many security tools are not installed.[/yellow]\n\n"
+                    "Run [bold]aiptx tools install --core[/bold] to install essential tools.",
+                    title="💡 Recommendation",
+                    border_style="yellow"
+                ))
+
+            return 0
+
+        except ImportError as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(_check())
+    finally:
+        loop.close()
 
 
 def run_vps_command(args):

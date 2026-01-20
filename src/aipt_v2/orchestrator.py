@@ -10,7 +10,7 @@ Each phase uses specialized tools and integrates with enterprise scanners
 (Acunetix, Burp Suite) for comprehensive coverage.
 
 Usage:
-    from orchestrator import Orchestrator
+    from aipt_v2.orchestrator import Orchestrator
 
     orch = Orchestrator("example.com")
     results = await orch.run()

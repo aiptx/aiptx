@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "2.0.6"
+version = "2.0.7"
 description = "AI-Powered Penetration Testing Framework - Autonomous security assessment with LLM intelligence"
 readme = "README.md"
 license = {file = "LICENSE"}
@@ -213,7 +213,7 @@ aiptx-api = "aipt_v2.app:run_server"
 
 [project.entry-points."aiptx.plugins"]
 # Future plugin system
-default = "orchestrator:Orchestrator"
+default = "aipt_v2.orchestrator:Orchestrator"
 
 [tool.setuptools.packages.find]
 where = ["src"]
