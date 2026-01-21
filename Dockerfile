@@ -11,7 +11,7 @@
 # -----------------------------------------------------------------------------
 # Stage 1: Builder - Install dependencies and build wheels
 # -----------------------------------------------------------------------------
-FROM python:3.11-slim as builder
+FROM python:3.14-slim as builder
 
 WORKDIR /build
 
@@ -35,7 +35,7 @@ RUN pip install --no-cache-dir --upgrade pip wheel setuptools && \
 # -----------------------------------------------------------------------------
 # Stage 2: Runtime - Minimal production image
 # -----------------------------------------------------------------------------
-FROM python:3.11-slim as runtime
+FROM python:3.14-slim as runtime
 
 # Labels
 LABEL org.opencontainers.image.title="AIPT v2"
