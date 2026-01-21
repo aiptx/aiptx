@@ -7,11 +7,13 @@ Adapts installation commands based on detected OS and package manager.
 
 Features:
 - Cross-platform support (Linux, macOS, Windows)
-- Multiple package manager support (apt, brew, yum, pacman, choco)
+- Multiple package manager support (apt, brew, yum, pacman, choco, winget, scoop)
 - Parallel installation for speed
 - Progress tracking with Rich UI
 - Rollback on failure
 - Prerequisite installation (Go, Ruby, etc.)
+- Timeout handling with fallback methods
+- Direct download support for Windows tools
 
 Usage:
     installer = LocalToolInstaller()
@@ -21,11 +23,16 @@ Usage:
 """
 
 import asyncio
+import os as _os
+import platform
 import shutil
-from dataclasses import dataclass
+import tempfile
+import urllib.request
+import zipfile
+from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Callable
+from typing import Dict, List, Optional, Set, Callable, Tuple
 
 from rich.console import Console
 from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
@@ -45,6 +52,10 @@ from aipt_v2.utils.logging import logger
 
 
 console = Console()
+
+# Default timeout for tool installation (seconds)
+DEFAULT_INSTALL_TIMEOUT = 120  # 2 minutes per tool
+QUICK_INSTALL_TIMEOUT = 60     # 1 minute for pip/simple installs
 
 
 class ToolCategory(Enum):
@@ -84,10 +95,20 @@ class ToolDefinition:
     dependencies: List[str] = None
     # Whether requires sudo/admin
     requires_sudo: bool = False
+    # Direct download URLs for fallback (keyed by architecture)
+    download_urls: Dict[str, str] = None
+    # Installation timeout in seconds (None = use default)
+    install_timeout: int = None
+    # Fallback pip package name (if different from tool name)
+    pip_package: Optional[str] = None
+    # Whether this tool is Windows-compatible
+    windows_compatible: bool = True
 
     def __post_init__(self):
         if self.dependencies is None:
             self.dependencies = []
+        if self.download_urls is None:
+            self.download_urls = {}
 
 
 # =============================================================================
@@ -105,12 +126,23 @@ TOOLS: Dict[str, ToolDefinition] = {
             PackageManager.DNF: "dnf install -y golang",
             PackageManager.YUM: "yum install -y golang",
             PackageManager.PACMAN: "pacman -S --noconfirm go",
+            PackageManager.ZYPPER: "zypper install -y go",
             PackageManager.BREW: "brew install go",
             PackageManager.CHOCO: "choco install golang -y",
-            PackageManager.WINGET: "winget install GoLang.Go --accept-source-agreements --accept-package-agreements",
+            PackageManager.WINGET: "winget install GoLang.Go --accept-source-agreements --accept-package-agreements -h",
+            PackageManager.SCOOP: "scoop install go",
         },
         check_command="go version",
         is_core=True,
+        download_urls={
+            "windows_x86_64": "https://go.dev/dl/go1.25.6.windows-amd64.zip",
+            "windows_arm64": "https://go.dev/dl/go1.25.6.windows-arm64.zip",
+            "linux_x86_64": "https://go.dev/dl/go1.25.6.linux-amd64.tar.gz",
+            "linux_arm64": "https://go.dev/dl/go1.25.6.linux-arm64.tar.gz",
+            "darwin_x86_64": "https://go.dev/dl/go1.25.6.darwin-amd64.tar.gz",
+            "darwin_arm64": "https://go.dev/dl/go1.25.6.darwin-arm64.tar.gz",
+        },
+        install_timeout=300,  # Go download can take time
     ),
     "ruby": ToolDefinition(
         name="ruby",
@@ -121,8 +153,11 @@ TOOLS: Dict[str, ToolDefinition] = {
             PackageManager.DNF: "dnf install -y ruby ruby-devel",
             PackageManager.YUM: "yum install -y ruby ruby-devel",
             PackageManager.PACMAN: "pacman -S --noconfirm ruby",
+            PackageManager.ZYPPER: "zypper install -y ruby ruby-devel",
             PackageManager.BREW: "brew install ruby",
             PackageManager.CHOCO: "choco install ruby -y",
+            PackageManager.WINGET: "winget install RubyInstallerTeam.Ruby.3.2 --accept-source-agreements --accept-package-agreements -h",
+            PackageManager.SCOOP: "scoop install ruby",
         },
         check_command="ruby --version",
         is_core=False,
@@ -134,9 +169,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
             PackageManager.DNF: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
+            PackageManager.YUM: "curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y",
+            PackageManager.ZYPPER: "zypper install -y rust cargo",
             PackageManager.BREW: "brew install rust",
             PackageManager.PACMAN: "pacman -S --noconfirm rust",
             PackageManager.CHOCO: "choco install rust -y",
+            PackageManager.WINGET: "winget install Rustlang.Rust.MSVC --accept-source-agreements --accept-package-agreements -h",
+            PackageManager.SCOOP: "scoop install rust",
         },
         check_command="cargo --version",
         is_core=False,
@@ -166,9 +205,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
             PackageManager.DNF: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
             PackageManager.BREW: "brew install subfinder",
             PackageManager.PACMAN: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
             PackageManager.CHOCO: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
         },
         check_command="subfinder -version",
         dependencies=["go"],
@@ -181,9 +224,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
             PackageManager.DNF: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
             PackageManager.BREW: "brew install httpx",
             PackageManager.PACMAN: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
             PackageManager.CHOCO: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
         },
         check_command="httpx -version",
         dependencies=["go"],
@@ -196,8 +243,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/owasp-amass/amass/v4/...@master",
             PackageManager.DNF: "go install -v github.com/owasp-amass/amass/v4/...@master",
+            PackageManager.YUM: "go install -v github.com/owasp-amass/amass/v4/...@master",
+            PackageManager.ZYPPER: "go install -v github.com/owasp-amass/amass/v4/...@master",
             PackageManager.BREW: "brew install amass",
             PackageManager.PACMAN: "go install -v github.com/owasp-amass/amass/v4/...@master",
+            PackageManager.CHOCO: "go install -v github.com/owasp-amass/amass/v4/...@master",
+            PackageManager.WINGET: "go install -v github.com/owasp-amass/amass/v4/...@master",
+            PackageManager.SCOOP: "go install -v github.com/owasp-amass/amass/v4/...@master",
         },
         check_command="amass -version",
         dependencies=["go"],
@@ -209,8 +261,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
             PackageManager.DNF: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
             PackageManager.BREW: "brew install dnsx",
             PackageManager.PACMAN: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            PackageManager.CHOCO: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
         },
         check_command="dnsx -version",
         dependencies=["go"],
@@ -222,8 +279,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
             PackageManager.DNF: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
             PackageManager.BREW: "brew install katana",
             PackageManager.PACMAN: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            PackageManager.CHOCO: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
         },
         check_command="katana -version",
         dependencies=["go"],
@@ -235,10 +297,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "apt-get install -y whatweb",
             PackageManager.DNF: "dnf install -y whatweb",
+            PackageManager.YUM: "yum install -y whatweb || gem install whatweb",
+            PackageManager.ZYPPER: "zypper install -y whatweb || gem install whatweb",
             PackageManager.BREW: "brew install whatweb",
             PackageManager.PACMAN: "pacman -S --noconfirm whatweb",
         },
         check_command="whatweb --version",
+        dependencies=["ruby"],
     ),
     "wafw00f": ToolDefinition(
         name="wafw00f",
@@ -247,10 +312,16 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "pip3 install wafw00f",
             PackageManager.DNF: "pip3 install wafw00f",
+            PackageManager.YUM: "pip3 install wafw00f",
+            PackageManager.ZYPPER: "pip3 install wafw00f",
             PackageManager.BREW: "pip3 install wafw00f",
             PackageManager.PACMAN: "pip3 install wafw00f",
+            PackageManager.CHOCO: "pip install wafw00f",
+            PackageManager.WINGET: "pip install wafw00f",
+            PackageManager.SCOOP: "pip install wafw00f",
         },
         check_command="wafw00f -h",
+        pip_package="wafw00f",
     ),
 
     # SCAN Tools
@@ -261,8 +332,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
             PackageManager.DNF: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
             PackageManager.BREW: "brew install nuclei && nuclei -update-templates",
             PackageManager.PACMAN: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            PackageManager.CHOCO: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
         },
         check_command="nuclei -version",
         dependencies=["go"],
@@ -277,9 +353,14 @@ TOOLS: Dict[str, ToolDefinition] = {
             PackageManager.DNF: "dnf install -y nikto",
             PackageManager.BREW: "brew install nikto",
             PackageManager.PACMAN: "pacman -S --noconfirm nikto",
+            PackageManager.CHOCO: "choco install nikto -y",
+            PackageManager.WINGET: "pip install nikto",  # Fallback to pip on Windows
+            PackageManager.SCOOP: "pip install nikto",
         },
         check_command="nikto -Version",
         is_core=True,
+        pip_package="nikto",
+        windows_compatible=True,
     ),
     "ffuf": ToolDefinition(
         name="ffuf",
@@ -288,8 +369,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/ffuf/ffuf/v2@latest",
             PackageManager.DNF: "go install -v github.com/ffuf/ffuf/v2@latest",
+            PackageManager.YUM: "go install -v github.com/ffuf/ffuf/v2@latest",
+            PackageManager.ZYPPER: "go install -v github.com/ffuf/ffuf/v2@latest",
             PackageManager.BREW: "brew install ffuf",
             PackageManager.PACMAN: "go install -v github.com/ffuf/ffuf/v2@latest",
+            PackageManager.CHOCO: "go install -v github.com/ffuf/ffuf/v2@latest",
+            PackageManager.WINGET: "go install -v github.com/ffuf/ffuf/v2@latest",
+            PackageManager.SCOOP: "go install -v github.com/ffuf/ffuf/v2@latest",
         },
         check_command="ffuf -V",
         dependencies=["go"],
@@ -302,8 +388,13 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "go install -v github.com/OJ/gobuster/v3@latest",
             PackageManager.DNF: "go install -v github.com/OJ/gobuster/v3@latest",
+            PackageManager.YUM: "go install -v github.com/OJ/gobuster/v3@latest",
+            PackageManager.ZYPPER: "go install -v github.com/OJ/gobuster/v3@latest",
             PackageManager.BREW: "brew install gobuster",
             PackageManager.PACMAN: "go install -v github.com/OJ/gobuster/v3@latest",
+            PackageManager.CHOCO: "go install -v github.com/OJ/gobuster/v3@latest",
+            PackageManager.WINGET: "go install -v github.com/OJ/gobuster/v3@latest",
+            PackageManager.SCOOP: "go install -v github.com/OJ/gobuster/v3@latest",
         },
         check_command="gobuster version",
         dependencies=["go"],
@@ -337,8 +428,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.SCAN,
         install_commands={
             PackageManager.APT: "go install github.com/gitleaks/gitleaks/v8@latest",
+            PackageManager.DNF: "go install github.com/gitleaks/gitleaks/v8@latest",
+            PackageManager.YUM: "go install github.com/gitleaks/gitleaks/v8@latest",
+            PackageManager.ZYPPER: "go install github.com/gitleaks/gitleaks/v8@latest",
             PackageManager.BREW: "brew install gitleaks",
             PackageManager.PACMAN: "go install github.com/gitleaks/gitleaks/v8@latest",
+            PackageManager.CHOCO: "choco install gitleaks -y",
+            PackageManager.WINGET: "go install github.com/gitleaks/gitleaks/v8@latest",
+            PackageManager.SCOOP: "scoop install gitleaks",
         },
         check_command="gitleaks version",
         dependencies=["go"],
@@ -377,9 +474,13 @@ TOOLS: Dict[str, ToolDefinition] = {
             PackageManager.DNF: "dnf install -y sqlmap",
             PackageManager.BREW: "brew install sqlmap",
             PackageManager.PACMAN: "pacman -S --noconfirm sqlmap",
+            PackageManager.CHOCO: "choco install sqlmap -y",
+            PackageManager.WINGET: "pip install sqlmap",
+            PackageManager.SCOOP: "pip install sqlmap",
         },
         check_command="sqlmap --version",
         is_core=True,
+        pip_package="sqlmap",
     ),
     "hydra": ToolDefinition(
         name="hydra",
@@ -423,9 +524,17 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.EXPLOIT,
         install_commands={
             PackageManager.APT: "pip3 install commix",
+            PackageManager.DNF: "pip3 install commix",
+            PackageManager.YUM: "pip3 install commix",
+            PackageManager.ZYPPER: "pip3 install commix",
             PackageManager.BREW: "pip3 install commix",
+            PackageManager.PACMAN: "pip3 install commix",
+            PackageManager.CHOCO: "pip install commix",
+            PackageManager.WINGET: "pip install commix",
+            PackageManager.SCOOP: "pip install commix",
         },
         check_command="commix --version",
+        pip_package="commix",
     ),
 
     # NETWORK Tools
@@ -448,7 +557,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.NETWORK,
         install_commands={
             PackageManager.APT: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.DNF: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.YUM: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.ZYPPER: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
             PackageManager.BREW: "brew install naabu",
+            PackageManager.PACMAN: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.CHOCO: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.WINGET: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            PackageManager.SCOOP: "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
         },
         check_command="naabu -version",
         dependencies=["go"],
@@ -461,9 +577,17 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.API,
         install_commands={
             PackageManager.APT: "pip3 install arjun",
+            PackageManager.DNF: "pip3 install arjun",
+            PackageManager.YUM: "pip3 install arjun",
+            PackageManager.ZYPPER: "pip3 install arjun",
             PackageManager.BREW: "pip3 install arjun",
+            PackageManager.PACMAN: "pip3 install arjun",
+            PackageManager.CHOCO: "pip install arjun",
+            PackageManager.WINGET: "pip install arjun",
+            PackageManager.SCOOP: "pip install arjun",
         },
         check_command="arjun -h",
+        pip_package="arjun",
     ),
 
     # =========================================================================
@@ -475,7 +599,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.DNF: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.YUM: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.ZYPPER: "go install -v github.com/tomnomnom/assetfinder@latest",
             PackageManager.BREW: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.PACMAN: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.CHOCO: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.WINGET: "go install -v github.com/tomnomnom/assetfinder@latest",
+            PackageManager.SCOOP: "go install -v github.com/tomnomnom/assetfinder@latest",
         },
         check_command="assetfinder -h",
         dependencies=["go"],
@@ -486,7 +617,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.DNF: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.YUM: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.ZYPPER: "go install -v github.com/tomnomnom/waybackurls@latest",
             PackageManager.BREW: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.PACMAN: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.CHOCO: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.WINGET: "go install -v github.com/tomnomnom/waybackurls@latest",
+            PackageManager.SCOOP: "go install -v github.com/tomnomnom/waybackurls@latest",
         },
         check_command="waybackurls -h",
         dependencies=["go"],
@@ -497,7 +635,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.DNF: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.YUM: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.ZYPPER: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
             PackageManager.BREW: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.PACMAN: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.CHOCO: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.WINGET: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
+            PackageManager.SCOOP: "go install -v github.com/lc/gau/v2/cmd/gau@latest",
         },
         check_command="gau -h",
         dependencies=["go"],
@@ -508,7 +653,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.DNF: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.YUM: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.ZYPPER: "go install -v github.com/hakluke/hakrawler@latest",
             PackageManager.BREW: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.PACMAN: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.CHOCO: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.WINGET: "go install -v github.com/hakluke/hakrawler@latest",
+            PackageManager.SCOOP: "go install -v github.com/hakluke/hakrawler@latest",
         },
         check_command="hakrawler -h",
         dependencies=["go"],
@@ -519,7 +671,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.DNF: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.YUM: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.ZYPPER: "go install -v github.com/jaeles-project/gospider@latest",
             PackageManager.BREW: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.PACMAN: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.CHOCO: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.WINGET: "go install -v github.com/jaeles-project/gospider@latest",
+            PackageManager.SCOOP: "go install -v github.com/jaeles-project/gospider@latest",
         },
         check_command="gospider -h",
         dependencies=["go"],
@@ -530,9 +689,17 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.RECON,
         install_commands={
             PackageManager.APT: "pip3 install shodan",
+            PackageManager.DNF: "pip3 install shodan",
+            PackageManager.YUM: "pip3 install shodan",
+            PackageManager.ZYPPER: "pip3 install shodan",
             PackageManager.BREW: "pip3 install shodan",
+            PackageManager.PACMAN: "pip3 install shodan",
+            PackageManager.CHOCO: "pip install shodan",
+            PackageManager.WINGET: "pip install shodan",
+            PackageManager.SCOOP: "pip install shodan",
         },
         check_command="shodan -h",
+        pip_package="shodan",
     ),
 
     # =========================================================================
@@ -544,9 +711,17 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.SCAN,
         install_commands={
             PackageManager.APT: "pip3 install dirsearch",
+            PackageManager.DNF: "pip3 install dirsearch",
+            PackageManager.YUM: "pip3 install dirsearch",
+            PackageManager.ZYPPER: "pip3 install dirsearch",
             PackageManager.BREW: "pip3 install dirsearch",
+            PackageManager.PACMAN: "pip3 install dirsearch",
+            PackageManager.CHOCO: "pip install dirsearch",
+            PackageManager.WINGET: "pip install dirsearch",
+            PackageManager.SCOOP: "pip install dirsearch",
         },
         check_command="dirsearch -h",
+        pip_package="dirsearch",
     ),
     "testssl": ToolDefinition(
         name="testssl",
@@ -564,7 +739,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.SCAN,
         install_commands={
             PackageManager.APT: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.DNF: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.YUM: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.ZYPPER: "go install -v github.com/hahwul/dalfox/v2@latest",
             PackageManager.BREW: "brew install dalfox",
+            PackageManager.PACMAN: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.CHOCO: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.WINGET: "go install -v github.com/hahwul/dalfox/v2@latest",
+            PackageManager.SCOOP: "go install -v github.com/hahwul/dalfox/v2@latest",
         },
         check_command="dalfox version",
         dependencies=["go"],
@@ -586,7 +768,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.SCAN,
         install_commands={
             PackageManager.APT: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.DNF: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.YUM: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.ZYPPER: "go install -v github.com/haccer/subjack@latest",
             PackageManager.BREW: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.PACMAN: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.CHOCO: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.WINGET: "go install -v github.com/haccer/subjack@latest",
+            PackageManager.SCOOP: "go install -v github.com/haccer/subjack@latest",
         },
         check_command="subjack -h",
         dependencies=["go"],
@@ -694,10 +883,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         install_commands={
             PackageManager.APT: "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o ~/.local/bin/linpeas.sh && chmod +x ~/.local/bin/linpeas.sh",
             PackageManager.BREW: "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o ~/.local/bin/linpeas.sh && chmod +x ~/.local/bin/linpeas.sh",
+            # Windows gets winPEAS instead
+            PackageManager.WINGET: "powershell -Command \"Invoke-WebRequest -Uri 'https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASx64.exe' -OutFile $env:USERPROFILE\\winpeas.exe\"",
+            PackageManager.CHOCO: "powershell -Command \"Invoke-WebRequest -Uri 'https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASx64.exe' -OutFile $env:USERPROFILE\\winpeas.exe\"",
         },
         check_command="test -f ~/.local/bin/linpeas.sh",
         check_path="~/.local/bin/linpeas.sh",
         is_core=True,
+        windows_compatible=True,
     ),
     "pspy": ToolDefinition(
         name="pspy",
@@ -716,7 +909,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.POST_EXPLOIT,
         install_commands={
             PackageManager.APT: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.DNF: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.YUM: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.ZYPPER: "go install -v github.com/jpillora/chisel@latest",
             PackageManager.BREW: "brew install chisel",
+            PackageManager.PACMAN: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.CHOCO: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.WINGET: "go install -v github.com/jpillora/chisel@latest",
+            PackageManager.SCOOP: "go install -v github.com/jpillora/chisel@latest",
         },
         check_command="chisel -h",
         dependencies=["go"],
@@ -764,7 +964,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.ACTIVE_DIRECTORY,
         install_commands={
             PackageManager.APT: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.DNF: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.YUM: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.ZYPPER: "go install -v github.com/ropnop/kerbrute@latest",
             PackageManager.BREW: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.PACMAN: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.CHOCO: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.WINGET: "go install -v github.com/ropnop/kerbrute@latest",
+            PackageManager.SCOOP: "go install -v github.com/ropnop/kerbrute@latest",
         },
         check_command="kerbrute -h",
         dependencies=["go"],
@@ -1007,7 +1214,14 @@ TOOLS: Dict[str, ToolDefinition] = {
         category=ToolCategory.SECRETS,
         install_commands={
             PackageManager.APT: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.DNF: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.YUM: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.ZYPPER: "go install -v github.com/eth0izzle/shhgit@latest",
             PackageManager.BREW: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.PACMAN: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.CHOCO: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.WINGET: "go install -v github.com/eth0izzle/shhgit@latest",
+            PackageManager.SCOOP: "go install -v github.com/eth0izzle/shhgit@latest",
         },
         check_command="shhgit -h",
         dependencies=["go"],
@@ -1126,16 +1340,46 @@ class LocalToolInstaller:
         if not tool:
             return False
 
-        # Check if binary exists
+        # Check if binary exists in standard PATH
         if shutil.which(tool_name):
             return True
 
-        # Try running check command
+        # Check in Go bin directory (for go install tools)
+        go_bin = Path.home() / "go" / "bin" / tool_name
+        if go_bin.exists():
+            return True
+        # Windows: check with .exe extension
+        go_bin_exe = Path.home() / "go" / "bin" / f"{tool_name}.exe"
+        if go_bin_exe.exists():
+            return True
+
+        # Check in ~/.local/bin (common for manual installs)
+        local_bin = Path.home() / ".local" / "bin" / tool_name
+        if local_bin.exists():
+            return True
+
+        # Check file path if specified
+        if tool.check_path:
+            check_path = Path(tool.check_path).expanduser()
+            if check_path.exists():
+                return True
+
+        # Try running check command with extended PATH
         try:
+            # Build PATH with Go bin and local bin directories
+            env = dict(_os.environ)
+            go_path = Path.home() / "go" / "bin"
+            local_path = Path.home() / ".local" / "bin"
+            if platform.system().lower() == "windows":
+                env["PATH"] = f"{go_path};{local_path};{env.get('PATH', '')}"
+            else:
+                env["PATH"] = f"{go_path}:{local_path}:{env.get('PATH', '')}"
+
             proc = await asyncio.create_subprocess_shell(
                 tool.check_command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
+                env=env,
             )
             await asyncio.wait_for(proc.communicate(), timeout=10)
             return proc.returncode == 0
@@ -1156,7 +1400,7 @@ class LocalToolInstaller:
         progress_callback: Optional[Callable[[str], None]] = None,
     ) -> InstallResult:
         """
-        Install a single tool.
+        Install a single tool with timeout and fallback support.
 
         Args:
             tool_name: Name of the tool to install
@@ -1168,6 +1412,7 @@ class LocalToolInstaller:
         """
         await self.detect_system()
         pkg_mgr = self._system_info.package_manager
+        os_type = self._system_info.os_type
 
         tool = TOOLS.get(tool_name)
         if not tool:
@@ -1175,6 +1420,14 @@ class LocalToolInstaller:
                 tool_name=tool_name,
                 success=False,
                 message=f"Unknown tool: {tool_name}"
+            )
+
+        # Check Windows compatibility
+        if os_type == OSType.WINDOWS and not tool.windows_compatible:
+            return InstallResult(
+                tool_name=tool_name,
+                success=False,
+                message="Not compatible with Windows"
             )
 
         # Check if already installed
@@ -1186,62 +1439,150 @@ class LocalToolInstaller:
                 already_installed=True
             )
 
-        # Install dependencies first
+        # Install dependencies first (with skip on failure for optional deps)
         for dep in tool.dependencies:
             dep_result = await self.install_tool(dep, use_sudo, progress_callback)
             if not dep_result.success and not dep_result.already_installed:
-                return InstallResult(
-                    tool_name=tool_name,
-                    success=False,
-                    message=f"Failed to install dependency: {dep}"
-                )
+                # Try fallback methods before giving up
+                if dep == "go" and os_type == OSType.WINDOWS:
+                    # Special handling for Go on Windows - try direct download
+                    go_result = await self._install_go_windows()
+                    if not go_result.success:
+                        return InstallResult(
+                            tool_name=tool_name,
+                            success=False,
+                            message=f"Failed to install dependency: {dep}"
+                        )
+                else:
+                    return InstallResult(
+                        tool_name=tool_name,
+                        success=False,
+                        message=f"Failed to install dependency: {dep}"
+                    )
 
-        # Get install command for this package manager
-        install_cmd = tool.install_commands.get(pkg_mgr)
-        if not install_cmd:
-            # Try to find alternative package manager command
-            for pm, cmd in tool.install_commands.items():
-                if cmd.startswith("pip3 ") or cmd.startswith("go install"):
-                    install_cmd = cmd
-                    break
+        # Build list of installation methods to try
+        install_methods = self._get_install_methods(tool, pkg_mgr, os_type)
 
-        if not install_cmd:
+        if not install_methods:
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
                 message=f"No installation method for {pkg_mgr.value}"
             )
 
-        # Prepare command with sudo if needed
-        if use_sudo and self._system_info.capabilities.has_sudo:
-            if install_cmd.startswith("apt") or install_cmd.startswith("dnf") or \
-               install_cmd.startswith("yum") or install_cmd.startswith("pacman"):
-                install_cmd = f"sudo {install_cmd}"
-
         if progress_callback:
             progress_callback(f"Installing {tool_name}...")
 
-        logger.info(f"Installing tool: {tool_name}", command=install_cmd[:100])
+        # Get timeout for this tool
+        timeout = tool.install_timeout or DEFAULT_INSTALL_TIMEOUT
 
+        # Try each installation method
+        last_error = "No methods available"
+        for method_name, install_cmd in install_methods:
+            logger.info(f"Installing tool: {tool_name} via {method_name}", command=install_cmd[:100])
+
+            result = await self._try_install_command(
+                tool_name, install_cmd, use_sudo, timeout, os_type
+            )
+
+            if result.success:
+                return result
+
+            last_error = result.message
+            logger.debug(f"Method {method_name} failed for {tool_name}: {last_error}")
+
+        return InstallResult(
+            tool_name=tool_name,
+            success=False,
+            message=f"All methods failed. Last: {last_error[:100]}"
+        )
+
+    def _get_install_methods(
+        self,
+        tool: ToolDefinition,
+        pkg_mgr: PackageManager,
+        os_type: OSType,
+    ) -> List[Tuple[str, str]]:
+        """Get list of installation methods to try in order."""
+        methods = []
+
+        # 1. Primary: Package manager command
+        if pkg_mgr in tool.install_commands:
+            methods.append((pkg_mgr.value, tool.install_commands[pkg_mgr]))
+
+        # 2. Fallback: pip install (cross-platform)
+        if tool.pip_package or any("pip" in cmd for cmd in tool.install_commands.values()):
+            pip_pkg = tool.pip_package or tool.name
+            pip_cmd = f"pip install {pip_pkg}" if os_type == OSType.WINDOWS else f"pip3 install {pip_pkg}"
+            if ("pip", pip_cmd) not in methods:
+                methods.append(("pip", pip_cmd))
+
+        # 3. Fallback: Try other package managers' pip commands
+        for pm, cmd in tool.install_commands.items():
+            if "pip" in cmd and (pm.value, cmd) not in methods:
+                # Adjust for Windows
+                if os_type == OSType.WINDOWS:
+                    cmd = cmd.replace("pip3 ", "pip ")
+                methods.append((pm.value, cmd))
+
+        # 4. Windows-specific: Try choco/scoop/winget even if not primary
+        if os_type == OSType.WINDOWS:
+            for pm in [PackageManager.CHOCO, PackageManager.WINGET, PackageManager.SCOOP]:
+                if pm in tool.install_commands and pm != pkg_mgr:
+                    methods.append((pm.value, tool.install_commands[pm]))
+
+        # 5. Go install commands (if Go is available)
+        for pm, cmd in tool.install_commands.items():
+            if "go install" in cmd and (pm.value, cmd) not in methods:
+                methods.append(("go", cmd))
+
+        return methods
+
+    async def _try_install_command(
+        self,
+        tool_name: str,
+        install_cmd: str,
+        use_sudo: bool,
+        timeout: int,
+        os_type: OSType,
+    ) -> InstallResult:
+        """Try a single installation command with timeout."""
         try:
-            # Set up environment for Go tools
-            env_setup = ""
+            # Prepare command based on OS
+            if os_type == OSType.WINDOWS:
+                full_cmd = self._prepare_windows_command(install_cmd)
+            else:
+                full_cmd = self._prepare_unix_command(install_cmd, use_sudo)
+
+            # Set up environment
+            env = dict(_os.environ)
             if "go install" in install_cmd:
                 go_path = Path.home() / "go" / "bin"
-                env_setup = f"export PATH=$PATH:{go_path} && export GOPATH=$HOME/go && "
+                env["GOPATH"] = str(Path.home() / "go")
+                if os_type == OSType.WINDOWS:
+                    env["PATH"] = f"{go_path};{env.get('PATH', '')}"
+                else:
+                    env["PATH"] = f"{go_path}:{env.get('PATH', '')}"
 
-            full_cmd = f"{env_setup}{install_cmd}"
-
-            proc = await asyncio.create_subprocess_shell(
-                full_cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env={**dict(__import__('os').environ), "GOPATH": str(Path.home() / "go")},
-            )
+            # Create subprocess with appropriate settings
+            if os_type == OSType.WINDOWS:
+                proc = await asyncio.create_subprocess_shell(
+                    full_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
+            else:
+                proc = await asyncio.create_subprocess_shell(
+                    full_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                    env=env,
+                )
 
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
-                timeout=600  # 10 minute timeout
+                timeout=timeout
             )
 
             if proc.returncode == 0:
@@ -1259,24 +1600,118 @@ class LocalToolInstaller:
                         message="Install completed but verification failed"
                     )
             else:
-                error_msg = stderr.decode()[:200] if stderr else "Unknown error"
+                error_msg = stderr.decode(errors='ignore')[:200] if stderr else "Unknown error"
                 return InstallResult(
                     tool_name=tool_name,
                     success=False,
-                    message=f"Installation failed: {error_msg}"
+                    message=f"Exit code {proc.returncode}: {error_msg}"
                 )
 
         except asyncio.TimeoutError:
+            # Kill the process if it times out
+            try:
+                proc.kill()
+            except Exception:
+                pass
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
-                message="Installation timed out"
+                message=f"Timed out after {timeout}s"
             )
         except Exception as e:
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
-                message=f"Installation error: {str(e)}"
+                message=f"Error: {str(e)[:100]}"
+            )
+
+    def _prepare_windows_command(self, cmd: str) -> str:
+        """Prepare command for Windows execution."""
+        # Handle common command translations for Windows
+        if cmd.startswith("pip3 "):
+            cmd = cmd.replace("pip3 ", "pip ", 1)
+        if cmd.startswith("python3 "):
+            cmd = cmd.replace("python3 ", "python ", 1)
+
+        # Wrap in cmd.exe if needed
+        if not cmd.startswith("powershell") and not cmd.startswith("cmd"):
+            # Check if it's a known Windows command
+            if any(cmd.startswith(p) for p in ["winget", "choco", "scoop", "pip", "go "]):
+                cmd = f'cmd /c "{cmd}"'
+
+        return cmd
+
+    def _prepare_unix_command(self, cmd: str, use_sudo: bool) -> str:
+        """Prepare command for Unix execution."""
+        # Add sudo if needed
+        if use_sudo and self._system_info.capabilities.has_sudo:
+            if any(cmd.startswith(p) for p in ["apt", "dnf", "yum", "pacman", "zypper"]):
+                cmd = f"sudo {cmd}"
+
+        # Set up Go environment for go install commands
+        if "go install" in cmd:
+            go_path = Path.home() / "go" / "bin"
+            cmd = f"export PATH=$PATH:{go_path} && export GOPATH=$HOME/go && {cmd}"
+
+        return cmd
+
+    async def _install_go_windows(self) -> InstallResult:
+        """Install Go on Windows via direct download."""
+        try:
+            console.print("  [dim]Downloading Go 1.25.6 for Windows...[/dim]")
+
+            # Determine architecture
+            machine = platform.machine().lower()
+            if machine in ("amd64", "x86_64"):
+                url = "https://go.dev/dl/go1.25.6.windows-amd64.zip"
+            else:
+                url = "https://go.dev/dl/go1.25.6.windows-arm64.zip"
+
+            # Download to temp directory
+            with tempfile.TemporaryDirectory() as tmpdir:
+                zip_path = Path(tmpdir) / "go.zip"
+
+                # Download with timeout
+                try:
+                    urllib.request.urlretrieve(url, zip_path)
+                except Exception as e:
+                    return InstallResult(
+                        tool_name="go",
+                        success=False,
+                        message=f"Download failed: {e}"
+                    )
+
+                # Extract to C:\Go
+                go_root = Path("C:/Go")
+                if go_root.exists():
+                    import shutil
+                    shutil.rmtree(go_root, ignore_errors=True)
+
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    zf.extractall(go_root.parent)
+
+                # Verify
+                go_exe = go_root / "bin" / "go.exe"
+                if go_exe.exists():
+                    console.print("  [green]Go installed to C:\\Go[/green]")
+                    console.print("  [yellow]Note: Add C:\\Go\\bin to your PATH[/yellow]")
+                    return InstallResult(
+                        tool_name="go",
+                        success=True,
+                        message="Installed via direct download"
+                    )
+
+            return InstallResult(
+                tool_name="go",
+                success=False,
+                message="Extraction failed"
+            )
+
+        except Exception as e:
+            return InstallResult(
+                tool_name="go",
+                success=False,
+                message=f"Direct install failed: {e}"
             )
 
     async def install_tools(
@@ -1409,6 +1844,45 @@ class LocalToolInstaller:
         failed = sum(1 for r in results.values() if not r.success)
 
         console.print(f"\n[bold]Summary:[/bold] {installed} installed, {already} already present, {failed} failed")
+
+        # Show PATH instructions if Go tools were installed
+        go_tools_installed = any(
+            r.success and not r.already_installed and TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {},"")).dependencies and "go" in TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {}, "")).dependencies
+            for name, r in results.items()
+        )
+        if go_tools_installed:
+            self._print_path_instructions()
+
+    def _print_path_instructions(self):
+        """Print instructions for adding Go bin to PATH."""
+        go_bin = Path.home() / "go" / "bin"
+        local_bin = Path.home() / ".local" / "bin"
+
+        console.print("\n[yellow]━━━ PATH Configuration Required ━━━[/yellow]")
+        console.print(f"\nGo tools are installed to: [cyan]{go_bin}[/cyan]")
+        console.print(f"Local tools are installed to: [cyan]{local_bin}[/cyan]")
+
+        if platform.system().lower() == "darwin":
+            shell = _os.environ.get("SHELL", "/bin/zsh")
+            if "zsh" in shell:
+                rc_file = "~/.zshrc"
+            else:
+                rc_file = "~/.bash_profile"
+            console.print(f"\n[bold]Add to {rc_file}:[/bold]")
+            console.print(f'[green]export PATH="$PATH:{go_bin}:{local_bin}"[/green]')
+            console.print(f"\nThen run: [cyan]source {rc_file}[/cyan]")
+
+        elif platform.system().lower() == "linux":
+            console.print("\n[bold]Add to ~/.bashrc or ~/.zshrc:[/bold]")
+            console.print(f'[green]export PATH="$PATH:{go_bin}:{local_bin}"[/green]')
+            console.print("\nThen run: [cyan]source ~/.bashrc[/cyan]")
+
+        elif platform.system().lower() == "windows":
+            console.print("\n[bold]Add to System PATH (PowerShell as Admin):[/bold]")
+            console.print(f'[green][Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";{go_bin}", "User")[/green]')
+            console.print("\nOr add manually via: System Properties → Environment Variables → PATH")
+
+        console.print("\n[dim]After updating PATH, restart your terminal or run the source command.[/dim]")
 
 
 async def install_prerequisites(system_info: Optional[SystemInfo] = None) -> Dict[str, InstallResult]:

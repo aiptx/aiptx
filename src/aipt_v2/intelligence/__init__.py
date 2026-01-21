@@ -118,6 +118,32 @@ from aipt_v2.intelligence.correlation import (
     PortfolioReport,
 )
 
+# Beast Mode - LLM Attack Planning
+from aipt_v2.intelligence.llm_attack_planner import (
+    LLMAttackPlanner,
+    AttackPlan,
+    AttackStep,
+    AttackPhase,
+    AttackObjective,
+    ATTACK_TEMPLATES,
+)
+
+# Beast Mode - Novel Chain Discovery
+from aipt_v2.intelligence.chain_discoverer import (
+    ChainDiscoverer,
+    NovelChain,
+    CHAIN_PATTERNS,
+    discover_attack_chains,
+)
+
+# Beast Mode - Business Logic Analysis
+from aipt_v2.intelligence.business_logic_analyzer import (
+    BusinessLogicAnalyzer,
+    BusinessLogicFlaw,
+    BL_CATEGORIES,
+    analyze_business_logic,
+)
+
 __all__ = [
     # CVE Intelligence (existing)
     "CVEIntelligence",
@@ -191,4 +217,21 @@ __all__ = [
     "CommonVulnerability",
     "SystemicIssue",
     "PortfolioReport",
+    # Beast Mode - LLM Attack Planning
+    "LLMAttackPlanner",
+    "AttackPlan",
+    "AttackStep",
+    "AttackPhase",
+    "AttackObjective",
+    "ATTACK_TEMPLATES",
+    # Beast Mode - Novel Chain Discovery
+    "ChainDiscoverer",
+    "NovelChain",
+    "CHAIN_PATTERNS",
+    "discover_attack_chains",
+    # Beast Mode - Business Logic Analysis
+    "BusinessLogicAnalyzer",
+    "BusinessLogicFlaw",
+    "BL_CATEGORIES",
+    "analyze_business_logic",
 ]

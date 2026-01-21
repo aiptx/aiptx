@@ -282,45 +282,158 @@ class BaseSecurityAgent(ABC):
             return f"Error executing {tool_name}: {str(e)}"
 
     def _extract_findings_from_response(self, content: str) -> List[Finding]:
-        """Extract structured findings from LLM response."""
+        """Extract structured findings from LLM response using multiple strategies."""
         findings = []
+        if not content:
+            return findings
 
-        # Look for XML-style finding blocks
+        # Strategy 1: XML-style finding blocks
         finding_pattern = r'<finding>(.*?)</finding>'
         matches = re.findall(finding_pattern, content, re.DOTALL)
-
         for match in matches:
             try:
                 finding = self._parse_finding_xml(match)
                 if finding:
                     findings.append(finding)
             except Exception as e:
-                logger.warning("Failed to parse finding", error=str(e))
+                logger.warning("Failed to parse XML finding", error=str(e))
 
-        # Also look for JSON-style findings
+        # Strategy 2: JSON-style findings
         json_pattern = r'```json\s*(\{[^`]*"severity"[^`]*\})\s*```'
         json_matches = re.findall(json_pattern, content, re.DOTALL)
-
         for match in json_matches:
             try:
                 data = json.loads(match)
                 if "title" in data and "severity" in data:
-                    finding = Finding(
-                        title=data.get("title", "Unknown"),
-                        severity=Severity(data.get("severity", "info").lower()),
-                        category=VulnCategory(data.get("category", VulnCategory.SECURITY_MISCONFIG.value)),
-                        description=data.get("description", ""),
-                        evidence=data.get("evidence", ""),
-                        location=data.get("location", "Unknown"),
-                        line_number=data.get("line_number"),
-                        remediation=data.get("remediation", ""),
-                        cwe_id=data.get("cwe_id"),
-                    )
-                    findings.append(finding)
+                    finding = self._create_finding_from_dict(data)
+                    if finding:
+                        findings.append(finding)
             except (json.JSONDecodeError, ValueError) as e:
                 logger.warning("Failed to parse JSON finding", error=str(e))
 
+        # Strategy 3: Natural language patterns (NEW)
+        findings.extend(self._extract_natural_language_findings(content))
+
+        # Deduplicate findings by title
+        seen_titles = set()
+        unique_findings = []
+        for f in findings:
+            if f.title.lower() not in seen_titles:
+                seen_titles.add(f.title.lower())
+                unique_findings.append(f)
+
+        return unique_findings
+
+    def _extract_natural_language_findings(self, content: str) -> List[Finding]:
+        """Extract findings from natural language patterns in LLM response."""
+        findings = []
+
+        # Severity keywords mapping
+        severity_keywords = {
+            Severity.CRITICAL: ["critical", "rce", "remote code execution", "command injection", "sql injection"],
+            Severity.HIGH: ["high", "xss", "cross-site scripting", "authentication bypass", "ssrf", "idor"],
+            Severity.MEDIUM: ["medium", "csrf", "information disclosure", "directory traversal", "path traversal"],
+            Severity.LOW: ["low", "information leakage", "verbose error", "missing header"],
+            Severity.INFO: ["info", "informational", "note", "observation"],
+        }
+
+        # Pattern 1: Markdown headers with vulnerability names
+        # e.g., "### SQL Injection Vulnerability" or "## CRITICAL: XSS Found"
+        header_patterns = [
+            r'#{1,4}\s*(?:CRITICAL|HIGH|MEDIUM|LOW|INFO)?:?\s*(.+?)(?:\n|$)',
+            r'\*\*(?:Vulnerability|Security Issue|Finding|Risk)(?:\s*Found)?:?\s*(.+?)\*\*',
+            r'(?:Vulnerability|Issue|Finding|Risk)\s*(?:Found|Detected|Identified):\s*(.+?)(?:\n|$)',
+        ]
+
+        # Pattern 2: Vulnerability indicators with context
+        vuln_indicators = [
+            (r'(?:found|detected|identified|discovered)\s+(?:a\s+)?(?:potential\s+)?(.+?(?:vulnerability|injection|xss|csrf|ssrf|idor|exposure))', None),
+            (r'(?:vulnerable to|susceptible to)\s+(.+?)(?:\.|,|\n|$)', None),
+            (r'(?:missing|absent|no)\s+(security header|https|authentication|authorization|rate limiting|input validation)', Severity.MEDIUM),
+            (r'(sql injection|xss|cross-site scripting|command injection|code injection)\s+(?:vulnerability|found|detected)', Severity.HIGH),
+            (r'(sensitive data|credentials|api key|password|token)\s+(?:exposed|leaked|visible|in plain text)', Severity.HIGH),
+            (r'(open redirect|unvalidated redirect)', Severity.MEDIUM),
+            (r'(directory listing|path traversal|lfi|rfi)\s+(?:enabled|possible|detected)', Severity.MEDIUM),
+        ]
+
+        content_lower = content.lower()
+
+        # Extract from header patterns
+        for pattern in header_patterns:
+            for match in re.finditer(pattern, content, re.IGNORECASE | re.MULTILINE):
+                title = match.group(1).strip()
+                if len(title) > 5 and len(title) < 200:  # Reasonable title length
+                    # Skip if it's just a section header, not a vulnerability
+                    if not any(skip in title.lower() for skip in ["phase", "step", "next", "now", "testing", "scanning", "checking"]):
+                        severity = self._detect_severity(title, severity_keywords)
+                        finding = Finding(
+                            title=title,
+                            severity=severity,
+                            category=self._detect_category(title),
+                            description=f"Detected during automated security testing",
+                            evidence=match.group(0)[:500],
+                            location="Target application",
+                        )
+                        findings.append(finding)
+
+        # Extract from vulnerability indicator patterns
+        for pattern, default_severity in vuln_indicators:
+            for match in re.finditer(pattern, content, re.IGNORECASE):
+                vuln_name = match.group(1).strip()
+                if len(vuln_name) > 3 and len(vuln_name) < 150:
+                    severity = default_severity or self._detect_severity(vuln_name, severity_keywords)
+                    finding = Finding(
+                        title=vuln_name.title(),
+                        severity=severity,
+                        category=self._detect_category(vuln_name),
+                        description=f"Detected: {match.group(0)[:200]}",
+                        evidence=match.group(0)[:500],
+                        location="Target application",
+                    )
+                    findings.append(finding)
+
         return findings
+
+    def _detect_severity(self, text: str, severity_keywords: Dict) -> Severity:
+        """Detect severity from text content."""
+        text_lower = text.lower()
+        for severity, keywords in severity_keywords.items():
+            if any(kw in text_lower for kw in keywords):
+                return severity
+        return Severity.INFO
+
+    def _detect_category(self, text: str) -> VulnCategory:
+        """Detect vulnerability category from text."""
+        text_lower = text.lower()
+        category_keywords = {
+            VulnCategory.INJECTION: ["injection", "sqli", "command", "code injection", "xss", "scripting"],
+            VulnCategory.BROKEN_AUTH: ["authentication", "auth", "password", "credential", "session"],
+            VulnCategory.SENSITIVE_DATA: ["sensitive", "exposure", "leak", "disclosure", "crypto"],
+            VulnCategory.BROKEN_ACCESS: ["access control", "idor", "authorization", "privilege"],
+            VulnCategory.SECURITY_MISCONFIG: ["misconfiguration", "config", "header", "cors", "tls", "ssl"],
+            VulnCategory.SSRF: ["ssrf", "server-side request"],
+        }
+        for category, keywords in category_keywords.items():
+            if any(kw in text_lower for kw in keywords):
+                return category
+        return VulnCategory.SECURITY_MISCONFIG
+
+    def _create_finding_from_dict(self, data: Dict) -> Optional[Finding]:
+        """Create a Finding object from a dictionary."""
+        try:
+            return Finding(
+                title=data.get("title", "Unknown"),
+                severity=Severity(data.get("severity", "info").lower()),
+                category=VulnCategory(data.get("category", VulnCategory.SECURITY_MISCONFIG.value)),
+                description=data.get("description", ""),
+                evidence=data.get("evidence", ""),
+                location=data.get("location", "Unknown"),
+                line_number=data.get("line_number"),
+                remediation=data.get("remediation", ""),
+                cwe_id=data.get("cwe_id"),
+            )
+        except (ValueError, KeyError):
+            return None
 
     def _parse_finding_xml(self, xml_content: str) -> Optional[Finding]:
         """Parse an XML-formatted finding."""
@@ -407,14 +520,32 @@ class BaseSecurityAgent(ABC):
                 new_findings = self._extract_findings_from_response(content)
                 self.findings.extend(new_findings)
 
-                # Add assistant response to history
-                self.messages.append({
-                    "role": "assistant",
-                    "content": content,
-                })
-
                 # Check for tool calls
                 tool_calls = getattr(message, 'tool_calls', None)
+
+                # Add assistant response to history
+                # IMPORTANT: Include tool_calls in the message if present,
+                # as Anthropic requires tool_result to have matching tool_use
+                assistant_message = {
+                    "role": "assistant",
+                    "content": content or "",
+                }
+
+                if tool_calls:
+                    # Convert tool_calls to the format expected by the API
+                    assistant_message["tool_calls"] = [
+                        {
+                            "id": tc.id,
+                            "type": "function",
+                            "function": {
+                                "name": tc.function.name,
+                                "arguments": tc.function.arguments,
+                            }
+                        }
+                        for tc in tool_calls
+                    ]
+
+                self.messages.append(assistant_message)
 
                 if not tool_calls:
                     # No tool calls - check if agent is done
@@ -448,8 +579,24 @@ class BaseSecurityAgent(ABC):
             logger.error("Agent execution failed", error=str(e))
             errors.append(str(e))
 
+        # Final pass: Extract any findings we might have missed from all messages
+        # This ensures partial findings are captured even on error
+        try:
+            additional_findings = self._extract_findings_from_all_messages()
+            if additional_findings:
+                # Deduplicate with existing findings
+                existing_titles = {f.title.lower() for f in self.findings}
+                for finding in additional_findings:
+                    if finding.title.lower() not in existing_titles:
+                        self.findings.append(finding)
+                        existing_titles.add(finding.title.lower())
+                logger.info(f"Extracted {len(additional_findings)} additional findings from message history")
+        except Exception as ex:
+            logger.warning(f"Failed to extract additional findings: {ex}")
+
         execution_time = time.time() - self._start_time
 
+        # Always return results, even partial ones
         return AgentResult(
             success=len(errors) == 0,
             findings=self.findings,
@@ -460,6 +607,25 @@ class BaseSecurityAgent(ABC):
             model_used=self.config.model,
             raw_transcript=self.messages if self.config.save_transcript else [],
         )
+
+    def _extract_findings_from_all_messages(self) -> List[Finding]:
+        """Extract findings from all messages in the conversation history."""
+        all_findings = []
+
+        for message in self.messages:
+            content = message.get("content", "")
+            if not content or not isinstance(content, str):
+                continue
+
+            # Skip system messages
+            if message.get("role") == "system":
+                continue
+
+            # Extract from assistant messages and tool results
+            findings = self._extract_findings_from_response(content)
+            all_findings.extend(findings)
+
+        return all_findings
 
     def _is_completion_message(self, content: str) -> bool:
         """Check if the message indicates the agent has completed its task."""

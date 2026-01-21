@@ -142,6 +142,7 @@ class LLM:
         self.agent_id = agent_id
         self._total_stats = RequestStats()
         self._last_request_stats = RequestStats()
+        self._loaded_skills: dict[str, str] = {}  # Cache for loaded skills
 
         self.memory_compressor = MemoryCompressor(
             model_name=self.config.model_name,
@@ -168,9 +169,13 @@ class LLM:
 
                 self.jinja_env.globals["get_module"] = get_module
 
+                # Load skills if specified in config (Strix integration)
+                skills_content = self._load_skills_for_prompt()
+
                 self.system_prompt = self.jinja_env.get_template("system_prompt.jinja").render(
                     get_tools_prompt=get_tools_prompt,
                     loaded_module_names=list(prompt_module_content.keys()),
+                    skills=skills_content,  # Inject skills into prompt
                     **prompt_module_content,
                 )
             except (FileNotFoundError, OSError, ValueError) as e:
@@ -178,6 +183,69 @@ class LLM:
                 self.system_prompt = "You are a helpful AI assistant."
         else:
             self.system_prompt = "You are a helpful AI assistant."
+
+    def _load_skills_for_prompt(self) -> str:
+        """Load vulnerability skills for injection into system prompt."""
+        try:
+            from aipt_v2.skills import load_skills
+
+            # Get skills from config or use defaults for security agents
+            skill_names = getattr(self.config, "skills", None) or []
+
+            # Auto-load common skills for AIPTxAgent
+            if not skill_names and self.agent_name == "AIPTxAgent":
+                skill_names = ["xss", "sql_injection", "ssrf", "idor", "rce"]
+
+            if not skill_names:
+                return ""
+
+            skills = load_skills(skill_names[:5])  # Limit to 5 to avoid context bloat
+            self._loaded_skills = skills
+
+            if not skills:
+                return ""
+
+            # Format skills for prompt injection
+            skill_blocks = []
+            for name, content in skills.items():
+                # Truncate very long skills to prevent context overflow
+                truncated = content[:8000] if len(content) > 8000 else content
+                skill_blocks.append(f"<!-- Skill: {name} -->\n{truncated}")
+
+            return "\n\n".join(skill_blocks)
+
+        except ImportError:
+            logger.debug("Skills module not available")
+            return ""
+        except Exception as e:
+            logger.warning(f"Failed to load skills: {e}")
+            return ""
+
+    def inject_skills(self, skill_names: list[str]) -> None:
+        """
+        Dynamically inject skills into the system prompt.
+
+        Args:
+            skill_names: List of skill names to load (e.g., ["xss", "sqli"]).
+        """
+        try:
+            from aipt_v2.skills import load_skills
+
+            skills = load_skills(skill_names[:5])
+            self._loaded_skills.update(skills)
+
+            if skills:
+                skill_blocks = []
+                for name, content in skills.items():
+                    truncated = content[:8000] if len(content) > 8000 else content
+                    skill_blocks.append(f"<!-- Skill: {name} -->\n{truncated}")
+
+                skills_section = "\n\n## Loaded Vulnerability Skills\n\n" + "\n\n".join(skill_blocks)
+                self.system_prompt += skills_section
+                logger.info(f"Injected {len(skills)} skills into system prompt")
+
+        except Exception as e:
+            logger.warning(f"Failed to inject skills: {e}")
 
     def set_agent_identity(self, agent_name: str | None, agent_id: str | None) -> None:
         if agent_name:
