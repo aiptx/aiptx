@@ -314,15 +314,57 @@ class SystemDetector:
                 return PackageManager.NIX
 
         elif os_type == OSType.WINDOWS:
-            # Check Windows package managers
-            if shutil.which("winget"):
+            # Check Windows package managers with fallback detection
+            # winget is preferred as it's built into Windows 10/11
+            if await self._check_windows_package_manager("winget"):
                 return PackageManager.WINGET
-            elif shutil.which("choco"):
+            elif await self._check_windows_package_manager("choco"):
                 return PackageManager.CHOCO
-            elif shutil.which("scoop"):
+            elif await self._check_windows_package_manager("scoop"):
                 return PackageManager.SCOOP
+            # If none found, default to WINGET as it's easiest to install
+            # and most Windows 10/11 systems can use it
+            return PackageManager.WINGET
 
         return PackageManager.UNKNOWN
+
+    async def _check_windows_package_manager(self, manager: str) -> bool:
+        """Check if a Windows package manager is available."""
+        # First check if it's in PATH
+        if shutil.which(manager):
+            return True
+
+        # Try running via cmd.exe/powershell for managers not in PATH
+        check_commands = {
+            "winget": [
+                "winget --version",
+                "powershell -Command \"Get-Command winget -ErrorAction SilentlyContinue\"",
+            ],
+            "choco": [
+                "choco --version",
+                "powershell -Command \"Get-Command choco -ErrorAction SilentlyContinue\"",
+                "cmd /c \"where choco\"",
+            ],
+            "scoop": [
+                "scoop --version",
+                "powershell -Command \"Get-Command scoop -ErrorAction SilentlyContinue\"",
+            ],
+        }
+
+        for cmd in check_commands.get(manager, []):
+            try:
+                proc = await asyncio.create_subprocess_shell(
+                    cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=10)
+                if proc.returncode == 0:
+                    return True
+            except Exception:
+                continue
+
+        return False
 
     async def _detect_capabilities(self) -> SystemCapabilities:
         """Detect available tools and runtimes."""

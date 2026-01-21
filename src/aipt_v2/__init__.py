@@ -1,18 +1,22 @@
 """
-AIPT v2 - AI-Powered Penetration Testing Framework
-===================================================
+AIPTX v3 - AI-Powered Penetration Testing Framework (Beast Mode)
+================================================================
 
-A unified penetration testing framework built on top of 8 reference tools:
-- AIPTx: LLM (litellm), Runtime (Docker), Tools (Browser, Terminal, Proxy)
-- pentest-agent: CVE Intelligence with EPSS scoring
-- PentestAssistant: RAG-based tool selection with BGE embeddings
-- PentestGPT: PTT (Penetration Testing Tree) task tracking
-- VulnBot: Output parsing patterns
-- HackSynth: Multi-step reasoning
-- Pentagi: Docker isolation
-- ez-ai-agent: Simple execution model
+A fully autonomous hacking agent with advanced exploitation capabilities.
 
-Features:
+Beast Mode v3.0 Features:
+- Multi-step exploit chain building and execution
+- Adaptive payload mutation with WAF bypass
+- Feedback learning from exploitation attempts
+- Autonomous credential harvesting
+- Privilege escalation automation (Windows/Linux)
+- Network pivoting and lateral movement
+- Credential spraying (SMB, SSH, RDP, WinRM, LDAP)
+- Stealth engine with timing jitter and LOLBins
+- LLM-powered attack planning and novel chain discovery
+- Business logic vulnerability analysis
+
+Core Features:
 - Universal LLM support via litellm (100+ models)
 - Docker sandbox execution
 - Browser automation via Playwright
@@ -24,7 +28,7 @@ Features:
 - FastAPI REST API
 """
 
-__version__ = "2.0.10"
+__version__ = "3.0.3"
 __author__ = "AIPT Team"
 
 # Available submodules (direct import)

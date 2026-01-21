@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "2.0.10"
-description = "AI-Powered Penetration Testing Framework - Autonomous security assessment with LLM intelligence"
+version = "3.0.3"
+description = "AIPTX Beast Mode - Fully Autonomous AI-Powered Penetration Testing Framework with exploit chains, credential harvesting, lateral movement, and stealth capabilities"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Satyam Rastogi", email = "satyam@aiptx.io"}]
@@ -27,7 +27,7 @@ keywords = [
     "artificial-intelligence",
     "machine-learning",
     "gpt",
-    "claude",
+    "chatgpt",
     # Industry Terms
     "cybersecurity",
     "infosec",
