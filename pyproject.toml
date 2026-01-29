@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "3.0.3"
+version = "3.5.1"
 description = "AIPTX Beast Mode - Fully Autonomous AI-Powered Penetration Testing Framework with exploit chains, credential harvesting, lateral movement, and stealth capabilities"
 readme = "README.md"
 license = {file = "LICENSE"}

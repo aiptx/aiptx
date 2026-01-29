@@ -29,6 +29,8 @@ from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
 
 # Suppress SSL warnings for self-signed certs
@@ -74,11 +76,12 @@ class ScanTemplate(Enum):
 @dataclass
 class NessusConfig:
     """Configuration for Nessus connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("NESSUS_URL", "https://localhost:8834"))
-    access_key: str = field(default_factory=lambda: os.getenv("NESSUS_ACCESS_KEY", ""))
-    secret_key: str = field(default_factory=lambda: os.getenv("NESSUS_SECRET_KEY", ""))
+    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_URL") or os.getenv("NESSUS_URL", "https://localhost:8834"))
+    access_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY") or os.getenv("NESSUS_ACCESS_KEY", ""))
+    secret_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY", ""))
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 60  # Increased from 30s for high-latency networks
+    max_retries: int = 3
 
 
 @dataclass
@@ -136,26 +139,62 @@ class NessusTool:
         self._headers = {
             "X-ApiKeys": f"accessKey={self.config.access_key}; secretKey={self.config.secret_key}",
             "Content-Type": "application/json",
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "Connection": "close",  # Avoid stale connection pooling issues
         }
         self._session.headers.update(self._headers)
 
-    def _request(self, method: str, endpoint: str, data: dict = None) -> dict:
-        """Make authenticated request to Nessus API."""
+        # Configure connection retry adapter for resilience
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["GET", "POST", "DELETE", "PATCH"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy, pool_maxsize=1, pool_connections=1)
+        self._session.mount("https://", adapter)
+        self._session.mount("http://", adapter)
+
+    def _request(self, method: str, endpoint: str, data: dict = None, retries: int = None, silent: bool = False) -> dict:
+        """Make authenticated request to Nessus API with retry logic.
+
+        Args:
+            method: HTTP method
+            endpoint: API endpoint
+            data: Request data
+            retries: Number of retries (default: config.max_retries)
+            silent: If True, suppress warning logs during retries (for polling)
+        """
         url = f"{self.config.base_url}{endpoint}"
-        try:
-            response = self._session.request(
-                method=method,
-                url=url,
-                json=data,
-                verify=self.config.verify_ssl,
-                timeout=self.config.timeout
-            )
-            response.raise_for_status()
-            return response.json() if response.text else {}
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Nessus API error: {e}")
-            raise
+        retries = retries if retries is not None else self.config.max_retries
+        last_error = None
+
+        for attempt in range(retries):
+            try:
+                response = self._session.request(
+                    method=method,
+                    url=url,
+                    json=data,
+                    verify=self.config.verify_ssl,
+                    timeout=self.config.timeout
+                )
+                response.raise_for_status()
+                return response.json() if response.text else {}
+            except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+                last_error = e
+                wait_time = min((2 ** attempt) * 2, 30)  # Cap at 30 seconds
+                if not silent and attempt < retries - 1:
+                    logger.debug(f"Nessus connection issue (attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
+                if attempt < retries - 1:
+                    time.sleep(wait_time)
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Nessus API error: {e}")
+                raise
+
+        # All retries exhausted - only log once
+        if not silent:
+            logger.warning(f"Nessus unreachable after {retries} attempts (timeout={self.config.timeout}s)")
+        raise last_error
 
     # ==================== Connection ====================
 
@@ -286,10 +325,15 @@ class NessusTool:
             self.launch_scan(scan_id)
         return scan_id
 
-    def get_scan_status(self, scan_id: str) -> ScanResult:
-        """Get current scan status."""
+    def get_scan_status(self, scan_id: str, silent: bool = False) -> ScanResult:
+        """Get current scan status.
+
+        Args:
+            scan_id: Nessus scan ID
+            silent: If True, suppress retry logs (useful for polling loops)
+        """
         try:
-            result = self._request("GET", f"/scans/{scan_id}")
+            result = self._request("GET", f"/scans/{scan_id}", silent=silent)
             info = result.get("info", {})
 
             return ScanResult(
@@ -302,6 +346,9 @@ class NessusTool:
                 start_time=info.get("scan_start", ""),
                 end_time=info.get("scan_end", "")
             )
+        except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
+            # Return error status instead of raising for connection issues
+            return ScanResult(scan_id=scan_id, status="unreachable", error=f"Connection failed: {type(e).__name__}")
         except Exception as e:
             return ScanResult(scan_id=scan_id, status="error", error=str(e))
 
@@ -325,11 +372,31 @@ class NessusTool:
             Final scan result
         """
         start_time = time.time()
+        consecutive_failures = 0
+        max_consecutive_failures = 5  # Give up after 5 consecutive connection failures
+
         while time.time() - start_time < timeout:
-            result = self.get_scan_status(scan_id)
+            result = self.get_scan_status(scan_id, silent=True)
 
             if callback:
                 callback(result)
+
+            # Handle connection issues during polling
+            if result.status == "unreachable":
+                consecutive_failures += 1
+                if consecutive_failures >= max_consecutive_failures:
+                    logger.warning(f"Nessus scan {scan_id}: server unreachable after {consecutive_failures} attempts")
+                    return ScanResult(
+                        scan_id=scan_id,
+                        status="unreachable",
+                        error=f"Server unreachable after {consecutive_failures} consecutive failures"
+                    )
+                # Wait longer before retrying
+                time.sleep(poll_interval * 2)
+                continue
+
+            # Reset failure counter on successful connection
+            consecutive_failures = 0
 
             if result.status in ["completed", "canceled", "failed"]:
                 return result

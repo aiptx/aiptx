@@ -11,6 +11,7 @@ Burp Suite Pro REST API Endpoints:
 """
 
 import json
+import os
 import time
 import logging
 import requests
@@ -55,10 +56,10 @@ class IssueConfidence(Enum):
 @dataclass
 class BurpConfig:
     """Configuration for Burp Suite connection."""
-    base_url: str = "http://13.127.28.41:1337/v0.1"
-    api_key: str = "t7thBWbImyiP8SA9hojkiFhq9QbHqlcm"
+    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_URL") or os.getenv("BURP_URL", "http://localhost:1337/v0.1"))
+    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_API_KEY") or os.getenv("BURP_API_KEY", ""))
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 120  # Increased for slow/remote networks
 
 
 @dataclass
@@ -72,6 +73,7 @@ class ScanResult:
     insertion_point_count: int = 0
     issue_events: List[Dict] = field(default_factory=list)
     audit_items: List[Dict] = field(default_factory=list)
+    progress: int = 0  # Scan progress percentage (0-100)
 
 
 @dataclass
@@ -121,7 +123,7 @@ class BurpTool:
         self.session.verify = self.config.verify_ssl
 
     def _request(self, method: str, endpoint: str, data: Optional[Dict] = None,
-                 params: Optional[Dict] = None) -> Any:
+                 params: Optional[Dict] = None, silent_404: bool = False) -> Any:
         """Make an API request to Burp Suite."""
         # Ensure base_url doesn't have trailing slash and endpoint doesn't have leading slash
         base = self.config.base_url.rstrip('/')
@@ -150,6 +152,13 @@ class BurpTool:
                 return {"success": True, "location": location, "task_id": location.split('/')[-1] if location else ""}
 
             return {"success": True}
+        except requests.exceptions.HTTPError as e:
+            # Don't log 404 errors for optional endpoints
+            if response.status_code == 404 and silent_404:
+                logger.debug(f"Burp Suite API endpoint not found (optional): {endpoint}")
+            else:
+                logger.error(f"Burp Suite API error: {e}")
+            raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Burp Suite API error: {e}")
             raise
@@ -177,7 +186,7 @@ class BurpTool:
 
                 # Try to get issue definitions (optional - not all versions support this)
                 try:
-                    result = self._request("GET", "issue_definitions")
+                    result = self._request("GET", "issue_definitions", silent_404=True)
                     if isinstance(result, list):
                         for issue_def in result:
                             type_index = issue_def.get("type_index", "")
@@ -186,7 +195,7 @@ class BurpTool:
                         logger.info(f"Loaded {len(self._issue_definitions)} issue definitions")
                 except Exception:
                     # issue_definitions not available in this version - that's OK
-                    logger.info("Issue definitions endpoint not available (normal for some versions)")
+                    pass  # Silently ignore - this is expected for some Burp versions
 
                 logger.info(f"Connected to Burp Suite API at {self.config.base_url}")
                 return True
@@ -257,12 +266,19 @@ class BurpTool:
     def get_issue_definitions(self) -> List[Dict[str, Any]]:
         """Get all Burp issue definitions."""
         if not self._issue_definitions:
-            result = self._request("GET", "/issue_definitions")
-            if isinstance(result, list):
-                for issue_def in result:
-                    type_index = issue_def.get("type_index", "")
-                    if type_index:
-                        self._issue_definitions[type_index] = issue_def
+            try:
+                # Use silent_404=True since this endpoint is optional in some Burp versions
+                result = self._request("GET", "/issue_definitions", silent_404=True)
+                if isinstance(result, list):
+                    for issue_def in result:
+                        type_index = issue_def.get("type_index", "")
+                        if type_index:
+                            self._issue_definitions[type_index] = issue_def
+            except requests.exceptions.HTTPError:
+                # 404 or other HTTP error - endpoint not available, that's OK
+                pass
+            except Exception as e:
+                logger.debug(f"Could not load issue definitions: {e}")
         return list(self._issue_definitions.values())
 
     def get_issue_definition(self, type_index: str) -> Optional[Dict[str, Any]]:
@@ -340,6 +356,25 @@ class BurpTool:
         if not isinstance(result, dict):
             result = {}
 
+        # Calculate progress from scan metrics if available
+        progress = 0
+        scan_status = result.get("scan_status", "unknown").lower()
+        if scan_status in ["succeeded", "completed"]:
+            progress = 100
+        elif scan_status == "running":
+            # Estimate progress from crawl metrics
+            metrics = result.get("scan_metrics", {})
+            crawl_requests = metrics.get("crawl_request_count", 0)
+            audit_requests = metrics.get("audit_request_count", 0)
+            total_requests = crawl_requests + audit_requests
+            # Rough estimate: assume crawl is done when we have requests
+            if total_requests > 0:
+                progress = min(95, 10 + (audit_requests * 85 // max(1, crawl_requests + audit_requests)))
+            else:
+                progress = 10
+        elif scan_status == "queued":
+            progress = 0
+
         return ScanResult(
             task_id=task_id,
             target_url=result.get("scan_metrics", {}).get("crawl_and_audit_urls", [""])[0] if result.get("scan_metrics") else "",
@@ -348,7 +383,8 @@ class BurpTool:
             error_count=result.get("scan_metrics", {}).get("crawl_and_audit_error_count", 0),
             insertion_point_count=result.get("scan_metrics", {}).get("insertion_point_count", 0),
             issue_events=result.get("issue_events", []),
-            audit_items=result.get("audit_items", [])
+            audit_items=result.get("audit_items", []),
+            progress=progress
         )
 
     def wait_for_scan(self, task_id: str, timeout: int = 3600,
@@ -425,6 +461,18 @@ class BurpTool:
         """Get all issues with full details for a scan."""
         issues = self.get_issues(task_id)
         return [self.to_finding(i) for i in issues]
+
+    def get_scan_issues(self, task_id: str) -> List[Issue]:
+        """
+        Alias for get_issues for orchestrator compatibility.
+
+        Args:
+            task_id: Scan task ID
+
+        Returns:
+            List of Issue objects
+        """
+        return self.get_issues(task_id)
 
     # ==================== Statistics ====================
 

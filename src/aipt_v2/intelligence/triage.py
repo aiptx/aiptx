@@ -21,9 +21,9 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-# Import VulnerabilityType from chaining module
-from aipt_v2.intelligence.chaining import VulnerabilityType
-from aipt_v2.models.findings import Finding, Severity
+# Import VulnerabilityType from the canonical source (models/findings.py)
+# This ensures consistency with Finding objects which use the same enum
+from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
 
 
 logger = logging.getLogger(__name__)

@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
+from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 
 try:
@@ -445,7 +446,7 @@ class LDAPEnum:
     async def enumerate_all(self) -> LDAPEnumResult:
         """Run full LDAP enumeration."""
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         if not self._connect():
             return LDAPEnumResult(
@@ -477,7 +478,7 @@ class LDAPEnum:
             self.connection.unbind()
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         return LDAPEnumResult(
             domain=self.config.domain,

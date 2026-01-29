@@ -35,7 +35,7 @@ class AcunetixSettings:
         "1986ad8c0a5b3df4d7028d5f3c06e936c83ef0a486ef74537812989cff1a41a7c"
     )
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 120  # Increased from 30 to handle slow responses during polling
 
     # Default scan settings
     default_profile: str = "full"  # full, high_risk, xss, sqli, crawl, malware
@@ -54,7 +54,7 @@ class BurpSettings:
     base_url: str = BURP_URL
     api_key: str = os.getenv("AIPT_BURP_API_KEY", "t7thBWbImyiP8SA9hojkiFhq9QbHqlcm")
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 120  # Increased from 30 to handle slow responses during polling
 
     # Default scan settings
     default_config: Optional[str] = None  # Scan configuration ID

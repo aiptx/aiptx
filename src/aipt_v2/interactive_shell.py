@@ -189,71 +189,148 @@ class InteractiveShell:
                 f.write(f"[{timestamp}] {message}\n")
 
     def print_banner(self):
-        """Print welcome banner."""
-        banner = """
-[bold cyan]╔═══════════════════════════════════════════════════════════════╗
-║                    AIPTX Interactive Shell                    ║
-║                   AI-Powered Penetration Testing              ║
-╚═══════════════════════════════════════════════════════════════╝[/bold cyan]
-"""
-        console.print(banner)
-        console.print("[dim]Type 'help' for commands, 'tools' to list available tools[/dim]")
-        console.print(f"[dim]Working directory: {self.working_dir}[/dim]")
+        """Print welcome banner with hacker aesthetic."""
+        from rich.align import Align
+        from rich.panel import Panel
+        from rich.text import Text
+        import socket
+        import os
+        from datetime import datetime
+
+        # Hacker colors
+        NEON_GREEN = "#00ff41"
+        DARK_GREEN = "#008f11"
+        CYBER_BLUE = "#00d4ff"
+        BLOOD_RED = "#ff0040"
+        GHOST_WHITE = "#c0c0c0"
+
+        term_width = console.size.width
+
+        # Cyber banner
+        banner = f"""
+[bold {NEON_GREEN}]╔══════════════════════════════════════════════════════════════════════════╗[/]
+[bold {NEON_GREEN}]║[/]  [bold {CYBER_BLUE}]█▀█ █ █▀█ ▀█▀ ▀▄▀   [/][bold white]INTERACTIVE SHELL[/]                                [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]║[/]  [{BLOOD_RED}]█▀█ █ █▀▀  █  █ █   [/][dim {GHOST_WHITE}]Tool Execution Environment[/]                       [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]╚══════════════════════════════════════════════════════════════════════════╝[/]"""
+
+        console.clear()
+        console.print(Align.center(banner))
+
+        # System info
+        try:
+            hostname = socket.gethostname()
+            username = os.getenv("USER") or os.getenv("USERNAME") or "operator"
+        except Exception:
+            hostname = "localhost"
+            username = "operator"
+
+        sys_info = Text()
+        sys_info.append("  ┌─", style=f"dim {DARK_GREEN}")
+        sys_info.append(f" {username}@{hostname}", style=f"bold {NEON_GREEN}")
+        sys_info.append(" │ ", style=f"dim {DARK_GREEN}")
+        sys_info.append(f"cwd: {self.working_dir}", style=f"dim {GHOST_WHITE}")
+        sys_info.append(" ─┐", style=f"dim {DARK_GREEN}")
+
+        console.print()
+        console.print(Align.center(sys_info))
+        console.print()
+        console.print(f"[dim {DARK_GREEN}]" + "─" * term_width + f"[/]")
+        console.print(Align.center(f"[dim]Type [bold {NEON_GREEN}]help[/] for commands • [bold {NEON_GREEN}]tools[/] to list available arsenal[/dim]"))
 
         if IS_WINDOWS:
-            console.print("[dim yellow]Note: Running on Windows - some interactive features may be limited[/dim yellow]")
+            console.print(Align.center(f"[dim {BLOOD_RED}][!] Windows detected - some features limited[/]"))
 
         console.print()
 
     def print_help(self):
-        """Print help information."""
-        help_text = """
-[bold cyan]AIPTX Interactive Shell Commands[/bold cyan]
+        """Print help information with hacker aesthetic."""
+        from rich.table import Table
+        from rich import box
 
-[bold]Built-in Commands:[/bold]
-  help              Show this help message
-  tools             List available security tools
-  tools <category>  List tools in a category
-  clear             Clear the screen
-  history           Show command history
-  env               Show environment variables
-  env SET KEY=VAL   Set an environment variable
-  cd <path>         Change working directory
-  pwd               Print working directory
-  log <file>        Start logging to file
-  exit, quit        Exit the shell
+        NEON_GREEN = "#00ff41"
+        DARK_GREEN = "#008f11"
+        CYBER_BLUE = "#00d4ff"
+        BLOOD_RED = "#ff0040"
+        GHOST_WHITE = "#c0c0c0"
 
-[bold]Running Tools:[/bold]
-  Just type the tool name and arguments:
-    nmap -sV target.com
-    nuclei -u https://target.com
-    sqlmap -u "http://target.com?id=1"
+        console.print()
+        console.print(f"[bold {CYBER_BLUE}]╔══ SHELL COMMAND REFERENCE ══╗[/]")
+        console.print()
 
-[bold]Tips:[/bold]
-  • Use TAB for auto-completion
-  • Use UP/DOWN arrows for history
-  • Ctrl+C interrupts running command
-  • Ctrl+D exits the shell
-"""
-        console.print(help_text)
+        # Built-in commands table
+        cmd_table = Table(
+            show_header=True,
+            header_style=f"bold {NEON_GREEN}",
+            box=box.SIMPLE_HEAD,
+            border_style=DARK_GREEN,
+            expand=True,
+        )
+        cmd_table.add_column("COMMAND", style=f"bold {NEON_GREEN}")
+        cmd_table.add_column("ACTION", style=GHOST_WHITE)
+
+        cmd_table.add_row("help", "Display this reference")
+        cmd_table.add_row("tools [category]", "List available security tools")
+        cmd_table.add_row("clear", "Purge terminal buffer")
+        cmd_table.add_row("history", "Display command history")
+        cmd_table.add_row("env", "Show environment variables")
+        cmd_table.add_row("env SET KEY=VAL", "Set environment variable")
+        cmd_table.add_row("cd <path>", "Change working directory")
+        cmd_table.add_row("pwd", "Print working directory")
+        cmd_table.add_row("log <file>", "Start session logging")
+        cmd_table.add_row("exit", "Terminate shell session")
+
+        console.print(cmd_table)
+        console.print()
+
+        # Usage examples
+        console.print(f"[bold {BLOOD_RED}]⚔ TOOL EXECUTION[/]")
+        console.print(f"[dim {GHOST_WHITE}]  Execute tools directly by name:[/]")
+        console.print(f"    [{NEON_GREEN}]nmap -sV -sC target.com[/]")
+        console.print(f"    [{NEON_GREEN}]nuclei -u https://target.com -t cves/[/]")
+        console.print(f"    [{NEON_GREEN}]sqlmap -u \"http://target.com?id=1\" --batch[/]")
+        console.print()
+
+        # Hotkeys
+        console.print(f"[bold {CYBER_BLUE}]⌨ HOTKEYS[/]")
+        console.print(f"  [dim]TAB[/]    → Auto-completion")
+        console.print(f"  [dim]↑/↓[/]    → Navigate history")
+        console.print(f"  [dim]Ctrl+C[/] → Kill current process")
+        console.print(f"  [dim]Ctrl+D[/] → Exit shell")
+        console.print()
 
     def list_tools(self, category: Optional[str] = None):
-        """List available tools, optionally filtered by category."""
+        """List available tools with hacker aesthetic."""
         try:
             from aipt_v2.local_tool_installer import TOOLS, ToolCategory
 
-            table = Table(title="Available Security Tools", box=box.ROUNDED)
-            table.add_column("Tool", style="cyan")
-            table.add_column("Category", style="dim")
-            table.add_column("Installed", justify="center")
-            table.add_column("Description")
+            NEON_GREEN = "#00ff41"
+            DARK_GREEN = "#008f11"
+            CYBER_BLUE = "#00d4ff"
+            BLOOD_RED = "#ff0040"
+            GHOST_WHITE = "#c0c0c0"
+
+            title = f"[bold {BLOOD_RED}]⚔ ARSENAL[/] - Security Tools"
+            if category:
+                title += f" [{category.upper()}]"
+
+            table = Table(
+                title=title,
+                box=box.HEAVY_EDGE,
+                border_style=DARK_GREEN,
+                header_style=f"bold {CYBER_BLUE}",
+                expand=True,
+            )
+            table.add_column("TOOL", style=f"bold {NEON_GREEN}")
+            table.add_column("CATEGORY", style=f"dim {GHOST_WHITE}")
+            table.add_column("STATUS", justify="center")
+            table.add_column("DESCRIPTION", style=GHOST_WHITE)
 
             for name, tool in sorted(TOOLS.items()):
                 if category and tool.category.value != category:
                     continue
 
                 is_installed = shutil.which(name) is not None
-                status = "[green]✓[/green]" if is_installed else "[dim]○[/dim]"
+                status = f"[bold {NEON_GREEN}]●[/]" if is_installed else f"[dim {BLOOD_RED}]○[/]"
 
                 desc = tool.description[:45] + "..." if len(tool.description) > 45 else tool.description
 

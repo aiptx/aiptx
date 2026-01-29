@@ -63,9 +63,9 @@ class ConfidenceLevel(Enum):
 @dataclass
 class ZAPConfig:
     """Configuration for ZAP connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("ZAP_URL", "http://localhost:8080"))
-    api_key: str = field(default_factory=lambda: os.getenv("ZAP_API_KEY", ""))
-    timeout: int = 30
+    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL", "http://localhost:8080"))
+    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY", ""))
+    timeout: int = 120  # Increased for slow/remote networks
 
 
 @dataclass

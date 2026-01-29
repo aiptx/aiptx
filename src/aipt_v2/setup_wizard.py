@@ -21,7 +21,7 @@ import os
 import shutil
 import sys
 from pathlib import Path
-from typing import Optional, Tuple, Dict, List
+from typing import Optional, Tuple, Dict, List, Coroutine, TypeVar, Any
 
 from rich.console import Console
 from rich.panel import Panel
@@ -31,8 +31,132 @@ from rich.text import Text
 from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich import box
 
+T = TypeVar("T")
+
+
+def _run_async_safe(coro: Coroutine[Any, Any, T]) -> T:
+    """
+    Run an async coroutine safely, handling the case where
+    we're already inside an event loop.
+
+    This prevents the "Cannot run the event loop while another loop is running" error
+    by using different strategies:
+    1. If no loop running: create a new one
+    2. If loop running but we're not in async context: use thread-safe scheduling
+    3. If we're in async context: use nest_asyncio to allow nested loops
+    """
+    import threading
+
+    # First, check if there's a running loop
+    try:
+        running_loop = asyncio.get_running_loop()
+        loop_is_running = True
+    except RuntimeError:
+        running_loop = None
+        loop_is_running = False
+
+    # If no loop is running, we can safely create one
+    if not loop_is_running:
+        # Try to use EventLoopManager if available
+        try:
+            from aipt_v2.core.event_loop_manager import EventLoopManager
+            return EventLoopManager.run(coro)
+        except ImportError:
+            pass
+
+        # Fallback: create a new loop
+        loop = asyncio.new_event_loop()
+        try:
+            asyncio.set_event_loop(loop)
+            return loop.run_until_complete(coro)
+        finally:
+            loop.close()
+
+    # Loop is running - we need a different strategy
+    # Option 1: Try nest_asyncio if available (allows nested event loops)
+    try:
+        import nest_asyncio
+        nest_asyncio.apply()
+        # After applying nest_asyncio, we can run nested loops
+        return running_loop.run_until_complete(coro)
+    except ImportError:
+        pass
+    except RuntimeError:
+        # nest_asyncio might not help in all cases
+        pass
+
+    # Option 2: Run in a separate thread with its own event loop
+    result = None
+    exception = None
+
+    def run_in_thread():
+        nonlocal result, exception
+        try:
+            thread_loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(thread_loop)
+            try:
+                result = thread_loop.run_until_complete(coro)
+            finally:
+                thread_loop.close()
+        except Exception as e:
+            exception = e
+
+    thread = threading.Thread(target=run_in_thread)
+    thread.start()
+    thread.join(timeout=300)  # 5 minute timeout
+
+    if thread.is_alive():
+        raise TimeoutError("Async operation timed out after 5 minutes")
+
+    if exception is not None:
+        raise exception
+
+    return result
+
+# Enable readline for arrow key support in input prompts
+try:
+    import readline
+    # Configure readline for better input handling
+    readline.parse_and_bind('set editing-mode emacs')
+except ImportError:
+    # readline not available on Windows by default
+    pass
+
 
 console = Console()
+
+
+def input_with_default(prompt: str, default: str = "", password: bool = False) -> str:
+    """
+    Get user input with readline support (arrow keys, history).
+
+    Args:
+        prompt: The prompt to display
+        default: Default value to show/return if empty input
+        password: If True, don't echo input (for sensitive data)
+
+    Returns:
+        User input or default value
+    """
+    import getpass
+
+    if default:
+        display_prompt = f"{prompt} ({default}): "
+    else:
+        display_prompt = f"{prompt}: "
+
+    try:
+        if password:
+            # Use getpass for password input (no echo)
+            value = getpass.getpass(display_prompt)
+        else:
+            # Use standard input with readline support
+            value = input(display_prompt)
+
+        return value.strip() if value.strip() else default
+    except (EOFError, KeyboardInterrupt):
+        console.print()
+        return default
 
 
 # Lazy imports to avoid circular dependencies
@@ -338,8 +462,8 @@ def setup_llm() -> dict:
         return config
 
     if choice == "5":
-        provider = Prompt.ask("Enter provider name")
-        model = Prompt.ask("Enter model name")
+        provider = input_with_default("Enter provider name", "")
+        model = input_with_default("Enter model name", "")
         key_name = "LLM_API_KEY"
 
     config["AIPT_LLM__PROVIDER"] = provider
@@ -355,7 +479,7 @@ def setup_llm() -> dict:
     elif provider == "deepseek":
         console.print("[dim]Get one at: https://platform.deepseek.com/api_keys[/dim]")
 
-    api_key = Prompt.ask("API Key", password=True)
+    api_key = input_with_default("API Key", "", password=True)
 
     if api_key and key_name:
         config[key_name] = api_key
@@ -380,12 +504,8 @@ def _setup_ollama(ollama_installed: bool) -> dict:
             console.print("[yellow]Falling back to cloud provider...[/yellow]")
             return setup_llm()  # Restart LLM setup
 
-    # Check if Ollama is running
-    loop = asyncio.new_event_loop()
-    try:
-        is_running = loop.run_until_complete(check_ollama_running())
-    finally:
-        loop.close()
+    # Check if Ollama is running (use safe async runner to avoid nested loop errors)
+    is_running = _run_async_safe(check_ollama_running())
 
     if not is_running:
         console.print("\n[yellow]Ollama server is not running.[/yellow]")
@@ -402,12 +522,8 @@ def _setup_ollama(ollama_installed: bool) -> dict:
             import time
             time.sleep(2)  # Wait for server to start
 
-    # Get available models
-    loop = asyncio.new_event_loop()
-    try:
-        models = loop.run_until_complete(get_ollama_models())
-    finally:
-        loop.close()
+    # Get available models (use safe async runner to avoid nested loop errors)
+    models = _run_async_safe(get_ollama_models())
 
     # Recommended models for pentesting
     recommended_models = [
@@ -519,6 +635,19 @@ def _install_ollama():
         console.print("[dim]Please install manually from: https://ollama.ai[/dim]")
 
 
+def normalize_url(url: str) -> str:
+    """Normalize a URL - add protocol if missing, remove trailing slashes."""
+    if not url:
+        return url
+    url = url.strip()
+    # Add https:// if no protocol specified (prefer https for security scanners)
+    if not url.startswith(('http://', 'https://')):
+        url = f"https://{url}"
+    # Remove trailing slashes
+    url = url.rstrip('/')
+    return url
+
+
 def setup_scanners() -> dict:
     """Configure enterprise scanners (optional)."""
     config = {}
@@ -537,29 +666,29 @@ def setup_scanners() -> dict:
 
     # Acunetix
     if Confirm.ask("\n[bold]Configure Acunetix?[/bold]", default=False):
-        url = Prompt.ask("  Acunetix URL (e.g., https://your-instance:3443)")
-        api_key = Prompt.ask("  Acunetix API Key", password=True)
+        url = input_with_default("  Acunetix URL (e.g., https://your-instance:3443)", "")
+        api_key = input_with_default("  Acunetix API Key", "", password=True)
         if url:
-            config["AIPT_SCANNERS__ACUNETIX_URL"] = url
+            config["AIPT_SCANNERS__ACUNETIX_URL"] = normalize_url(url)
         if api_key:
             config["AIPT_SCANNERS__ACUNETIX_API_KEY"] = api_key
 
     # Burp Suite
     if Confirm.ask("\n[bold]Configure Burp Suite Enterprise?[/bold]", default=False):
-        url = Prompt.ask("  Burp Suite URL (e.g., https://your-burp:8080)")
-        api_key = Prompt.ask("  Burp Suite API Key", password=True)
+        url = input_with_default("  Burp Suite URL (e.g., https://your-burp:8080)", "")
+        api_key = input_with_default("  Burp Suite API Key", "", password=True)
         if url:
-            config["AIPT_SCANNERS__BURP_URL"] = url
+            config["AIPT_SCANNERS__BURP_URL"] = normalize_url(url)
         if api_key:
             config["AIPT_SCANNERS__BURP_API_KEY"] = api_key
 
     # Nessus
     if Confirm.ask("\n[bold]Configure Nessus?[/bold]", default=False):
-        url = Prompt.ask("  Nessus URL (e.g., https://your-nessus:8834)")
-        access_key = Prompt.ask("  Nessus Access Key", password=True)
-        secret_key = Prompt.ask("  Nessus Secret Key", password=True)
+        url = input_with_default("  Nessus URL (e.g., https://your-nessus:8834)", "")
+        access_key = input_with_default("  Nessus Access Key", "", password=True)
+        secret_key = input_with_default("  Nessus Secret Key", "", password=True)
         if url:
-            config["AIPT_SCANNERS__NESSUS_URL"] = url
+            config["AIPT_SCANNERS__NESSUS_URL"] = normalize_url(url)
         if access_key:
             config["AIPT_SCANNERS__NESSUS_ACCESS_KEY"] = access_key
         if secret_key:
@@ -567,10 +696,15 @@ def setup_scanners() -> dict:
 
     # OWASP ZAP
     if Confirm.ask("\n[bold]Configure OWASP ZAP?[/bold]", default=False):
-        url = Prompt.ask("  ZAP URL (e.g., http://localhost:8080)")
-        api_key = Prompt.ask("  ZAP API Key (leave empty if disabled)", password=True)
+        url = input_with_default("  ZAP URL (e.g., http://localhost:8080)", "")
+        api_key = input_with_default("  ZAP API Key (leave empty if disabled)", "", password=True)
         if url:
-            config["AIPT_SCANNERS__ZAP_URL"] = url
+            # ZAP typically uses http, not https
+            normalized = url.strip()
+            if not normalized.startswith(('http://', 'https://')):
+                normalized = f"http://{normalized}"
+            normalized = normalized.rstrip('/')
+            config["AIPT_SCANNERS__ZAP_URL"] = normalized
         if api_key:
             config["AIPT_SCANNERS__ZAP_API_KEY"] = api_key
 
@@ -593,10 +727,11 @@ def setup_vps() -> dict:
         console.print("[dim]Skipping VPS configuration...[/dim]\n")
         return config
 
-    host = Prompt.ask("  VPS IP or hostname")
-    user = Prompt.ask("  SSH username", default="ubuntu")
-    key_path = Prompt.ask("  Path to SSH private key (e.g., ~/.ssh/id_rsa)")
-    port = Prompt.ask("  SSH port", default="22")
+    # Use readline-enabled input for arrow key support
+    host = input_with_default("  VPS IP or hostname", "")
+    user = input_with_default("  SSH username", "ubuntu")
+    key_path = input_with_default("  Path to SSH private key (e.g., ~/.ssh/id_rsa)", "")
+    port = input_with_default("  SSH port", "22")
 
     if host:
         config["AIPT_VPS__HOST"] = host
@@ -606,6 +741,10 @@ def setup_vps() -> dict:
         # Expand ~ to home directory
         expanded_path = str(Path(key_path).expanduser())
         config["AIPT_VPS__KEY_PATH"] = expanded_path
+        # Validate the key file exists
+        if not Path(expanded_path).exists():
+            console.print(f"[yellow]Warning: SSH key file not found at {expanded_path}[/yellow]")
+            console.print("[dim]Make sure the path is correct before testing the connection.[/dim]")
     if port:
         config["AIPT_VPS__PORT"] = port
 
@@ -787,16 +926,14 @@ def run_setup_wizard(force: bool = False) -> bool:
     Returns:
         True if setup completed successfully
     """
-    # Use asyncio to run the async version
+    # Use safe async runner to handle nested event loops
     try:
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            return loop.run_until_complete(_run_setup_wizard_async(force))
-        finally:
-            loop.close()
+        return _run_async_safe(_run_setup_wizard_async(force))
     except KeyboardInterrupt:
         console.print("\n[yellow]Setup cancelled.[/yellow]")
+        return False
+    except Exception as e:
+        console.print(f"\n[red]Setup error: {e}[/red]")
         return False
 
 

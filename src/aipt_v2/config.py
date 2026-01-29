@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 
 from .utils.logging import logger
+from .utils.security import mask_path
 
 
 def _load_config_files():
@@ -66,6 +67,25 @@ class LLMSettings(BaseModel):
                 return os.getenv(key)
         return None
 
+    @field_validator("api_base", mode="before")
+    @classmethod
+    def get_api_base_from_env(cls, v):
+        """Load API base URL from environment, with Ollama-specific handling."""
+        if v:
+            return v
+        # Check environment variables in order of priority
+        for key in [
+            "AIPT_LLM__OLLAMA_BASE_URL",  # Setup wizard Ollama config
+            "AIPT_LLM__API_BASE",           # Generic AIPT config
+            "LLM_API_BASE",                 # LiteLLM generic
+            "OPENAI_API_BASE",              # OpenAI-compatible
+            "LITELLM_BASE_URL",             # LiteLLM explicit
+            "OLLAMA_API_BASE",              # Ollama specific
+        ]:
+            if os.getenv(key):
+                return os.getenv(key)
+        return None
+
 
 class ScannerSettings(BaseModel):
     """Enterprise scanner configuration."""
@@ -94,6 +114,37 @@ class ScannerSettings(BaseModel):
             # Auto-prepend http:// if no scheme provided (user-friendly)
             v = f"http://{v}"
         return v
+
+
+class IntelligenceSettings(BaseModel):
+    """Passive reconnaissance and threat intelligence configuration."""
+
+    # ZoomEye - Cyberspace search engine
+    zoomeye_api_key: Optional[str] = Field(default=None, description="ZoomEye API key")
+
+    # Shodan (future)
+    shodan_api_key: Optional[str] = Field(default=None, description="Shodan API key")
+
+    # Censys (future)
+    censys_api_id: Optional[str] = Field(default=None, description="Censys API ID")
+    censys_api_secret: Optional[str] = Field(default=None, description="Censys API Secret")
+
+    # VirusTotal (future)
+    virustotal_api_key: Optional[str] = Field(default=None, description="VirusTotal API key")
+
+    @field_validator("zoomeye_api_key", mode="before")
+    @classmethod
+    def get_zoomeye_key_from_env(cls, v):
+        if v:
+            return v
+        return os.getenv("ZOOMEYE_API_KEY")
+
+    @field_validator("shodan_api_key", mode="before")
+    @classmethod
+    def get_shodan_key_from_env(cls, v):
+        if v:
+            return v
+        return os.getenv("SHODAN_API_KEY")
 
 
 class VPSSettings(BaseModel):
@@ -160,6 +211,7 @@ class AIPTConfig(BaseSettings):
     # Sub-configurations
     llm: LLMSettings = Field(default_factory=LLMSettings)
     scanners: ScannerSettings = Field(default_factory=ScannerSettings)
+    intelligence: IntelligenceSettings = Field(default_factory=IntelligenceSettings)
     vps: VPSSettings = Field(default_factory=VPSSettings)
     api: APISettings = Field(default_factory=APISettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
@@ -195,11 +247,26 @@ def get_config() -> AIPTConfig:
     # Load from environment
     # Note: Setup wizard saves with AIPT_ prefix and __ delimiter (e.g., AIPT_LLM__PROVIDER)
     # We check both formats for backwards compatibility
+    # Determine API base URL with provider-specific handling
+    llm_provider = os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER", "anthropic")
+    llm_api_base = (
+        os.getenv("AIPT_LLM__OLLAMA_BASE_URL")  # Ollama from setup wizard
+        or os.getenv("AIPT_LLM__API_BASE")       # Generic AIPT config
+        or os.getenv("LLM_API_BASE")             # LiteLLM generic
+        or os.getenv("OPENAI_API_BASE")          # OpenAI-compatible
+        or os.getenv("OLLAMA_API_BASE")          # Ollama specific
+    )
+
+    # Auto-set Ollama base URL if provider is ollama and no base URL configured
+    if llm_provider.lower() == "ollama" and not llm_api_base:
+        llm_api_base = "http://localhost:11434"
+
     config = AIPTConfig(
         llm=LLMSettings(
-            provider=os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER", "anthropic"),
+            provider=llm_provider,
             model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
             api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
+            api_base=llm_api_base,
             timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),
         ),
         scanners=ScannerSettings(
@@ -212,6 +279,13 @@ def get_config() -> AIPTConfig:
             nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY"),
             zap_url=os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL"),
             zap_api_key=os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY"),
+        ),
+        intelligence=IntelligenceSettings(
+            zoomeye_api_key=os.getenv("AIPT_INTELLIGENCE__ZOOMEYE_API_KEY") or os.getenv("ZOOMEYE_API_KEY"),
+            shodan_api_key=os.getenv("AIPT_INTELLIGENCE__SHODAN_API_KEY") or os.getenv("SHODAN_API_KEY"),
+            censys_api_id=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_ID") or os.getenv("CENSYS_API_ID"),
+            censys_api_secret=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_SECRET") or os.getenv("CENSYS_API_SECRET"),
+            virustotal_api_key=os.getenv("AIPT_INTELLIGENCE__VIRUSTOTAL_API_KEY") or os.getenv("VIRUSTOTAL_API_KEY"),
         ),
         vps=VPSSettings(
             host=os.getenv("AIPT_VPS__HOST") or os.getenv("VPS_HOST"),
@@ -241,6 +315,7 @@ def get_config() -> AIPTConfig:
         has_acunetix=bool(config.scanners.acunetix_url),
         has_burp=bool(config.scanners.burp_url),
         has_nessus=bool(config.scanners.nessus_url),
+        has_zoomeye=bool(config.intelligence.zoomeye_api_key),
         has_vps=bool(config.vps.host),
         sandbox_mode=config.sandbox_mode,
     )
@@ -310,13 +385,21 @@ def validate_config_for_features(features: List[str]) -> List[str]:
         if not config.scanners.nessus_secret_key:
             errors.append("Nessus secret key required. Set NESSUS_SECRET_KEY environment variable.")
 
+    if "zoomeye" in features:
+        if not config.intelligence.zoomeye_api_key:
+            errors.append(
+                "ZoomEye API key required. Set ZOOMEYE_API_KEY environment variable. "
+                "Get your key from https://www.zoomeye.ai profile."
+            )
+
     if "vps" in features:
         if not config.vps.host:
             errors.append("VPS host required. Set VPS_HOST environment variable.")
         if not config.vps.key_path:
             errors.append("VPS SSH key path required. Set VPS_KEY environment variable.")
         elif not Path(config.vps.key_path).exists():
-            errors.append(f"VPS SSH key not found: {config.vps.key_path}")
+            # Mask the path to avoid exposing full filesystem structure
+            errors.append(f"VPS SSH key not found: {mask_path(config.vps.key_path)}")
 
     return errors
 

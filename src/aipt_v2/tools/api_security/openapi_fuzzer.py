@@ -28,6 +28,8 @@ import string
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from aipt_v2.core.event_loop_manager import current_time
 from typing import List, Dict, Any, Optional, Union
 from urllib.parse import urljoin, urlencode
 
@@ -653,7 +655,7 @@ class OpenAPIFuzzer:
             OpenAPIFuzzResult with all findings
         """
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         # Load spec
         if not self.spec:
@@ -693,7 +695,7 @@ class OpenAPIFuzzer:
             findings.extend(await self.test_mass_assignment())
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         # Spec info
         spec_info = {

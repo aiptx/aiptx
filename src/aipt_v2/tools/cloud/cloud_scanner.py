@@ -16,6 +16,7 @@ from enum import Enum
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Callable
 
+from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.cloud.cloud_config import CloudConfig, get_cloud_config
 
 logger = logging.getLogger(__name__)
@@ -165,7 +166,7 @@ class CloudScanner:
     async def _scan_provider(self, provider: str) -> CloudScanResult:
         """Scan a specific cloud provider."""
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         self._log(f"Scanning {provider.upper()}...")
 
@@ -182,7 +183,7 @@ class CloudScanner:
             errors.append(f"Unknown provider: {provider}")
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         # Calculate summary
         summary = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}

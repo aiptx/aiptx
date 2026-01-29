@@ -23,6 +23,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 
 
@@ -341,7 +342,7 @@ class KerberosAttacks:
             KerberosResult with findings
         """
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         # Run attacks
         await self.kerberoast()
@@ -349,7 +350,7 @@ class KerberosAttacks:
         await self.check_delegation()
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         return KerberosResult(
             domain=self.config.domain,

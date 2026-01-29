@@ -240,7 +240,7 @@ class WebCrawler:
     async def _crawl_page(self, url: str, depth: int, parent: str) -> None:
         """Crawl a single page"""
         async with self._semaphore:
-            page = CrawledPage(url=url, depth=depth, parent_url=parent)
+            page = CrawledPage(url=url, status_code=0, depth=depth, parent_url=parent)
             start_time = datetime.utcnow()
 
             try:

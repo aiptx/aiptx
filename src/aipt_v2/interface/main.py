@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
 """
 AIPTx Agent Interface
+
+This module provides the main entry point for AIPTX, handling:
+- Environment validation
+- LLM connection warmup with retry
+- Docker image management
+- CLI/TUI mode selection
+
+Uses EventLoopManager for proper asyncio lifecycle management.
 """
 
 import argparse
@@ -17,7 +25,14 @@ from docker.errors import DockerException
 from rich.console import Console
 from rich.panel import Panel
 from rich.text import Text
+from tenacity import (
+    retry,
+    stop_after_attempt,
+    wait_exponential,
+    retry_if_exception_type,
+)
 
+from aipt_v2.core.event_loop_manager import EventLoopManager, run_async
 from aipt_v2.interface.cli import run_cli
 from aipt_v2.interface.tui import run_tui
 from aipt_v2.interface.utils import (
@@ -184,61 +199,179 @@ def check_docker_installed() -> None:
         sys.exit(1)
 
 
+class LLMConnectionError(Exception):
+    """Custom exception for LLM connection failures."""
+
+    pass
+
+
+def _validate_api_base(api_base: str | None) -> str | None:
+    """Validate the API base URL format."""
+    if not api_base:
+        return None
+
+    api_base = api_base.strip()
+    if not api_base.startswith(("http://", "https://")):
+        raise ValueError(
+            f"Invalid API base URL: '{api_base}'. "
+            "URL must start with 'http://' or 'https://'"
+        )
+    return api_base
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=10),
+    retry=retry_if_exception_type((litellm.APIConnectionError, litellm.Timeout, LLMConnectionError)),
+    reraise=True,
+)
+async def _attempt_llm_connection(completion_kwargs: dict[str, Any]) -> Any:
+    """
+    Attempt to connect to the LLM with retry logic.
+
+    Retries up to 3 times with exponential backoff (2s, 4s, 8s).
+    """
+    response = litellm.completion(**completion_kwargs)
+
+    # Check if response content looks like HTML (proxy/firewall interception)
+    if response and hasattr(response, "choices") and response.choices:
+        content = getattr(response.choices[0].message, "content", "") or ""
+        if content.strip().startswith(("<!DOCTYPE", "<html", "<HTML")):
+            raise LLMConnectionError(
+                "API returned HTML instead of JSON. "
+                "Check if a proxy or firewall is intercepting requests."
+            )
+
+    return response
+
+
 async def warm_up_llm() -> None:
+    """
+    Warm up the LLM connection with retry logic.
+
+    This function:
+    1. Validates the API base URL format
+    2. Attempts to connect with up to 3 retries
+    3. Uses a shorter timeout (30s) for warmup vs regular requests
+    4. Provides clear error messages for common failure modes
+    """
     console = Console()
 
     try:
         model_name = os.getenv("AIPT_LLM", "openai/gpt-5")
         api_key = os.getenv("LLM_API_KEY")
-        api_base = (
+
+        # Get and validate API base URL
+        api_base_raw = (
             os.getenv("LLM_API_BASE")
             or os.getenv("OPENAI_API_BASE")
             or os.getenv("LITELLM_BASE_URL")
             or os.getenv("OLLAMA_API_BASE")
         )
 
+        try:
+            api_base = _validate_api_base(api_base_raw)
+        except ValueError as e:
+            _show_llm_error(console, str(e))
+            sys.exit(1)
+
         test_messages = [
             {"role": "system", "content": "You are a helpful assistant."},
             {"role": "user", "content": "Reply with just 'OK'."},
         ]
 
-        llm_timeout = int(os.getenv("LLM_TIMEOUT", "600"))
+        # Use shorter timeout for warmup check (30s instead of 600s)
+        warmup_timeout = int(os.getenv("LLM_WARMUP_TIMEOUT", "30"))
 
         completion_kwargs: dict[str, Any] = {
             "model": model_name,
             "messages": test_messages,
-            "timeout": llm_timeout,
+            "timeout": warmup_timeout,
         }
         if api_key:
             completion_kwargs["api_key"] = api_key
         if api_base:
             completion_kwargs["api_base"] = api_base
 
-        response = litellm.completion(**completion_kwargs)
-
+        # Attempt connection with retry
+        console.print("[dim]Testing LLM connection...[/]", end=" ")
+        response = await _attempt_llm_connection(completion_kwargs)
         validate_llm_response(response)
+        console.print("[green]OK[/]")
+
+    except LLMConnectionError as e:
+        _show_llm_error(console, str(e), hint="Check your network proxy settings.")
+        sys.exit(1)
+
+    except litellm.AuthenticationError as e:
+        _show_llm_error(
+            console,
+            "Invalid API key",
+            details=str(e),
+            hint="Verify your LLM_API_KEY environment variable.",
+        )
+        sys.exit(1)
+
+    except litellm.APIConnectionError as e:
+        _show_llm_error(
+            console,
+            "Could not connect to LLM API",
+            details=str(e),
+            hint="Check your internet connection and API base URL.",
+        )
+        sys.exit(1)
+
+    except litellm.Timeout as e:
+        _show_llm_error(
+            console,
+            "LLM connection timed out",
+            details=str(e),
+            hint="The API may be slow or unreachable. Try increasing LLM_WARMUP_TIMEOUT.",
+        )
+        sys.exit(1)
 
     except Exception as e:  # noqa: BLE001
-        error_text = Text()
-        error_text.append("❌ ", style="bold red")
-        error_text.append("LLM CONNECTION FAILED", style="bold red")
-        error_text.append("\n\n", style="white")
-        error_text.append("Could not establish connection to the language model.\n", style="white")
-        error_text.append("Please check your configuration and try again.\n", style="white")
-        error_text.append(f"\nError: {e}", style="dim white")
-
-        panel = Panel(
-            error_text,
-            title="[bold red]🛡️  AIPT STARTUP ERROR",
-            title_align="center",
-            border_style="red",
-            padding=(1, 2),
+        _show_llm_error(
+            console,
+            "LLM connection failed",
+            details=str(e),
+            hint="Check your configuration and try again.",
         )
-
-        console.print("\n")
-        console.print(panel)
-        console.print()
         sys.exit(1)
+
+
+def _show_llm_error(
+    console: Console,
+    message: str,
+    details: str | None = None,
+    hint: str | None = None,
+) -> None:
+    """Display a formatted LLM error panel."""
+    error_text = Text()
+    error_text.append("❌ ", style="bold red")
+    error_text.append("LLM CONNECTION FAILED", style="bold red")
+    error_text.append("\n\n", style="white")
+    error_text.append(f"{message}\n", style="white")
+
+    if hint:
+        error_text.append(f"\n💡 Hint: {hint}\n", style="yellow")
+
+    if details:
+        # Truncate long error details
+        truncated_details = details[:500] + "..." if len(details) > 500 else details
+        error_text.append(f"\nError: {truncated_details}", style="dim white")
+
+    panel = Panel(
+        error_text,
+        title="[bold red]🛡️  AIPT STARTUP ERROR",
+        title_align="center",
+        border_style="red",
+        padding=(1, 2),
+    )
+
+    console.print("\n")
+    console.print(panel)
+    console.print()
 
 
 def parse_arguments() -> argparse.Namespace:
@@ -460,33 +593,55 @@ def pull_docker_image() -> None:
 
 
 def main() -> None:
-    if sys.platform == "win32":
-        asyncio.set_event_loop_policy(asyncio.WindowsSelectorEventLoopPolicy())
+    """
+    Main entry point for AIPTX.
 
+    Uses EventLoopManager to ensure a single event loop is used throughout
+    the application lifecycle, preventing "event loop is closed" errors.
+
+    Flow:
+    1. Parse arguments
+    2. Check Docker installation
+    3. Validate environment
+    4. Warm up LLM connection (with retry)
+    5. Clone repositories if needed
+    6. Run CLI or TUI mode
+    7. Display completion message
+    """
+    # Windows-specific event loop policy is handled by EventLoopManager
     args = parse_arguments()
 
     check_docker_installed()
     pull_docker_image()
 
     validate_environment()
-    asyncio.run(warm_up_llm())
 
-    if not args.run_name:
-        args.run_name = generate_run_name(args.targets_info)
+    # Use EventLoopManager for all async operations to maintain a single loop
+    try:
+        # Warm up LLM with retry logic
+        run_async(warm_up_llm())
 
-    for target_info in args.targets_info:
-        if target_info["type"] == "repository":
-            repo_url = target_info["details"]["target_repo"]
-            dest_name = target_info["details"].get("workspace_subdir")
-            cloned_path = clone_repository(repo_url, args.run_name, dest_name)
-            target_info["details"]["cloned_repo_path"] = cloned_path
+        if not args.run_name:
+            args.run_name = generate_run_name(args.targets_info)
 
-    args.local_sources = collect_local_sources(args.targets_info)
+        for target_info in args.targets_info:
+            if target_info["type"] == "repository":
+                repo_url = target_info["details"]["target_repo"]
+                dest_name = target_info["details"].get("workspace_subdir")
+                cloned_path = clone_repository(repo_url, args.run_name, dest_name)
+                target_info["details"]["cloned_repo_path"] = cloned_path
 
-    if args.non_interactive:
-        asyncio.run(run_cli(args))
-    else:
-        asyncio.run(run_tui(args))
+        args.local_sources = collect_local_sources(args.targets_info)
+
+        # Run the appropriate interface mode using the same event loop
+        if args.non_interactive:
+            run_async(run_cli(args))
+        else:
+            run_async(run_tui(args))
+
+    finally:
+        # Ensure graceful shutdown of the event loop
+        EventLoopManager.shutdown()
 
     results_path = Path("aipt_runs") / args.run_name
     display_completion_message(args, results_path)

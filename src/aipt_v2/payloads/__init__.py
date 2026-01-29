@@ -8,6 +8,7 @@ Security testing payloads for various vulnerability classes:
 - Path Traversal
 - SSRF (Server-Side Request Forgery)
 - Template Injection
+- XXE (XML External Entity Injection)
 """
 
 from .xss import XSSPayloads
@@ -16,6 +17,7 @@ from .cmdi import CommandInjectionPayloads
 from .traversal import PathTraversalPayloads
 from .ssrf import SSRFPayloads
 from .templates import TemplateInjectionPayloads
+from .xxe import XXEPayloads, XXEPayload, get_xxe_payloads
 
 __all__ = [
     "XSSPayloads",
@@ -24,4 +26,7 @@ __all__ = [
     "PathTraversalPayloads",
     "SSRFPayloads",
     "TemplateInjectionPayloads",
+    "XXEPayloads",
+    "XXEPayload",
+    "get_xxe_payloads",
 ]

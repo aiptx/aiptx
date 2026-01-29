@@ -20,10 +20,41 @@ import os
 import warnings
 from pathlib import Path
 
+# =============================================================================
+# Readline Configuration (MUST be before any input operations)
+# Fixes backspace/delete key handling on macOS and Linux
+# =============================================================================
+try:
+    import readline
+    # macOS uses libedit which needs different configuration
+    if 'libedit' in readline.__doc__:
+        # macOS libedit compatibility
+        readline.parse_and_bind("bind ^[[3~ delete-char")  # Delete key
+        readline.parse_and_bind("bind ^H backward-delete-char")  # Backspace
+        readline.parse_and_bind("bind ^? backward-delete-char")  # Alt backspace
+    else:
+        # GNU readline (Linux)
+        readline.parse_and_bind('"\e[3~": delete-char')
+        readline.parse_and_bind('"\C-h": backward-delete-char')
+except ImportError:
+    # Windows doesn't have readline by default
+    try:
+        import pyreadline3 as readline
+    except ImportError:
+        pass  # readline not available, basic input will be used
+
 # Suppress noisy warnings for cleaner user experience
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 warnings.filterwarnings("ignore", message=".*urllib3.*OpenSSL.*")
 warnings.filterwarnings("ignore", message=".*NotOpenSSLWarning.*")
+warnings.filterwarnings("ignore", message=".*coroutine.*was never awaited.*")
+warnings.filterwarnings("ignore", message=".*Enable tracemalloc.*")
+
+# Suppress litellm verbose output
+import os
+os.environ.setdefault("LITELLM_LOG", "ERROR")
+os.environ.setdefault("LITELLM_TELEMETRY", "false")
 
 # Set default log level to WARNING before any imports that might log
 os.environ.setdefault("AIPT_LOG_LEVEL", "WARNING")
@@ -33,6 +64,7 @@ try:
     from . import __version__
     from .config import get_config, validate_config_for_features, reload_config
     from .utils.logging import setup_logging, logger
+    from .utils.security import mask_path, sanitize_error_message
     from .setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
     from .interface.icons import icon, supports_emoji
 except ImportError:
@@ -41,6 +73,7 @@ except ImportError:
     from __init__ import __version__
     from config import get_config, validate_config_for_features, reload_config
     from utils.logging import setup_logging, logger
+    from utils.security import mask_path, sanitize_error_message
     from setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
     from interface.icons import icon, supports_emoji
 
@@ -114,7 +147,8 @@ Installation:
         default="standard",
         help="Scan mode (default: standard)",
     )
-    scan_parser.add_argument("--full", action="store_true", help="Run full comprehensive scan")
+    scan_parser.add_argument("--full", action="store_true", help="Run full comprehensive scan (60-90 min with enterprise scanners)")
+    scan_parser.add_argument("--quick", action="store_true", help="Quick scan - skip enterprise scanners (Acunetix/Nessus/Burp/ZAP)")
     scan_parser.add_argument("--ai", action="store_true", help="Enable AI-guided scanning")
     scan_parser.add_argument("--use-vps", action="store_true", help="Use VPS for tool execution")
     scan_parser.add_argument("--use-acunetix", action="store_true", help="Include Acunetix scan")
@@ -494,74 +528,158 @@ def show_first_run_help():
 
 
 def run_interactive_mode():
-    """Run AIPTX in interactive shell mode."""
-    from rich.console import Console
+    """Run AIPTX in interactive shell mode with hacker aesthetic."""
+    import platform
+    import socket
+    import os
+    from datetime import datetime
+    from rich.console import Console, Group
     from rich.panel import Panel
     from rich.prompt import Prompt
     from rich.table import Table
+    from rich.align import Align
+    from rich.columns import Columns
+    from rich.text import Text
     from rich import box
 
     console = Console()
+    term_width = console.size.width
 
-    # ASCII Art Logo
-    logo = """
-[bold cyan]     █████╗ ██╗██████╗ ████████╗██╗  ██╗[/bold cyan]
-[bold cyan]    ██╔══██╗██║██╔══██╗╚══██╔══╝╚██╗██╔╝[/bold cyan]
-[bold blue]    ███████║██║██████╔╝   ██║    ╚███╔╝ [/bold blue]
-[bold blue]    ██╔══██║██║██╔═══╝    ██║    ██╔██╗ [/bold blue]
-[bold magenta]    ██║  ██║██║██║        ██║   ██╔╝ ██╗[/bold magenta]
-[bold magenta]    ╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝[/bold magenta]
-"""
+    # Hacker-style color constants
+    NEON_GREEN = "#00ff41"
+    DARK_GREEN = "#008f11"
+    MATRIX_GREEN = "#00ff00"
+    CYBER_BLUE = "#00d4ff"
+    BLOOD_RED = "#ff0040"
+    GHOST_WHITE = "#c0c0c0"
 
-    # Show welcome banner
+    # Epic ASCII banner with cyber styling
+    banner = f"""
+[bold {NEON_GREEN}]    ╔═══════════════════════════════════════════════════════════════════════════════╗[/]
+[bold {NEON_GREEN}]    ║[/] [bold {MATRIX_GREEN}]   █████╗ ██╗██████╗ ████████╗██╗  ██╗[/]                                      [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ║[/] [bold {MATRIX_GREEN}]  ██╔══██╗██║██╔══██╗╚══██╔══╝╚██╗██╔╝[/]                                      [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ║[/] [bold {CYBER_BLUE}]  ███████║██║██████╔╝   ██║    ╚███╔╝ [/]   [bold white]AI-POWERED PENETRATION TESTING[/]   [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ║[/] [bold {CYBER_BLUE}]  ██╔══██║██║██╔═══╝    ██║    ██╔██╗ [/]   [dim {GHOST_WHITE}]Autonomous Security Framework[/]    [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ║[/] [{BLOOD_RED}]  ██║  ██║██║██║        ██║   ██╔╝ ██╗[/]   [dim]v{__version__} // aiptx.io[/]              [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ║[/] [{BLOOD_RED}]  ╚═╝  ╚═╝╚═╝╚═╝        ╚═╝   ╚═╝  ╚═╝[/]                                      [bold {NEON_GREEN}]║[/]
+[bold {NEON_GREEN}]    ╚═══════════════════════════════════════════════════════════════════════════════╝[/]"""
+
+    # Clear screen and show banner
+    console.clear()
+    console.print(Align.center(banner))
+
+    # System info bar (like neofetch)
+    try:
+        hostname = socket.gethostname()
+        username = os.getenv("USER") or os.getenv("USERNAME") or "operator"
+        os_info = f"{platform.system()} {platform.release()}"
+        py_version = platform.python_version()
+        current_time = datetime.now().strftime("%H:%M:%S")
+    except Exception:
+        hostname = "localhost"
+        username = "operator"
+        os_info = platform.system()
+        py_version = platform.python_version()
+        current_time = datetime.now().strftime("%H:%M:%S")
+
+    # Status indicators
+    config_status = f"[bold {NEON_GREEN}]●[/] READY" if is_configured() else f"[bold {BLOOD_RED}]●[/] UNCONFIGURED"
+
+    sys_info = Text()
+    sys_info.append("    ┌─", style=f"dim {DARK_GREEN}")
+    sys_info.append(f" {username}@{hostname}", style=f"bold {NEON_GREEN}")
+    sys_info.append(" │ ", style=f"dim {DARK_GREEN}")
+    sys_info.append(f"󰌽 {os_info}", style=f"{GHOST_WHITE}")
+    sys_info.append(" │ ", style=f"dim {DARK_GREEN}")
+    sys_info.append(f" Python {py_version}", style=f"{GHOST_WHITE}")
+    sys_info.append(" │ ", style=f"dim {DARK_GREEN}")
+    sys_info.append(f" {current_time}", style=f"{GHOST_WHITE}")
+    sys_info.append(" │ ", style=f"dim {DARK_GREEN}")
+    sys_info.append(config_status)
+    sys_info.append(" ─┐", style=f"dim {DARK_GREEN}")
+
     console.print()
-    console.print(logo)
-    console.print("[bold white]         AI-Powered Penetration Testing Framework[/bold white]")
-    console.print(f"[dim]                      v{__version__} • [link=https://aiptx.io]aiptx.io[/link][/dim]")
+    console.print(Align.center(sys_info))
     console.print()
 
-    # Stylish separator
-    console.print("[dim cyan]" + "━" * 60 + "[/dim cyan]")
+    # Cyber separator
+    separator = f"[{DARK_GREEN}]" + "═" * term_width + f"[/{DARK_GREEN}]"
+    console.print(separator)
     console.print()
 
-    # Quick commands in a nice table format
-    commands_table = Table(
-        show_header=False,
-        box=box.SIMPLE,
-        padding=(0, 2),
-        collapse_padding=True,
+    # Command modules in a grid layout
+    modules_left = Table(
+        show_header=True,
+        header_style=f"bold {CYBER_BLUE}",
+        box=box.ROUNDED,
+        border_style=DARK_GREEN,
+        padding=(0, 1),
+        expand=True,
     )
-    commands_table.add_column("Command", style="bold green", width=18)
-    commands_table.add_column("Description", style="white")
+    modules_left.add_column("⚡ ATTACK MODULES", style=f"bold {NEON_GREEN}")
+    modules_left.add_column("", style=f"dim {GHOST_WHITE}")
 
-    commands_table.add_row("scan <target>", f"{icon('search')} Run security scan")
-    commands_table.add_row("scan <target> --ai", f"{icon('robot')} AI-guided intelligent scanning")
-    commands_table.add_row("scan <target> --full", f"{icon('target')} Comprehensive assessment")
-    commands_table.add_row("ai <command>", f"{icon('brain')} AI security testing")
-    commands_table.add_row("vps <command>", f"{icon('cloud')} Remote VPS execution")
-    commands_table.add_row("setup", f"{icon('gear')} Configure AIPTX")
-    commands_table.add_row("status", f"{icon('chart')} Show configuration")
-    commands_table.add_row("help", f"{icon('info')} Show all commands")
-    commands_table.add_row("exit", f"{icon('arrow')} Exit AIPTX")
+    modules_left.add_row(f"[bold]scan[/] <target>", "→ Execute security scan")
+    modules_left.add_row(f"[bold]scan[/] <target> [cyan]--ai[/]", "→ AI-guided exploitation")
+    modules_left.add_row(f"[bold]scan[/] <target> [cyan]--full[/]", "→ Deep penetration test")
+    modules_left.add_row(f"[bold]ai[/] <command>", "→ AI security analysis")
+    modules_left.add_row(f"[bold]vps[/] <command>", "→ Remote VPS execution")
 
-    console.print(commands_table)
-    console.print()
-    console.print("[dim cyan]" + "━" * 60 + "[/dim cyan]")
-    console.print()
-    console.print(f"[dim]{icon('lightbulb')} Tip: Type [bold green]scan example.com --ai[/bold green] to start AI-guided scanning[/dim]")
-    console.print(f"[dim]{icon('globe')} Docs: [link=https://aiptx.io/docs]https://aiptx.io/docs[/link][/dim]")
+    modules_right = Table(
+        show_header=True,
+        header_style=f"bold {CYBER_BLUE}",
+        box=box.ROUNDED,
+        border_style=DARK_GREEN,
+        padding=(0, 1),
+        expand=True,
+    )
+    modules_right.add_column("🔧 SYSTEM", style=f"bold {NEON_GREEN}")
+    modules_right.add_column("", style=f"dim {GHOST_WHITE}")
+
+    modules_right.add_row(f"[bold]setup[/]", "→ Configure framework")
+    modules_right.add_row(f"[bold]status[/]", "→ System diagnostics")
+    modules_right.add_row(f"[bold]test[/]", "→ Validate connections")
+    modules_right.add_row(f"[bold]help[/]", "→ Command reference")
+    modules_right.add_row(f"[bold]exit[/]", "→ Terminate session")
+
+    # Display modules side by side
+    console.print(Columns([modules_left, modules_right], expand=True, padding=2))
     console.print()
 
-    # Check configuration status
+    # Bottom separator with tips
+    console.print(separator)
+    console.print()
+
+    tip_text = Text()
+    tip_text.append("    [", style=f"dim {DARK_GREEN}")
+    tip_text.append("!", style=f"bold {BLOOD_RED}")
+    tip_text.append("] ", style=f"dim {DARK_GREEN}")
+    tip_text.append("Quick Start", style=f"bold {CYBER_BLUE}")
+    tip_text.append(": ", style="dim")
+    tip_text.append("scan target.com --ai", style=f"bold {NEON_GREEN}")
+    tip_text.append("    ", style="dim")
+    tip_text.append("[", style=f"dim {DARK_GREEN}")
+    tip_text.append("?", style=f"bold {CYBER_BLUE}")
+    tip_text.append("] ", style=f"dim {DARK_GREEN}")
+    tip_text.append("Docs", style=f"bold {CYBER_BLUE}")
+    tip_text.append(": ", style="dim")
+    tip_text.append("https://aiptx.io/docs", style=f"underline {GHOST_WHITE}")
+
+    console.print(Align.center(tip_text))
+    console.print()
+
+    # Warning panel if not configured
     if not is_configured():
-        console.print(Panel(
-            f"[yellow]{icon('warning')} AIPTX is not configured yet![/yellow]\n\n"
-            "Run [bold green]setup[/bold green] to configure your API keys and scanners.\n"
-            "Or set environment variable: [dim]export ANTHROPIC_API_KEY=your-key[/dim]",
-            border_style="yellow",
-            title="[bold yellow]Setup Required[/bold yellow]",
-            title_align="left",
-        ))
+        warning_panel = Panel(
+            f"[bold {BLOOD_RED}]⚠ FRAMEWORK NOT INITIALIZED[/]\n\n"
+            f"[{GHOST_WHITE}]Execute [bold {NEON_GREEN}]setup[/] to configure API keys and scanner integrations.\n"
+            f"Alternative: [dim]export ANTHROPIC_API_KEY=<your-key>[/dim][/]",
+            border_style=BLOOD_RED,
+            title=f"[bold {BLOOD_RED}][ ALERT ][/]",
+            title_align="center",
+            width=term_width,
+        )
+        console.print(warning_panel)
         console.print()
 
     # Interactive loop
@@ -569,22 +687,21 @@ def run_interactive_mode():
         try:
             # Flush stdin to avoid stale input from previous commands
             import sys
-            import platform
             if sys.stdin.isatty():
                 # Clear any buffered input (platform-specific)
                 if platform.system() == "Windows":
-                    # Windows: use msvcrt for non-blocking input check
                     import msvcrt
                     while msvcrt.kbhit():
                         msvcrt.getch()
                 else:
-                    # Unix/Linux/macOS: use select
                     import select
                     while select.select([sys.stdin], [], [], 0)[0]:
                         sys.stdin.read(1)
 
-            # Get user input with stylish prompt
-            user_input = Prompt.ask(f"[bold cyan]aiptx[/bold cyan] [dim]{icon('arrow')}[/dim]", default="").strip()
+            # Hacker-style prompt
+            prompt_time = datetime.now().strftime("%H:%M:%S")
+            prompt_text = f"[dim {DARK_GREEN}]┌──([/][bold {NEON_GREEN}]aiptx[/][dim {DARK_GREEN}])─[[/][dim]{prompt_time}[/][dim {DARK_GREEN}]][/]\n[dim {DARK_GREEN}]└─[/][bold {BLOOD_RED}]$[/]"
+            user_input = Prompt.ask(prompt_text, default="").strip()
 
             if not user_input:
                 continue
@@ -597,9 +714,18 @@ def run_interactive_mode():
             # Handle commands
             if cmd in ("exit", "quit", "q"):
                 console.print()
-                console.print(f"[bold cyan]Thanks for using AIPTX![/bold cyan] {icon('rocket')}")
-                console.print("[dim]Visit [link=https://aiptx.io]aiptx.io[/link] for docs & updates[/dim]")
-                console.print()
+                exit_msg = Text()
+                exit_msg.append("\n    [", style=f"dim {DARK_GREEN}")
+                exit_msg.append("✓", style=f"bold {NEON_GREEN}")
+                exit_msg.append("] ", style=f"dim {DARK_GREEN}")
+                exit_msg.append("Session terminated. ", style=f"{GHOST_WHITE}")
+                exit_msg.append("Stay stealthy.", style=f"italic {DARK_GREEN}")
+                exit_msg.append("\n    [", style=f"dim {DARK_GREEN}")
+                exit_msg.append("→", style=f"bold {CYBER_BLUE}")
+                exit_msg.append("] ", style=f"dim {DARK_GREEN}")
+                exit_msg.append("https://aiptx.io", style=f"underline dim {GHOST_WHITE}")
+                exit_msg.append("\n")
+                console.print(exit_msg)
                 break
 
             elif cmd == "help":
@@ -653,29 +779,99 @@ def run_interactive_mode():
 
 
 def show_interactive_help(console):
-    """Show help for interactive mode."""
+    """Show help for interactive mode with hacker aesthetic."""
     from rich.table import Table
+    from rich.panel import Panel
+    from rich.text import Text
+    from rich.align import Align
     from rich import box
 
-    table = Table(title="AIPTX Commands", box=box.ROUNDED)
-    table.add_column("Command", style="green")
-    table.add_column("Description")
-    table.add_column("Example", style="dim")
+    # Hacker colors
+    NEON_GREEN = "#00ff41"
+    DARK_GREEN = "#008f11"
+    CYBER_BLUE = "#00d4ff"
+    BLOOD_RED = "#ff0040"
+    GHOST_WHITE = "#c0c0c0"
 
-    table.add_row("scan <target>", "Run security scan", "scan example.com --check --full")
-    table.add_row("ai code-review <path>", "AI code security review", "ai code-review ./src")
-    table.add_row("ai api-test <url>", "AI API security testing", "ai api-test https://api.example.com")
-    table.add_row("ai web-pentest <url>", "AI web penetration test", "ai web-pentest https://example.com")
-    table.add_row("vps setup", "Install tools on VPS", "vps setup")
-    table.add_row("vps status", "Check VPS status", "vps status")
-    table.add_row("vps scan <target>", "Run scan from VPS", "vps scan example.com")
-    table.add_row("setup", "Configure AIPTX", "setup")
-    table.add_row("status", "Show configuration", "status")
-    table.add_row("test", "Validate all configs", "test")
-    table.add_row("clear", "Clear screen", "clear")
-    table.add_row("exit", "Exit AIPTX", "exit")
+    term_width = console.size.width
 
-    console.print(table)
+    # Header
+    header = Text()
+    header.append("╔══════════════════════════════════════════════════════════════════╗\n", style=f"bold {DARK_GREEN}")
+    header.append("║", style=f"bold {DARK_GREEN}")
+    header.append("                    AIPTX COMMAND REFERENCE                       ", style=f"bold {CYBER_BLUE}")
+    header.append("║\n", style=f"bold {DARK_GREEN}")
+    header.append("╚══════════════════════════════════════════════════════════════════╝", style=f"bold {DARK_GREEN}")
+
+    console.print()
+    console.print(Align.center(header))
+    console.print()
+
+    # Attack modules
+    attack_table = Table(
+        show_header=True,
+        header_style=f"bold {BLOOD_RED}",
+        box=box.HEAVY_EDGE,
+        border_style=DARK_GREEN,
+        expand=True,
+        title=f"[bold {BLOOD_RED}]⚔ ATTACK VECTORS[/]",
+        title_style=f"bold {BLOOD_RED}",
+    )
+    attack_table.add_column("MODULE", style=f"bold {NEON_GREEN}", ratio=1)
+    attack_table.add_column("FUNCTION", style=f"{GHOST_WHITE}", ratio=2)
+    attack_table.add_column("SYNTAX", style=f"dim {CYBER_BLUE}", ratio=2)
+
+    attack_table.add_row("scan", "Execute automated security scan", "scan <target> [--ai|--full]")
+    attack_table.add_row("ai code-review", "AI-powered source code analysis", "ai code-review ./path")
+    attack_table.add_row("ai api-test", "Intelligent API security testing", "ai api-test https://api.target.com")
+    attack_table.add_row("ai web-pentest", "Full AI-guided web exploitation", "ai web-pentest https://target.com")
+    attack_table.add_row("vps scan", "Execute scan from remote VPS", "vps scan <target>")
+
+    console.print(attack_table)
+    console.print()
+
+    # Infrastructure modules
+    infra_table = Table(
+        show_header=True,
+        header_style=f"bold {CYBER_BLUE}",
+        box=box.HEAVY_EDGE,
+        border_style=DARK_GREEN,
+        expand=True,
+        title=f"[bold {CYBER_BLUE}]🖥 INFRASTRUCTURE[/]",
+        title_style=f"bold {CYBER_BLUE}",
+    )
+    infra_table.add_column("MODULE", style=f"bold {NEON_GREEN}", ratio=1)
+    infra_table.add_column("FUNCTION", style=f"{GHOST_WHITE}", ratio=2)
+    infra_table.add_column("SYNTAX", style=f"dim {CYBER_BLUE}", ratio=2)
+
+    infra_table.add_row("vps setup", "Deploy toolkit on remote VPS", "vps setup")
+    infra_table.add_row("vps status", "Query VPS operational status", "vps status")
+    infra_table.add_row("setup", "Initialize framework configuration", "setup")
+    infra_table.add_row("status", "Display system diagnostics", "status")
+    infra_table.add_row("test", "Validate all service connections", "test")
+
+    console.print(infra_table)
+    console.print()
+
+    # System commands
+    sys_table = Table(
+        show_header=True,
+        header_style=f"bold {NEON_GREEN}",
+        box=box.HEAVY_EDGE,
+        border_style=DARK_GREEN,
+        expand=True,
+        title=f"[bold {NEON_GREEN}]⚙ SYSTEM[/]",
+        title_style=f"bold {NEON_GREEN}",
+    )
+    sys_table.add_column("CMD", style=f"bold {NEON_GREEN}", ratio=1)
+    sys_table.add_column("ACTION", style=f"{GHOST_WHITE}", ratio=3)
+
+    sys_table.add_row("clear", "Purge terminal buffer")
+    sys_table.add_row("help", "Display this reference")
+    sys_table.add_row("exit", "Terminate session")
+
+    console.print(sys_table)
+    console.print()
 
 
 def run_setup_wrapper():
@@ -976,10 +1172,12 @@ def run_scan(args):
         console.print()
 
     # Create config
-    # Verbose mode is default (True), quiet mode disables it
-    verbose = not getattr(args, 'quiet', False)
-    # Show command output is default (True), --no-stream disables it
-    show_command_output = not getattr(args, 'no_stream', False)
+    # Verbose mode is OFF by default, -v enables it (cleaner output)
+    # Use args.verbose from global parser (count type)
+    verbose_level = getattr(args, 'verbose', 0)
+    verbose = verbose_level > 0 or getattr(args, 'quiet', False) is False and verbose_level > 0
+    # Show command output only if verbose, or if not in quiet mode with --no-stream
+    show_command_output = verbose_level > 0 and not getattr(args, 'no_stream', False)
 
     config = OrchestratorConfig(
         target=args.target,
@@ -996,8 +1194,16 @@ def run_scan(args):
         mode = "ai"
     elif args.full or args.mode == "full":
         mode = "full"
-    elif args.mode == "quick":
+        config.full_mode = True
+    elif getattr(args, 'quick', False) or args.mode == "quick":
         mode = "quick"
+        # Quick mode: Disable enterprise scanners for faster scan
+        config.use_acunetix = False
+        config.use_burp = False
+        config.use_nessus = False
+        config.use_zap = False
+        config.wait_for_scanners = False
+        config.full_mode = False
     else:
         mode = "standard"
 
@@ -1095,6 +1301,13 @@ def show_status(args):
         with console.status("[yellow]Validating LLM connection...[/yellow]"):
             try:
                 import litellm
+                import logging
+
+                # Suppress litellm verbose output
+                litellm.suppress_debug_info = True
+                litellm.set_verbose = False
+                logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+                logging.getLogger("httpx").setLevel(logging.ERROR)
 
                 provider = config.llm.provider.lower()
                 model = config.llm.model
@@ -1128,8 +1341,19 @@ def show_status(args):
                 validation_results['llm'] = (None, "litellm not installed")
             except Exception as e:
                 llm_status = False
-                llm_error = str(e)[:50]
-                validation_results['llm'] = (False, str(e)[:50])
+                # Parse error for cleaner display
+                error_str = str(e)
+                if "<!DOCTYPE" in error_str or "<html" in error_str.lower():
+                    llm_error = "Wrong API endpoint (HTML response)"
+                elif "Connection" in error_str or "connect" in error_str.lower():
+                    llm_error = "Connection failed"
+                elif "401" in error_str or "Unauthorized" in error_str:
+                    llm_error = "Invalid API key"
+                elif "timeout" in error_str.lower():
+                    llm_error = "Request timed out"
+                else:
+                    llm_error = error_str[:40]
+                validation_results['llm'] = (False, llm_error)
     else:
         llm_status = False
         llm_error = "API key not configured"
@@ -1167,14 +1391,32 @@ def show_status(args):
     # Test each scanner connection
     scanner_results = {}
 
+    def normalize_scanner_url(url):
+        """Normalize scanner URL to ensure proper format."""
+        if not url:
+            return url
+        url = url.strip()
+        # Add http:// if no protocol specified
+        if not url.startswith(('http://', 'https://')):
+            url = f"http://{url}"
+        # Remove trailing slashes
+        url = url.rstrip('/')
+        return url
+
     async def test_scanner_connection(name, url, test_endpoint, headers):
         """Test scanner connectivity."""
         if not url:
             return None, "Not configured"
         try:
             import httpx
+            # Normalize URL before testing
+            url = normalize_scanner_url(url)
+            # Ensure endpoint starts with /
+            if not test_endpoint.startswith('/'):
+                test_endpoint = '/' + test_endpoint
+            full_url = f"{url}{test_endpoint}"
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
-                response = await client.get(f"{url}{test_endpoint}", headers=headers)
+                response = await client.get(full_url, headers=headers)
                 if response.status_code == 200:
                     return True, "Connected"
                 else:
@@ -1200,11 +1442,12 @@ def show_status(args):
         # Burp Suite
         if config.scanners.burp_url:
             with console.status("[yellow]Testing Burp Suite...[/yellow]"):
+                # Use /scan endpoint (list scans) - more reliable than /issue_definitions
                 results['burp'] = await test_scanner_connection(
                     "Burp Suite",
                     config.scanners.burp_url,
-                    "/api-internal/versions",
-                    {"Authorization": f"Bearer {config.scanners.burp_api_key or ''}"}
+                    "/scan",
+                    {"Authorization": config.scanners.burp_api_key or ''}
                 )
         else:
             results['burp'] = (None, "Not configured")
@@ -1298,6 +1541,9 @@ def show_status(args):
                 else:
                     async def test_vps():
                         import asyncssh
+                        import tempfile
+                        import os
+
                         conn = await asyncssh.connect(
                             config.vps.host,
                             port=config.vps.port,
@@ -1305,24 +1551,91 @@ def show_status(args):
                             client_keys=[str(key_path)],
                             known_hosts=None,
                         )
-                        result = await conn.run("echo 'OK'", check=True)
-                        await conn.close()
-                        return "OK" in result.stdout
 
-                    if asyncio.run(test_vps()):
-                        vps_status = True
-                    else:
-                        vps_status = False
-                        vps_error = "Connection test failed"
+                        # Test 1: Basic SSH connection
+                        result = await conn.run("echo 'OK'", check=True)
+                        if "OK" not in result.stdout:
+                            conn.close()
+                            await conn.wait_closed()
+                            return False, "SSH command execution failed"
+
+                        # Test 2: Create results directory and test file
+                        results_dir = config.vps.results_dir or "/var/tmp/aiptx_results"
+                        test_file = f"{results_dir}/.aiptx_test_{os.getpid()}"
+                        test_content = "AIPTX_REPORT_TEST_OK"
+
+                        result = await conn.run(
+                            f"mkdir -p {results_dir} && echo '{test_content}' > {test_file}",
+                            check=False
+                        )
+                        if result.exit_status != 0:
+                            conn.close()
+                            await conn.wait_closed()
+                            return False, f"Cannot write to results dir: {results_dir}"
+
+                        # Test 3: SFTP retrieval - the critical report download test
+                        try:
+                            async with conn.start_sftp_client() as sftp:
+                                # Create a temp local file to receive the test file
+                                with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tmp:
+                                    local_test_path = tmp.name
+
+                                # Download the test file
+                                await sftp.get(test_file, local_test_path)
+
+                                # Verify content
+                                with open(local_test_path, 'r') as f:
+                                    downloaded_content = f.read().strip()
+
+                                # Clean up local temp file
+                                os.unlink(local_test_path)
+
+                                if test_content not in downloaded_content:
+                                    # Clean up remote test file
+                                    await conn.run(f"rm -f {test_file}", check=False)
+                                    conn.close()
+                                    await conn.wait_closed()
+                                    return False, "SFTP content verification failed"
+
+                        except Exception as sftp_err:
+                            # Clean up remote test file
+                            await conn.run(f"rm -f {test_file}", check=False)
+                            conn.close()
+                            await conn.wait_closed()
+                            return False, f"SFTP retrieval failed: {str(sftp_err)[:30]}"
+
+                        # Test 4: Clean up remote test file
+                        await conn.run(f"rm -f {test_file}", check=False)
+
+                        # All tests passed
+                        conn.close()
+                        await conn.wait_closed()
+                        return True, "Connected (SSH + SFTP verified)"
+
+                    # Use a new event loop to avoid conflicts with existing loops
+                    loop = asyncio.new_event_loop()
+                    try:
+                        asyncio.set_event_loop(loop)
+                        vps_status, vps_message = loop.run_until_complete(test_vps())
+                        if not vps_status:
+                            vps_error = vps_message
+                        else:
+                            vps_error = None  # Success message stored in vps_message
+                    finally:
+                        loop.close()
 
             except ImportError:
                 vps_status = None
                 vps_error = "asyncssh not installed"
             except Exception as e:
                 vps_status = False
-                vps_error = str(e)[:30]
+                vps_error = str(e)[:50]
 
-        validation_results['vps'] = (vps_status, vps_error if vps_error else "Connected")
+        # Use the detailed message for successful connections
+        if vps_status and not vps_error:
+            validation_results['vps'] = (vps_status, vps_message)
+        else:
+            validation_results['vps'] = (vps_status, vps_error if vps_error else "Connected")
     elif config.vps.host:
         vps_status = False
         vps_error = "SSH key not configured"
@@ -1345,7 +1658,8 @@ def show_status(args):
 
     table.add_row("Host", host_display)
     table.add_row("User", config.vps.user)
-    table.add_row("SSH Key", config.vps.key_path or "Not configured")
+    # Mask SSH key path to avoid exposing full filesystem structure
+    table.add_row("SSH Key", mask_path(config.vps.key_path) if config.vps.key_path else "Not configured")
 
     console.print(table)
 
@@ -1422,17 +1736,23 @@ def run_config_test(args):
     from rich.panel import Panel
     from rich.table import Table
     from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich.align import Align
+    from rich.rule import Rule
     from rich import box
 
     console = Console()
     config = get_config()
 
+    # Get terminal width for full-width display
+    term_width = console.size.width
+
     console.print()
     console.print(Panel(
-        "[bold]AIPTX Configuration Validator[/bold]\n\n"
-        "Testing all configured services and credentials...",
+        Align.center("[bold]AIPTX Configuration Validator[/bold]\n\n"
+        "Testing all configured services and credentials..."),
         title=f"{icon('search')} Self-Test",
-        border_style="cyan"
+        border_style="cyan",
+        width=term_width,
     ))
     console.print()
 
@@ -1446,7 +1766,7 @@ def run_config_test(args):
 
     # ======================== LLM Test ========================
     if test_all or getattr(args, 'llm', False):
-        console.print("[bold cyan]━━━ LLM API Test ━━━[/bold cyan]")
+        console.print(Rule("LLM API Test", style="bold cyan"))
 
         if not config.llm.api_key:
             console.print(f"  [red]{icon('cross')}[/red] No API key configured")
@@ -1456,30 +1776,53 @@ def run_config_test(args):
             with console.status("[yellow]Testing LLM API connection...[/yellow]"):
                 try:
                     import litellm
+                    import os
+                    import logging
+
+                    # Suppress litellm verbose output
+                    litellm.suppress_debug_info = True
+                    litellm.set_verbose = False
+                    logging.getLogger("LiteLLM").setLevel(logging.ERROR)
+                    logging.getLogger("httpx").setLevel(logging.ERROR)
 
                     # Determine model string based on provider
                     provider = config.llm.provider.lower()
                     model = config.llm.model
+                    api_key = config.llm.api_key
+                    api_base = config.llm.api_base  # May be None for cloud providers
 
+                    # Set the appropriate environment variable for litellm
+                    # litellm reads API keys from environment variables
                     if provider == "anthropic":
                         model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
-                        litellm.api_key = config.llm.api_key
+                        os.environ["ANTHROPIC_API_KEY"] = api_key
                     elif provider == "openai":
                         model_str = f"openai/{model}" if not model.startswith("openai/") else model
-                        litellm.api_key = config.llm.api_key
+                        os.environ["OPENAI_API_KEY"] = api_key
                     elif provider == "deepseek":
                         model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
-                        litellm.api_key = config.llm.api_key
+                        os.environ["DEEPSEEK_API_KEY"] = api_key
+                    elif provider == "ollama":
+                        model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
+                        # Ollama doesn't need an API key, but needs base URL
+                        if not api_base:
+                            api_base = "http://localhost:11434"
+                        os.environ["OLLAMA_API_BASE"] = api_base
                     else:
                         model_str = model
+                        os.environ["LLM_API_KEY"] = api_key
 
                     start = time.time()
-                    response = litellm.completion(
-                        model=model_str,
-                        messages=[{"role": "user", "content": "Reply with only: OK"}],
-                        max_tokens=10,
-                        timeout=30,
-                    )
+                    # Build completion kwargs, conditionally including api_base
+                    completion_kwargs = {
+                        "model": model_str,
+                        "messages": [{"role": "user", "content": "Reply with only: OK"}],
+                        "max_tokens": 10,
+                        "timeout": 30,
+                    }
+                    if api_base:
+                        completion_kwargs["api_base"] = api_base
+                    response = litellm.completion(**completion_kwargs)
                     elapsed = time.time() - start
 
                     console.print(f"  [green]{icon('check')}[/green] LLM API connection successful")
@@ -1489,19 +1832,51 @@ def run_config_test(args):
                     results['llm'] = True
 
                 except ImportError:
-                    console.print(f"  [yellow]{icon('warning')}[/yellow] litellm not installed")
+                    console.print(f"  [red]{icon('cross')}[/red] litellm not installed")
                     console.print("    [dim]Install with: pip install litellm[/dim]")
                     results['llm'] = None
                 except Exception as e:
+                    # Parse and clean the error message
+                    error_str = str(e)
+                    error_type = type(e).__name__
+
+                    # Detect common error patterns and provide helpful messages
+                    if "<!DOCTYPE" in error_str or "<html" in error_str.lower():
+                        error_msg = "API endpoint returned HTML (likely wrong URL or proxy error)"
+                        suggestion = "Check LLM_API_BASE or provider configuration"
+                    elif "Connection" in error_str or "connect" in error_str.lower():
+                        error_msg = "Connection failed - API endpoint unreachable"
+                        suggestion = "Check network connection and API base URL"
+                    elif "401" in error_str or "Unauthorized" in error_str:
+                        error_msg = "Authentication failed - invalid API key"
+                        suggestion = "Verify your API key is correct"
+                    elif "403" in error_str or "Forbidden" in error_str:
+                        error_msg = "Access denied - API key lacks permissions"
+                        suggestion = "Check API key permissions or quota"
+                    elif "429" in error_str or "rate" in error_str.lower():
+                        error_msg = "Rate limited - too many requests"
+                        suggestion = "Wait and retry, or upgrade API plan"
+                    elif "timeout" in error_str.lower():
+                        error_msg = "Request timed out"
+                        suggestion = "Check network connection or try again"
+                    else:
+                        # Extract just the core error message
+                        if ": " in error_str:
+                            error_msg = error_str.split(": ")[-1][:80]
+                        else:
+                            error_msg = error_str[:80]
+                        suggestion = "Run 'aiptx setup' to reconfigure"
+
                     console.print(f"  [red]{icon('cross')}[/red] LLM API test failed")
-                    console.print(f"    [dim]Error: {str(e)[:100]}[/dim]")
+                    console.print(f"    [bold red]Error:[/bold red] {error_msg}")
+                    console.print(f"    [dim cyan]Fix:[/dim cyan] {suggestion}")
                     results['llm'] = False
 
         console.print()
 
     # ======================== VPS Test ========================
     if test_all or getattr(args, 'vps', False):
-        console.print("[bold cyan]━━━ VPS Connection Test ━━━[/bold cyan]")
+        console.print(Rule("VPS Connection Test", style="bold cyan"))
 
         if not config.vps.host:
             console.print(f"  [yellow]{icon('circle_empty')}[/yellow] VPS not configured (optional)")
@@ -1516,12 +1891,16 @@ def run_config_test(args):
 
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
-                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {key_path}")
+                        # Mask the path to avoid exposing full filesystem structure
+                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}")
                         results['vps'] = False
                     else:
-                        # Test SSH connection using asyncssh
-                        async def test_ssh():
+                        # Test SSH connection and SFTP report retrieval using asyncssh
+                        async def test_ssh_and_sftp():
                             import asyncssh
+                            import tempfile
+                            import os as _os
+
                             start = time.time()
                             conn = await asyncssh.connect(
                                 config.vps.host,
@@ -1530,23 +1909,82 @@ def run_config_test(args):
                                 client_keys=[str(key_path)],
                                 known_hosts=None,
                             )
-                            # Run a simple command to verify
+
+                            # Test 1: Basic SSH command
                             result = await conn.run("echo 'AIPTX_TEST_OK' && uname -a", check=True)
-                            await conn.close()
+                            uname_output = result.stdout.strip()
+
+                            if "AIPTX_TEST_OK" not in uname_output:
+                                conn.close()
+                                await conn.wait_closed()
+                                return False, "SSH command failed", None, time.time() - start
+
+                            # Test 2: Results directory write access
+                            results_dir = config.vps.results_dir or "/var/tmp/aiptx_results"
+                            test_file = f"{results_dir}/.aiptx_report_test_{_os.getpid()}"
+                            test_content = "AIPTX_SFTP_TEST_OK"
+
+                            result = await conn.run(
+                                f"mkdir -p {results_dir} && echo '{test_content}' > {test_file}",
+                                check=False
+                            )
+                            if result.exit_status != 0:
+                                conn.close()
+                                await conn.wait_closed()
+                                return False, f"Cannot write to {results_dir}", None, time.time() - start
+
+                            # Test 3: SFTP retrieval (report download simulation)
+                            sftp_ok = False
+                            try:
+                                async with conn.start_sftp_client() as sftp:
+                                    with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tmp:
+                                        local_test_path = tmp.name
+
+                                    await sftp.get(test_file, local_test_path)
+
+                                    with open(local_test_path, 'r') as f:
+                                        downloaded = f.read().strip()
+
+                                    _os.unlink(local_test_path)
+                                    sftp_ok = test_content in downloaded
+
+                            except Exception as sftp_err:
+                                await conn.run(f"rm -f {test_file}", check=False)
+                                conn.close()
+                                await conn.wait_closed()
+                                return False, f"SFTP failed: {str(sftp_err)[:40]}", None, time.time() - start
+
+                            # Cleanup remote test file
+                            await conn.run(f"rm -f {test_file}", check=False)
+
+                            if not sftp_ok:
+                                conn.close()
+                                await conn.wait_closed()
+                                return False, "SFTP content verification failed", None, time.time() - start
+
                             elapsed = time.time() - start
-                            return result.stdout.strip(), elapsed
+                            uname = uname_output.replace("AIPTX_TEST_OK", "").strip()
+                            conn.close()
+                            await conn.wait_closed()
+                            return True, "SSH + SFTP OK", uname, elapsed
 
-                        output, elapsed = asyncio.run(test_ssh())
+                        # Use explicit event loop to avoid conflicts
+                        loop = asyncio.new_event_loop()
+                        try:
+                            asyncio.set_event_loop(loop)
+                            success, message, uname, elapsed = loop.run_until_complete(test_ssh_and_sftp())
+                        finally:
+                            loop.close()
 
-                        if "AIPTX_TEST_OK" in output:
-                            uname = output.replace("AIPTX_TEST_OK", "").strip()
+                        if success:
                             console.print(f"  [green]{icon('check')}[/green] VPS connection successful")
                             console.print(f"    [dim]Host: {config.vps.user}@{config.vps.host}:{config.vps.port}[/dim]")
-                            console.print(f"    [dim]System: {uname[:60]}...[/dim]" if len(uname) > 60 else f"    [dim]System: {uname}[/dim]")
+                            console.print(f"    [dim]System: {uname[:60]}...[/dim]" if uname and len(uname) > 60 else f"    [dim]System: {uname}[/dim]")
                             console.print(f"    [dim]Response time: {elapsed:.2f}s[/dim]")
+                            console.print(f"    [green]{icon('check')}[/green] [dim]Report retrieval (SFTP): Verified[/dim]")
                             results['vps'] = True
                         else:
-                            console.print(f"  [red]{icon('cross')}[/red] VPS connection failed - unexpected response")
+                            console.print(f"  [red]{icon('cross')}[/red] VPS connection failed - {message}")
                             results['vps'] = False
 
                 except ImportError:
@@ -1562,7 +2000,7 @@ def run_config_test(args):
 
     # ======================== Scanner Tests ========================
     if test_all or getattr(args, 'scanners', False):
-        console.print("[bold cyan]━━━ Scanner Integration Tests ━━━[/bold cyan]")
+        console.print(Rule("Scanner Integration Tests", style="bold cyan"))
 
         scanners_tested = 0
 
@@ -1666,7 +2104,7 @@ def run_config_test(args):
 
     # ======================== Local Tools Test ========================
     if test_all or getattr(args, 'tools', False):
-        console.print("[bold cyan]━━━ Local Security Tools ━━━[/bold cyan]")
+        console.print(Rule("Local Security Tools", style="bold cyan"))
 
         tools = {
             "nmap": "nmap --version",
@@ -1701,7 +2139,7 @@ def run_config_test(args):
         console.print()
 
     # ======================== Summary ========================
-    console.print("[bold cyan]━━━ Test Summary ━━━[/bold cyan]")
+    console.print(Rule("Test Summary", style="bold cyan"))
 
     table = Table(box=box.ROUNDED)
     table.add_column("Component", style="cyan")
@@ -1761,23 +2199,29 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     import time
     from rich.panel import Panel
     from rich.table import Table
+    from rich.align import Align
+    from rich.rule import Rule
     from rich import box
 
     config = get_config()
     results = {}
     all_passed = True
 
+    # Get terminal width for full-width display
+    term_width = console.size.width
+
     console.print()
     console.print(Panel(
-        "[bold]Pre-flight Configuration Check[/bold]\n\n"
-        "Validating all required services before scan...",
+        Align.center("[bold]Pre-flight Configuration Check[/bold]\n\n"
+        "Validating all required services before scan..."),
         title=f"{icon('airplane')} Pre-flight Check",
-        border_style="cyan"
+        border_style="cyan",
+        width=term_width,
     ))
     console.print()
 
     # ======================== LLM Check (always required) ========================
-    console.print("[bold cyan]━━━ LLM API ━━━[/bold cyan]")
+    console.print(Rule("LLM API", style="bold cyan"))
 
     if not config.llm.api_key:
         console.print(f"  [red]{icon('cross')}[/red] No API key configured")
@@ -1788,18 +2232,27 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         with console.status("[yellow]Testing LLM API...[/yellow]"):
             try:
                 import litellm
+                import os
 
                 provider = config.llm.provider.lower()
                 model = config.llm.model
+                api_key = config.llm.api_key
 
+                # Set the appropriate environment variable for litellm
                 if provider == "anthropic":
                     model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    os.environ["ANTHROPIC_API_KEY"] = api_key
                 elif provider == "openai":
                     model_str = f"openai/{model}" if not model.startswith("openai/") else model
+                    os.environ["OPENAI_API_KEY"] = api_key
                 elif provider == "deepseek":
                     model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
+                    os.environ["DEEPSEEK_API_KEY"] = api_key
+                elif provider == "ollama":
+                    model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
                 else:
                     model_str = model
+                    os.environ["LLM_API_KEY"] = api_key
 
                 start = time.time()
                 response = litellm.completion(
@@ -1825,7 +2278,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
     # ======================== VPS Check (if requested) ========================
     if use_vps:
-        console.print("[bold cyan]━━━ VPS Connection ━━━[/bold cyan]")
+        console.print(Rule("VPS Connection", style="bold cyan"))
 
         if not config.vps.host:
             console.print(f"  [red]{icon('cross')}[/red] VPS not configured")
@@ -1844,7 +2297,8 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
-                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {key_path}")
+                        # Mask the path to avoid exposing full filesystem structure
+                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}")
                         results['vps'] = False
                         all_passed = False
                     else:
@@ -1857,10 +2311,18 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                                 client_keys=[str(key_path)],
                                 known_hosts=None,
                             )
-                            await conn.close()
+                            # conn.close() is not awaitable in all asyncssh versions
+                            conn.close()
+                            await conn.wait_closed()
                             return time.time() - start
 
-                        elapsed = asyncio.run(test_ssh())
+                        # Use explicit event loop to avoid conflicts
+                        loop = asyncio.new_event_loop()
+                        try:
+                            asyncio.set_event_loop(loop)
+                            elapsed = loop.run_until_complete(test_ssh())
+                        finally:
+                            loop.close()
                         console.print(f"  [green]{icon('check')}[/green] VPS connected ({config.vps.user}@{config.vps.host}) - {elapsed:.1f}s")
                         results['vps'] = True
 
@@ -1877,7 +2339,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
     # ======================== Scanner Checks (if requested) ========================
     if use_acunetix or use_burp:
-        console.print("[bold cyan]━━━ Scanner Integrations ━━━[/bold cyan]")
+        console.print(Rule("Scanner Integrations", style="bold cyan"))
 
         # Acunetix
         if use_acunetix:
@@ -1938,7 +2400,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         console.print()
 
     # ======================== Local Tools Check ========================
-    console.print("[bold cyan]━━━ Local Security Tools ━━━[/bold cyan]")
+    console.print(Rule("Local Security Tools", style="bold cyan"))
 
     essential_tools = ["nmap", "httpx", "nuclei"]
     optional_tools = ["subfinder", "ffuf", "nikto"]
@@ -1968,7 +2430,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     console.print()
 
     # ======================== Summary ========================
-    console.print("[bold cyan]━━━ Pre-flight Summary ━━━[/bold cyan]")
+    console.print(Rule("Pre-flight Summary", style="bold cyan"))
 
     table = Table(box=box.ROUNDED, show_header=False)
     table.add_column("Component", style="cyan")

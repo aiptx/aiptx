@@ -22,66 +22,12 @@ from enum import Enum
 from typing import Any
 import hashlib
 
-# Works with dict-based findings, not typed Finding class
+# Import canonical VulnerabilityType from models to ensure consistency
+# across the entire application. This prevents enum mismatch errors.
+from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
 
 
 logger = logging.getLogger(__name__)
-
-
-# ============================================================================
-# Vulnerability Types (for chain rules)
-# ============================================================================
-
-class VulnerabilityType(Enum):
-    """Types of vulnerabilities for chain detection"""
-    # Injection
-    SQL_INJECTION = "sql_injection"
-    XSS_STORED = "xss_stored"
-    XSS_REFLECTED = "xss_reflected"
-    COMMAND_INJECTION = "command_injection"
-    LDAP_INJECTION = "ldap_injection"
-    XPATH_INJECTION = "xpath_injection"
-
-    # Authentication/Authorization
-    AUTH_BYPASS = "auth_bypass"
-    BROKEN_AUTH = "broken_authentication"
-    PRIVILEGE_ESCALATION = "privilege_escalation"
-    IDOR = "idor"
-
-    # Information Disclosure
-    INFORMATION_DISCLOSURE = "information_disclosure"
-    PATH_TRAVERSAL = "path_traversal"
-    SOURCE_CODE_DISCLOSURE = "source_code_disclosure"
-
-    # Server-Side
-    SSRF = "ssrf"
-    RCE = "rce"
-    FILE_UPLOAD = "file_upload"
-    FILE_INCLUSION = "file_inclusion"
-    LFI = "lfi"
-    RFI = "rfi"
-    DESERIALIZATION = "deserialization"
-    INSECURE_DESERIALIZATION = "insecure_deserialization"
-    XXE = "xxe"
-
-    # Client-Side
-    CSRF = "csrf"
-    CLICKJACKING = "clickjacking"
-    OPEN_REDIRECT = "open_redirect"
-
-    # Cryptographic
-    WEAK_CRYPTO = "weak_cryptography"
-    HARDCODED_SECRETS = "hardcoded_secrets"
-
-    # Configuration
-    MISCONFIGURATION = "misconfiguration"
-    DEFAULT_CREDENTIALS = "default_credentials"
-    EXPOSED_ADMIN = "exposed_admin_panel"
-
-    # Other
-    DOS = "denial_of_service"
-    BUSINESS_LOGIC = "business_logic"
-    UNKNOWN = "unknown"
 
 
 class ChainType(Enum):

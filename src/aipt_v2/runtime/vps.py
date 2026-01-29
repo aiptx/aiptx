@@ -46,6 +46,32 @@ from aipt_v2.config import get_config
 # Tool Definitions - Security tools to install on VPS
 # =============================================================================
 
+# Tool-specific timeouts for version/availability checks (in seconds)
+# Some tools like Metasploit take longer to initialize
+TOOL_CHECK_TIMEOUTS: dict[str, int] = {
+    "default": 10,
+    # Metasploit loads Ruby VM and database on startup
+    "metasploit": 60,
+    "msfconsole": 60,
+    # Network scanners may need time for initialization
+    "nikto": 30,
+    "nuclei": 30,
+    # Amass loads data on first run
+    "amass": 30,
+    # WPScan updates on first run
+    "wpscan": 45,
+    # John loads wordlists
+    "john": 20,
+    # Hashcat loads OpenCL
+    "hashcat": 30,
+}
+
+
+def get_tool_check_timeout(tool_name: str) -> int:
+    """Get the appropriate timeout for checking if a tool is installed."""
+    return TOOL_CHECK_TIMEOUTS.get(tool_name, TOOL_CHECK_TIMEOUTS["default"])
+
+
 VPS_TOOLS = {
     # Phase 1: RECON
     "recon": {
@@ -270,7 +296,9 @@ class VPSRuntime:
         for category, tools in VPS_TOOLS.items():
             for tool_name, tool_info in tools.items():
                 check_cmd = tool_info.get("check", f"which {tool_name}")
-                stdout, stderr, code = await self._run_command(check_cmd, timeout=10)
+                # Use tool-specific timeout to handle slow-starting tools
+                timeout = get_tool_check_timeout(tool_name)
+                stdout, stderr, code = await self._run_command(check_cmd, timeout=timeout)
                 results[tool_name] = code == 0
 
         return results
@@ -299,9 +327,11 @@ class VPSRuntime:
 
         install_cmd = tool_info["install"]
         check_cmd = tool_info.get("check", f"which {tool_name}")
+        # Use tool-specific timeout for checks
+        check_timeout = get_tool_check_timeout(tool_name)
 
         # Check if already installed
-        stdout, stderr, code = await self._run_command(check_cmd, timeout=10)
+        stdout, stderr, code = await self._run_command(check_cmd, timeout=check_timeout)
         if code == 0:
             logger.info(f"Tool already installed: {tool_name}")
             return True
@@ -317,8 +347,8 @@ class VPSRuntime:
             logger.error(f"Failed to install {tool_name}", stderr=stderr[:200])
             return False
 
-        # Verify installation
-        stdout, stderr, code = await self._run_command(check_cmd, timeout=10)
+        # Verify installation with tool-specific timeout
+        stdout, stderr, code = await self._run_command(check_cmd, timeout=check_timeout)
         success = code == 0
 
         if success:

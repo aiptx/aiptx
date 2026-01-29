@@ -25,6 +25,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 
+from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.cloud.cloud_config import CloudConfig, get_cloud_config
 
 
@@ -168,7 +169,7 @@ class ScoutSuiteTool:
             raise RuntimeError("ScoutSuite is not installed. Install with: pip install scoutsuite")
 
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         cmd = self._build_command()
         print(f"[*] Running: {cmd}")
@@ -193,7 +194,7 @@ class ScoutSuiteTool:
             raise TimeoutError(f"ScoutSuite scan timed out after {timeout}s")
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         # Parse results
         report_path = self._find_latest_report()

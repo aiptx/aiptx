@@ -19,7 +19,7 @@ AIPT v2 is a 16,943-line AI-powered penetration testing framework. This plan out
 ### Remaining Issues (Week 5-6)
 - ~~CORS allows all origins~~ → Fixed: restricted to localhost
 - ~~No rate limiting~~ → Fixed: slowapi rate limits added
-- cve_info.py has subprocess shell=True (CWE-78) - needs refactoring
+- ~~cve_info.py has subprocess shell=True (CWE-78)~~ → Fixed: input validation + subprocess list args
 - DevOps: Dockerfile, CI/CD, health checks needed
 
 ---
@@ -81,7 +81,7 @@ AIPT v2 is a 16,943-line AI-powered penetration testing framework. This plan out
 
 **Bandit Results:**
 - app.py: 1 medium (bind 0.0.0.0) - acceptable for server
-- cve_info.py: 3 high (shell=True) - marked for future fix
+- ~~cve_info.py: 3 high (shell=True)~~ → Fixed: CVE ID validation + sanitized subprocess calls
 - Total scanned: 447 lines, 10+ modules
 
 ---

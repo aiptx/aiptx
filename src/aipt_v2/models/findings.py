@@ -43,15 +43,24 @@ class Severity(Enum):
 
 
 class VulnerabilityType(Enum):
-    """OWASP Top 10 aligned vulnerability categories"""
+    """
+    OWASP Top 10 aligned vulnerability categories.
+
+    This is the canonical VulnerabilityType enum used throughout AIPTX.
+    All modules should import from here to prevent enum mismatch errors.
+
+    Includes additional types for vulnerability chaining analysis.
+    """
     # A01:2021 - Broken Access Control
     IDOR = "idor"
     BROKEN_ACCESS_CONTROL = "broken_access_control"
     PRIVILEGE_ESCALATION = "privilege_escalation"
+    PATH_TRAVERSAL = "path_traversal"
 
     # A02:2021 - Cryptographic Failures
     WEAK_CRYPTO = "weak_crypto"
     SENSITIVE_DATA_EXPOSURE = "sensitive_data_exposure"
+    HARDCODED_SECRETS = "hardcoded_secrets"
 
     # A03:2021 - Injection
     SQL_INJECTION = "sql_injection"
@@ -62,11 +71,13 @@ class VulnerabilityType(Enum):
 
     # A04:2021 - Insecure Design
     BUSINESS_LOGIC_FLAW = "business_logic_flaw"
+    BUSINESS_LOGIC = "business_logic"  # Alias for chaining compatibility
 
     # A05:2021 - Security Misconfiguration
     MISCONFIGURATION = "misconfiguration"
     DEFAULT_CREDENTIALS = "default_credentials"
     DIRECTORY_LISTING = "directory_listing"
+    EXPOSED_ADMIN = "exposed_admin_panel"
 
     # A06:2021 - Vulnerable Components
     OUTDATED_COMPONENT = "outdated_component"
@@ -74,11 +85,13 @@ class VulnerabilityType(Enum):
 
     # A07:2021 - Authentication Failures
     AUTH_BYPASS = "auth_bypass"
+    BROKEN_AUTH = "broken_authentication"  # Alias for chaining compatibility
     WEAK_PASSWORD = "weak_password"
     SESSION_FIXATION = "session_fixation"
 
     # A08:2021 - Software Integrity Failures
     INSECURE_DESERIALIZATION = "insecure_deserialization"
+    DESERIALIZATION = "deserialization"  # Alias for chaining compatibility
 
     # A09:2021 - Logging & Monitoring Failures
     INSUFFICIENT_LOGGING = "insufficient_logging"
@@ -91,18 +104,26 @@ class VulnerabilityType(Enum):
     XSS_STORED = "xss_stored"
     XSS_DOM = "xss_dom"
 
-    # Other
-    OPEN_REDIRECT = "open_redirect"
+    # File Inclusion (LFI/RFI)
     FILE_INCLUSION = "file_inclusion"
+    LFI = "lfi"  # Local File Inclusion
+    RFI = "rfi"  # Remote File Inclusion
+
+    # Other Common Vulnerabilities
+    OPEN_REDIRECT = "open_redirect"
     FILE_UPLOAD = "file_upload"
     XXE = "xxe"
     CORS_MISCONFIGURATION = "cors_misconfiguration"
     CSRF = "csrf"
+    CLICKJACKING = "clickjacking"
     INFORMATION_DISCLOSURE = "information_disclosure"
+    SOURCE_CODE_DISCLOSURE = "source_code_disclosure"
     RCE = "rce"
+    DOS = "denial_of_service"
 
     # Catch-all
     OTHER = "other"
+    UNKNOWN = "unknown"  # For unclassified vulnerabilities
 
 
 @dataclass

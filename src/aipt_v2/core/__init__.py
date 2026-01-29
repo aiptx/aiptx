@@ -5,6 +5,7 @@ LangGraph-based autonomous pentesting agent with:
 - Multi-provider LLM abstraction (OpenAI, Anthropic, Ollama)
 - Memory management with automatic compression
 - State machine for pentest workflow
+- Centralized event loop management
 
 Inspired by: Strix (LangGraph state machine, 300 iterations)
 """
@@ -21,6 +22,12 @@ from .llm import (
 from .memory import MemoryManager, MemoryConfig
 from .agent import AIPTAgent, PentestState, Phase
 from .ptt import PTTTracker, PTTNode
+from .event_loop_manager import (
+    EventLoopManager,
+    run_async,
+    get_current_loop,
+    current_time,
+)
 
 __all__ = [
     # LLM
@@ -40,4 +47,9 @@ __all__ = [
     # PTT
     "PTTTracker",
     "PTTNode",
+    # Event Loop Management
+    "EventLoopManager",
+    "run_async",
+    "get_current_loop",
+    "current_time",
 ]

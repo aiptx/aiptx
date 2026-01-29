@@ -4,6 +4,7 @@ import asyncio
 import base64
 import logging
 import threading
+import time
 from pathlib import Path
 from typing import Any, cast
 
@@ -35,27 +36,83 @@ class BrowserInstance:
 
         self._loop: asyncio.AbstractEventLoop | None = None
         self._loop_thread: threading.Thread | None = None
+        self._loop_lock = threading.Lock()
 
         self._start_event_loop()
 
     def _start_event_loop(self) -> None:
-        def run_loop() -> None:
-            self._loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(self._loop)
-            self._loop.run_forever()
+        """Start the browser event loop in a separate thread."""
+        with self._loop_lock:
+            # Don't start if already running
+            if self._loop is not None and not self._loop.is_closed():
+                return
 
-        self._loop_thread = threading.Thread(target=run_loop, daemon=True)
-        self._loop_thread.start()
+            def run_loop() -> None:
+                self._loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(self._loop)
+                self._loop.run_forever()
 
-        while self._loop is None:
-            threading.Event().wait(0.01)
+            self._loop_thread = threading.Thread(target=run_loop, daemon=True)
+            self._loop_thread.start()
+
+            # Wait for loop to be ready with timeout
+            timeout = 5.0
+            start = time.time()
+            while self._loop is None:
+                if time.time() - start > timeout:
+                    raise RuntimeError("Event loop failed to start within timeout")
+                threading.Event().wait(0.01)
+
+    def _ensure_loop_running(self) -> asyncio.AbstractEventLoop:
+        """
+        Ensure the event loop is running, recreating if necessary.
+
+        Returns:
+            The running event loop.
+
+        Raises:
+            RuntimeError: If the loop cannot be started.
+        """
+        with self._loop_lock:
+            if self._loop is None or self._loop.is_closed():
+                logger.warning("Event loop was closed, attempting to restart...")
+                self._loop = None
+                self._start_event_loop()
+
+            if self._loop is None:
+                raise RuntimeError("Failed to start event loop")
+
+            return self._loop
 
     def _run_async(self, coro: Any) -> dict[str, Any]:
-        if not self._loop or not self.is_running:
+        """
+        Run an async coroutine from sync context with auto-reconnection.
+
+        Args:
+            coro: The coroutine to run.
+
+        Returns:
+            The result of the coroutine.
+
+        Raises:
+            RuntimeError: If browser instance is not running or loop cannot be started.
+        """
+        if not self.is_running:
             raise RuntimeError("Browser instance is not running")
 
-        future = asyncio.run_coroutine_threadsafe(coro, self._loop)
-        return cast("dict[str, Any]", future.result(timeout=30))  # 30 second timeout
+        try:
+            loop = self._ensure_loop_running()
+            future = asyncio.run_coroutine_threadsafe(coro, loop)
+            return cast("dict[str, Any]", future.result(timeout=30))  # 30 second timeout
+        except RuntimeError as e:
+            if "closed" in str(e).lower():
+                # Try to recover by restarting the loop
+                logger.warning("Loop closed during execution, attempting recovery...")
+                self._loop = None
+                loop = self._ensure_loop_running()
+                future = asyncio.run_coroutine_threadsafe(coro, loop)
+                return cast("dict[str, Any]", future.result(timeout=30))
+            raise
 
     async def _setup_console_logging(self, page: Page, tab_id: str) -> None:
         self.console_logs[tab_id] = []
@@ -65,11 +122,13 @@ class BrowserInstance:
             if len(text) > MAX_INDIVIDUAL_LOG_LENGTH:
                 text = text[:MAX_INDIVIDUAL_LOG_LENGTH] + "... [TRUNCATED]"
 
+            # Use time.time() instead of asyncio.get_event_loop().time()
+            # since this callback runs outside async context
             log_entry = {
                 "type": msg.type,
                 "text": text,
                 "location": msg.location,
-                "timestamp": asyncio.get_event_loop().time(),
+                "timestamp": time.time(),
             }
 
             self.console_logs[tab_id].append(log_entry)

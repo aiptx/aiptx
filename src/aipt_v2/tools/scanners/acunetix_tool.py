@@ -5,9 +5,12 @@ Provides comprehensive API integration with Acunetix Web Vulnerability Scanner.
 """
 
 import json
+import os
 import time
 import logging
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 from enum import Enum
@@ -56,10 +59,10 @@ class Severity(Enum):
 @dataclass
 class AcunetixConfig:
     """Configuration for Acunetix connection."""
-    base_url: str = "https://13.127.28.41:3443"
-    api_key: str = "1986ad8c0a5b3df4d7028d5f3c06e936c83ef0a486ef74537812989cff1a41a7c"
+    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_URL") or os.getenv("ACUNETIX_URL", "https://localhost:3443"))
+    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY") or os.getenv("ACUNETIX_API_KEY", ""))
     verify_ssl: bool = False
-    timeout: int = 30
+    timeout: int = 120  # Increased for slow/remote networks
 
 
 @dataclass
@@ -105,10 +108,22 @@ class AcunetixTool:
         self.session = requests.Session()
         self.session.headers.update({
             "X-Auth": self.config.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
+            "Connection": "close",  # Avoid stale connection pooling
         })
         self.session.verify = self.config.verify_ssl
         self._connected = False
+
+        # Configure connection retry adapter for resilience
+        retry_strategy = Retry(
+            total=3,
+            backoff_factor=1,
+            status_forcelist=[500, 502, 503, 504],
+            allowed_methods=["GET", "POST", "DELETE", "PATCH"],
+        )
+        adapter = HTTPAdapter(max_retries=retry_strategy, pool_maxsize=1, pool_connections=1)
+        self.session.mount("https://", adapter)
+        self.session.mount("http://", adapter)
 
     @property
     def api_url(self) -> str:
@@ -370,11 +385,13 @@ class AcunetixTool:
             callback: Optional callback function called with ScanResult on each poll
 
         Returns:
-            Final ScanResult
+            Final ScanResult (or partial result if timeout)
         """
         start_time = time.time()
+        last_result = None
         while time.time() - start_time < timeout:
             result = self.get_scan_status(scan_id)
+            last_result = result
 
             if callback:
                 callback(result)
@@ -387,7 +404,19 @@ class AcunetixTool:
             logger.info(f"Scan {scan_id}: {result.status} ({result.progress}%)")
             time.sleep(poll_interval)
 
-        raise TimeoutError(f"Scan {scan_id} did not complete within {timeout}s")
+        # Timeout reached - return last known result instead of raising exception
+        # This allows partial results to be collected
+        logger.warning(f"Scan {scan_id} timeout after {timeout}s - returning partial results (progress: {last_result.progress if last_result else 0}%)")
+        if last_result:
+            last_result.status = "timeout"
+            return last_result
+        # Return a timeout result if we never got any status
+        return ScanResult(
+            scan_id=scan_id,
+            target_id="",
+            status="timeout",
+            progress=0
+        )
 
     # ==================== Vulnerability Management ====================
 
@@ -430,23 +459,35 @@ class AcunetixTool:
 
     def get_scan_vulnerabilities(self, scan_id: str) -> List[Vulnerability]:
         """Get all vulnerabilities for a specific scan."""
-        # Get scan to find target
-        scan = self._request("GET", f"scans/{scan_id}")
-        target_id = scan.get("target_id")
-
-        # Get vulnerabilities for target
-        result = self._request("GET", f"targets/{target_id}/vulnerabilities")
         vulns = []
 
-        for v in result.get("vulnerabilities", []):
-            vulns.append(Vulnerability(
-                vuln_id=v.get("vuln_id", ""),
-                severity=v.get("severity", "info"),
-                name=v.get("vt_name", "Unknown"),
-                description="",  # Need to fetch details separately
-                target_url=scan.get("target", {}).get("address", ""),
-                affected_url=v.get("affects_url", "")
-            ))
+        try:
+            # Get scan to find target
+            scan = self._request("GET", f"scans/{scan_id}")
+            target_id = scan.get("target_id")
+            target_url = scan.get("target", {}).get("address", "")
+
+            # Use the general vulnerabilities endpoint with target filter
+            # This works across all Acunetix versions
+            result = self._request("GET", "vulnerabilities", params={
+                "q": f"target_id:{target_id}",
+                "l": 100
+            })
+
+            for v in result.get("vulnerabilities", []):
+                vulns.append(Vulnerability(
+                    vuln_id=v.get("vuln_id", ""),
+                    severity=v.get("severity", "info"),
+                    name=v.get("vt_name", "Unknown"),
+                    description=v.get("vt_description", ""),
+                    target_url=target_url,
+                    affected_url=v.get("affects_url", "")
+                ))
+
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Failed to get scan vulnerabilities: {e}")
+        except Exception as e:
+            logger.error(f"Error getting scan vulnerabilities: {e}")
 
         return vulns
 

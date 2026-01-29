@@ -144,6 +144,16 @@ from aipt_v2.intelligence.business_logic_analyzer import (
     analyze_business_logic,
 )
 
+# LLM Crawler Analyzer - Intelligent attack surface analysis
+from aipt_v2.intelligence.llm_crawler_analyzer import (
+    LLMCrawlerAnalyzer,
+    CrawlerAnalysisResult,
+    ParameterTarget,
+    FormTarget,
+    AttackChainRecommendation,
+    AttackType,
+)
+
 __all__ = [
     # CVE Intelligence (existing)
     "CVEIntelligence",
@@ -234,4 +244,11 @@ __all__ = [
     "BusinessLogicFlaw",
     "BL_CATEGORIES",
     "analyze_business_logic",
+    # LLM Crawler Analyzer - Attack Surface Intelligence
+    "LLMCrawlerAnalyzer",
+    "CrawlerAnalysisResult",
+    "ParameterTarget",
+    "FormTarget",
+    "AttackChainRecommendation",
+    "AttackType",
 ]

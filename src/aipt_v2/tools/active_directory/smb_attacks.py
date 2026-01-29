@@ -23,6 +23,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 
+from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 
 
@@ -445,7 +446,7 @@ class SMBAttacks:
         target = target or self.config.dc_ip
 
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         # Run enumeration
         await self.check_smb_signing(target)
@@ -454,7 +455,7 @@ class SMBAttacks:
         await self.enumerate_shares(target)
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         return SMBResult(
             target=target,

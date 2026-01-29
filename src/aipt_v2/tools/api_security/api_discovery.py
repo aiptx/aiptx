@@ -24,6 +24,8 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional, Set
 from urllib.parse import urljoin, urlparse
 
+from aipt_v2.core.event_loop_manager import current_time
+
 try:
     import aiohttp
 except ImportError:
@@ -489,7 +491,7 @@ class APIDiscovery:
             APIDiscoveryResult with all discovered endpoints
         """
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         # Run discovery tasks
         if self.config.discover_swagger:
@@ -510,7 +512,7 @@ class APIDiscovery:
         await self.discover_from_sitemap()
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         # Deduplicate endpoints
         seen = set()

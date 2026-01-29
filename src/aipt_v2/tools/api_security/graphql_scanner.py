@@ -29,6 +29,8 @@ from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
 from urllib.parse import urlparse
 
+from aipt_v2.core.event_loop_manager import current_time
+
 try:
     import aiohttp
 except ImportError:
@@ -530,7 +532,7 @@ class GraphQLScanner:
             GraphQLScanResult with all findings
         """
         started_at = datetime.now(timezone.utc).isoformat()
-        start_time = asyncio.get_event_loop().time()
+        start_time = current_time()
 
         findings = []
 
@@ -554,7 +556,7 @@ class GraphQLScanner:
         findings.extend(await self.test_authorization_bypass())
 
         finished_at = datetime.now(timezone.utc).isoformat()
-        duration = asyncio.get_event_loop().time() - start_time
+        duration = current_time() - start_time
 
         # Build schema info summary
         schema_info = {}
