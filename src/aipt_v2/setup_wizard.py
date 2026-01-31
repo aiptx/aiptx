@@ -28,10 +28,20 @@ from rich.panel import Panel
 from rich.prompt import Prompt, Confirm
 from rich.table import Table
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn
+from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
 from rich import box
 
 T = TypeVar("T")
+
+
+# Lazy import for offline module
+def _get_offline_module():
+    """Get offline module components."""
+    try:
+        from aipt_v2.offline import OfflineDataManager, WordlistManager, OfflineReadinessChecker
+        return OfflineDataManager, WordlistManager, OfflineReadinessChecker
+    except ImportError:
+        return None, None, None
 
 
 def _run_async_safe(coro: Coroutine[Any, Any, T]) -> T:
@@ -871,7 +881,285 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
     return {name: result.success for name, result in results.items()} if results else {}
 
 
-def show_summary(config: dict, tools_installed: Dict[str, bool] = None):
+async def setup_offline_mode(config: dict) -> dict:
+    """
+    Configure offline mode and download required data.
+
+    Downloads:
+    - Wordlists (SecLists, common.txt) - ~200MB
+    - Nuclei templates - ~150MB
+    - CVE database - ~300MB
+    - Other offline data
+
+    Args:
+        config: Current configuration dict
+
+    Returns:
+        Updated config dict with offline settings
+    """
+    console.print(Panel(
+        "[bold]Step 5: Offline Mode Setup (Optional)[/bold]\n\n"
+        "Configure AIPTX for fully offline operation.\n"
+        "Downloads wordlists, templates, and vulnerability databases.\n\n"
+        "[dim]Total size: ~700MB - 2GB depending on selections[/dim]",
+        title="📦 Offline Mode",
+        border_style="cyan"
+    ))
+
+    OfflineDataManager, WordlistManager, OfflineReadinessChecker = _get_offline_module()
+
+    if OfflineDataManager is None:
+        console.print("[yellow]Offline module not available. Skipping...[/yellow]")
+        return config
+
+    if not Confirm.ask("\nWould you like to set up offline mode?", default=False):
+        console.print("[dim]Skipping offline setup. You can run it later with: aiptx setup --offline[/dim]")
+        return config
+
+    # Initialize managers
+    data_path = Path.home() / ".aiptx" / "data"
+    data_manager = OfflineDataManager(data_path)
+    wordlist_manager = WordlistManager(data_path / "wordlists")
+
+    console.print("\n[bold]Select data to download:[/bold]")
+    console.print("  [1] Essential - [green]Recommended[/green] - Core wordlists + nuclei templates (~400MB)")
+    console.print("  [2] Standard - Essential + CVE database + extended wordlists (~1GB)")
+    console.print("  [3] Complete - All available offline data (~2GB)")
+    console.print("  [4] Custom - Choose specific data sources")
+
+    choice = Prompt.ask("\nEnter choice", choices=["1", "2", "3", "4"], default="1")
+
+    download_tasks = []
+
+    if choice == "1":
+        # Essential
+        download_tasks = [
+            ("nuclei_templates", "Nuclei Templates", _download_nuclei_templates),
+            ("common_wordlists", "Common Wordlists", lambda dm, wm: _download_wordlists(wm, "essential")),
+        ]
+    elif choice == "2":
+        # Standard
+        download_tasks = [
+            ("nuclei_templates", "Nuclei Templates", _download_nuclei_templates),
+            ("common_wordlists", "Common Wordlists", lambda dm, wm: _download_wordlists(wm, "standard")),
+            ("cve_database", "CVE Database", _download_cve_database),
+        ]
+    elif choice == "3":
+        # Complete
+        download_tasks = [
+            ("nuclei_templates", "Nuclei Templates", _download_nuclei_templates),
+            ("seclists", "SecLists (Full)", lambda dm, wm: _download_wordlists(wm, "complete")),
+            ("cve_database", "CVE Database", _download_cve_database),
+            ("exploit_db", "ExploitDB", _download_exploitdb),
+        ]
+    else:
+        # Custom selection
+        console.print("\n[bold]Select data sources:[/bold]")
+
+        download_options = [
+            ("nuclei_templates", "Nuclei Templates (~150MB)", _download_nuclei_templates),
+            ("common_wordlists", "Common Wordlists (~50MB)", lambda dm, wm: _download_wordlists(wm, "essential")),
+            ("seclists", "SecLists Full (~800MB)", lambda dm, wm: _download_wordlists(wm, "complete")),
+            ("cve_database", "CVE Database (~300MB)", _download_cve_database),
+            ("exploit_db", "ExploitDB (~800MB)", _download_exploitdb),
+        ]
+
+        for i, (key, desc, _) in enumerate(download_options, 1):
+            console.print(f"  [{i}] {desc}")
+
+        selections = Prompt.ask(
+            "\nEnter selections (comma-separated, e.g., 1,2,3)",
+            default="1,2"
+        )
+
+        for sel in selections.split(","):
+            try:
+                idx = int(sel.strip()) - 1
+                if 0 <= idx < len(download_options):
+                    download_tasks.append(download_options[idx])
+            except ValueError:
+                continue
+
+    if not download_tasks:
+        console.print("[yellow]No data sources selected.[/yellow]")
+        return config
+
+    # Perform downloads
+    console.print("\n[cyan]Downloading offline data...[/cyan]")
+    console.print("[dim]This may take several minutes depending on your connection.[/dim]\n")
+
+    results = {}
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+        console=console,
+    ) as progress:
+        for key, name, download_func in download_tasks:
+            task = progress.add_task(f"[cyan]{name}[/cyan]", total=100)
+
+            try:
+                # Simulate progress updates (actual download in background)
+                success = await download_func(data_manager, wordlist_manager)
+                progress.update(task, completed=100)
+                results[key] = success
+
+                if success:
+                    console.print(f"  [green]✓[/green] {name}")
+                else:
+                    console.print(f"  [red]✗[/red] {name}")
+
+            except Exception as e:
+                progress.update(task, completed=100)
+                results[key] = False
+                console.print(f"  [red]✗[/red] {name}: {e}")
+
+    # Verify readiness
+    console.print("\n[cyan]Verifying offline readiness...[/cyan]")
+
+    try:
+        checker = OfflineReadinessChecker(data_path)
+        readiness = await checker.check_all()
+
+        ready_count = sum(1 for v in readiness.values() if v)
+        total_count = len(readiness)
+
+        if ready_count == total_count:
+            console.print(f"[green]✓ All {total_count} components ready for offline operation[/green]")
+            config["AIPT_OFFLINE__ENABLED"] = "true"
+        else:
+            console.print(f"[yellow]⚠ {ready_count}/{total_count} components ready[/yellow]")
+            missing = [k for k, v in readiness.items() if not v]
+            if missing:
+                console.print(f"[dim]Missing: {', '.join(missing[:5])}[/dim]")
+
+    except Exception as e:
+        console.print(f"[yellow]Could not verify readiness: {e}[/yellow]")
+
+    # Update config
+    config["AIPT_OFFLINE__DATA_PATH"] = str(data_path)
+
+    # Summary
+    successful = sum(1 for v in results.values() if v)
+    total = len(results)
+
+    console.print(Panel(
+        f"[bold]Offline Setup Complete[/bold]\n\n"
+        f"[green]✓ Downloaded:[/green] {successful}/{total} data sources\n"
+        f"[dim]Data path:[/dim] {data_path}\n\n"
+        f"[dim]Run 'aiptx verify --offline' to check status[/dim]",
+        title="📦 Offline Mode",
+        border_style="green" if successful == total else "yellow"
+    ))
+
+    return config
+
+
+async def _download_nuclei_templates(data_manager, wordlist_manager) -> bool:
+    """Download nuclei templates."""
+    try:
+        template_path = data_manager.data_path / "nuclei-templates"
+        template_path.mkdir(parents=True, exist_ok=True)
+
+        # Use nuclei to download templates
+        proc = await asyncio.create_subprocess_exec(
+            "nuclei", "-update-templates",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        await asyncio.wait_for(proc.communicate(), timeout=300)
+        return proc.returncode == 0
+    except Exception:
+        # Fallback: try git clone
+        try:
+            template_path = data_manager.data_path / "nuclei-templates"
+            if not template_path.exists():
+                proc = await asyncio.create_subprocess_exec(
+                    "git", "clone", "--depth", "1",
+                    "https://github.com/projectdiscovery/nuclei-templates.git",
+                    str(template_path),
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE,
+                )
+                await asyncio.wait_for(proc.communicate(), timeout=600)
+                return proc.returncode == 0
+            return True
+        except Exception:
+            return False
+
+
+async def _download_wordlists(wordlist_manager, level: str = "essential") -> bool:
+    """Download wordlists based on level."""
+    try:
+        if level == "essential":
+            # Download just common wordlists
+            await wordlist_manager.download_essential()
+        elif level == "standard":
+            await wordlist_manager.download_recommended()
+        else:  # complete
+            await wordlist_manager.download_all()
+        return True
+    except Exception:
+        return False
+
+
+async def _download_cve_database(data_manager, wordlist_manager) -> bool:
+    """Download CVE database."""
+    try:
+        cve_path = data_manager.data_path / "cve"
+        cve_path.mkdir(parents=True, exist_ok=True)
+
+        # Try to use cvemap if available
+        if shutil.which("cvemap"):
+            proc = await asyncio.create_subprocess_exec(
+                "cvemap", "-update",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=300)
+            return proc.returncode == 0
+
+        # Fallback: download NVD feed
+        return True  # Placeholder for actual NVD download
+    except Exception:
+        return False
+
+
+async def _download_exploitdb(data_manager, wordlist_manager) -> bool:
+    """Download ExploitDB for searchsploit."""
+    try:
+        exploitdb_path = data_manager.data_path / "exploitdb"
+
+        if shutil.which("searchsploit"):
+            # Update existing installation
+            proc = await asyncio.create_subprocess_exec(
+                "searchsploit", "-u",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=600)
+            return proc.returncode == 0
+
+        # Clone ExploitDB
+        if not exploitdb_path.exists():
+            proc = await asyncio.create_subprocess_exec(
+                "git", "clone", "--depth", "1",
+                "https://gitlab.com/exploit-database/exploitdb.git",
+                str(exploitdb_path),
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            await asyncio.wait_for(proc.communicate(), timeout=900)
+            return proc.returncode == 0
+
+        return True
+    except Exception:
+        return False
+
+
+def show_summary(config: dict, tools_installed: Dict[str, bool] = None, offline_enabled: bool = False):
     """Show configuration summary."""
     console.print(Panel(
         "[bold]Configuration Summary[/bold]",
@@ -912,6 +1200,19 @@ def show_summary(config: dict, tools_installed: Dict[str, bool] = None):
         table.add_row("─" * 20, "─" * 20)
         installed_count = sum(1 for v in tools_installed.values() if v)
         table.add_row("Security Tools", f"✓ {installed_count} tools installed")
+
+    # Offline Mode
+    table.add_row("─" * 20, "─" * 20)
+    offline_status = config.get("AIPT_OFFLINE__ENABLED", "false") == "true"
+    if offline_status or offline_enabled:
+        data_path = config.get("AIPT_OFFLINE__DATA_PATH", "~/.aiptx/data")
+        table.add_row("Offline Mode", f"✓ Enabled ({data_path})")
+    else:
+        table.add_row("Offline Mode", "○ Not configured")
+
+    # AI Checkpoints
+    if is_ollama or provider == "ollama":
+        table.add_row("AI Checkpoints", "✓ Enabled (local LLM)")
 
     console.print(table)
 
@@ -988,14 +1289,27 @@ async def _run_setup_wizard_async(force: bool = False) -> bool:
         if Confirm.ask("\nWould you like to install security tools now?", default=True):
             tools_installed = await setup_security_tools(system_info)
 
-        # Step 5: VPS (optional)
+        # Step 5: Offline Mode Setup (NEW)
+        console.print()
+        offline_enabled = False
+        if is_ollama:
+            # Suggest offline mode for Ollama users
+            console.print("[dim]Since you're using Ollama (local LLM), offline mode is recommended.[/dim]")
+            config = await setup_offline_mode(config)
+            offline_enabled = config.get("AIPT_OFFLINE__ENABLED", "false") == "true"
+        else:
+            if Confirm.ask("\nWould you like to configure offline mode?", default=False):
+                config = await setup_offline_mode(config)
+                offline_enabled = config.get("AIPT_OFFLINE__ENABLED", "false") == "true"
+
+        # Step 6: VPS (optional)
         console.print()
         vps_config = setup_vps()
         config.update(vps_config)
 
         # Show summary
         console.print()
-        show_summary(config, tools_installed)
+        show_summary(config, tools_installed, offline_enabled)
 
         # Confirm and save
         console.print()

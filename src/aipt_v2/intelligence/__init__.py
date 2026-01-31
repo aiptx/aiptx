@@ -154,6 +154,36 @@ from aipt_v2.intelligence.llm_crawler_analyzer import (
     AttackType,
 )
 
+# Chain Analysis - Advanced attack path detection with MITRE ATT&CK
+from aipt_v2.intelligence.chain_analysis import (
+    ChainAnalyzer,
+    AttackChain as AdvancedAttackChain,
+    ChainNode,
+    ChainPattern,
+    ChainConfidence,
+    ChainImpact,
+    MitreTactic,
+    MitreTechnique,
+    CHAIN_PATTERNS as ADVANCED_CHAIN_PATTERNS,
+    TECHNIQUE_MAP,
+    analyze_findings,
+    get_top_attack_paths,
+)
+
+# Extended Attack Patterns - 50+ additional patterns for modern attacks
+from aipt_v2.intelligence.attack_patterns import (
+    EXTENDED_CHAIN_PATTERNS,
+    EXTENDED_TECHNIQUE_MAP,
+    ATTACK_TOOL_RECOMMENDATIONS,
+    get_all_patterns,
+    get_patterns_by_tactic,
+    get_patterns_by_impact,
+    get_patterns_by_keywords,
+    get_recommended_tools,
+    get_technique_for_attack,
+    get_pattern_statistics,
+)
+
 __all__ = [
     # CVE Intelligence (existing)
     "CVEIntelligence",
@@ -251,4 +281,28 @@ __all__ = [
     "FormTarget",
     "AttackChainRecommendation",
     "AttackType",
+    # Chain Analysis - Advanced Attack Path Detection
+    "ChainAnalyzer",
+    "AdvancedAttackChain",
+    "ChainNode",
+    "ChainPattern",
+    "ChainConfidence",
+    "ChainImpact",
+    "MitreTactic",
+    "MitreTechnique",
+    "ADVANCED_CHAIN_PATTERNS",
+    "TECHNIQUE_MAP",
+    "analyze_findings",
+    "get_top_attack_paths",
+    # Extended Attack Patterns (50+ additional patterns)
+    "EXTENDED_CHAIN_PATTERNS",
+    "EXTENDED_TECHNIQUE_MAP",
+    "ATTACK_TOOL_RECOMMENDATIONS",
+    "get_all_patterns",
+    "get_patterns_by_tactic",
+    "get_patterns_by_impact",
+    "get_patterns_by_keywords",
+    "get_recommended_tools",
+    "get_technique_for_attack",
+    "get_pattern_statistics",
 ]

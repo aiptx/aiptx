@@ -201,6 +201,88 @@ class LoggingSettings(BaseModel):
     redact_secrets: bool = Field(default=True, description="Redact sensitive values in logs")
 
 
+class OfflineSettings(BaseModel):
+    """Offline mode configuration for air-gapped operation."""
+
+    enabled: bool = Field(default=False, description="Enable offline mode")
+    data_path: Path = Field(
+        default_factory=lambda: Path.home() / ".aiptx" / "data",
+        description="Path to offline data storage"
+    )
+    wordlist_path: Optional[Path] = Field(default=None, description="Path to wordlists")
+    template_path: Optional[Path] = Field(default=None, description="Path to nuclei templates")
+    auto_update_when_online: bool = Field(default=True, description="Auto-update data when online")
+    update_interval_days: int = Field(default=7, ge=1, description="Days between updates")
+
+    @field_validator("data_path", mode="before")
+    @classmethod
+    def expand_data_path(cls, v):
+        if v:
+            return Path(v).expanduser().resolve()
+        return Path.home() / ".aiptx" / "data"
+
+
+class AICheckpointSettings(BaseModel):
+    """AI checkpoint configuration for local LLM analysis between phases."""
+
+    enabled: bool = Field(default=True, description="Enable AI checkpoints")
+    ollama_base_url: str = Field(
+        default="http://localhost:11434",
+        description="Ollama API base URL"
+    )
+
+    # Model configuration per checkpoint type
+    post_recon_model: str = Field(
+        default="mistral:7b",
+        description="Model for post-recon analysis"
+    )
+    post_scan_model: str = Field(
+        default="deepseek-coder:6.7b",
+        description="Model for post-scan vulnerability analysis"
+    )
+    post_exploit_model: str = Field(
+        default="mistral:7b",
+        description="Model for post-exploit strategy decisions"
+    )
+
+    # Context management
+    max_context_tokens: int = Field(
+        default=8192,
+        ge=1024,
+        le=131072,
+        description="Maximum tokens for LLM context"
+    )
+    response_timeout: int = Field(
+        default=300,
+        ge=30,
+        le=3600,
+        description="Timeout for LLM response in seconds"
+    )
+
+    # Streaming and UI
+    enable_streaming: bool = Field(
+        default=True,
+        description="Stream tokens for progress feedback"
+    )
+    show_reasoning: bool = Field(
+        default=True,
+        description="Show LLM reasoning in output"
+    )
+
+    # Fallback behavior
+    fallback_to_rules: bool = Field(
+        default=True,
+        description="Use rule-based analysis if LLM unavailable"
+    )
+
+    @field_validator("ollama_base_url", mode="before")
+    @classmethod
+    def get_ollama_url_from_env(cls, v):
+        if v:
+            return v
+        return os.getenv("OLLAMA_API_BASE") or os.getenv("AIPT_CHECKPOINT__OLLAMA_URL", "http://localhost:11434")
+
+
 class AIPTConfig(BaseSettings):
     """
     Main AIPT v2 configuration.
@@ -216,6 +298,8 @@ class AIPTConfig(BaseSettings):
     api: APISettings = Field(default_factory=APISettings)
     database: DatabaseSettings = Field(default_factory=DatabaseSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
+    offline: OfflineSettings = Field(default_factory=OfflineSettings)
+    ai_checkpoints: AICheckpointSettings = Field(default_factory=AICheckpointSettings)
 
     # General settings
     sandbox_mode: bool = Field(default=False, description="Run tools in sandbox")
@@ -303,6 +387,23 @@ def get_config() -> AIPTConfig:
             level=os.getenv("AIPT_LOG_LEVEL", "WARNING"),  # Default to WARNING for cleaner output
             format=os.getenv("AIPT_LOG_FORMAT", "console"),
         ),
+        offline=OfflineSettings(
+            enabled=os.getenv("AIPT_OFFLINE__ENABLED", "false").lower() == "true",
+            data_path=Path(os.getenv("AIPT_OFFLINE__DATA_PATH", str(Path.home() / ".aiptx" / "data"))),
+            auto_update_when_online=os.getenv("AIPT_OFFLINE__AUTO_UPDATE", "true").lower() == "true",
+            update_interval_days=int(os.getenv("AIPT_OFFLINE__UPDATE_INTERVAL", "7")),
+        ),
+        ai_checkpoints=AICheckpointSettings(
+            enabled=os.getenv("AIPT_CHECKPOINT__ENABLED", "true").lower() == "true",
+            ollama_base_url=os.getenv("AIPT_CHECKPOINT__OLLAMA_URL") or os.getenv("OLLAMA_API_BASE", "http://localhost:11434"),
+            post_recon_model=os.getenv("AIPT_CHECKPOINT__POST_RECON_MODEL", "mistral:7b"),
+            post_scan_model=os.getenv("AIPT_CHECKPOINT__POST_SCAN_MODEL", "deepseek-coder:6.7b"),
+            post_exploit_model=os.getenv("AIPT_CHECKPOINT__POST_EXPLOIT_MODEL", "mistral:7b"),
+            max_context_tokens=int(os.getenv("AIPT_CHECKPOINT__MAX_CONTEXT", "8192")),
+            response_timeout=int(os.getenv("AIPT_CHECKPOINT__TIMEOUT", "300")),
+            enable_streaming=os.getenv("AIPT_CHECKPOINT__STREAMING", "true").lower() == "true",
+            fallback_to_rules=os.getenv("AIPT_CHECKPOINT__FALLBACK_RULES", "true").lower() == "true",
+        ),
         sandbox_mode=os.getenv("AIPT_SANDBOX_MODE", "false").lower() == "true",
     )
 
@@ -318,6 +419,8 @@ def get_config() -> AIPTConfig:
         has_zoomeye=bool(config.intelligence.zoomeye_api_key),
         has_vps=bool(config.vps.host),
         sandbox_mode=config.sandbox_mode,
+        offline_mode=config.offline.enabled,
+        ai_checkpoints=config.ai_checkpoints.enabled,
     )
 
     return config

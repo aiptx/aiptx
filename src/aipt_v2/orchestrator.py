@@ -78,6 +78,21 @@ from aipt_v2.intelligence import (
     # Vulnerability Chaining - Connect related findings into attack paths
     VulnerabilityChainer,
     AttackChain,
+)
+
+# AI Checkpoints - Local LLM analysis between phases (NEW)
+try:
+    from aipt_v2.intelligence.ai_checkpoints import (
+        AICheckpointManager,
+        CheckpointResult,
+        CheckpointType,
+    )
+    AI_CHECKPOINTS_AVAILABLE = True
+except ImportError:
+    AI_CHECKPOINTS_AVAILABLE = False
+
+# Continue intelligence imports
+from aipt_v2.intelligence import (
     # AI-Powered Triage - Prioritize by real-world impact
     AITriage,
     TriageResult,
@@ -360,6 +375,7 @@ class OrchestratorConfig:
 
     # Intelligence module settings
     enable_intelligence: bool = True  # Enable chaining and triage
+    enable_ai_checkpoints: bool = True  # Enable AI checkpoints between phases (local Ollama)
     scope_config: Optional[ScopeConfig] = None  # Authorization boundary
     auth_credentials: Optional[AuthCredentials] = None  # Authentication for protected resources
 
@@ -484,6 +500,32 @@ class Orchestrator:
                 logger.info("Key validation module enabled")
             except ImportError as e:
                 logger.warning(f"Key validation module not available: {e}")
+
+        # =====================================================================
+        # AI Checkpoint Module (NEW - Local LLM Analysis)
+        # =====================================================================
+        self._ai_checkpoint_manager = None
+        self._checkpoint_results: Dict[str, CheckpointResult] = {}
+        if self.config.enable_ai_checkpoints and AI_CHECKPOINTS_AVAILABLE:
+            try:
+                from aipt_v2.config import get_config
+                app_config = get_config()
+
+                self._ai_checkpoint_manager = AICheckpointManager(
+                    ollama_base_url=app_config.ai_checkpoints.ollama_base_url,
+                    post_recon_model=app_config.ai_checkpoints.post_recon_model,
+                    post_scan_model=app_config.ai_checkpoints.post_scan_model,
+                    post_exploit_model=app_config.ai_checkpoints.post_exploit_model,
+                    max_context_tokens=app_config.ai_checkpoints.max_context_tokens,
+                    response_timeout=app_config.ai_checkpoints.response_timeout,
+                    enable_streaming=app_config.ai_checkpoints.enable_streaming,
+                    fallback_to_rules=app_config.ai_checkpoints.fallback_to_rules,
+                    show_reasoning=app_config.ai_checkpoints.show_reasoning,
+                )
+                logger.info("AI checkpoint module enabled (local LLM analysis)")
+            except Exception as e:
+                logger.warning(f"AI checkpoint module not available: {e}")
+                self._ai_checkpoint_manager = None
 
         logger.info(f"Orchestrator initialized for {self.domain}")
         logger.info(f"Output directory: {self.output_dir}")
@@ -2182,6 +2224,186 @@ class Orchestrator:
                         logger.debug(f"CORS test error at {endpoint}: {e}")
 
         return findings
+
+    # ==================== AI CHECKPOINT METHODS ====================
+
+    async def _run_post_recon_checkpoint(self) -> Optional[CheckpointResult]:
+        """
+        Run AI checkpoint after RECON phase.
+
+        Analyzes recon findings and recommends scan strategy.
+        """
+        if not self._ai_checkpoint_manager:
+            return None
+
+        try:
+            logger.info("Running post-recon AI checkpoint...")
+
+            # Convert findings to dict format for checkpoint
+            findings_dicts = [
+                {
+                    "type": f.type,
+                    "value": f.value,
+                    "description": f.description,
+                    "severity": f.severity,
+                    "metadata": f.metadata,
+                }
+                for f in self.findings
+                if f.phase == "recon"
+            ]
+
+            if not findings_dicts:
+                logger.info("No recon findings to analyze")
+                return None
+
+            # Run checkpoint with streaming callback for progress
+            def on_token(token: str):
+                if self.config.verbose:
+                    print(token, end="", flush=True)
+
+            result = await self._ai_checkpoint_manager.post_recon_checkpoint(
+                findings=findings_dicts,
+                on_token=on_token if self.config.verbose else None,
+            )
+
+            self._checkpoint_results["post_recon"] = result
+
+            if result.success and result.recommendations:
+                logger.info(f"AI checkpoint complete (source: {result.source})")
+
+                # Apply scan strategy recommendations if available
+                if "scan_priority" in result.recommendations:
+                    priority_tools = result.recommendations["scan_priority"]
+                    logger.info(f"AI recommends prioritizing: {', '.join(priority_tools[:3])}")
+
+                if "reasoning" in result.recommendations:
+                    reasoning = result.recommendations["reasoning"]
+                    if self.config.verbose:
+                        print(f"\n[AI Reasoning] {reasoning}")
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Post-recon checkpoint failed: {e}")
+            return None
+
+    async def _run_post_scan_checkpoint(self) -> Optional[CheckpointResult]:
+        """
+        Run AI checkpoint after SCAN phase.
+
+        Analyzes vulnerabilities and plans exploitation approach.
+        """
+        if not self._ai_checkpoint_manager:
+            return None
+
+        try:
+            logger.info("Running post-scan AI checkpoint...")
+
+            # Convert vulnerability findings to dict format
+            findings_dicts = [
+                {
+                    "type": f.type,
+                    "value": f.value,
+                    "description": f.description,
+                    "severity": f.severity,
+                    "url": f.metadata.get("url", ""),
+                    "host": f.metadata.get("host", ""),
+                    "title": f.metadata.get("title", f.description[:60] if f.description else ""),
+                    "cve": f.metadata.get("cve"),
+                    "template": f.metadata.get("template", ""),
+                    "metadata": f.metadata,
+                }
+                for f in self.findings
+                if f.phase == "scan" or "vuln" in f.type.lower()
+            ]
+
+            if not findings_dicts:
+                logger.info("No scan findings to analyze")
+                return None
+
+            # Run checkpoint
+            def on_token(token: str):
+                if self.config.verbose:
+                    print(token, end="", flush=True)
+
+            result = await self._ai_checkpoint_manager.post_scan_checkpoint(
+                findings=findings_dicts,
+                on_token=on_token if self.config.verbose else None,
+            )
+
+            self._checkpoint_results["post_scan"] = result
+
+            if result.success and result.recommendations:
+                logger.info(f"AI checkpoint complete (source: {result.source})")
+
+                # Log exploitation plan
+                if "exploitation_order" in result.recommendations:
+                    exploit_order = result.recommendations["exploitation_order"]
+                    logger.info(f"AI recommends exploiting {len(exploit_order)} findings")
+
+                if "attack_chains" in result.recommendations:
+                    chains = result.recommendations["attack_chains"]
+                    if chains:
+                        logger.info(f"AI identified {len(chains)} potential attack chains")
+
+                if "reasoning" in result.recommendations:
+                    reasoning = result.recommendations["reasoning"]
+                    if self.config.verbose:
+                        print(f"\n[AI Reasoning] {reasoning}")
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Post-scan checkpoint failed: {e}")
+            return None
+
+    async def _run_post_exploit_checkpoint(
+        self,
+        target: str,
+        vuln_type: str,
+        tool: str,
+        command: str,
+        exit_code: int,
+        output: str,
+    ) -> Optional[CheckpointResult]:
+        """
+        Run AI checkpoint after an exploitation attempt.
+
+        Evaluates result and recommends next action.
+        """
+        if not self._ai_checkpoint_manager:
+            return None
+
+        try:
+            # Get previous attempts for context
+            previous = self._checkpoint_results.get("exploit_attempts", [])
+
+            result = await self._ai_checkpoint_manager.post_exploit_checkpoint(
+                target=target,
+                vuln_type=vuln_type,
+                tool=tool,
+                command=command,
+                exit_code=exit_code,
+                output=output,
+                previous_attempts=previous,
+                findings_exploited=len([f for f in self.findings if f.metadata.get("exploited")]),
+                total_findings=len([f for f in self.findings if "vuln" in f.type.lower()]),
+            )
+
+            # Track this attempt
+            if "exploit_attempts" not in self._checkpoint_results:
+                self._checkpoint_results["exploit_attempts"] = []
+            self._checkpoint_results["exploit_attempts"].append({
+                "target": target,
+                "tool": tool,
+                "success": result.recommendations.get("success", False),
+            })
+
+            return result
+
+        except Exception as e:
+            logger.warning(f"Post-exploit checkpoint failed: {e}")
+            return None
 
     # ==================== RECON PHASE ====================
 
@@ -6526,9 +6748,15 @@ class Orchestrator:
         try:
             if Phase.RECON in phases and not self.config.skip_recon:
                 await self.run_recon()
+                # AI Checkpoint: Analyze recon results and recommend scan strategy
+                if self._ai_checkpoint_manager:
+                    await self._run_post_recon_checkpoint()
 
             if Phase.SCAN in phases and not self.config.skip_scan:
                 await self.run_scan()
+                # AI Checkpoint: Analyze vulnerabilities and plan exploitation
+                if self._ai_checkpoint_manager:
+                    await self._run_post_scan_checkpoint()
 
             # NEW: Intelligence Analysis Phase
             if Phase.ANALYZE in phases and self.config.enable_intelligence:
