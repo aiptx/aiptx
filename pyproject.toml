@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "4.0.0"
-description = "AIPTX v4.0 - AI-Native Penetration Testing Framework with multi-agent collaboration, PoC validation, SAST+DAST, and GitHub Security integration"
+version = "4.0.1"
+description = "AI-assisted security testing framework with SAST, DAST, and business logic testing capabilities"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Satyam Rastogi", email = "satyam@aiptx.io"}]
