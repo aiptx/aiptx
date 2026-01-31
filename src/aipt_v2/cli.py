@@ -158,6 +158,28 @@ Installation:
     scan_parser.add_argument("--no-stream", action="store_true", help="Don't stream command output (show progress only)")
     scan_parser.add_argument("--check", action="store_true", help="Run pre-flight checks to validate config/connections before scan")
 
+    # v4.0 Enhanced scanning options
+    scan_parser.add_argument(
+        "--format", "-f",
+        choices=["text", "json", "sarif", "html"],
+        default="text",
+        help="Output format (default: text, use sarif for GitHub Security integration)",
+    )
+    scan_parser.add_argument("--sast", action="store_true", help="Include SAST (source code) analysis")
+    scan_parser.add_argument("--dast", action="store_true", help="Include DAST (runtime) analysis")
+    scan_parser.add_argument("--business-logic", action="store_true", help="Enable business logic testing")
+    scan_parser.add_argument("--websocket", action="store_true", help="Include WebSocket endpoint testing")
+    scan_parser.add_argument("--spa", action="store_true", help="Enable SPA (browser-based) scanning")
+    scan_parser.add_argument("--graphql", action="store_true", help="Enhanced GraphQL security testing")
+    scan_parser.add_argument(
+        "--fail-on-severity",
+        choices=["critical", "high", "medium", "low", "info"],
+        default=None,
+        help="Exit with error if findings >= severity (for CI/CD)",
+    )
+    scan_parser.add_argument("--validate-pocs", action="store_true", help="Validate findings with PoC execution")
+    scan_parser.add_argument("--sarif-output", help="Path for SARIF output file (implies --format sarif)")
+
     # API command
     api_parser = subparsers.add_parser("api", help="Start REST API server")
     # Security: Default to localhost to prevent accidental network exposure
@@ -1189,6 +1211,24 @@ def run_scan(args):
         show_command_output=show_command_output,
     )
 
+    # v4.0 Enhanced scanning options
+    output_format = getattr(args, 'format', 'text')
+    sarif_output = getattr(args, 'sarif_output', None)
+    if sarif_output:
+        output_format = 'sarif'
+
+    # Add v4.0 scanning flags to config if OrchestratorConfig supports them
+    # These may need to be added to OrchestratorConfig in a future update
+    scan_options = {
+        'sast': getattr(args, 'sast', False),
+        'dast': getattr(args, 'dast', False),
+        'business_logic': getattr(args, 'business_logic', False),
+        'websocket': getattr(args, 'websocket', False),
+        'spa': getattr(args, 'spa', False),
+        'graphql': getattr(args, 'graphql', False),
+        'validate_pocs': getattr(args, 'validate_pocs', False),
+    }
+
     # Determine mode
     if args.ai or args.mode == "ai":
         mode = "ai"
@@ -1236,6 +1276,50 @@ def run_scan(args):
 
         console.print()
         console.print(f"[bold green]{icon('check')} Scan completed successfully[/bold green]")
+
+        # v4.0: Generate SARIF output if requested
+        if output_format == 'sarif' or sarif_output:
+            try:
+                from .reports.sarif import SARIFGenerator, SARIFConfig
+                from .agents.shared.finding_repository import FindingRepository
+
+                # Get findings from the scan result
+                findings = getattr(orchestrator, 'findings', [])
+
+                if findings:
+                    sarif_config = SARIFConfig(
+                        include_poc=getattr(args, 'validate_pocs', False),
+                        include_evidence=True,
+                    )
+                    generator = SARIFGenerator(sarif_config)
+                    sarif_report = generator.generate(findings, target=args.target)
+
+                    output_path = sarif_output or str(config.output_dir / "results.sarif")
+                    generator.to_file(output_path, sarif_report)
+                    console.print(f"[dim]SARIF report written to {output_path}[/dim]")
+
+                    # v4.0: Check fail-on-severity threshold
+                    fail_on = getattr(args, 'fail_on_severity', None)
+                    if fail_on:
+                        from .agents.shared.finding_repository import FindingSeverity
+                        severity_order = ['info', 'low', 'medium', 'high', 'critical']
+                        threshold_index = severity_order.index(fail_on)
+
+                        max_severity = 0
+                        for finding in findings:
+                            finding_index = severity_order.index(finding.severity.value.lower())
+                            max_severity = max(max_severity, finding_index)
+
+                        if max_severity >= threshold_index:
+                            severity_name = severity_order[max_severity]
+                            console.print(f"[bold red]CI/CD: Found {severity_name} severity findings (threshold: {fail_on})[/bold red]")
+                            return 1
+
+            except ImportError as e:
+                console.print(f"[yellow]Warning: Could not generate SARIF report: {e}[/yellow]")
+            except Exception as e:
+                console.print(f"[yellow]Warning: SARIF generation failed: {e}[/yellow]")
+
         return 0
     except KeyboardInterrupt:
         console.print()
@@ -1244,7 +1328,7 @@ def run_scan(args):
     except Exception as e:
         console.print()
         console.print(f"[bold red]{icon('cross')} Scan failed:[/bold red] {e}")
-        if args.verbose:
+        if getattr(args, 'verbose', 0) > 0:
             import traceback
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         return 1

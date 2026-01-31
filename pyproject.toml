@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "3.6.0"
-description = "AIPTX Beast Mode - Fully Autonomous AI-Powered Penetration Testing Framework with exploit chains, credential harvesting, lateral movement, and stealth capabilities"
+version = "4.0.0"
+description = "AIPTX v4.0 - AI-Native Penetration Testing Framework with multi-agent collaboration, PoC validation, SAST+DAST, and GitHub Security integration"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Satyam Rastogi", email = "satyam@aiptx.io"}]
@@ -46,6 +46,8 @@ keywords = [
     "owasp",
     "cve",
     "exploit",
+    "sarif",
+    "cwe",
     # Tools
     "nmap",
     "nuclei",
@@ -59,10 +61,23 @@ keywords = [
     "recon",
     "scanning",
     "exploitation",
+    # v4.0 Modern App Testing
+    "graphql",
+    "websocket",
+    "spa",
+    "single-page-application",
+    "business-logic",
+    "race-condition",
+    # CI/CD Integration
+    "github-actions",
+    "cicd",
+    "pr-blocking",
     # Other
     "automation",
     "cli",
     "api",
+    "multi-agent",
+    "poc-validation",
 ]
 classifiers = [
     # Development Status
@@ -148,12 +163,36 @@ dependencies = [
     "aiofiles>=23.0.0",
     "structlog>=23.0.0",
     "psutil>=5.9.0",
+
+    # WebSocket testing
+    "websockets>=12.0",
 ]
 
 [project.optional-dependencies]
 # VPS remote execution
 vps = [
     "asyncssh>=2.14.0",
+]
+
+# v4.0 Modern App Testing (SPA, WebSocket, GraphQL, Business Logic)
+modern = [
+    # Browser automation for SPA scanning
+    "playwright>=1.40.0",
+    # HTML parsing for DOM analysis
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    # Enhanced async HTTP
+    "aiohttp>=3.9.0",
+    # WebSocket testing (already in core, but explicit for clarity)
+    "websockets>=12.0",
+]
+
+# SAST (Static Analysis) features
+sast = [
+    # Git operations for repo scanning
+    "gitpython>=3.1.40",
+    # YAML parsing for CI/CD config analysis
+    "pyyaml>=6.0",
 ]
 
 # Full installation with all features
@@ -165,6 +204,13 @@ full = [
 
     # Browser automation
     "playwright>=1.40.0",
+
+    # HTML parsing
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+
+    # Git operations
+    "gitpython>=3.1.40",
 
     # Proxy
     "mitmproxy>=10.0.0",
@@ -180,6 +226,12 @@ full = [
     "scikit-learn>=1.3.0",
     "scipy>=1.11.0",
     "pandas>=2.0.0",
+]
+
+# CI/CD integration (minimal for GitHub Actions)
+cicd = [
+    # SARIF validation (optional)
+    "jsonschema>=4.20.0",
 ]
 
 # Development dependencies

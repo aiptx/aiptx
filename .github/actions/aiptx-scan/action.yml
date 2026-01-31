@@ -1,0 +1,171 @@
+name: 'AIPTX Security Scan'
+description: 'AI-powered security scanning with validated findings and SARIF output'
+author: 'AIPTX'
+branding:
+  icon: 'shield'
+  color: 'red'
+
+inputs:
+  target:
+    description: 'Target URL or repository path to scan'
+    required: true
+  mode:
+    description: 'Scan mode: quick, standard, full, or ai'
+    required: false
+    default: 'standard'
+  fail-on-severity:
+    description: 'Fail if findings >= severity (critical, high, medium, low, info)'
+    required: false
+    default: 'high'
+  github-token:
+    description: 'GitHub token for PR comments and check runs'
+    required: false
+  sarif-output:
+    description: 'Path for SARIF output file'
+    required: false
+    default: 'aiptx-results.sarif'
+  upload-sarif:
+    description: 'Upload SARIF to GitHub Security tab'
+    required: false
+    default: 'true'
+  create-pr-comment:
+    description: 'Create PR comment with scan summary'
+    required: false
+    default: 'true'
+  scan-timeout:
+    description: 'Scan timeout in minutes'
+    required: false
+    default: '30'
+  include-sast:
+    description: 'Include SAST (source code) analysis'
+    required: false
+    default: 'true'
+  include-dast:
+    description: 'Include DAST (runtime) analysis'
+    required: false
+    default: 'true'
+
+outputs:
+  findings-count:
+    description: 'Total number of findings'
+    value: \${{ steps.scan.outputs.findings-count }}
+  critical-count:
+    description: 'Number of critical severity findings'
+    value: \${{ steps.scan.outputs.critical-count }}
+  high-count:
+    description: 'Number of high severity findings'
+    value: \${{ steps.scan.outputs.high-count }}
+  sarif-path:
+    description: 'Path to SARIF report'
+    value: \${{ steps.scan.outputs.sarif-path }}
+  scan-status:
+    description: 'Scan status (passed, failed, error)'
+    value: \${{ steps.check.outputs.status }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Setup Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install AIPTX
+      shell: bash
+      run: |
+        pip install aiptx
+        echo "AIPTX installed successfully"
+
+    - name: Run Security Scan
+      id: scan
+      shell: bash
+      env:
+        AIPTX_TARGET: \${{ inputs.target }}
+        AIPTX_MODE: \${{ inputs.mode }}
+        AIPTX_SARIF_OUTPUT: \${{ inputs.sarif-output }}
+        AIPTX_TIMEOUT: \${{ inputs.scan-timeout }}
+        AIPTX_INCLUDE_SAST: \${{ inputs.include-sast }}
+        AIPTX_INCLUDE_DAST: \${{ inputs.include-dast }}
+      run: |
+        echo "Starting AIPTX security scan..."
+        echo "Target: \$AIPTX_TARGET"
+        echo "Mode: \$AIPTX_MODE"
+        
+        # Build scan command
+        SCAN_CMD="aiptx scan '\$AIPTX_TARGET' --mode \$AIPTX_MODE --format sarif --output '\$AIPTX_SARIF_OUTPUT'"
+        
+        # Add SAST/DAST flags
+        if [ "\$AIPTX_INCLUDE_SAST" = "true" ]; then
+          SCAN_CMD="\$SCAN_CMD --sast"
+        fi
+        if [ "\$AIPTX_INCLUDE_DAST" = "true" ]; then
+          SCAN_CMD="\$SCAN_CMD --dast"
+        fi
+        
+        # Run scan with timeout
+        timeout \${AIPTX_TIMEOUT}m eval \$SCAN_CMD || SCAN_EXIT=\$?
+        
+        # Parse results
+        if [ -f "\$AIPTX_SARIF_OUTPUT" ]; then
+          TOTAL=\$(jq '.runs[0].results | length' "\$AIPTX_SARIF_OUTPUT" 2>/dev/null || echo "0")
+          CRITICAL=\$(jq '[.runs[0].results[] | select(.level == "error")] | length' "\$AIPTX_SARIF_OUTPUT" 2>/dev/null || echo "0")
+          HIGH=\$(jq '[.runs[0].results[] | select(.level == "warning")] | length' "\$AIPTX_SARIF_OUTPUT" 2>/dev/null || echo "0")
+          
+          echo "findings-count=\$TOTAL" >> \$GITHUB_OUTPUT
+          echo "critical-count=\$CRITICAL" >> \$GITHUB_OUTPUT
+          echo "high-count=\$HIGH" >> \$GITHUB_OUTPUT
+          echo "sarif-path=\$AIPTX_SARIF_OUTPUT" >> \$GITHUB_OUTPUT
+          
+          echo "Scan complete: \$TOTAL findings (\$CRITICAL critical, \$HIGH high)"
+        else
+          echo "findings-count=0" >> \$GITHUB_OUTPUT
+          echo "critical-count=0" >> \$GITHUB_OUTPUT  
+          echo "high-count=0" >> \$GITHUB_OUTPUT
+          echo "sarif-path=" >> \$GITHUB_OUTPUT
+        fi
+
+    - name: Upload SARIF to Security Tab
+      if: inputs.upload-sarif == 'true' && steps.scan.outputs.sarif-path != ''
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: \${{ steps.scan.outputs.sarif-path }}
+        category: aiptx-security-scan
+
+    - name: Check Severity Threshold
+      id: check
+      shell: bash
+      env:
+        FAIL_ON: \${{ inputs.fail-on-severity }}
+        CRITICAL: \${{ steps.scan.outputs.critical-count }}
+        HIGH: \${{ steps.scan.outputs.high-count }}
+        FINDINGS: \${{ steps.scan.outputs.findings-count }}
+      run: |
+        SHOULD_FAIL=false
+        
+        case "\$FAIL_ON" in
+          critical)
+            if [ "\${CRITICAL:-0}" -gt 0 ]; then
+              SHOULD_FAIL=true
+              echo "::error::Found \$CRITICAL critical severity findings"
+            fi
+            ;;
+          high)
+            if [ "\${CRITICAL:-0}" -gt 0 ] || [ "\${HIGH:-0}" -gt 0 ]; then
+              SHOULD_FAIL=true
+              echo "::error::Found \$CRITICAL critical and \$HIGH high severity findings"
+            fi
+            ;;
+          *)
+            if [ "\${FINDINGS:-0}" -gt 0 ]; then
+              SHOULD_FAIL=true
+            fi
+            ;;
+        esac
+        
+        if [ "\$SHOULD_FAIL" = "true" ]; then
+          echo "status=failed" >> \$GITHUB_OUTPUT
+          exit 1
+        else
+          echo "status=passed" >> \$GITHUB_OUTPUT
+          echo "Security scan passed!"
+        fi
