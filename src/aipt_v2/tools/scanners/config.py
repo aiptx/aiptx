@@ -12,14 +12,15 @@ from typing import Optional
 
 # ==================== Server Configuration ====================
 
-# Remote Scanner Server
-SCANNER_SERVER_IP = os.getenv("AIPT_SCANNER_IP", "13.127.28.41")
+# Remote Scanner Server - MUST be configured via environment variable
+# No default IP - users must explicitly configure their scanner server
+SCANNER_SERVER_IP = os.getenv("AIPT_SCANNER_IP", "localhost")
 
 # Port Configuration
 ACUNETIX_PORT = int(os.getenv("AIPT_ACUNETIX_PORT", "3443"))
 BURP_PORT = int(os.getenv("AIPT_BURP_PORT", "1337"))
 
-# Full URLs
+# Full URLs - default to localhost (safe default)
 ACUNETIX_URL = os.getenv("AIPT_ACUNETIX_URL", f"https://{SCANNER_SERVER_IP}:{ACUNETIX_PORT}")
 BURP_URL = os.getenv("AIPT_BURP_URL", f"http://{SCANNER_SERVER_IP}:{BURP_PORT}/v0.1")
 
@@ -30,10 +31,8 @@ BURP_URL = os.getenv("AIPT_BURP_URL", f"http://{SCANNER_SERVER_IP}:{BURP_PORT}/v
 class AcunetixSettings:
     """Acunetix scanner settings."""
     base_url: str = ACUNETIX_URL
-    api_key: str = os.getenv(
-        "AIPT_ACUNETIX_API_KEY",
-        "1986ad8c0a5b3df4d7028d5f3c06e936c83ef0a486ef74537812989cff1a41a7c"
-    )
+    # API key MUST be provided via environment variable - no default for security
+    api_key: str = os.getenv("AIPT_ACUNETIX_API_KEY", "")
     verify_ssl: bool = False
     timeout: int = 120  # Increased from 30 to handle slow responses during polling
 
@@ -52,7 +51,8 @@ class AcunetixSettings:
 class BurpSettings:
     """Burp Suite scanner settings."""
     base_url: str = BURP_URL
-    api_key: str = os.getenv("AIPT_BURP_API_KEY", "t7thBWbImyiP8SA9hojkiFhq9QbHqlcm")
+    # API key MUST be provided via environment variable - no default for security
+    api_key: str = os.getenv("AIPT_BURP_API_KEY", "")
     verify_ssl: bool = False
     timeout: int = 120  # Increased from 30 to handle slow responses during polling
 
@@ -135,20 +135,23 @@ def print_config():
 
 # ==================== Environment Variable Reference ====================
 """
-Environment variables for configuration override:
+Environment variables for configuration (REQUIRED for scanner functionality):
 
-    AIPT_SCANNER_IP         - Scanner server IP (default: 13.127.28.41)
+    AIPT_SCANNER_IP         - Scanner server IP (default: localhost)
     AIPT_ACUNETIX_PORT      - Acunetix port (default: 3443)
     AIPT_BURP_PORT          - Burp port (default: 1337)
     AIPT_ACUNETIX_URL       - Full Acunetix URL (overrides IP+port)
     AIPT_BURP_URL           - Full Burp URL (overrides IP+port)
-    AIPT_ACUNETIX_API_KEY   - Acunetix API key
-    AIPT_BURP_API_KEY       - Burp Suite API key
+    AIPT_ACUNETIX_API_KEY   - Acunetix API key (REQUIRED - no default)
+    AIPT_BURP_API_KEY       - Burp Suite API key (REQUIRED - no default)
 
 Example:
-    export AIPT_SCANNER_IP="192.168.1.100"
-    export AIPT_ACUNETIX_API_KEY="your-api-key-here"
+    export AIPT_SCANNER_IP="your-scanner-server.local"
+    export AIPT_ACUNETIX_API_KEY="your-acunetix-api-key"
     export AIPT_BURP_API_KEY="your-burp-api-key"
+
+SECURITY NOTE: Never commit API keys to source control. Always use environment
+variables or a secure secrets manager.
 """
 
 

@@ -7,12 +7,12 @@ Provides plug-and-play integrations with enterprise security scanners:
 - Nessus Professional/Expert (Network Vulnerability Scanner)
 - OWASP ZAP (Dynamic Application Security Testing)
 
-Server Configuration:
-    Public IP:    13.127.28.41
-    Acunetix:     https://13.127.28.41:3443
-    Burp Suite:   http://13.127.28.41:1337
-    Nessus:       https://your-nessus-server:8834
-    ZAP:          http://localhost:8080
+Configuration via environment variables (see config.py):
+    AIPT_SCANNER_IP       - Your scanner server IP/hostname
+    AIPT_ACUNETIX_API_KEY - Acunetix API key (required)
+    AIPT_BURP_API_KEY     - Burp Suite API key (required)
+    AIPT_ACUNETIX_URL     - Full Acunetix URL (optional, overrides IP+port)
+    AIPT_BURP_URL         - Full Burp URL (optional, overrides IP+port)
 """
 
 # Configuration

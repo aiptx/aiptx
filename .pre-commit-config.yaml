@@ -95,7 +95,15 @@ repos:
       - id: detect-secrets
         name: Detect secrets
         args: ['--baseline', '.secrets.baseline']
-        exclude: (\.env\.example|requirements.*\.txt|poetry\.lock)$
+        exclude: (\.env\.example|requirements.*\.txt|poetry\.lock|sdks/.*/node_modules/)$
+
+  # Gitleaks - comprehensive secret scanning
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.18.2
+    hooks:
+      - id: gitleaks
+        name: Gitleaks secret scanner
+        args: ['--config', '.gitleaks.toml']
 
   # ============== Commit Message ==============
   - repo: https://github.com/commitizen-tools/commitizen

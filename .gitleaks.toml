@@ -1,0 +1,69 @@
+# Gitleaks Configuration for AIPTX
+# https://github.com/gitleaks/gitleaks
+
+title = "AIPTX Gitleaks Configuration"
+
+[extend]
+# Use default rules as base
+useDefault = true
+
+# Allowlist - patterns that are NOT secrets
+[allowlist]
+description = "Known safe patterns"
+
+# Regex patterns to ignore
+regexes = [
+    # NTLM empty LM hash (standard value, not a secret)
+    '''aad3b435b51404eeaad3b435b51404ee''',
+    # Git commit hashes used for pinning
+    '''[a-f0-9]{40}''',
+    # UUID placeholders for scan profiles (Acunetix/Burp)
+    '''11111111-1111-1111-1111-11111111111[0-9]''',
+    # Example/placeholder values
+    '''your-.*-key''',
+    '''example\.com''',
+    '''localhost''',
+]
+
+# Paths to ignore
+paths = [
+    '''\.secrets\.baseline''',
+    '''\.gitleaks\.toml''',
+    '''tests/.*''',
+    '''sdks/.*/node_modules/.*''',
+    '''node_modules/.*''',
+    '''\.venv/.*''',
+    '''venv/.*''',
+    '''\.git/.*''',
+]
+
+# Commits to ignore (if needed for historical reasons)
+commits = []
+
+# Stop words - common false positive triggers
+stopwords = [
+    "example",
+    "sample",
+    "test",
+    "mock",
+    "fake",
+    "dummy",
+    "placeholder",
+]
+
+# Custom rules for project-specific patterns
+[[rules]]
+id = "aiptx-api-key"
+description = "AIPTX API Key Pattern"
+regex = '''AIPT_[A-Z_]+_API_KEY\s*=\s*["'][a-zA-Z0-9]{20,}["']'''
+secretGroup = 0
+entropy = 3.5
+keywords = ["aipt", "api_key", "api-key"]
+
+[[rules]]
+id = "scanner-credentials"
+description = "Scanner API credentials"
+regex = '''(acunetix|burp).*api[_-]?key.*=.*["'][a-zA-Z0-9]{15,}["']'''
+secretGroup = 0
+entropy = 3.0
+keywords = ["acunetix", "burp", "api_key"]
