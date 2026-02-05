@@ -22,7 +22,22 @@ try:
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
-    logger.warning("Playwright not installed. Install with: pip install playwright && playwright install")
+    logger.debug("Playwright not available - browser automation features disabled")
+
+PLAYWRIGHT_INSTALL_MSG = """
+Playwright is required for browser automation features.
+
+Install with:
+  pip install aiptx[modern]   # Or: pip install playwright
+
+Then download browser binaries:
+  playwright install chromium  # Or: playwright install (all browsers)
+
+This is needed because Playwright controls real browsers for:
+- SPA/JavaScript rendering
+- DOM-based vulnerability testing
+- Screenshot capture
+"""
 
 
 @dataclass
@@ -105,7 +120,7 @@ class BrowserAutomation:
 
     def __init__(self, config: Optional[BrowserConfig] = None):
         if not PLAYWRIGHT_AVAILABLE:
-            raise ImportError("Playwright is required. Install with: pip install playwright && playwright install")
+            raise ImportError(PLAYWRIGHT_INSTALL_MSG)
 
         self.config = config or BrowserConfig()
         self._playwright = None

@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "4.0.1"
-description = "AI-assisted security testing framework with SAST, DAST, and business logic testing capabilities"
+version = "5.0.1"
+description = "AI-assisted security testing framework with SAST, DAST, business logic testing, and Active Directory penetration testing"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Satyam Rastogi", email = "satyam@aiptx.io"}]
@@ -78,6 +78,22 @@ keywords = [
     "api",
     "multi-agent",
     "poc-validation",
+    # v5.0 Active Directory Testing
+    "active-directory",
+    "ad-security",
+    "kerberos",
+    "ldap",
+    "ntlm",
+    "dcsync",
+    "kerberoasting",
+    "pass-the-hash",
+    "bloodhound",
+    "adcs",
+    "certificate-services",
+    "lateral-movement",
+    "privilege-escalation",
+    "domain-admin",
+    "impacket",
 ]
 classifiers = [
     # Development Status
@@ -226,6 +242,15 @@ full = [
     "scikit-learn>=1.3.0",
     "scipy>=1.11.0",
     "pandas>=2.0.0",
+
+    # Active Directory (v5.0)
+    "impacket>=0.11.0",
+    "ldap3>=2.9.0",
+    "certipy-ad>=4.8.0",
+    "lsassy>=3.1.0",
+    "bloodhound>=1.7.0",
+    "dnspython>=2.4.0",
+    "pyasn1>=0.5.0",
 ]
 
 # CI/CD integration (minimal for GitHub Actions)
@@ -251,6 +276,17 @@ dev = [
 # Windows-specific enhancements (optional)
 windows = [
     "pyreadline3>=3.4.0",  # Tab completion in interactive shell
+]
+
+# Active Directory penetration testing (v5.0)
+ad = [
+    "impacket>=0.11.0",       # Core AD tools (secretsdump, getST, psexec, etc.)
+    "ldap3>=2.9.0",           # LDAP operations
+    "certipy-ad>=4.8.0",      # ADCS enumeration and exploitation
+    "lsassy>=3.1.0",          # Remote LSASS credential dumping
+    "bloodhound>=1.7.0",      # Attack path mapping
+    "dnspython>=2.4.0",       # DNS enumeration for AD discovery
+    "pyasn1>=0.5.0",          # ASN.1 parsing for Kerberos
 ]
 
 [project.urls]

@@ -59,6 +59,20 @@ class ToolCapability(str, Enum):
     LATERAL_MOVE = "lateral_move"
     DATA_EXFIL = "data_exfil"
 
+    # Active Directory capabilities (v5.0)
+    AD_RECON = "ad_recon"  # Domain discovery, user enumeration
+    AD_LDAP_ENUM = "ad_ldap_enum"  # LDAP-based enumeration
+    AD_KERBEROS = "ad_kerberos"  # Kerberos attacks (Kerberoast, AS-REP)
+    AD_USER_ENUM = "ad_user_enum"  # User enumeration
+    AD_ACL_ABUSE = "ad_acl_abuse"  # ACL-based privilege escalation
+    AD_DELEGATION = "ad_delegation"  # Delegation abuse (RBCD, constrained)
+    AD_CREDENTIAL = "ad_credential"  # Credential extraction (DCSync, LSASS)
+    AD_ADCS = "ad_adcs"  # Certificate Services attacks
+    AD_RELAY = "ad_relay"  # NTLM relay attacks
+    AD_COERCE = "ad_coerce"  # Authentication coercion (PetitPotam, PrinterBug)
+    AD_EXEC = "ad_exec"  # Remote execution (psexec, wmi, dcom)
+    AD_BLOODHOUND = "ad_bloodhound"  # Attack path mapping
+
 
 @dataclass
 class ToolConfig:
@@ -165,6 +179,19 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         silent_flag="-silent",
         install_cmd="go install github.com/owasp-amass/amass/v4/...@latest",
         docs_url="https://github.com/owasp-amass/amass",
+    ),
+
+    "sublist3r": ToolConfig(
+        name="sublist3r",
+        binary="sublist3r",
+        description="Subdomain enumeration using search engines",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.SUBDOMAIN_ENUM},
+        default_timeout=300,
+        max_parallel=1,
+        output_file_flag="-o",
+        install_cmd="pip3 install sublist3r",
+        docs_url="https://github.com/aboul3la/Sublist3r",
     ),
 
     "nmap": ToolConfig(
@@ -348,6 +375,290 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_timeout=300,
         max_parallel=1,
         safe_for_local=False,
+    ),
+
+    # ========== ACTIVE DIRECTORY TOOLS (v5.0) ==========
+
+    # --- AD Recon Tools ---
+    "bloodhound-python": ToolConfig(
+        name="bloodhound-python",
+        binary="bloodhound-python",
+        description="BloodHound data collector for AD attack path mapping",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.AD_BLOODHOUND, ToolCapability.AD_RECON, ToolCapability.AD_LDAP_ENUM},
+        default_timeout=600,
+        max_parallel=1,
+        safe_for_local=False,
+        default_args=["-c", "All"],
+        install_cmd="pip install bloodhound",
+        docs_url="https://github.com/fox-it/BloodHound.py",
+    ),
+
+    "kerbrute": ToolConfig(
+        name="kerbrute",
+        binary="kerbrute",
+        description="Kerberos user enumeration and password spraying",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.AD_USER_ENUM, ToolCapability.AD_KERBEROS, ToolCapability.CRED_SPRAY},
+        default_timeout=300,
+        max_parallel=2,
+        safe_for_local=False,
+        default_args=["userenum", "--safe"],
+        install_cmd="go install github.com/ropnop/kerbrute@latest",
+        docs_url="https://github.com/ropnop/kerbrute",
+    ),
+
+    "ldapsearch": ToolConfig(
+        name="ldapsearch",
+        binary="ldapsearch",
+        description="LDAP client for AD enumeration",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.AD_LDAP_ENUM, ToolCapability.AD_RECON},
+        default_timeout=120,
+        max_parallel=3,
+        default_args=["-x", "-H"],
+    ),
+
+    "windapsearch": ToolConfig(
+        name="windapsearch",
+        binary="windapsearch",
+        description="LDAP enumeration tool for AD",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.AD_LDAP_ENUM, ToolCapability.AD_USER_ENUM},
+        default_timeout=300,
+        max_parallel=2,
+        default_args=["--full"],
+        install_cmd="go install github.com/ropnop/go-windapsearch@latest",
+        docs_url="https://github.com/ropnop/go-windapsearch",
+    ),
+
+    "enum4linux-ng": ToolConfig(
+        name="enum4linux-ng",
+        binary="enum4linux-ng",
+        description="SMB and LDAP enumeration tool",
+        phase=ToolPhase.RECON,
+        capabilities={ToolCapability.AD_RECON, ToolCapability.AD_USER_ENUM},
+        default_timeout=300,
+        max_parallel=1,
+        json_output_flag="-oJ",
+        default_args=["-A"],
+        install_cmd="pip install enum4linux-ng",
+        docs_url="https://github.com/cddmp/enum4linux-ng",
+    ),
+
+    # --- AD Scan Tools ---
+    "certipy": ToolConfig(
+        name="certipy",
+        binary="certipy",
+        description="AD Certificate Services enumeration and exploitation",
+        phase=ToolPhase.SCAN,
+        capabilities={ToolCapability.AD_ADCS, ToolCapability.VULN_SCAN},
+        default_timeout=300,
+        max_parallel=1,
+        safe_for_local=False,
+        default_args=["find", "-vulnerable"],
+        install_cmd="pip install certipy-ad",
+        docs_url="https://github.com/ly4k/Certipy",
+    ),
+
+    # --- AD Exploitation Tools (Impacket Suite) ---
+    "secretsdump.py": ToolConfig(
+        name="secretsdump.py",
+        binary="secretsdump.py",
+        description="DCSync and credential extraction (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_CREDENTIAL, ToolCapability.DATA_EXFIL},
+        default_timeout=600,
+        max_parallel=1,
+        safe_for_local=False,
+        default_args=["-just-dc-ntlm"],
+        install_cmd="pip install impacket",
+        docs_url="https://github.com/fortra/impacket",
+    ),
+
+    "GetUserSPNs.py": ToolConfig(
+        name="GetUserSPNs.py",
+        binary="GetUserSPNs.py",
+        description="Kerberoasting - extract TGS tickets (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_KERBEROS, ToolCapability.AD_CREDENTIAL},
+        default_timeout=300,
+        max_parallel=2,
+        safe_for_local=False,
+        default_args=["-request"],
+        install_cmd="pip install impacket",
+    ),
+
+    "GetNPUsers.py": ToolConfig(
+        name="GetNPUsers.py",
+        binary="GetNPUsers.py",
+        description="AS-REP roasting - extract AS-REP hashes (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_KERBEROS, ToolCapability.AD_CREDENTIAL},
+        default_timeout=300,
+        max_parallel=2,
+        safe_for_local=False,
+        default_args=["-format", "hashcat"],
+        install_cmd="pip install impacket",
+    ),
+
+    "getST.py": ToolConfig(
+        name="getST.py",
+        binary="getST.py",
+        description="Request service tickets for delegation attacks (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_DELEGATION, ToolCapability.AD_KERBEROS},
+        default_timeout=120,
+        max_parallel=2,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "rbcd.py": ToolConfig(
+        name="rbcd.py",
+        binary="rbcd.py",
+        description="Resource-Based Constrained Delegation attack (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_DELEGATION, ToolCapability.AD_ACL_ABUSE},
+        default_timeout=120,
+        max_parallel=1,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "ntlmrelayx.py": ToolConfig(
+        name="ntlmrelayx.py",
+        binary="ntlmrelayx.py",
+        description="NTLM relay attacks (Impacket)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_RELAY, ToolCapability.AD_CREDENTIAL},
+        default_timeout=3600,  # Long-running relay server
+        max_parallel=1,
+        requires_root=True,
+        safe_for_local=False,
+        default_args=["--no-smb-server"],
+        install_cmd="pip install impacket",
+    ),
+
+    "PetitPotam.py": ToolConfig(
+        name="PetitPotam.py",
+        binary="PetitPotam.py",
+        description="Authentication coercion via MS-EFSRPC",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_COERCE, ToolCapability.AD_RELAY},
+        default_timeout=60,
+        max_parallel=1,
+        safe_for_local=False,
+        install_cmd="git clone https://github.com/topotam/PetitPotam",
+        docs_url="https://github.com/topotam/PetitPotam",
+    ),
+
+    "lsassy": ToolConfig(
+        name="lsassy",
+        binary="lsassy",
+        description="Remote LSASS credential extraction",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={ToolCapability.AD_CREDENTIAL, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=2,
+        safe_for_local=False,
+        json_output_flag="--format json",
+        default_args=["-m", "comsvcs"],
+        install_cmd="pip install lsassy",
+        docs_url="https://github.com/Hackndo/lsassy",
+    ),
+
+    # --- AD Lateral Movement Tools (Impacket Suite) ---
+    "psexec.py": ToolConfig(
+        name="psexec.py",
+        binary="psexec.py",
+        description="Remote command execution via SMB (Impacket)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "wmiexec.py": ToolConfig(
+        name="wmiexec.py",
+        binary="wmiexec.py",
+        description="Remote command execution via WMI (Impacket)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "smbexec.py": ToolConfig(
+        name="smbexec.py",
+        binary="smbexec.py",
+        description="Remote command execution via SMB service (Impacket)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "atexec.py": ToolConfig(
+        name="atexec.py",
+        binary="atexec.py",
+        description="Remote command execution via Task Scheduler (Impacket)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "dcomexec.py": ToolConfig(
+        name="dcomexec.py",
+        binary="dcomexec.py",
+        description="Remote command execution via DCOM (Impacket)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE},
+        default_timeout=300,
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="pip install impacket",
+    ),
+
+    "evil-winrm": ToolConfig(
+        name="evil-winrm",
+        binary="evil-winrm",
+        description="WinRM shell with PTH and file transfer",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE, ToolCapability.DATA_EXFIL},
+        default_timeout=3600,  # Interactive shell
+        max_parallel=3,
+        safe_for_local=False,
+        install_cmd="gem install evil-winrm",
+        docs_url="https://github.com/Hackplayers/evil-winrm",
+    ),
+
+    "netexec": ToolConfig(
+        name="netexec",
+        binary="netexec",
+        description="Network execution tool (CrackMapExec successor)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={
+            ToolCapability.LATERAL_MOVE,
+            ToolCapability.AD_EXEC,
+            ToolCapability.AD_CREDENTIAL,
+            ToolCapability.CRED_SPRAY
+        },
+        default_timeout=600,
+        max_parallel=1,
+        safe_for_local=False,
+        default_args=["smb"],
+        install_cmd="pip install netexec",
+        docs_url="https://github.com/Pennyw0rth/NetExec",
     ),
 }
 

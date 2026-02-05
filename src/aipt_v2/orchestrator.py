@@ -321,7 +321,7 @@ class OrchestratorConfig:
 
     # Post-exploit settings - NEW privilege escalation tools
     post_exploit_tools: List[str] = field(default_factory=lambda: [
-        "linpeas", "winpeas", "pspy", "lazagne"
+        "linpeas", "winpeas", "pspy", "lazagne", "winpwn"
     ])
 
     # Enterprise scanners
@@ -5820,7 +5820,66 @@ class Orchestrator:
                     ))
                     self._log_tool("lazagne - downloaded", "done")
 
-        # 3. Generate Post-Exploitation Report
+            # 3. WinPwn - Comprehensive Windows/AD Assessment
+            if "winpwn" in self.config.post_exploit_tools:
+                self._log_tool("winpwn", "running")
+                try:
+                    from aipt_v2.scanners.winpwn_scanner import WinPwnScanner, WinPwnScanConfig
+
+                    winpwn_config = WinPwnScanConfig(
+                        target_host=self.domain,
+                        domain=self.config.ad_domain or "",
+                        dc_ip=self.config.ad_dc_ip or "",
+                        username=self.config.ad_username or "",
+                        password=self.config.ad_password or "",
+                        modules=["localrecon", "privesc", "kittielocal"],
+                        run_domain_recon=bool(self.config.ad_domain),
+                        run_credential_extraction=True,
+                        output_dir=str(self.output_dir / "winpwn"),
+                    )
+                    scanner = WinPwnScanner(winpwn_config)
+                    result = await scanner.scan()
+
+                    tools_run.append("winpwn")
+
+                    # Convert WinPwn findings to orchestrator findings
+                    for wp_finding in result.findings:
+                        findings.append(Finding(
+                            type="post_exploit_privesc",
+                            value=wp_finding.title,
+                            description=wp_finding.description,
+                            severity=wp_finding.severity.value,
+                            phase="post_exploit",
+                            tool="winpwn",
+                            target=self.domain,
+                            metadata={
+                                "module": wp_finding.template,
+                                "evidence": wp_finding.evidence[:200] if wp_finding.evidence else ""
+                            }
+                        ))
+
+                    if result.credentials_found > 0:
+                        findings.append(Finding(
+                            type="credentials",
+                            value=f"WinPwn extracted {result.credentials_found} credentials",
+                            description="Credentials were extracted from the Windows target",
+                            severity="critical",
+                            phase="post_exploit",
+                            tool="winpwn",
+                            target=self.domain,
+                            metadata={"count": result.credentials_found}
+                        ))
+
+                    self._log_tool(f"winpwn - {len(result.findings)} findings, {result.credentials_found} creds", "done")
+
+                except ImportError:
+                    errors.append("WinPwn module not available")
+                    self._log_tool("winpwn - module not available", "error")
+                except Exception as e:
+                    errors.append(f"WinPwn error: {str(e)}")
+                    self._log_tool(f"winpwn - error: {e}", "error")
+
+        # 5. Generate Post-Exploitation Report
         post_exploit_report = {
             "target": self.domain,
             "target_os": target_os,
@@ -5830,6 +5889,7 @@ class Orchestrator:
                 "Execute LinPEAS/WinPEAS on target for privilege escalation paths",
                 "Run pspy to monitor for cron jobs and scheduled tasks",
                 "Use LaZagne to recover stored credentials",
+                "Run WinPwn for comprehensive Windows/AD assessment",
                 "Check for kernel exploits based on version",
                 "Look for SUID binaries (Linux) or service misconfigurations (Windows)"
             ]

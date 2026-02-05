@@ -1,0 +1,307 @@
+# AIPTX Security Scan Workflow Example
+# This workflow demonstrates how to use AIPTX for CI/CD security scanning
+
+name: AIPTX Security Scan
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  # Allow manual trigger
+  workflow_dispatch:
+    inputs:
+      target:
+        description: 'Target URL to scan'
+        required: false
+        default: ''
+      mode:
+        description: 'Scan mode'
+        required: false
+        default: 'standard'
+        type: choice
+        options:
+          - quick
+          - standard
+          - full
+          - ai
+
+jobs:
+  # SAST - Source Code Analysis
+  sast-scan:
+    name: SAST Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AIPTX SAST
+        uses: ./.github/actions/aiptx-scan
+        with:
+          target: '.'
+          mode: 'standard'
+          sarif-output: 'sast-results.sarif'
+          fail-on-severity: 'high'
+          enable-poc: 'false'
+
+  # DAST - Dynamic Analysis (only on staging URL)
+  dast-scan:
+    name: DAST Scan
+    runs-on: ubuntu-latest
+    # Only run DAST on main branch or manual trigger with URL
+    if: github.ref == 'refs/heads/main' || github.event.inputs.target != ''
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AIPTX DAST
+        uses: ./.github/actions/aiptx-scan
+        with:
+          target: ${{ github.event.inputs.target || 'https://staging.example.com' }}
+          mode: ${{ github.event.inputs.mode || 'standard' }}
+          sarif-output: 'dast-results.sarif'
+          fail-on-severity: 'high'
+          enable-poc: 'true'
+          timeout: '30'
+
+  # PAT Scanner - PayloadsAllTheThings vulnerability testing
+  pat-scan:
+    name: PAT Vulnerability Scan
+    runs-on: ubuntu-latest
+    # Only run PAT scan on main branch or manual trigger with URL
+    if: github.ref == 'refs/heads/main' || github.event.inputs.target != ''
+    needs: [sast-scan]
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install AIPTX
+        run: pip install -e .
+
+      - name: Run PAT Scanner
+        id: pat-scan
+        run: |
+          python -c "
+          import asyncio
+          import json
+          import sys
+
+          from aipt_v2.scanners.pat import (
+              ChainEscalatingPATScanner,
+              EnhancedPATScanConfig,
+              VulnerabilityType,
+          )
+          from aipt_v2.scanners.pat.reporters import PATReportPipeline
+
+          async def run_pat_scan():
+              # Configure scan
+              target_url = '${{ github.event.inputs.target }}' or 'https://staging.example.com'
+
+              config = EnhancedPATScanConfig(
+                  target_url=target_url,
+                  parameters=['id', 'user', 'search', 'q'],
+                  vuln_types=[
+                      VulnerabilityType.SQL_INJECTION,
+                      VulnerabilityType.XSS,
+                      VulnerabilityType.COMMAND_INJECTION,
+                      VulnerabilityType.SSRF,
+                      VulnerabilityType.CSRF,
+                      VulnerabilityType.IDOR,
+                  ],
+                  authorized=True,
+                  auto_validate=True,
+                  enable_mutations=True,
+              )
+
+              # Run scan
+              scanner = ChainEscalatingPATScanner(config)
+              result = await scanner.scan()
+
+              # Generate reports
+              pipeline = PATReportPipeline(result)
+              pipeline.to_sarif('pat-results.sarif')
+              pipeline.to_html('pat-report.html')
+              pipeline.to_json('pat-results.json')
+
+              # Output metrics for GitHub Actions
+              severity_counts = result.severity_counts()
+              print(f'findings-count={len(result.findings)}')
+              print(f'critical-count={severity_counts.get(\"critical\", 0)}')
+              print(f'high-count={severity_counts.get(\"high\", 0)}')
+              print(f'medium-count={severity_counts.get(\"medium\", 0)}')
+              print(f'validated-count={len([f for f in result.findings if \"validated\" in (f.tags or [])])}')
+
+              # Fail if critical findings
+              critical = severity_counts.get('critical', 0)
+              if critical > 0:
+                  print(f'::error::Found {critical} critical vulnerabilities')
+                  sys.exit(1)
+
+              return result
+
+          asyncio.run(run_pat_scan())
+          " | tee pat-output.txt
+
+          # Parse outputs for GitHub Actions
+          echo "findings-count=$(grep 'findings-count=' pat-output.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "critical-count=$(grep 'critical-count=' pat-output.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "high-count=$(grep 'high-count=' pat-output.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
+          echo "validated-count=$(grep 'validated-count=' pat-output.txt | cut -d= -f2)" >> $GITHUB_OUTPUT
+
+      - name: Upload SARIF to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: pat-results.sarif
+          category: pat-scanner
+
+      - name: Upload HTML Report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pat-security-report
+          path: |
+            pat-report.html
+            pat-results.json
+
+      - name: Comment PAT Results on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const findings = '${{ steps.pat-scan.outputs.findings-count }}' || '0';
+            const critical = '${{ steps.pat-scan.outputs.critical-count }}' || '0';
+            const high = '${{ steps.pat-scan.outputs.high-count }}' || '0';
+            const validated = '${{ steps.pat-scan.outputs.validated-count }}' || '0';
+
+            let status = findings > 0 ? '⚠️' : '✅';
+            if (critical > 0) status = '🚨';
+
+            const body = `## ${status} PAT Scanner Results
+
+            | Metric | Count |
+            |--------|-------|
+            | Total Findings | ${findings} |
+            | Critical | ${critical} |
+            | High | ${high} |
+            | Validated (PoC) | ${validated} |
+
+            **Scanner**: PayloadsAllTheThings Integration
+            **Vuln Types**: SQL Injection, XSS, Command Injection, SSRF, CSRF, IDOR
+
+            ${critical > 0 ? '### 🚨 Critical findings detected - review required' : ''}
+            ${findings > 0 ? 'Download the HTML report from Artifacts for details.' : 'No vulnerabilities found! 🎉'}
+
+            ---
+            *Scanned by AIPTX PAT Scanner using [PayloadsAllTheThings](https://github.com/swisskyrepo/PayloadsAllTheThings)*`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });
+
+  # Combined scan for full releases
+  full-scan:
+    name: Full Security Scan
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    needs: [sast-scan]
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run AIPTX Full Scan
+        id: aiptx
+        uses: ./.github/actions/aiptx-scan
+        with:
+          target: 'https://staging.example.com'
+          source-path: '.'
+          mode: 'full'
+          sarif-output: 'full-results.sarif'
+          fail-on-severity: 'critical'
+          enable-poc: 'true'
+          timeout: '60'
+
+      - name: Create Issue on Critical Findings
+        if: failure() && steps.aiptx.outputs.critical-count > 0
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const criticalCount = '${{ steps.aiptx.outputs.critical-count }}';
+            const totalCount = '${{ steps.aiptx.outputs.findings-count }}';
+
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `🚨 Security Alert: ${criticalCount} Critical Findings`,
+              body: `## AIPTX Security Scan Alert
+
+              A security scan has detected **${criticalCount} critical** vulnerabilities.
+
+              ### Summary
+              - Total Findings: ${totalCount}
+              - Critical: ${criticalCount}
+              - Run: [${context.runId}](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})
+
+              ### Action Required
+              Please review the Security tab for detailed findings and remediation guidance.
+
+              ---
+              *This issue was automatically created by AIPTX Security Scan*`,
+              labels: ['security', 'critical', 'automated']
+            });
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const findings = '${{ steps.aiptx.outputs.findings-count }}';
+            const critical = '${{ steps.aiptx.outputs.critical-count }}';
+            const high = '${{ steps.aiptx.outputs.high-count }}';
+            const validated = '${{ steps.aiptx.outputs.validated-count }}';
+
+            let status = findings > 0 ? '⚠️' : '✅';
+            if (critical > 0) status = '🚨';
+
+            const body = `## ${status} AIPTX Security Scan Results
+
+            | Metric | Count |
+            |--------|-------|
+            | Total Findings | ${findings} |
+            | Critical | ${critical} |
+            | High | ${high} |
+            | Validated (PoC) | ${validated} |
+
+            ${critical > 0 ? '### ⚠️ Critical findings detected - merge blocked' : ''}
+            ${findings > 0 ? 'See the Security tab for detailed findings.' : 'No security issues found! 🎉'}
+
+            ---
+            *Scanned by [AIPTX](https://aiptx.io)*`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: body
+            });

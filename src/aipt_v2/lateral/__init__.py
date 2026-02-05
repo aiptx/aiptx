@@ -41,6 +41,17 @@ from aipt_v2.lateral.credential_sprayer import (
     SprayProtocol,
 )
 
+# AD Lateral Movement
+from aipt_v2.lateral.ad_lateral import (
+    ADLateralMovement,
+    ADLateralConfig,
+    ExecResult,
+    ExecMethod,
+    AuthMethod,
+    execute_remote,
+    find_local_admin_access,
+)
+
 __all__ = [
     # Pivot management
     "PivotManager",
@@ -62,4 +73,12 @@ __all__ = [
     "SprayResult",
     "SprayConfig",
     "SprayProtocol",
+    # AD Lateral Movement
+    "ADLateralMovement",
+    "ADLateralConfig",
+    "ExecResult",
+    "ExecMethod",
+    "AuthMethod",
+    "execute_remote",
+    "find_local_admin_access",
 ]

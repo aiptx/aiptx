@@ -1,0 +1,70 @@
+# AIPTX Security Scan Workflow
+# Add this to your repository's .github/workflows/ directory
+name: AIPTX Security Scan
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run weekly on Sunday at midnight
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+    inputs:
+      scan-mode:
+        description: 'Scan mode'
+        required: false
+        default: 'standard'
+        type: choice
+        options:
+          - quick
+          - standard
+          - full
+          - ai
+
+permissions:
+  contents: read
+  security-events: write
+  pull-requests: write
+
+jobs:
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run AIPTX Security Scan
+        uses: aiptx/aiptx-action@v1
+        id: scan
+        with:
+          target: '.'
+          mode: \${{ github.event.inputs.scan-mode || 'standard' }}
+          fail-on-severity: 'high'
+          upload-sarif: 'true'
+          create-pr-comment: 'true'
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload scan artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aiptx-results
+          path: |
+            aiptx-results.sarif
+            aiptx-report.html
+          retention-days: 30
+
+      - name: Check scan results
+        if: steps.scan.outputs.scan-status == 'failed'
+        run: |
+          echo "::error::Security scan failed with \${{ steps.scan.outputs.findings-count }} findings"
+          echo "Critical: \${{ steps.scan.outputs.critical-count }}"
+          echo "High: \${{ steps.scan.outputs.high-count }}"
+          exit 1

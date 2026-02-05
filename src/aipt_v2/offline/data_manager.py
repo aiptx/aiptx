@@ -16,7 +16,7 @@ import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional, Union
 
 import httpx
 
@@ -150,9 +150,22 @@ class OfflineDataManager:
         },
     }
 
-    def __init__(self, config: Optional[OfflineDataConfig] = None):
-        """Initialize the offline data manager."""
-        self.config = config or OfflineDataConfig()
+    def __init__(self, config: Optional[Union[OfflineDataConfig, Path, str]] = None):
+        """
+        Initialize the offline data manager.
+
+        Args:
+            config: Either an OfflineDataConfig, a Path to data directory, or None for defaults
+        """
+        # Handle different input types
+        if config is None:
+            self.config = OfflineDataConfig()
+        elif isinstance(config, (Path, str)):
+            # If a path is passed directly, create config with that base_path
+            self.config = OfflineDataConfig(base_path=Path(config))
+        else:
+            self.config = config
+
         self._initialized = False
         self._metadata_file = self.config.base_path / ".metadata.json"
         self._metadata: Dict[str, Any] = {}

@@ -10,6 +10,7 @@ Components:
 - ValidationStrategy: Per-vulnerability validation logic
 - EvidenceCollector: Captures proof (screenshots, responses)
 - ExploitExecutor: Safe exploitation in sandbox
+- CallbackManager: OOB callback server for blind vulnerabilities
 """
 
 from aipt_v2.validation.poc_validator import (
@@ -45,6 +46,16 @@ from aipt_v2.validation.executor import (
     ExecutionContext,
     SandboxConfig,
 )
+from aipt_v2.validation.callback_server import (
+    CallbackManager,
+    CallbackResult,
+    HTTPCallbackServer,
+    DNSCallbackServer,
+    InteractshClient,
+    PendingCallback,
+    create_callback_server,
+    generate_oob_payloads,
+)
 
 __all__ = [
     # Core validator
@@ -76,4 +87,13 @@ __all__ = [
     "ExecutionResult",
     "ExecutionContext",
     "SandboxConfig",
+    # Callback Server (OOB Detection)
+    "CallbackManager",
+    "CallbackResult",
+    "HTTPCallbackServer",
+    "DNSCallbackServer",
+    "InteractshClient",
+    "PendingCallback",
+    "create_callback_server",
+    "generate_oob_payloads",
 ]

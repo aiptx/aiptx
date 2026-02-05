@@ -480,6 +480,73 @@ Installation:
         help="Output file for results (JSON)"
     )
 
+    # ========== AD (Active Directory) Commands (v5.0) ==========
+    ad_parser = subparsers.add_parser("ad", help="Active Directory penetration testing (v5.0)")
+    ad_subparsers = ad_parser.add_subparsers(dest="ad_command", help="AD commands")
+
+    # ad recon - Domain reconnaissance
+    ad_recon = ad_subparsers.add_parser("recon", help="AD domain reconnaissance and enumeration")
+    ad_recon.add_argument("domain", help="Target AD domain (e.g., corp.local)")
+    ad_recon.add_argument("--dc", "-d", help="Domain Controller IP address")
+    ad_recon.add_argument("--username", "-u", help="Username for authenticated enumeration")
+    ad_recon.add_argument("--password", "-p", help="Password (will prompt if not provided)")
+    ad_recon.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
+    ad_recon.add_argument(
+        "--method", "-m",
+        choices=["dns", "ldap", "smb", "kerberos", "all"],
+        default="all",
+        help="Reconnaissance method (default: all)"
+    )
+    ad_recon.add_argument("--output", "-o", help="Output file for results (JSON)")
+    ad_recon.add_argument("--bloodhound", "-b", action="store_true", help="Collect BloodHound data")
+
+    # ad scan - AD vulnerability scanning
+    ad_scan = ad_subparsers.add_parser("scan", help="Scan AD for vulnerabilities and misconfigurations")
+    ad_scan.add_argument("domain", help="Target AD domain")
+    ad_scan.add_argument("--dc", "-d", required=True, help="Domain Controller IP address")
+    ad_scan.add_argument("--username", "-u", required=True, help="Username for scanning")
+    ad_scan.add_argument("--password", "-p", help="Password (will prompt if not provided)")
+    ad_scan.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
+    ad_scan.add_argument(
+        "--type", "-t",
+        nargs="+",
+        choices=["privesc", "adcs", "delegation", "acl", "winpwn", "all"],
+        default=["all"],
+        help="Scan types (default: all)"
+    )
+    ad_scan.add_argument("--output", "-o", help="Output file for results (JSON)")
+    ad_scan.add_argument("--winpwn-script", dest="winpwn_script", help="Path to WinPwn.ps1 for WinPwn scans")
+    ad_scan.add_argument("--extract-creds", dest="extract_creds", action="store_true", help="Enable credential extraction in WinPwn scan")
+
+    # ad attack - Execute AD attack chains
+    ad_attack = ad_subparsers.add_parser("attack", help="Execute AD attack chains (authorized testing only)")
+    ad_attack.add_argument("domain", help="Target AD domain")
+    ad_attack.add_argument("--dc", "-d", required=True, help="Domain Controller IP address")
+    ad_attack.add_argument("--username", "-u", required=True, help="Username")
+    ad_attack.add_argument("--password", "-p", help="Password (will prompt if not provided)")
+    ad_attack.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
+    ad_attack.add_argument(
+        "--chain", "-c",
+        choices=["kerberoast", "asreproast", "rbcd", "adcs-esc1", "adcs-esc8", "golden-ticket", "auto"],
+        default="auto",
+        help="Attack chain to execute (default: auto - LLM selects)"
+    )
+    ad_attack.add_argument(
+        "--stealth", "-s",
+        choices=["fast", "balanced", "stealth", "paranoid"],
+        default="balanced",
+        help="Stealth profile (default: balanced)"
+    )
+    ad_attack.add_argument("--output", "-o", help="Output file for results (JSON)")
+    ad_attack.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Show attack plan without executing"
+    )
+
+    # ad tools - List available AD tools
+    ad_tools = ad_subparsers.add_parser("tools", help="Check available AD security tools")
+
     args = parser.parse_args()
 
     # Setup logging based on verbosity
@@ -512,6 +579,8 @@ Installation:
             return run_verify(args)
         elif args.command == "ai":
             return run_ai_command(args)
+        elif args.command == "ad":
+            return run_ad_command(args)
         else:
             # No command given - start interactive mode
             return run_interactive_mode()
@@ -3804,6 +3873,526 @@ def display_ai_results(console, result, test_name):
         console.print("[bold red]Errors:[/bold red]")
         for error in result.errors:
             console.print(f"  [red]{icon('bullet')}[/red] {error}")
+
+
+# =============================================================================
+# Active Directory Commands (v5.0)
+# =============================================================================
+
+def run_ad_command(args):
+    """Handle Active Directory penetration testing commands."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    import getpass
+
+    console = Console()
+
+    ad_cmd = getattr(args, 'ad_command', None)
+
+    if ad_cmd == "recon":
+        return run_ad_recon(args, console)
+    elif ad_cmd == "scan":
+        return run_ad_scan(args, console)
+    elif ad_cmd == "attack":
+        return run_ad_attack(args, console)
+    elif ad_cmd == "tools":
+        return run_ad_tools(args, console)
+    else:
+        # Show AD help
+        console.print()
+        console.print(Panel(
+            "[bold cyan]AIPTX Active Directory Testing (v5.0)[/bold cyan]\n\n"
+            "[bold]Available Commands:[/bold]\n\n"
+            f"  {icon('search')} [green]aiptx ad recon[/green] <domain>      Domain reconnaissance\n"
+            f"  {icon('scan')} [green]aiptx ad scan[/green] <domain>       Vulnerability scanning\n"
+            f"  {icon('exploit')} [green]aiptx ad attack[/green] <domain>     Execute attack chains\n"
+            f"  {icon('tool')} [green]aiptx ad tools[/green]              Check available tools\n\n"
+            "[bold]Examples:[/bold]\n"
+            "  [dim]# Enumerate domain without credentials[/dim]\n"
+            "  aiptx ad recon corp.local --dc 10.0.0.1 --method dns\n\n"
+            "  [dim]# Authenticated enumeration with BloodHound[/dim]\n"
+            "  aiptx ad recon corp.local --dc 10.0.0.1 -u jdoe -p pass123 --bloodhound\n\n"
+            "  [dim]# Scan for ADCS vulnerabilities[/dim]\n"
+            "  aiptx ad scan corp.local --dc 10.0.0.1 -u jdoe -p pass123 --type adcs\n\n"
+            "  [dim]# Run Kerberoasting attack[/dim]\n"
+            "  aiptx ad attack corp.local --dc 10.0.0.1 -u jdoe -p pass123 --chain kerberoast\n\n"
+            "[bold yellow]WARNING:[/bold yellow] Use only for authorized penetration testing!",
+            title=f"{icon('shield')} AD Security Testing",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        console.print()
+        return 0
+
+
+def run_ad_recon(args, console):
+    """Run AD reconnaissance."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich import box
+    import asyncio
+    import json
+    import getpass
+
+    console.print()
+    console.print(Panel(
+        f"[bold cyan]AD Reconnaissance[/bold cyan]\n"
+        f"Target: [yellow]{args.domain}[/yellow]\n"
+        f"DC: [yellow]{args.dc or 'Auto-detect'}[/yellow]\n"
+        f"Method: [yellow]{args.method}[/yellow]",
+        title=f"{icon('search')} Domain Enumeration",
+        border_style="cyan",
+    ))
+
+    # Prompt for password if username provided but no password/hash
+    password = args.password
+    if args.username and not args.password and not args.hash:
+        password = getpass.getpass(f"Password for {args.username}: ")
+
+    try:
+        from aipt_v2.recon.ad_discovery import ADDiscovery, ADDiscoveryConfig
+        from aipt_v2.recon.ad_users import ADUserEnumerator, ADUserEnumConfig
+
+        async def do_recon():
+            results = {"domain": args.domain, "dcs": [], "users": [], "trusts": []}
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+                # Domain discovery
+                task = progress.add_task("Discovering domain controllers...", total=None)
+
+                discovery_config = ADDiscoveryConfig()
+                discovery = ADDiscovery(args.domain, args.dc, config=discovery_config)
+                disc_result = await discovery.discover()
+
+                results["dcs"] = [dc.hostname for dc in disc_result.domain_controllers]
+                results["trusts"] = [{"source": t.source_domain, "target": t.target_domain}
+                                    for t in disc_result.trusts]
+                progress.update(task, completed=True)
+
+                # User enumeration if we have credentials or anonymous methods
+                if args.username or args.method in ("kerberos", "all"):
+                    progress.update(task, description="Enumerating users...")
+
+                    dc_ip = args.dc or (disc_result.domain_controllers[0].ip
+                                       if disc_result.domain_controllers else None)
+
+                    if dc_ip:
+                        enum_config = ADUserEnumConfig(
+                            use_kerberos=(args.method in ("kerberos", "all")),
+                            use_ldap=(args.method in ("ldap", "all") and args.username),
+                        )
+                        enumerator = ADUserEnumerator(
+                            args.domain, dc_ip,
+                            username=args.username,
+                            password=password,
+                            ntlm_hash=args.hash,
+                            config=enum_config
+                        )
+                        enum_result = await enumerator.enumerate()
+                        results["users"] = [u.username for u in enum_result.users[:50]]  # Limit output
+                        results["user_count"] = enum_result.total_found
+                        results["kerberoastable"] = enum_result.kerberoastable_count
+                        results["asrep_roastable"] = enum_result.asrep_roastable_count
+
+            return results
+
+        results = asyncio.run(do_recon())
+
+        # Display results
+        console.print()
+
+        # DCs table
+        if results["dcs"]:
+            table = Table(title="Domain Controllers", box=box.ROUNDED)
+            table.add_column("Hostname", style="cyan")
+            for dc in results["dcs"]:
+                table.add_row(dc)
+            console.print(table)
+
+        # Users summary
+        if results.get("user_count"):
+            console.print()
+            console.print(Panel(
+                f"[bold]Total Users:[/bold] {results['user_count']}\n"
+                f"[bold]Kerberoastable:[/bold] [yellow]{results.get('kerberoastable', 0)}[/yellow]\n"
+                f"[bold]AS-REP Roastable:[/bold] [yellow]{results.get('asrep_roastable', 0)}[/yellow]",
+                title=f"{icon('user')} User Enumeration",
+                border_style="green",
+            ))
+
+        # Save output
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump(results, f, indent=2)
+            console.print(f"\n[green]{icon('check')} Results saved to {args.output}[/green]")
+
+        return 0
+
+    except ImportError as e:
+        console.print(f"\n[red]{icon('error')} Missing AD module: {e}[/red]")
+        console.print("[dim]Install AD dependencies: pip install aiptx[ad][/dim]")
+        return 1
+    except Exception as e:
+        console.print(f"\n[red]{icon('error')} Reconnaissance failed: {e}[/red]")
+        return 1
+
+
+def run_ad_scan(args, console):
+    """Run AD vulnerability scanning."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich import box
+    import asyncio
+    import json
+    import getpass
+
+    console.print()
+    console.print(Panel(
+        f"[bold cyan]AD Vulnerability Scan[/bold cyan]\n"
+        f"Target: [yellow]{args.domain}[/yellow]\n"
+        f"DC: [yellow]{args.dc}[/yellow]\n"
+        f"Scan Types: [yellow]{', '.join(args.type)}[/yellow]",
+        title=f"{icon('scan')} AD Security Scan",
+        border_style="cyan",
+    ))
+
+    # Prompt for password if not provided
+    password = args.password
+    if not args.password and not args.hash:
+        password = getpass.getpass(f"Password for {args.username}: ")
+
+    try:
+        findings = []
+
+        async def do_scan():
+            nonlocal findings
+
+            with Progress(
+                SpinnerColumn(),
+                TextColumn("[progress.description]{task.description}"),
+                console=console,
+            ) as progress:
+
+                scan_types = args.type if "all" not in args.type else ["privesc", "adcs", "delegation", "winpwn"]
+
+                for scan_type in scan_types:
+                    task = progress.add_task(f"Scanning for {scan_type} issues...", total=None)
+
+                    if scan_type == "privesc":
+                        from aipt_v2.scanners.ad_privesc_scanner import ADPrivescScanner, ADPrivescConfig
+                        config = ADPrivescConfig(
+                            domain=args.domain,
+                            dc_ip=args.dc,
+                            username=args.username,
+                            password=password,
+                            ntlm_hash=args.hash,
+                        )
+                        scanner = ADPrivescScanner(config)
+                        result = await scanner.scan()
+                        for account in result.privileged_accounts[:20]:
+                            findings.append({
+                                "type": "Privileged Account",
+                                "severity": "high" if "admin" in account.sam_account_name.lower() else "medium",
+                                "name": account.sam_account_name,
+                                "details": f"Groups: {', '.join(account.group_memberships[:3])}"
+                            })
+
+                    elif scan_type == "adcs":
+                        from aipt_v2.scanners.ad_adcs_scanner import ADCSScanner, ADCSConfig
+                        config = ADCSConfig(
+                            domain=args.domain,
+                            dc_ip=args.dc,
+                            username=args.username,
+                            password=password,
+                            ntlm_hash=args.hash,
+                        )
+                        scanner = ADCSScanner(config)
+                        result = await scanner.scan()
+                        for vuln in result.vulnerabilities:
+                            findings.append({
+                                "type": f"ADCS {vuln.esc_type.value}",
+                                "severity": "critical",
+                                "name": vuln.template_name,
+                                "details": vuln.description
+                            })
+
+                    elif scan_type == "delegation":
+                        from aipt_v2.exploitation.ad_delegation import ADDelegationAttacks, ADDelegationConfig
+                        config = ADDelegationConfig(
+                            domain=args.domain,
+                            dc_ip=args.dc,
+                            username=args.username,
+                            password=password,
+                            ntlm_hash=args.hash,
+                        )
+                        attacks = ADDelegationAttacks(config)
+                        result = await attacks.enumerate_delegation()
+                        for target in result.delegation_targets:
+                            findings.append({
+                                "type": f"Delegation ({target.delegation_type.value})",
+                                "severity": "high",
+                                "name": target.sam_account_name,
+                                "details": f"Target: {target.target_spn or 'Any'}"
+                            })
+
+                    elif scan_type == "winpwn":
+                        # WinPwn comprehensive Windows/AD assessment
+                        from aipt_v2.scanners.winpwn_scanner import WinPwnScanner, WinPwnScanConfig
+                        config = WinPwnScanConfig(
+                            domain=args.domain,
+                            dc_ip=args.dc,
+                            username=args.username,
+                            password=password,
+                            ntlm_hash=args.hash,
+                            script_path=getattr(args, 'winpwn_script', ''),
+                            modules=["localrecon", "domainrecon", "privesc", "kerberoasting"],
+                            run_domain_recon=True,
+                            run_kerberoasting=True,
+                            run_credential_extraction=getattr(args, 'extract_creds', False),
+                        )
+                        scanner = WinPwnScanner(config)
+                        result = await scanner.scan()
+                        for finding in result.findings:
+                            findings.append({
+                                "type": f"WinPwn ({finding.template})",
+                                "severity": finding.severity.value,
+                                "name": finding.title[:40],
+                                "details": finding.description[:60] if finding.description else ""
+                            })
+                        if result.credentials_found > 0:
+                            findings.append({
+                                "type": "Credentials",
+                                "severity": "critical",
+                                "name": f"{result.credentials_found} credentials extracted",
+                                "details": "See detailed output for credential data"
+                            })
+
+                    progress.update(task, completed=True)
+
+        asyncio.run(do_scan())
+
+        # Display findings
+        console.print()
+        if findings:
+            table = Table(title="Security Findings", box=box.ROUNDED)
+            table.add_column("Type", style="cyan")
+            table.add_column("Severity", width=10)
+            table.add_column("Name", style="white")
+            table.add_column("Details", style="dim")
+
+            severity_colors = {"critical": "red", "high": "yellow", "medium": "blue", "low": "green"}
+            for f in findings:
+                color = severity_colors.get(f["severity"], "white")
+                table.add_row(
+                    f["type"],
+                    f"[{color}]{f['severity'].upper()}[/{color}]",
+                    f["name"][:30],
+                    f["details"][:40] + "..." if len(f["details"]) > 40 else f["details"]
+                )
+
+            console.print(table)
+            console.print(f"\n[bold]Total findings:[/bold] {len(findings)}")
+        else:
+            console.print("[green]{icon('check')} No vulnerabilities found[/green]")
+
+        # Save output
+        if args.output:
+            with open(args.output, 'w') as f:
+                json.dump({"domain": args.domain, "findings": findings}, f, indent=2)
+            console.print(f"\n[green]{icon('check')} Results saved to {args.output}[/green]")
+
+        return 0
+
+    except ImportError as e:
+        console.print(f"\n[red]{icon('error')} Missing AD module: {e}[/red]")
+        console.print("[dim]Install AD dependencies: pip install aiptx[ad][/dim]")
+        return 1
+    except Exception as e:
+        console.print(f"\n[red]{icon('error')} Scan failed: {e}[/red]")
+        return 1
+
+
+def run_ad_attack(args, console):
+    """Execute AD attack chains."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich import box
+    import asyncio
+    import json
+    import getpass
+
+    # Warning banner
+    console.print()
+    console.print(Panel(
+        "[bold red]WARNING: ACTIVE EXPLOITATION[/bold red]\n\n"
+        "You are about to execute Active Directory attacks.\n"
+        "Ensure you have [bold]explicit written authorization[/bold] for:\n\n"
+        f"  • Domain: [yellow]{args.domain}[/yellow]\n"
+        f"  • DC: [yellow]{args.dc}[/yellow]\n"
+        f"  • Attack: [yellow]{args.chain}[/yellow]\n\n"
+        "[dim]Unauthorized access is illegal and unethical.[/dim]",
+        title=f"{icon('warning')} Authorization Required",
+        border_style="red",
+    ))
+
+    if not args.dry_run:
+        confirm = input("\nType 'AUTHORIZED' to continue: ")
+        if confirm != "AUTHORIZED":
+            console.print("[yellow]Attack cancelled.[/yellow]")
+            return 0
+
+    # Prompt for password
+    password = args.password
+    if not args.password and not args.hash:
+        password = getpass.getpass(f"Password for {args.username}: ")
+
+    try:
+        from aipt_v2.exploitation.ad_chain_templates import get_ad_chain, AD_ATTACK_CHAINS
+        from aipt_v2.evasion.ad_evasion import create_stealth_wrapper
+
+        console.print()
+        console.print(Panel(
+            f"[bold cyan]AD Attack Execution[/bold cyan]\n"
+            f"Target: [yellow]{args.domain}[/yellow]\n"
+            f"Chain: [yellow]{args.chain}[/yellow]\n"
+            f"Stealth: [yellow]{args.stealth}[/yellow]\n"
+            f"Dry Run: [yellow]{args.dry_run}[/yellow]",
+            title=f"{icon('exploit')} Attack Chain",
+            border_style="red" if not args.dry_run else "yellow",
+        ))
+
+        # Get attack chain
+        if args.chain == "auto":
+            # Show available chains for auto mode
+            console.print("\n[bold]Available Attack Chains:[/bold]")
+            for name, chain in AD_ATTACK_CHAINS.items():
+                console.print(f"  • [cyan]{name}[/cyan]: {chain.description[:60]}...")
+            console.print("\n[dim]Use --chain <name> to select a specific chain[/dim]")
+            return 0
+
+        chain = get_ad_chain(args.chain)
+        if not chain:
+            console.print(f"[red]{icon('error')} Unknown attack chain: {args.chain}[/red]")
+            return 1
+
+        # Display attack plan
+        console.print(f"\n[bold]Attack Chain: {chain.name}[/bold]")
+        console.print(f"[dim]{chain.description}[/dim]\n")
+
+        table = Table(title="Attack Steps", box=box.ROUNDED)
+        table.add_column("#", style="dim", width=3)
+        table.add_column("Step", style="cyan")
+        table.add_column("Tool", style="yellow")
+        table.add_column("Description", style="dim")
+
+        for i, step in enumerate(chain.steps, 1):
+            table.add_row(
+                str(i),
+                step.name,
+                step.tool,
+                step.description[:50] + "..." if len(step.description) > 50 else step.description
+            )
+
+        console.print(table)
+
+        if args.dry_run:
+            console.print("\n[yellow]{icon('info')} Dry run - no attacks executed[/yellow]")
+            return 0
+
+        # Execute chain (placeholder - actual execution would need more implementation)
+        console.print("\n[bold red]Executing attack chain...[/bold red]")
+        console.print("[dim]Full attack chain execution requires additional implementation[/dim]")
+
+        return 0
+
+    except ImportError as e:
+        console.print(f"\n[red]{icon('error')} Missing AD module: {e}[/red]")
+        console.print("[dim]Install AD dependencies: pip install aiptx[ad][/dim]")
+        return 1
+    except Exception as e:
+        console.print(f"\n[red]{icon('error')} Attack failed: {e}[/red]")
+        return 1
+
+
+def run_ad_tools(args, console):
+    """Check available AD security tools."""
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    import asyncio
+
+    console.print()
+    console.print(Panel(
+        "[bold cyan]AD Security Tools Status[/bold cyan]\n"
+        "Checking availability of Active Directory testing tools...",
+        title=f"{icon('tool')} Tool Check",
+        border_style="cyan",
+    ))
+
+    try:
+        from aipt_v2.execution.tool_registry import get_registry, ToolCapability
+
+        async def check_tools():
+            registry = get_registry()
+            await registry.discover_tools()
+            return registry
+
+        registry = asyncio.run(check_tools())
+
+        # Get AD tools
+        ad_capabilities = [c for c in ToolCapability if c.value.startswith('ad_')]
+
+        table = Table(title="AD Tools", box=box.ROUNDED)
+        table.add_column("Tool", style="cyan")
+        table.add_column("Status", width=12)
+        table.add_column("Capabilities", style="dim")
+        table.add_column("Install", style="dim")
+
+        ad_tool_count = 0
+        available_count = 0
+
+        for name, config in registry.tools.items():
+            # Check if tool has any AD capability
+            ad_caps = [c for c in config.capabilities if c.value.startswith('ad_')]
+            if not ad_caps:
+                continue
+
+            ad_tool_count += 1
+            status = registry.get_status(name)
+            is_available = status and status.available
+
+            if is_available:
+                available_count += 1
+                status_text = "[green]✓ Available[/green]"
+            else:
+                status_text = "[red]✗ Missing[/red]"
+
+            caps_text = ", ".join(c.value.replace("ad_", "") for c in ad_caps)
+            install_text = config.install_cmd[:40] + "..." if config.install_cmd and len(config.install_cmd) > 40 else (config.install_cmd or "")
+
+            table.add_row(name, status_text, caps_text, install_text)
+
+        console.print()
+        console.print(table)
+        console.print(f"\n[bold]Summary:[/bold] {available_count}/{ad_tool_count} AD tools available")
+
+        if available_count < ad_tool_count:
+            console.print("\n[dim]Install missing tools with: aiptx tools install --ad[/dim]")
+
+        return 0
+
+    except Exception as e:
+        console.print(f"\n[red]{icon('error')} Tool check failed: {e}[/red]")
+        return 1
 
 
 if __name__ == "__main__":

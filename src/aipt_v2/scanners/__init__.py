@@ -18,6 +18,7 @@ Integrations with popular security scanning tools:
 - Subfinder - Subdomain discovery
 - Amass - Attack surface mapping
 - TestSSL - SSL/TLS testing
+- PAT - PayloadsAllTheThings vulnerability scanner
 """
 
 from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
@@ -42,6 +43,48 @@ from .recon import AmassScanner, AmassConfig
 # Exploit scanners
 from .exploit import SqlmapScanner, SqlmapConfig
 from .exploit import HydraScanner, HydraConfig
+
+# AD Scanners
+from .ad_privesc_scanner import (
+    ADPrivescScanner,
+    ADPrivescConfig,
+    ADPrivescResult,
+    ADPrivilegedAccount,
+    ADFindingType,
+    scan_ad_privesc,
+)
+from .ad_adcs_scanner import (
+    ADCSScanner,
+    ADCSConfig,
+    ADCSResult,
+    CertificateAuthority,
+    CertificateTemplate,
+    ESCType,
+    scan_adcs,
+)
+
+# WinPwn Windows/AD Scanner
+from .winpwn_scanner import (
+    WinPwnScanner,
+    WinPwnScanConfig,
+    WinPwnScanResult,
+    scan_windows,
+    scan_ad_with_winpwn,
+)
+
+# PAT - PayloadsAllTheThings Scanner
+from .pat import (
+    PATScanner,
+    PATScanConfig,
+    PATScanResult,
+    VulnerabilityType,
+    InjectionPoint,
+    PayloadTechnique,
+    DetectionMethod,
+    PayloadDatabase,
+    scan_url as pat_scan_url,
+    update_payloads as pat_update_payloads,
+)
 
 __all__ = [
     # Base
@@ -86,4 +129,36 @@ __all__ = [
     "SqlmapConfig",
     "HydraScanner",
     "HydraConfig",
+    # AD Scanners
+    "ADPrivescScanner",
+    "ADPrivescConfig",
+    "ADPrivescResult",
+    "ADPrivilegedAccount",
+    "ADFindingType",
+    "scan_ad_privesc",
+    # ADCS Scanner
+    "ADCSScanner",
+    "ADCSConfig",
+    "ADCSResult",
+    "CertificateAuthority",
+    "CertificateTemplate",
+    "ESCType",
+    "scan_adcs",
+    # WinPwn Scanner
+    "WinPwnScanner",
+    "WinPwnScanConfig",
+    "WinPwnScanResult",
+    "scan_windows",
+    "scan_ad_with_winpwn",
+    # PAT Scanner
+    "PATScanner",
+    "PATScanConfig",
+    "PATScanResult",
+    "VulnerabilityType",
+    "InjectionPoint",
+    "PayloadTechnique",
+    "DetectionMethod",
+    "PayloadDatabase",
+    "pat_scan_url",
+    "pat_update_payloads",
 ]

@@ -702,6 +702,25 @@ TOOLS: Dict[str, ToolDefinition] = {
         pip_package="shodan",
     ),
 
+    "sublist3r": ToolDefinition(
+        name="sublist3r",
+        description="Subdomain enumeration using search engines and DNS",
+        category=ToolCategory.RECON,
+        install_commands={
+            PackageManager.APT: "pip3 install sublist3r",
+            PackageManager.DNF: "pip3 install sublist3r",
+            PackageManager.YUM: "pip3 install sublist3r",
+            PackageManager.ZYPPER: "pip3 install sublist3r",
+            PackageManager.BREW: "pip3 install sublist3r",
+            PackageManager.PACMAN: "pip3 install sublist3r",
+            PackageManager.CHOCO: "pip install sublist3r",
+            PackageManager.WINGET: "pip install sublist3r",
+            PackageManager.SCOOP: "pip install sublist3r",
+        },
+        check_command="sublist3r -h",
+        pip_package="sublist3r",
+    ),
+
     # =========================================================================
     # Additional SCAN Tools
     # =========================================================================
@@ -847,7 +866,8 @@ TOOLS: Dict[str, ToolDefinition] = {
             PackageManager.APT: "pip3 install impacket",
             PackageManager.BREW: "pip3 install impacket",
         },
-        check_command="impacket-psexec -h",
+        # Use secretsdump.py which is the most commonly used Impacket tool
+        check_command="secretsdump.py --help",
         is_core=True,
     ),
     "evil-winrm": ToolDefinition(
@@ -1124,14 +1144,18 @@ TOOLS: Dict[str, ToolDefinition] = {
     # =========================================================================
     "theHarvester": ToolDefinition(
         name="theHarvester",
-        description="Email, subdomain, and name harvesting",
+        description="Email, subdomain, and name harvesting (requires Python 3.12+)",
         category=ToolCategory.OSINT,
         install_commands={
-            PackageManager.APT: "pip3 install theHarvester",
-            PackageManager.BREW: "pip3 install theHarvester",
+            # Note: Latest version requires Python 3.12+
+            # For Python 3.9-3.11, use: pip3 install theHarvester==4.4.4
+            PackageManager.APT: "pip3 install theHarvester==4.4.4 || pip3 install theHarvester",
+            PackageManager.BREW: "pip3 install theHarvester==4.4.4 || pip3 install theHarvester",
+            PackageManager.DNF: "pip3 install theHarvester==4.4.4 || pip3 install theHarvester",
         },
-        check_command="theHarvester -h",
-        is_core=True,
+        # Check via pip show since CLI entry point varies by version
+        check_command="pip3 show theHarvester",
+        is_core=False,  # Not core due to Python version requirements
     ),
     "spiderfoot": ToolDefinition(
         name="spiderfoot",

@@ -184,6 +184,16 @@ from aipt_v2.intelligence.attack_patterns import (
     get_pattern_statistics,
 )
 
+# AD Attack Planning - LLM-guided Active Directory attack path selection
+from aipt_v2.intelligence.ad_attack_planner import (
+    ADAttackPlanner,
+    AttackPlan as ADAttackPlan,
+    AttackStep as ADAttackStep,
+    ADEnvironment,
+    AttackObjective as ADAttackObjective,
+    plan_ad_attack,
+)
+
 __all__ = [
     # CVE Intelligence (existing)
     "CVEIntelligence",
@@ -305,4 +315,11 @@ __all__ = [
     "get_recommended_tools",
     "get_technique_for_attack",
     "get_pattern_statistics",
+    # AD Attack Planning - LLM-guided path selection
+    "ADAttackPlanner",
+    "ADAttackPlan",
+    "ADAttackStep",
+    "ADEnvironment",
+    "ADAttackObjective",
+    "plan_ad_attack",
 ]

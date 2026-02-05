@@ -9,10 +9,29 @@ Score = 0.5 * description_similarity + 0.5 * sample_similarity + 2.0 * keyword_m
 import json
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
 
-import numpy as np
+# Lazy import for numpy - only required when RAG features are actually used
+if TYPE_CHECKING:
+    import numpy as np
+
+_np = None  # Lazy-loaded numpy module
+
+
+def _get_numpy():
+    """Lazy-load numpy with helpful error message."""
+    global _np
+    if _np is None:
+        try:
+            import numpy
+            _np = numpy
+        except ImportError:
+            raise ImportError(
+                "numpy is required for RAG-based tool selection. "
+                "Install with: pip install aiptx[full] or pip install numpy"
+            )
+    return _np
 
 
 @dataclass
@@ -148,7 +167,7 @@ class ToolRAG:
     def _score_tool(
         self,
         query: str,
-        query_embedding: np.ndarray,
+        query_embedding,  # np.ndarray when numpy is available
         tool: dict,
     ) -> float:
         """
@@ -188,10 +207,11 @@ class ToolRAG:
 
         return float(score)
 
-    def _cosine_similarity(self, a: np.ndarray, b: np.ndarray) -> float:
-        """Compute cosine similarity between two vectors"""
+    def _cosine_similarity(self, a, b) -> float:
+        """Compute cosine similarity between two vectors (np.ndarray when available)"""
         if a is None or b is None:
             return 0.0
+        np = _get_numpy()
         return float(np.dot(a, b))  # Already normalized
 
     def _keyword_match(self, query: str, tool: dict) -> float:

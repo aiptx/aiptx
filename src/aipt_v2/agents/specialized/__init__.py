@@ -7,6 +7,7 @@ Domain-specific agents for different testing aspects:
 - DASTAgent: Dynamic Application Security Testing
 - BusinessLogicAgent: Business logic flaw testing
 - WebSocketAgent: WebSocket security testing
+- DistributedPATAgent: PayloadsAllTheThings-based distributed scanning
 """
 
 from aipt_v2.agents.specialized.base_specialized import (
@@ -19,6 +20,12 @@ from aipt_v2.agents.specialized.sast_agent import SASTAgent
 from aipt_v2.agents.specialized.dast_agent import DASTAgent
 from aipt_v2.agents.specialized.business_logic_agent import BusinessLogicAgent
 from aipt_v2.agents.specialized.websocket_agent import WebSocketAgent
+from aipt_v2.agents.specialized.pat_agent import (
+    DistributedPATAgent,
+    PATAgentConfig,
+    PATCoordinator,
+    create_pat_agent,
+)
 
 __all__ = [
     # Base
@@ -31,4 +38,9 @@ __all__ = [
     "DASTAgent",
     "BusinessLogicAgent",
     "WebSocketAgent",
+    # PAT Agent
+    "DistributedPATAgent",
+    "PATAgentConfig",
+    "PATCoordinator",
+    "create_pat_agent",
 ]

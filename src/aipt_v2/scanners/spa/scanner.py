@@ -201,7 +201,10 @@ class SPAScanner(BaseScanner):
         result = SPAScanResult(target=url, started_at=datetime.now())
 
         if not self.is_available():
-            result.errors.append("Playwright not installed. Run: pip install playwright && playwright install")
+            result.errors.append(
+                "SPA scanning requires Playwright for browser automation. "
+                "Install: pip install aiptx[modern] && playwright install chromium"
+            )
             return result
 
         try:

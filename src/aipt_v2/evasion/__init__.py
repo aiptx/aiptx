@@ -39,6 +39,18 @@ from aipt_v2.evasion.tls_fingerprint import (
     randomize_tls,
 )
 
+# AD-specific evasion for stealth penetration testing
+from aipt_v2.evasion.ad_evasion import (
+    ADEvasion,
+    EvasionConfig,
+    EvasionStats,
+    EvasionTechnique,
+    StealthLevel,
+    STEALTH_PROFILES,
+    get_evasion_profile,
+    create_stealth_wrapper,
+)
+
 __all__ = [
     # WAF Bypass
     "WAFBypass",
@@ -55,4 +67,13 @@ __all__ = [
     # TLS
     "TLSFingerprint",
     "randomize_tls",
+    # AD Evasion - Stealth techniques for AD testing
+    "ADEvasion",
+    "EvasionConfig",
+    "EvasionStats",
+    "EvasionTechnique",
+    "StealthLevel",
+    "STEALTH_PROFILES",
+    "get_evasion_profile",
+    "create_stealth_wrapper",
 ]
