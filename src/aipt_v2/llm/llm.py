@@ -35,6 +35,8 @@ _LLM_API_BASE = (
     or os.getenv("OPENAI_API_BASE")
     or os.getenv("LITELLM_BASE_URL")
     or os.getenv("OLLAMA_API_BASE")
+    or os.getenv("AIPT_LLM__OLLAMA_BASE_URL")  # From setup wizard
+    or os.getenv("AIPT_LLM__API_BASE")          # Generic AIPT config
 )
 
 

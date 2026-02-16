@@ -33,6 +33,15 @@ except ImportError:
 
 
 @dataclass
+class APIValidationResult:
+    """Result of API content validation."""
+    is_valid: bool = False
+    endpoint_type: str = "unknown"
+    confidence: float = 0.0  # 0.0 to 1.0
+    reason: str = ""
+
+
+@dataclass
 class DiscoveredEndpoint:
     """Discovered API endpoint."""
     url: str
@@ -45,6 +54,7 @@ class DiscoveredEndpoint:
     documentation_url: str = ""
     version: str = ""
     timestamp: str = ""
+    confidence: float = 0.0  # Confidence score (0.0-1.0) for content validation
 
     def __post_init__(self):
         if not self.timestamp:
@@ -200,7 +210,13 @@ class APIDiscovery:
         return headers
 
     async def _check_url(self, path: str, method: str = "GET") -> Optional[DiscoveredEndpoint]:
-        """Check if URL exists and is accessible."""
+        """
+        Check if URL exists and contains VALID API content.
+
+        This method now validates content, not just status codes.
+        A 200 response is NOT sufficient - we must verify the content
+        is actually an API endpoint to eliminate false positives.
+        """
         if aiohttp is None:
             raise ImportError("aiohttp required. Install with: pip install aiohttp")
 
@@ -221,27 +237,40 @@ class APIDiscovery:
                     ssl=False,
                     allow_redirects=False
                 ) as response:
-                    if response.status in [200, 201, 301, 302, 401, 403]:
-                        self.discovered.add(url)
+                    # First filter: check status codes
+                    if response.status not in [200, 201, 301, 302, 401, 403]:
+                        return None
 
-                        content_type = response.headers.get("Content-Type", "")
-                        body = await response.text()
+                    content_type = response.headers.get("Content-Type", "")
+                    body = await response.text()
 
-                        # Determine endpoint type
-                        endpoint_type = self._detect_endpoint_type(path, content_type, body)
+                    # CRITICAL: Validate content to eliminate false positives
+                    validation = self._validate_api_content(
+                        path, content_type, body, response.status
+                    )
 
-                        # Check if auth required
-                        auth_required = response.status in [401, 403]
+                    # Reject invalid API content
+                    if not validation.is_valid:
+                        # Log rejection for debugging
+                        # logger.debug(f"Rejected {url}: {validation.reason}")
+                        return None
 
-                        return DiscoveredEndpoint(
-                            url=url,
-                            method=method,
-                            status_code=response.status,
-                            endpoint_type=endpoint_type,
-                            content_type=content_type,
-                            response_size=len(body),
-                            auth_required=auth_required
-                        )
+                    # Content validated - this is a real API endpoint
+                    self.discovered.add(url)
+
+                    # Check if auth required
+                    auth_required = response.status in [401, 403]
+
+                    return DiscoveredEndpoint(
+                        url=url,
+                        method=method,
+                        status_code=response.status,
+                        endpoint_type=validation.endpoint_type,
+                        content_type=content_type,
+                        response_size=len(body),
+                        auth_required=auth_required,
+                        confidence=validation.confidence
+                    )
 
         except Exception:
             pass
@@ -278,6 +307,232 @@ class APIDiscovery:
 
         # Default REST
         return "rest"
+
+    def _validate_api_content(
+        self,
+        path: str,
+        content_type: str,
+        body: str,
+        status_code: int
+    ) -> APIValidationResult:
+        """
+        Validate that response is actually API content, not a generic page.
+
+        This is the key method for eliminating false positives.
+        A 200 status code is NOT enough - we must validate the content.
+
+        Checks for:
+        - OpenAPI/Swagger structure (must have "openapi"/"swagger" + "paths")
+        - GraphQL introspection response (must have "__schema" or errors)
+        - JSON API response patterns (must be valid JSON with API structure)
+        - NOT HTML error pages or generic content
+        """
+        result = APIValidationResult()
+        path_lower = path.lower()
+        content_lower = content_type.lower()
+
+        # First: Reject HTML pages (common false positive source)
+        if self._is_html_page(content_type, body):
+            # Exception: API documentation HTML (Swagger UI, Redoc)
+            if self._is_api_docs_html(body):
+                result.is_valid = True
+                result.endpoint_type = "swagger_ui"
+                result.confidence = 0.85
+                result.reason = "API documentation page (Swagger UI/Redoc)"
+                return result
+
+            result.is_valid = False
+            result.reason = "HTML page, not API endpoint"
+            return result
+
+        # OpenAPI/Swagger validation
+        if any(kw in path_lower for kw in ["swagger", "openapi", "api-docs"]):
+            if self._is_valid_openapi(body):
+                result.is_valid = True
+                result.endpoint_type = "swagger"
+                result.confidence = 0.95
+                result.reason = "Valid OpenAPI/Swagger specification"
+                return result
+            else:
+                result.is_valid = False
+                result.reason = "Path suggests OpenAPI but content is not valid spec"
+                return result
+
+        # GraphQL validation
+        if "graphql" in path_lower:
+            if self._is_valid_graphql_endpoint(body):
+                result.is_valid = True
+                result.endpoint_type = "graphql"
+                result.confidence = 0.95
+                result.reason = "Valid GraphQL endpoint (introspection or error response)"
+                return result
+            else:
+                result.is_valid = False
+                result.reason = "Path suggests GraphQL but response is not valid"
+                return result
+
+        # JSON API validation
+        if "application/json" in content_lower:
+            if self._is_valid_json_api_response(body):
+                result.is_valid = True
+                result.endpoint_type = "rest"
+                result.confidence = 0.80
+                result.reason = "Valid JSON API response"
+                return result
+
+        # XML/SOAP validation
+        if "xml" in content_lower:
+            if self._is_valid_soap_endpoint(body):
+                result.is_valid = True
+                result.endpoint_type = "soap"
+                result.confidence = 0.85
+                result.reason = "Valid SOAP/WSDL endpoint"
+                return result
+
+        # Status-code only endpoints (auth required) - lower confidence
+        if status_code in [401, 403]:
+            result.is_valid = True
+            result.endpoint_type = "unknown"
+            result.confidence = 0.50  # Low confidence - needs verification
+            result.reason = "Auth required - cannot verify content type"
+            return result
+
+        # Default: reject unknown content
+        result.is_valid = False
+        result.reason = "Does not match known API content patterns"
+        return result
+
+    def _is_html_page(self, content_type: str, body: str) -> bool:
+        """Check if response is an HTML page (common false positive)."""
+        if "text/html" in content_type.lower():
+            return True
+
+        body_stripped = body.strip()[:500].lower()
+        if body_stripped.startswith(("<!doctype", "<html", "<head", "<body")):
+            return True
+
+        return False
+
+    def _is_api_docs_html(self, body: str) -> bool:
+        """Check if HTML is API documentation (Swagger UI, Redoc, etc.)."""
+        body_lower = body.lower()
+
+        # Swagger UI indicators
+        swagger_ui_indicators = [
+            "swagger-ui",
+            "swagger-ui-bundle",
+            "swagger-ui.css",
+            "swagger-ui-standalone",
+        ]
+        if any(indicator in body_lower for indicator in swagger_ui_indicators):
+            return True
+
+        # Redoc indicators
+        if "redoc" in body_lower or "redocly" in body_lower:
+            return True
+
+        # OpenAPI spec embedded in HTML
+        if '"openapi"' in body_lower and '"paths"' in body_lower:
+            return True
+
+        return False
+
+    def _is_valid_openapi(self, body: str) -> bool:
+        """Validate OpenAPI/Swagger spec structure."""
+        try:
+            data = json.loads(body)
+            # OpenAPI 3.x validation
+            if isinstance(data, dict) and "openapi" in data and "paths" in data:
+                return True
+            # Swagger 2.x validation
+            if isinstance(data, dict) and "swagger" in data and "paths" in data:
+                return True
+            return False
+        except (json.JSONDecodeError, TypeError):
+            # Try YAML (basic check)
+            body_lower = body.lower().strip()
+            if body_lower.startswith("openapi:") or body_lower.startswith("swagger:"):
+                if "paths:" in body_lower:
+                    return True
+            return False
+
+    def _is_valid_graphql_endpoint(self, body: str) -> bool:
+        """Validate GraphQL endpoint response."""
+        try:
+            data = json.loads(body)
+            if not isinstance(data, dict):
+                return False
+
+            # Standard GraphQL introspection response
+            if "data" in data and "__schema" in str(data.get("data", {})):
+                return True
+
+            # GraphQL error response (still valid endpoint)
+            if "errors" in data and isinstance(data["errors"], list):
+                for error in data["errors"]:
+                    error_str = str(error).lower()
+                    if any(kw in error_str for kw in ["graphql", "query", "mutation", "schema"]):
+                        return True
+
+            # GraphQL Playground/GraphiQL response
+            if "extensions" in data or "operationName" in data:
+                return True
+
+            return False
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    def _is_valid_json_api_response(self, body: str) -> bool:
+        """Validate JSON API response structure."""
+        try:
+            data = json.loads(body)
+
+            # Must be object or array (not primitive)
+            if not isinstance(data, (dict, list)):
+                return False
+
+            # Empty response is not a valid API
+            if not data:
+                return False
+
+            # Object with typical API structure
+            if isinstance(data, dict):
+                # Has common API keys
+                api_keys = ["data", "results", "items", "response", "status",
+                           "message", "error", "errors", "success", "id",
+                           "user", "users", "token", "access_token"]
+                if any(key in data for key in api_keys):
+                    return True
+
+                # Has pagination
+                if any(key in data for key in ["page", "limit", "offset", "total", "count"]):
+                    return True
+
+            # Array of objects (list response)
+            if isinstance(data, list) and len(data) > 0 and isinstance(data[0], dict):
+                return True
+
+            return False
+        except (json.JSONDecodeError, TypeError):
+            return False
+
+    def _is_valid_soap_endpoint(self, body: str) -> bool:
+        """Validate SOAP/WSDL endpoint."""
+        body_lower = body.lower()
+
+        # WSDL indicators
+        if "<wsdl:" in body_lower or 'xmlns:wsdl=' in body_lower:
+            return True
+
+        # SOAP envelope
+        if "<soap:" in body_lower or "<soap-env:" in body_lower:
+            return True
+
+        # XML service definitions
+        if "<definitions" in body_lower and "xmlns" in body_lower:
+            return True
+
+        return False
 
     async def discover_swagger(self) -> List[str]:
         """Discover OpenAPI/Swagger specifications."""

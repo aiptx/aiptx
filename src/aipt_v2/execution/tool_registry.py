@@ -73,6 +73,16 @@ class ToolCapability(str, Enum):
     AD_EXEC = "ad_exec"  # Remote execution (psexec, wmi, dcom)
     AD_BLOODHOUND = "ad_bloodhound"  # Attack path mapping
 
+    # PowerShell Arsenal capabilities (ps_arsenal)
+    PS_CREDENTIAL_DUMP = "ps_credential_dump"  # Mimikatz, PassHashes, LSA secrets
+    PS_SHELL = "ps_shell"  # TCP, UDP, ICMP, HTTP shells
+    PS_PERSISTENCE = "ps_persistence"  # WMI, registry, screensaver backdoors
+    PS_RECON = "ps_recon"  # System info, VM detection, session enumeration
+    PS_ESCALATION = "ps_escalation"  # UAC bypass, token manipulation
+    PS_EXFILTRATION = "ps_exfiltration"  # DNS, HTTP, pastebin exfil
+    PS_CLIENT_ATTACK = "ps_client_attack"  # Word, Excel, HTA payloads
+    PS_AMSI_BYPASS = "ps_amsi_bypass"  # AMSI bypass techniques
+
 
 @dataclass
 class ToolConfig:
@@ -659,6 +669,125 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["smb"],
         install_cmd="pip install netexec",
         docs_url="https://github.com/Pennyw0rth/NetExec",
+    ),
+
+    # ========== POWERSHELL ARSENAL TOOLS ==========
+
+    "ps-arsenal-creds": ToolConfig(
+        name="ps-arsenal-creds",
+        binary="pwsh",  # Requires PowerShell
+        description="PowerShell credential extraction (Mimikatz, PassHashes, WLAN, Browser)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={
+            ToolCapability.PS_CREDENTIAL_DUMP,
+            ToolCapability.AD_CREDENTIAL,
+            ToolCapability.DATA_EXFIL
+        },
+        default_timeout=300,
+        max_parallel=1,
+        safe_for_local=False,
+        requires_root=True,  # Many scripts require admin
+        docs_url="https://github.com/samratashok/nishang",
+    ),
+
+    "ps-arsenal-shell": ToolConfig(
+        name="ps-arsenal-shell",
+        binary="pwsh",
+        description="PowerShell reverse/bind shells (TCP, UDP, ICMP, HTTP, WMI)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={
+            ToolCapability.PS_SHELL,
+            ToolCapability.LATERAL_MOVE
+        },
+        default_timeout=60,
+        max_parallel=3,
+        safe_for_local=False,
+    ),
+
+    "ps-arsenal-recon": ToolConfig(
+        name="ps-arsenal-recon",
+        binary="pwsh",
+        description="PowerShell system reconnaissance and enumeration",
+        phase=ToolPhase.RECON,
+        capabilities={
+            ToolCapability.PS_RECON,
+            ToolCapability.SERVICE_DETECT,
+            ToolCapability.AD_RECON
+        },
+        default_timeout=120,
+        max_parallel=2,
+        safe_for_local=True,
+    ),
+
+    "ps-arsenal-persist": ToolConfig(
+        name="ps-arsenal-persist",
+        binary="pwsh",
+        description="PowerShell persistence mechanisms (WMI, Registry, Screensaver)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={
+            ToolCapability.PS_PERSISTENCE,
+            ToolCapability.PRIV_ESC
+        },
+        default_timeout=120,
+        max_parallel=1,
+        safe_for_local=False,
+        requires_root=True,
+    ),
+
+    "ps-arsenal-escalate": ToolConfig(
+        name="ps-arsenal-escalate",
+        binary="pwsh",
+        description="PowerShell privilege escalation (UAC bypass, token manipulation)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={
+            ToolCapability.PS_ESCALATION,
+            ToolCapability.PRIV_ESC
+        },
+        default_timeout=120,
+        max_parallel=1,
+        safe_for_local=False,
+    ),
+
+    "ps-arsenal-client": ToolConfig(
+        name="ps-arsenal-client",
+        binary="pwsh",
+        description="PowerShell client-side attacks (Office macros, HTA, CHM)",
+        phase=ToolPhase.EXPLOIT,
+        capabilities={
+            ToolCapability.PS_CLIENT_ATTACK
+        },
+        default_timeout=60,
+        max_parallel=2,
+        safe_for_local=True,
+    ),
+
+    "ps-arsenal-exfil": ToolConfig(
+        name="ps-arsenal-exfil",
+        binary="pwsh",
+        description="PowerShell data exfiltration (DNS, HTTP, Pastebin)",
+        phase=ToolPhase.POST_EXPLOIT,
+        capabilities={
+            ToolCapability.PS_EXFILTRATION,
+            ToolCapability.DATA_EXFIL
+        },
+        default_timeout=120,
+        max_parallel=1,
+        safe_for_local=False,
+    ),
+
+    "ps-arsenal-scanner": ToolConfig(
+        name="ps-arsenal-scanner",
+        binary="pwsh",
+        description="PowerShell Arsenal integrated scanner for AIPTX pipeline",
+        phase=ToolPhase.SCAN,
+        capabilities={
+            ToolCapability.PS_CREDENTIAL_DUMP,
+            ToolCapability.PS_RECON,
+            ToolCapability.VULN_SCAN
+        },
+        default_timeout=600,
+        max_parallel=1,
+        safe_for_local=False,
     ),
 }
 

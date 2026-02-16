@@ -1,9 +1,20 @@
 """
-AIPT Tools Module - Terminal, Browser, Proxy, and Output Parsing
+AIPTX Tools Module - Terminal, Browser, Proxy, and Output Parsing.
+
+Includes v5.2 additions:
+- WordlistGenerator: Targeted password list generation
 """
 
-from aipt_v2.tools.parser import OutputParser, Finding
+from aipt_v2.tools.parser import Finding, OutputParser
 from aipt_v2.tools.tool_processing import process_tool_invocations
+# v5.2 - Wordlist Generator
+from aipt_v2.tools.wordlist_generator import (
+    WordlistConfig,
+    WordlistGenerator,
+    generate_company_wordlist,
+    generate_targeted_wordlist,
+    mutate_password,
+)
 
 
 def get_tools_prompt() -> str:
@@ -41,4 +52,10 @@ __all__ = [
     "Finding",
     "process_tool_invocations",
     "get_tools_prompt",
+    # v5.2 - Wordlist Generator
+    "WordlistGenerator",
+    "WordlistConfig",
+    "generate_company_wordlist",
+    "generate_targeted_wordlist",
+    "mutate_password",
 ]

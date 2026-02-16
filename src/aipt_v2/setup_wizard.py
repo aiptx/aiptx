@@ -457,7 +457,7 @@ def setup_llm() -> dict:
     )
 
     providers = {
-        "1": ("anthropic", "claude-sonnet-4-20250514", "ANTHROPIC_API_KEY"),
+        "1": ("anthropic", "claude-3-7-sonnet-20250219", "ANTHROPIC_API_KEY"),
         "2": ("openai", "gpt-4o", "OPENAI_API_KEY"),
         "3": ("deepseek", "deepseek-chat", "DEEPSEEK_API_KEY"),
         "4": ("ollama", "llama3.2", None),  # No API key needed
@@ -479,7 +479,7 @@ def setup_llm() -> dict:
     config["AIPT_LLM__PROVIDER"] = provider
     config["AIPT_LLM__MODEL"] = model
 
-    # Get API key
+    # Get API key - show input so user can verify what they pasted
     console.print(f"\n[bold]Enter your {provider.title()} API key:[/bold]")
 
     if provider == "anthropic":
@@ -489,10 +489,72 @@ def setup_llm() -> dict:
     elif provider == "deepseek":
         console.print("[dim]Get one at: https://platform.deepseek.com/api_keys[/dim]")
 
-    api_key = input_with_default("API Key", "", password=True)
+    # Show input so user can see what they're pasting (important for verification)
+    api_key = input_with_default("API Key", "", password=False)
 
     if api_key and key_name:
         config[key_name] = api_key
+        # Show masked confirmation
+        masked = api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        console.print(f"  [green]✓[/green] Key saved: {masked}")
+
+    return config
+
+
+def _select_cloud_provider() -> dict:
+    """
+    Select a cloud LLM provider (fallback when Ollama isn't available).
+    This shows only cloud options without the Ollama choice to avoid loops.
+    """
+    config = {}
+
+    console.print("\n[bold]Select a cloud LLM provider:[/bold]")
+    console.print("  [1] Anthropic (Claude) - [green]Recommended for best results[/green]")
+    console.print("  [2] OpenAI (GPT-4)")
+    console.print("  [3] DeepSeek - [dim]Cost-effective option[/dim]")
+    console.print("  [4] Other (custom)")
+
+    choice = Prompt.ask(
+        "\nEnter choice",
+        choices=["1", "2", "3", "4"],
+        default="1"
+    )
+
+    providers = {
+        "1": ("anthropic", "claude-3-7-sonnet-20250219", "ANTHROPIC_API_KEY"),
+        "2": ("openai", "gpt-4o", "OPENAI_API_KEY"),
+        "3": ("deepseek", "deepseek-chat", "DEEPSEEK_API_KEY"),
+        "4": ("custom", "", "LLM_API_KEY"),
+    }
+
+    provider, model, key_name = providers[choice]
+
+    if choice == "4":
+        provider = input_with_default("Enter provider name", "")
+        model = input_with_default("Enter model name", "")
+        key_name = "LLM_API_KEY"
+
+    config["AIPT_LLM__PROVIDER"] = provider
+    config["AIPT_LLM__MODEL"] = model
+
+    # Get API key - show input so user can verify what they pasted
+    console.print(f"\n[bold]Enter your {provider.title()} API key:[/bold]")
+
+    if provider == "anthropic":
+        console.print("[dim]Get one at: https://console.anthropic.com/settings/keys[/dim]")
+    elif provider == "openai":
+        console.print("[dim]Get one at: https://platform.openai.com/api-keys[/dim]")
+    elif provider == "deepseek":
+        console.print("[dim]Get one at: https://platform.deepseek.com/api_keys[/dim]")
+
+    # Show input so user can see what they're pasting (important for verification)
+    api_key = input_with_default("API Key", "", password=False)
+
+    if api_key and key_name:
+        config[key_name] = api_key
+        # Show masked confirmation
+        masked = api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        console.print(f"  [green]✓[/green] Key saved: {masked}")
 
     return config
 
@@ -508,11 +570,29 @@ def _setup_ollama(ollama_installed: bool) -> dict:
         console.print("Ollama allows you to run LLMs locally for FREE and offline.")
 
         if Confirm.ask("\nWould you like to install Ollama now?", default=True):
-            _install_ollama()
-        else:
+            install_success = _install_ollama()
+            if install_success:
+                # Re-check if Ollama is now installed after installation attempt
+                ollama_installed, _ = check_ollama_installed()
+            else:
+                # User chose to skip Ollama - go to cloud provider selection
+                return _select_cloud_provider()
+
+        if not ollama_installed:
             console.print("[dim]You can install Ollama later from: https://ollama.ai[/dim]")
-            console.print("[yellow]Falling back to cloud provider...[/yellow]")
-            return setup_llm()  # Restart LLM setup
+            return _select_cloud_provider()
+
+    # Verify Ollama is actually available before trying to start it
+    ollama_path = shutil.which("ollama")
+    if not ollama_path:
+        console.print("\n[yellow]Ollama executable not found in PATH.[/yellow]")
+        console.print("[dim]This can happen if you need to restart your terminal.[/dim]")
+
+        if Confirm.ask("Continue with Ollama setup anyway? (Select 'No' for cloud provider)", default=True):
+            # User wants to proceed - they may have installed it but PATH isn't updated
+            ollama_path = "ollama"  # Try using just the command name
+        else:
+            return _select_cloud_provider()
 
     # Check if Ollama is running (use safe async runner to avoid nested loop errors)
     is_running = _run_async_safe(check_ollama_running())
@@ -523,14 +603,21 @@ def _setup_ollama(ollama_installed: bool) -> dict:
 
         if Confirm.ask("\nWould you like to start Ollama now?", default=True):
             import subprocess
-            subprocess.Popen(
-                ["ollama", "serve"],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            console.print("[green]✓ Ollama server started[/green]")
-            import time
-            time.sleep(2)  # Wait for server to start
+            try:
+                subprocess.Popen(
+                    [ollama_path, "serve"],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                console.print("[green]✓ Ollama server started[/green]")
+                import time
+                time.sleep(2)  # Wait for server to start
+            except FileNotFoundError:
+                console.print("[red]Failed to start Ollama: executable not found.[/red]")
+                console.print("[dim]Please ensure Ollama is properly installed and in your PATH.[/dim]")
+            except OSError as e:
+                console.print(f"[red]Failed to start Ollama: {e}[/red]")
+                console.print("[dim]You can start it manually with: ollama serve[/dim]")
 
     # Get available models (use safe async runner to avoid nested loop errors)
     models = _run_async_safe(get_ollama_models())
@@ -580,15 +667,22 @@ def _setup_ollama(ollama_installed: bool) -> dict:
         console.print("[dim]This may take a few minutes...[/dim]")
 
         import subprocess
+        ollama_cmd = shutil.which("ollama") or "ollama"
         try:
             subprocess.run(
-                ["ollama", "pull", selected_model],
+                [ollama_cmd, "pull", selected_model],
                 check=True
             )
             console.print(f"[green]✓ Model {selected_model} downloaded[/green]")
         except subprocess.CalledProcessError:
             console.print(f"[red]Failed to download {selected_model}[/red]")
-            console.print("[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
+            console.print(f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
+        except FileNotFoundError:
+            console.print("[red]Ollama executable not found.[/red]")
+            console.print(f"[yellow]After installing Ollama, download the model with: ollama pull {selected_model}[/yellow]")
+        except OSError as e:
+            console.print(f"[red]Failed to run Ollama: {e}[/red]")
+            console.print(f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
 
     config["AIPT_LLM__PROVIDER"] = "ollama"
     config["AIPT_LLM__MODEL"] = selected_model
@@ -606,10 +700,17 @@ def _setup_ollama(ollama_installed: bool) -> dict:
     return config
 
 
-def _install_ollama():
-    """Install Ollama on the system."""
+def _install_ollama() -> bool:
+    """
+    Install Ollama on the system.
+
+    Returns:
+        True if installation succeeded or user completed manual install,
+        False if user wants to skip Ollama.
+    """
     import platform
     import subprocess
+    import webbrowser
 
     system = platform.system().lower()
 
@@ -627,22 +728,65 @@ def _install_ollama():
                     stdout=subprocess.PIPE,
                     check=True
                 )
+            console.print("[green]✓ Ollama installed successfully[/green]")
+            return True
+
         elif system == "linux":
             subprocess.run(
                 "curl -fsSL https://ollama.ai/install.sh | sh",
                 shell=True,
                 check=True
             )
-        elif system == "windows":
-            console.print("[yellow]Please install Ollama manually from: https://ollama.ai[/yellow]")
-            console.print("[dim]After installation, run 'ollama serve' to start the server[/dim]")
-            return
+            console.print("[green]✓ Ollama installed successfully[/green]")
+            return True
 
-        console.print("[green]✓ Ollama installed successfully[/green]")
+        elif system == "windows":
+            # Windows requires manual installation
+            console.print("\n[yellow]Ollama requires manual installation on Windows.[/yellow]")
+            console.print("[bold]Download from:[/bold] https://ollama.ai/download/windows")
+
+            console.print("\n[bold]Options:[/bold]")
+            console.print("  [1] Open download page in browser (then press Enter when installed)")
+            console.print("  [2] Skip Ollama - use a cloud provider instead")
+
+            choice = Prompt.ask("Enter choice", choices=["1", "2"], default="1")
+
+            if choice == "1":
+                console.print("\n[cyan]Opening Ollama download page...[/cyan]")
+                try:
+                    webbrowser.open("https://ollama.ai/download/windows")
+                except Exception:
+                    console.print("[yellow]Could not open browser. Please visit: https://ollama.ai/download/windows[/yellow]")
+
+                console.print("\n[bold]Instructions:[/bold]")
+                console.print("  1. Download and run the Ollama installer")
+                console.print("  2. Follow the installation wizard")
+                console.print("  3. Once installed, Ollama will start automatically")
+                console.print("")
+
+                input_with_default("Press Enter when Ollama is installed", "")
+
+                # Check if installation succeeded
+                if shutil.which("ollama"):
+                    console.print("[green]✓ Ollama detected![/green]")
+                    return True
+                else:
+                    console.print("[yellow]Ollama not detected in PATH.[/yellow]")
+                    console.print("[dim]You may need to restart your terminal or add Ollama to PATH.[/dim]")
+
+                    if Confirm.ask("Continue with Ollama setup anyway?", default=True):
+                        return True
+                    else:
+                        return False
+            else:
+                return False
+
+        return True
 
     except subprocess.CalledProcessError as e:
         console.print(f"[red]Failed to install Ollama: {e}[/red]")
         console.print("[dim]Please install manually from: https://ollama.ai[/dim]")
+        return False
 
 
 def normalize_url(url: str) -> str:
@@ -672,6 +816,16 @@ def setup_scanners() -> dict:
 
     if not Confirm.ask("\nDo you want to configure enterprise scanners?", default=False):
         console.print("[dim]Skipping scanner configuration...[/dim]\n")
+        # Clear any existing scanner configs to avoid stale/invalid URLs
+        config["AIPT_SCANNERS__ACUNETIX_URL"] = ""
+        config["AIPT_SCANNERS__ACUNETIX_API_KEY"] = ""
+        config["AIPT_SCANNERS__BURP_URL"] = ""
+        config["AIPT_SCANNERS__BURP_API_KEY"] = ""
+        config["AIPT_SCANNERS__NESSUS_URL"] = ""
+        config["AIPT_SCANNERS__NESSUS_ACCESS_KEY"] = ""
+        config["AIPT_SCANNERS__NESSUS_SECRET_KEY"] = ""
+        config["AIPT_SCANNERS__ZAP_URL"] = ""
+        config["AIPT_SCANNERS__ZAP_API_KEY"] = ""
         return config
 
     # Acunetix

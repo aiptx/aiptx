@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "aiptx"
-version = "5.0.1"
-description = "AI-assisted security testing framework with SAST, DAST, business logic testing, and Active Directory penetration testing"
+version = "5.2.14"
+description = "AI-assisted security testing framework with SAST, DAST, business logic testing, Active Directory, OSINT, and FP reduction"
 readme = "README.md"
 license = {file = "LICENSE"}
 authors = [{name = "Satyam Rastogi", email = "satyam@aiptx.io"}]

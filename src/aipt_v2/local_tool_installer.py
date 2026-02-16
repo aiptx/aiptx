@@ -1392,12 +1392,14 @@ class LocalToolInstaller:
         try:
             # Build PATH with Go bin and local bin directories
             env = dict(_os.environ)
-            go_path = Path.home() / "go" / "bin"
+            go_user_bin = Path.home() / "go" / "bin"
             local_path = Path.home() / ".local" / "bin"
             if platform.system().lower() == "windows":
-                env["PATH"] = f"{go_path};{local_path};{env.get('PATH', '')}"
+                # Include both Go installation and Go user bin directories
+                go_root_bin = Path("C:/Go/bin")
+                env["PATH"] = f"{go_root_bin};{go_user_bin};{local_path};{env.get('PATH', '')}"
             else:
-                env["PATH"] = f"{go_path}:{local_path}:{env.get('PATH', '')}"
+                env["PATH"] = f"{go_user_bin}:{local_path}:{env.get('PATH', '')}"
 
             proc = await asyncio.create_subprocess_shell(
                 tool.check_command,
@@ -1515,10 +1517,14 @@ class LocalToolInstaller:
             last_error = result.message
             logger.debug(f"Method {method_name} failed for {tool_name}: {last_error}")
 
+        # Ensure error message is meaningful
+        error_display = last_error.strip() if last_error else "No error details available"
+        if len(error_display) > 150:
+            error_display = error_display[:150] + "..."
         return InstallResult(
             tool_name=tool_name,
             success=False,
-            message=f"All methods failed. Last: {last_error[:100]}"
+            message=f"All methods failed. Last: {error_display}"
         )
 
     def _get_install_methods(
@@ -1581,12 +1587,14 @@ class LocalToolInstaller:
             # Set up environment
             env = dict(_os.environ)
             if "go install" in install_cmd:
-                go_path = Path.home() / "go" / "bin"
+                go_user_bin = Path.home() / "go" / "bin"
                 env["GOPATH"] = str(Path.home() / "go")
                 if os_type == OSType.WINDOWS:
-                    env["PATH"] = f"{go_path};{env.get('PATH', '')}"
+                    # Include both C:\Go\bin (Go itself) and user's go/bin (installed tools)
+                    go_root_bin = Path("C:/Go/bin")
+                    env["PATH"] = f"{go_root_bin};{go_user_bin};{env.get('PATH', '')}"
                 else:
-                    env["PATH"] = f"{go_path}:{env.get('PATH', '')}"
+                    env["PATH"] = f"{go_user_bin}:{env.get('PATH', '')}"
 
             # Create subprocess with appropriate settings
             if os_type == OSType.WINDOWS:
@@ -1643,10 +1651,11 @@ class LocalToolInstaller:
                 message=f"Timed out after {timeout}s"
             )
         except Exception as e:
+            error_str = str(e).strip() if str(e) else type(e).__name__
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
-                message=f"Error: {str(e)[:100]}"
+                message=f"Error: {error_str[:150]}" if error_str else f"Error: {type(e).__name__}"
             )
 
     def _prepare_windows_command(self, cmd: str) -> str:
@@ -1717,8 +1726,16 @@ class LocalToolInstaller:
                 # Verify
                 go_exe = go_root / "bin" / "go.exe"
                 if go_exe.exists():
+                    # Update current process PATH so subsequent tools can find Go
+                    go_bin_path = str(go_root / "bin")
+                    go_user_bin = str(Path.home() / "go" / "bin")
+                    current_path = _os.environ.get("PATH", "")
+                    if go_bin_path not in current_path:
+                        _os.environ["PATH"] = f"{go_bin_path};{go_user_bin};{current_path}"
+                        logger.info(f"Updated PATH with Go: {go_bin_path}")
+
                     console.print("  [green]Go installed to C:\\Go[/green]")
-                    console.print("  [yellow]Note: Add C:\\Go\\bin to your PATH[/yellow]")
+                    console.print("  [dim]PATH updated for this session[/dim]")
                     return InstallResult(
                         tool_name="go",
                         success=True,

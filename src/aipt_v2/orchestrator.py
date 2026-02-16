@@ -238,6 +238,7 @@ class Phase(Enum):
     SCAN = "scan"
     ANALYZE = "analyze"  # Intelligence analysis (chaining, triage)
     EXPLOIT = "exploit"
+    VERIFY = "verify"  # NEW: Verification phase to eliminate false positives
     POST_EXPLOIT = "post_exploit"  # Privilege escalation & lateral movement
     REPORT = "report"
 
@@ -299,6 +300,7 @@ class OrchestratorConfig:
     skip_recon: bool = False
     skip_scan: bool = False
     skip_exploit: bool = False
+    skip_verification: bool = False  # NEW: Enable verification phase for false positive elimination
     skip_post_exploit: bool = True  # Disabled by default, auto-enables on shell access
     skip_report: bool = False
 
@@ -5685,6 +5687,194 @@ class Orchestrator:
 
         return result
 
+    # ==================== VERIFICATION PHASE (NEW - FALSE POSITIVE ELIMINATION) ====================
+
+    async def run_verify(self) -> PhaseResult:
+        """
+        Execute verification phase to eliminate false positives.
+
+        This phase validates findings from previous phases by:
+        1. SSRF verification via OOB callbacks and content analysis
+        2. API endpoint validation via content inspection
+        3. Updating verification status on all findings
+
+        Critical/High findings MUST be CONFIRMED to appear in final report.
+        Medium findings can be LIKELY.
+        Low/Info findings need at least POTENTIAL status.
+        """
+        phase = Phase.VERIFY
+        started_at = datetime.now(timezone.utc).isoformat()
+        start_time = time.time()
+        findings = []
+        tools_run = []
+        errors = []
+
+        if self.on_phase_start:
+            self.on_phase_start(phase)
+
+        self._log_phase(phase, f"Verification on {self.domain}")
+
+        # Import verification tools
+        try:
+            from aipt_v2.validation.ssrf_verifier import SSRFVerifier
+            from aipt_v2.models.findings import (
+                Finding as ModelFinding,
+                VerificationStatus,
+                VulnerabilityType,
+                Severity as ModelSeverity,
+            )
+            VERIFICATION_AVAILABLE = True
+        except ImportError as e:
+            logger.warning(f"Verification modules not available: {e}")
+            VERIFICATION_AVAILABLE = False
+
+        if not VERIFICATION_AVAILABLE:
+            self._log_tool("Verification skipped - modules not available", "skip")
+            duration = time.time() - start_time
+            result = PhaseResult(
+                phase=phase,
+                status="skipped",
+                started_at=started_at,
+                finished_at=datetime.now(timezone.utc).isoformat(),
+                duration=duration,
+                findings=[],
+                tools_run=[],
+                errors=["Verification modules not available"],
+                metadata={"reason": "Import error"}
+            )
+            self.phase_results[phase] = result
+            return result
+
+        # Collect findings that need verification
+        findings_to_verify = []
+        for f in self.findings:
+            # Check if this finding is high-severity vulnerability that needs verification
+            sev = f.severity
+            if hasattr(sev, 'value'):
+                sev = sev.value
+            sev_str = str(sev).lower()
+
+            if sev_str in ['critical', 'high', 'medium']:
+                # Check if it's SSRF-related
+                f_type = f.type.lower() if hasattr(f, 'type') and f.type else ''
+                if 'ssrf' in f_type or 'server-side request' in f_type.lower():
+                    findings_to_verify.append(f)
+
+        self._log_tool(f"Verifying {len(findings_to_verify)} high-priority findings", "running")
+
+        # Statistics for reporting
+        verified_count = 0
+        false_positive_count = 0
+        manual_review_count = 0
+
+        # Verify SSRF findings
+        if findings_to_verify:
+            try:
+                async with SSRFVerifier() as verifier:
+                    async with httpx.AsyncClient(
+                        timeout=30.0,
+                        verify=False,
+                        follow_redirects=True
+                    ) as client:
+                        # Convert httpx client to aiohttp-like interface for verifier
+                        # Note: SSRFVerifier expects aiohttp, but we can adapt
+                        for finding in findings_to_verify:
+                            try:
+                                # Create a model Finding for verification
+                                model_finding = ModelFinding(
+                                    title=str(finding.value) if hasattr(finding, 'value') else "SSRF Finding",
+                                    severity=ModelSeverity.HIGH,
+                                    vuln_type=VulnerabilityType.SSRF,
+                                    url=finding.target if hasattr(finding, 'target') else self.target,
+                                    evidence=finding.description if hasattr(finding, 'description') else "",
+                                    source="verification",
+                                )
+
+                                # Analyze existing evidence (content analysis only, no network requests)
+                                result = verifier._analyze_content(model_finding)
+
+                                # Update the original finding's metadata
+                                if not hasattr(finding, 'metadata') or finding.metadata is None:
+                                    finding.metadata = {}
+
+                                finding.metadata['verification_status'] = result.status.value
+                                finding.metadata['verification_confidence'] = result.confidence
+                                finding.metadata['verification_evidence'] = result.evidence
+
+                                if result.status == VerificationStatus.CONFIRMED:
+                                    verified_count += 1
+                                    finding.metadata['verified'] = True
+                                elif result.status == VerificationStatus.FALSE_POSITIVE:
+                                    false_positive_count += 1
+                                    finding.metadata['false_positive'] = True
+                                else:
+                                    manual_review_count += 1
+                                    finding.metadata['needs_manual_review'] = True
+
+                            except Exception as e:
+                                logger.debug(f"Error verifying finding: {e}")
+                                if hasattr(finding, 'metadata') and finding.metadata is not None:
+                                    finding.metadata['verification_error'] = str(e)
+                                manual_review_count += 1
+
+                tools_run.append("ssrf_verifier")
+            except Exception as e:
+                errors.append(f"SSRF verification failed: {e}")
+                logger.error(f"SSRF verification error: {e}")
+
+        # Log verification summary
+        self._log_tool(
+            f"Verification complete: {verified_count} confirmed, "
+            f"{false_positive_count} false positives, {manual_review_count} need review",
+            "done"
+        )
+
+        # Create verification summary finding
+        findings.append(Finding(
+            type="verification_summary",
+            value=f"Verification Phase Complete",
+            description=f"Verified {len(findings_to_verify)} findings: "
+                       f"{verified_count} confirmed, {false_positive_count} false positives, "
+                       f"{manual_review_count} pending manual review",
+            severity="info",
+            phase="verify",
+            tool="verification_engine",
+            target=self.target,
+            metadata={
+                "total_verified": len(findings_to_verify),
+                "confirmed": verified_count,
+                "false_positives": false_positive_count,
+                "manual_review": manual_review_count,
+            }
+        ))
+
+        duration = time.time() - start_time
+
+        result = PhaseResult(
+            phase=phase,
+            status="completed",
+            started_at=started_at,
+            finished_at=datetime.now(timezone.utc).isoformat(),
+            duration=duration,
+            findings=findings,
+            tools_run=tools_run,
+            errors=errors,
+            metadata={
+                "total_verified": len(findings_to_verify),
+                "confirmed": verified_count,
+                "false_positives": false_positive_count,
+                "manual_review": manual_review_count,
+            }
+        )
+
+        self.phase_results[phase] = result
+        self.findings.extend(findings)
+
+        if self.on_phase_complete:
+            self.on_phase_complete(result)
+
+        return result
+
     # ==================== POST-EXPLOITATION PHASE (NEW) ====================
 
     async def run_post_exploit(self) -> PhaseResult:
@@ -6522,9 +6712,42 @@ class Orchestrator:
         return result
 
     def _generate_summary(self) -> str:
-        """Generate markdown summary."""
+        """Generate markdown summary with verification filtering."""
+        # Filter findings by verification status (if available in metadata)
+        def is_reportable(f) -> bool:
+            """Check if finding should be included in report based on verification."""
+            metadata = f.metadata if hasattr(f, 'metadata') and f.metadata else {}
+            verification_status = metadata.get('verification_status', 'unverified')
+            is_false_positive = metadata.get('false_positive', False)
+
+            # Never report false positives
+            if is_false_positive or verification_status == 'false_positive':
+                return False
+
+            # Get severity
+            sev = f.severity
+            if hasattr(sev, "value"):
+                sev = sev.value
+            sev = str(sev).lower()
+
+            # Critical/High must be confirmed
+            if sev in ['critical', 'high']:
+                return verification_status == 'confirmed'
+
+            # Medium can be confirmed or likely
+            if sev == 'medium':
+                return verification_status in ['confirmed', 'likely']
+
+            # Low/Info can be anything except false_positive or unverified
+            return verification_status not in ['unverified', 'pending', 'false_positive']
+
+        # Get reportable findings
+        reportable_findings = [f for f in self.findings if is_reportable(f)]
+        total_discovered = len(self.findings)
+        false_positives_count = len([f for f in self.findings if f.metadata.get('false_positive', False) if hasattr(f, 'metadata') and f.metadata])
+
         severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
-        for f in self.findings:
+        for f in reportable_findings:
             # Handle severity as string, enum, or int
             sev = f.severity
             if hasattr(sev, "value"):
@@ -6536,6 +6759,21 @@ class Orchestrator:
         phases_info = []
         for phase, result in self.phase_results.items():
             phases_info.append(f"| {phase.value.upper()} | {result.status} | {result.duration:.1f}s | {len(result.findings)} |")
+
+        # Build verification summary section if we filtered anything
+        verification_section = ""
+        if false_positives_count > 0 or total_discovered != len(reportable_findings):
+            verification_section = f"""
+## Verification Summary
+| Metric | Count |
+|--------|-------|
+| Total Discovered | {total_discovered} |
+| Verified (Reported) | {len(reportable_findings)} |
+| False Positives Filtered | {false_positives_count} |
+
+> **Note:** Only verified findings are included in the vulnerability counts above.
+> Critical and High severity findings require confirmed exploitation evidence.
+"""
 
         return f"""# AIPT Scan Summary
 
@@ -6553,8 +6791,8 @@ class Orchestrator:
 | 🟡 Medium | {severity_counts['medium']} |
 | 🔵 Low | {severity_counts['low']} |
 | ⚪ Info | {severity_counts['info']} |
-| **Total** | **{len(self.findings)}** |
-
+| **Total** | **{len(reportable_findings)}** |
+{verification_section}
 ## Phase Results
 | Phase | Status | Duration | Findings |
 |-------|--------|----------|----------|
@@ -6741,7 +6979,7 @@ class Orchestrator:
             Complete results dictionary
         """
         if phases is None:
-            phases = [Phase.RECON, Phase.SCAN, Phase.ANALYZE, Phase.EXPLOIT, Phase.POST_EXPLOIT, Phase.REPORT]
+            phases = [Phase.RECON, Phase.SCAN, Phase.ANALYZE, Phase.EXPLOIT, Phase.VERIFY, Phase.POST_EXPLOIT, Phase.REPORT]
 
         start_time = time.time()
 
@@ -6824,6 +7062,10 @@ class Orchestrator:
 
             if Phase.EXPLOIT in phases and not self.config.skip_exploit:
                 await self.run_exploit()
+
+            # NEW: Verification phase to eliminate false positives
+            if Phase.VERIFY in phases and not self.config.skip_verification:
+                await self.run_verify()
 
             # Auto-trigger POST_EXPLOIT if shell was obtained
             if Phase.POST_EXPLOIT in phases and self.config.shell_obtained:

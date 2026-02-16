@@ -1,20 +1,21 @@
 """
-AIPTX v3 - AI-Powered Penetration Testing Framework (Beast Mode)
-================================================================
+AIPTX - AI-Powered Penetration Testing Framework
+=================================================
 
-A fully autonomous hacking agent with advanced exploitation capabilities.
+A fully autonomous security testing framework with advanced capabilities.
 
-Beast Mode v3.0 Features:
-- Multi-step exploit chain building and execution
-- Adaptive payload mutation with WAF bypass
-- Feedback learning from exploitation attempts
-- Autonomous credential harvesting
-- Privilege escalation automation (Windows/Linux)
-- Network pivoting and lateral movement
-- Credential spraying (SMB, SSH, RDP, WinRM, LDAP)
-- Stealth engine with timing jitter and LOLBins
-- LLM-powered attack planning and novel chain discovery
-- Business logic vulnerability analysis
+v5.2.0 Features (Zen-AI-Pentest Integration):
+- Comprehensive SQL injection payload database (6+ DB types)
+- False positive reduction engine with multi-LLM consensus
+- OSINT module (email harvesting, domain recon)
+- Targeted wordlist generator
+- SARIF output for GitHub/GitLab CI/CD integration
+- Risk scoring with CVSS + EPSS + business impact
+
+v5.1.0 Features (PentestAgent Integration):
+- MCP Protocol server management
+- Structured playbooks for methodologies
+- Worker pool for parallel execution
 
 Core Features:
 - Universal LLM support via litellm (100+ models)
@@ -28,7 +29,7 @@ Core Features:
 - FastAPI REST API
 """
 
-__version__ = "3.0.3"
+__version__ = "5.2.14"
 __author__ = "AIPT Team"
 
 # Available submodules (direct import)
@@ -57,6 +58,18 @@ __all__ = [
     "terminal",
     # Proxy - mitmproxy interception
     "proxy",
+    # v5.1 - PentestAgent Integration
+    # MCP - Model Context Protocol server management
+    "mcp",
+    # Playbooks - Structured attack methodologies
+    "playbooks",
+    # Agents/Crew - Worker pool for parallel execution
+    "agents",
+    # v5.2 - Zen-AI-Pentest Integration
+    # OSINT - Email harvesting, domain recon
+    "osint",
+    # Validation - False positive engine, risk scoring
+    "validation",
 ]
 
 # Lazy imports to avoid failures when optional dependencies are missing
@@ -111,4 +124,60 @@ def __getattr__(name):
     elif name == "ReportConfig":
         from aipt_v2.reports.generator import ReportConfig
         return ReportConfig
+    # v5.1 - MCP Module
+    elif name == "MCPManager":
+        from aipt_v2.mcp.manager import MCPManager
+        return MCPManager
+    elif name == "MCPServerConfig":
+        from aipt_v2.mcp.manager import MCPServerConfig
+        return MCPServerConfig
+    # v5.1 - Playbooks Module
+    elif name == "get_playbook":
+        from aipt_v2.playbooks import get_playbook
+        return get_playbook
+    elif name == "list_playbooks":
+        from aipt_v2.playbooks import list_playbooks
+        return list_playbooks
+    elif name == "BasePlaybook":
+        from aipt_v2.playbooks.base_playbook import BasePlaybook
+        return BasePlaybook
+    # v5.1 - Worker Pool Module
+    elif name == "WorkerPool":
+        from aipt_v2.agents.crew.worker_pool import WorkerPool
+        return WorkerPool
+    elif name == "AgentWorker":
+        from aipt_v2.agents.crew.models import AgentWorker
+        return AgentWorker
+    # v5.2 - SQL Injection Payloads
+    elif name == "SQLInjectionDB":
+        from aipt_v2.payloads.sqli_payloads import SQLInjectionDB
+        return SQLInjectionDB
+    elif name == "DBType":
+        from aipt_v2.payloads.sqli_payloads import DBType
+        return DBType
+    elif name == "SQLITechnique":
+        from aipt_v2.payloads.sqli_payloads import SQLITechnique
+        return SQLITechnique
+    # v5.2 - False Positive Engine
+    elif name == "FalsePositiveEngine":
+        from aipt_v2.validation.false_positive_engine import FalsePositiveEngine
+        return FalsePositiveEngine
+    elif name == "RiskScorer":
+        from aipt_v2.validation.risk_scorer import RiskScorer
+        return RiskScorer
+    # v5.2 - OSINT Module
+    elif name == "EmailHarvester":
+        from aipt_v2.osint.email_harvester import EmailHarvester
+        return EmailHarvester
+    elif name == "DomainRecon":
+        from aipt_v2.osint.domain_recon import DomainRecon
+        return DomainRecon
+    # v5.2 - Wordlist Generator
+    elif name == "WordlistGenerator":
+        from aipt_v2.tools.wordlist_generator import WordlistGenerator
+        return WordlistGenerator
+    # v5.2 - SARIF Generator
+    elif name == "SARIFGenerator":
+        from aipt_v2.reports.sarif import SARIFGenerator
+        return SARIFGenerator
     raise AttributeError(f"module 'aipt_v2' has no attribute '{name}'")

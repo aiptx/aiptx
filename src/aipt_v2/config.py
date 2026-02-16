@@ -25,19 +25,20 @@ def _load_config_files():
     Load configuration from .env files.
 
     Priority (highest to lowest):
-    1. Environment variables (already set in shell)
-    2. Local .env file in current directory
-    3. Global ~/.aiptx/.env file from setup wizard
+    1. Local .env file in current directory (highest - for project overrides)
+    2. Global ~/.aiptx/.env file from setup wizard (user's main config)
+    3. Environment variables already set in shell
     """
-    # Load global config first (lowest priority)
+    # Load global config first with override=True since this is the user's
+    # primary configuration from the setup wizard
     global_env = Path.home() / ".aiptx" / ".env"
     if global_env.exists():
-        load_dotenv(global_env, override=False)
+        load_dotenv(global_env, override=True)
 
-    # Load local .env file (higher priority, but doesn't override existing env vars)
+    # Load local .env file with override=True (highest priority for project-specific config)
     local_env = Path(".env")
     if local_env.exists():
-        load_dotenv(local_env, override=False)
+        load_dotenv(local_env, override=True)
 
 
 # Load config files on module import
@@ -48,13 +49,37 @@ class LLMSettings(BaseModel):
     """LLM provider configuration."""
 
     provider: str = Field(default="anthropic", description="LLM provider name")
-    model: str = Field(default="claude-sonnet-4-20250514", description="Model identifier")
+    model: str = Field(default="claude-3-7-sonnet-20250219", description="Model identifier")
     api_key: Optional[str] = Field(default=None, description="API key")
     api_base: Optional[str] = Field(default=None, description="Custom API base URL")
     timeout: int = Field(default=120, ge=10, le=600, description="Request timeout in seconds")
     max_tokens: int = Field(default=4096, ge=100, le=128000, description="Max response tokens")
     temperature: float = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     enable_caching: bool = Field(default=True, description="Enable prompt caching")
+
+    @field_validator("provider", mode="before")
+    @classmethod
+    def get_provider_from_env(cls, v):
+        """Load provider from environment variable if not explicitly set."""
+        if v and v != "anthropic":  # Only use env if no explicit value or default
+            return v
+        # Check environment variables (setup wizard saves to AIPT_LLM__PROVIDER)
+        env_provider = os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER")
+        if env_provider:
+            return env_provider
+        return v or "anthropic"
+
+    @field_validator("model", mode="before")
+    @classmethod
+    def get_model_from_env(cls, v):
+        """Load model from environment variable if not explicitly set."""
+        if v and v != "claude-3-7-sonnet-20250219":  # Only use env if no explicit value or default
+            return v
+        # Check environment variables (setup wizard saves to AIPT_LLM__MODEL)
+        env_model = os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL")
+        if env_model:
+            return env_model
+        return v or "claude-3-7-sonnet-20250219"
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -70,17 +95,23 @@ class LLMSettings(BaseModel):
     @field_validator("api_base", mode="before")
     @classmethod
     def get_api_base_from_env(cls, v):
-        """Load API base URL from environment, with Ollama-specific handling."""
+        """Load API base URL from environment.
+
+        NOTE: We intentionally do NOT load Ollama-specific URLs here.
+        Ollama URLs (AIPT_LLM__OLLAMA_BASE_URL, OLLAMA_API_BASE) should only
+        be used when the provider is explicitly set to 'ollama'. Loading them
+        unconditionally would cause cloud providers like Anthropic to incorrectly
+        route requests to localhost:11434.
+
+        The CLI's _get_llm_model_config() handles provider-specific URL logic.
+        """
         if v:
             return v
-        # Check environment variables in order of priority
+        # Only check generic/explicit API base URLs, NOT provider-specific ones
         for key in [
-            "AIPT_LLM__OLLAMA_BASE_URL",  # Setup wizard Ollama config
-            "AIPT_LLM__API_BASE",           # Generic AIPT config
+            "AIPT_LLM__API_BASE",           # Generic AIPT config (explicit)
             "LLM_API_BASE",                 # LiteLLM generic
-            "OPENAI_API_BASE",              # OpenAI-compatible
             "LITELLM_BASE_URL",             # LiteLLM explicit
-            "OLLAMA_API_BASE",              # Ollama specific
         ]:
             if os.getenv(key):
                 return os.getenv(key)
@@ -348,7 +379,7 @@ def get_config() -> AIPTConfig:
     config = AIPTConfig(
         llm=LLMSettings(
             provider=llm_provider,
-            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
+            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-3-7-sonnet-20250219"),
             api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
             api_base=llm_api_base,
             timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),

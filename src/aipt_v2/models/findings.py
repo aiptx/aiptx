@@ -16,6 +16,25 @@ import hashlib
 import json
 
 
+class VerificationStatus(Enum):
+    """
+    Verification status for findings - determines reportability.
+
+    This is the core mechanism for eliminating false positives:
+    - Critical/High findings MUST be CONFIRMED to be reported
+    - Medium findings can be CONFIRMED or LIKELY
+    - Low/Info can be POTENTIAL but not UNVERIFIED
+    """
+    UNVERIFIED = "unverified"           # Initial state, no validation attempted
+    PENDING = "pending"                  # Queued for validation
+    IN_PROGRESS = "in_progress"          # Currently being validated
+    CONFIRMED = "confirmed"              # Verified with evidence (callback, content, etc.)
+    LIKELY = "likely"                    # High confidence but no definitive proof
+    POTENTIAL = "potential"              # Low confidence, needs manual review
+    FALSE_POSITIVE = "false_positive"    # Proven not exploitable
+    MANUAL_REVIEW = "manual_review"      # Cannot be auto-verified, needs human review
+
+
 class Severity(Enum):
     """CVSS-aligned severity levels"""
     CRITICAL = "critical"  # CVSS 9.0-10.0
@@ -180,6 +199,19 @@ class Finding:
     ai_reasoning: str | None = None
     ai_confidence: float | None = None  # 0.0 to 1.0
 
+    # Verification state machine (for false positive elimination)
+    verification_status: VerificationStatus = VerificationStatus.UNVERIFIED
+    verification_attempts: int = 0
+    last_verification_at: datetime | None = None
+
+    # Callback verification for blind/OOB vulnerabilities (SSRF, XXE, Blind SQLi)
+    callback_id: str | None = None
+    callback_received: bool = False
+    callback_data: dict[str, Any] = field(default_factory=dict)
+
+    # Evidence tracking for verification
+    verification_evidence: list[str] = field(default_factory=list)
+
     def __post_init__(self):
         """Generate unique fingerprint for deduplication"""
         self._fingerprint = self._generate_fingerprint()
@@ -188,14 +220,73 @@ class Finding:
         """
         Generate a unique fingerprint for finding deduplication.
 
-        Two findings are considered duplicates if they have the same:
-        - URL (normalized)
-        - Parameter
+        Enhanced fingerprinting to prevent over-aggressive deduplication.
+        Two findings are considered duplicates ONLY if they have the same:
+        - URL path (not query params, to avoid false dedup)
+        - HTTP method
+        - Parameter name
         - Vulnerability type
+        - Root cause signature (extracted from evidence)
+
+        This ensures different endpoints are NOT incorrectly merged.
         """
-        normalized_url = self.url.rstrip("/").lower()
-        data = f"{normalized_url}:{self.parameter}:{self.vuln_type.value}"
-        return hashlib.sha256(data.encode()).hexdigest()[:16]
+        from urllib.parse import urlparse
+
+        # Parse URL and use only the path (not query params or fragments)
+        parsed = urlparse(self.url)
+        normalized_path = parsed.path.rstrip("/").lower()
+
+        # Include host to differentiate internal vs external targets
+        host = parsed.netloc.lower()
+
+        # Create compound key with all distinguishing factors
+        components = [
+            host,
+            normalized_path,
+            self.method.upper(),
+            self.parameter or "_no_param_",
+            self.vuln_type.value,
+            self._get_root_cause_signature(),
+        ]
+
+        data = "|".join(str(c) for c in components)
+        return hashlib.sha256(data.encode()).hexdigest()[:24]
+
+    def _get_root_cause_signature(self) -> str:
+        """
+        Extract root cause signature from evidence for better deduplication.
+
+        Findings with the same root cause (e.g., same SQL error message)
+        can be deduplicated, but different root causes should remain separate.
+        """
+        evidence_lower = (self.evidence or "").lower()
+
+        # SQL Injection signatures
+        if "sql syntax" in evidence_lower or "mysql" in evidence_lower:
+            return "sqli_mysql"
+        if "postgresql" in evidence_lower or "pg_" in evidence_lower:
+            return "sqli_postgres"
+        if "sqlite" in evidence_lower:
+            return "sqli_sqlite"
+        if "ora-" in evidence_lower:
+            return "sqli_oracle"
+
+        # XSS signatures
+        if "<script" in evidence_lower:
+            return "xss_script"
+        if "onerror" in evidence_lower or "onload" in evidence_lower:
+            return "xss_event"
+
+        # SSRF signatures - differentiate by target
+        if "169.254.169.254" in evidence_lower:
+            return "ssrf_aws_metadata"
+        if "metadata.google" in evidence_lower:
+            return "ssrf_gcp_metadata"
+        if "localhost" in evidence_lower or "127.0.0.1" in evidence_lower:
+            return "ssrf_localhost"
+
+        # Default: use vuln type as signature
+        return self.vuln_type.value
 
     @property
     def fingerprint(self) -> str:
@@ -204,6 +295,89 @@ class Finding:
     def is_duplicate_of(self, other: "Finding") -> bool:
         """Check if this finding is a duplicate of another"""
         return self.fingerprint == other.fingerprint
+
+    def is_reportable(self) -> bool:
+        """
+        Check if finding meets reporting criteria based on severity and verification status.
+
+        Reporting rules (to eliminate false positives):
+        - CRITICAL/HIGH: MUST be CONFIRMED (verified with evidence)
+        - MEDIUM: Can be CONFIRMED or LIKELY (high confidence)
+        - LOW/INFO: Can be POTENTIAL but not UNVERIFIED or FALSE_POSITIVE
+
+        This ensures only validated findings reach the final report.
+        """
+        # Never report false positives
+        if self.verification_status == VerificationStatus.FALSE_POSITIVE:
+            return False
+
+        # Critical and High severity require confirmed status
+        if self.severity in [Severity.CRITICAL, Severity.HIGH]:
+            return self.verification_status == VerificationStatus.CONFIRMED
+
+        # Medium severity can be confirmed or likely
+        if self.severity == Severity.MEDIUM:
+            return self.verification_status in [
+                VerificationStatus.CONFIRMED,
+                VerificationStatus.LIKELY
+            ]
+
+        # Low and Info can be potential (for informational purposes)
+        # but not unverified or pending
+        return self.verification_status not in [
+            VerificationStatus.UNVERIFIED,
+            VerificationStatus.PENDING,
+            VerificationStatus.FALSE_POSITIVE
+        ]
+
+    def needs_verification(self) -> bool:
+        """
+        Check if finding requires verification before reporting.
+
+        Returns True if:
+        - Status is UNVERIFIED or PENDING
+        - Severity is CRITICAL, HIGH, or MEDIUM (important enough to verify)
+        """
+        return (
+            self.verification_status in [
+                VerificationStatus.UNVERIFIED,
+                VerificationStatus.PENDING
+            ]
+            and self.severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM]
+        )
+
+    def mark_verified(
+        self,
+        status: VerificationStatus,
+        evidence: str | None = None,
+        confidence: float | None = None
+    ) -> None:
+        """
+        Mark finding as verified with given status.
+
+        Args:
+            status: The verification result status
+            evidence: Optional evidence string from verification
+            confidence: Optional confidence score (0.0-1.0)
+        """
+        self.verification_status = status
+        self.verification_attempts += 1
+        self.last_verification_at = datetime.utcnow()
+
+        if evidence:
+            self.verification_evidence.append(evidence)
+            self.evidence = f"{self.evidence}\n\n--- Verification Evidence ---\n{evidence}" if self.evidence else evidence
+
+        if confidence is not None:
+            self.ai_confidence = confidence
+
+        # Update confirmed/exploited flags based on status
+        if status == VerificationStatus.CONFIRMED:
+            self.confirmed = True
+            self.exploited = True
+        elif status == VerificationStatus.FALSE_POSITIVE:
+            self.confirmed = False
+            self.exploited = False
 
     def merge_with(self, other: "Finding") -> "Finding":
         """
@@ -233,6 +407,24 @@ class Finding:
             supplement.ai_confidence or 0
         ) or None
 
+        # Determine best verification status (prefer CONFIRMED over others)
+        verification_priority = [
+            VerificationStatus.CONFIRMED,
+            VerificationStatus.LIKELY,
+            VerificationStatus.POTENTIAL,
+            VerificationStatus.MANUAL_REVIEW,
+            VerificationStatus.IN_PROGRESS,
+            VerificationStatus.PENDING,
+            VerificationStatus.UNVERIFIED,
+            VerificationStatus.FALSE_POSITIVE,
+        ]
+        base_priority = verification_priority.index(base.verification_status) if base.verification_status in verification_priority else 99
+        supp_priority = verification_priority.index(supplement.verification_status) if supplement.verification_status in verification_priority else 99
+        best_verification = base.verification_status if base_priority <= supp_priority else supplement.verification_status
+
+        # Merge verification evidence
+        merged_verification_evidence = list(set(base.verification_evidence + supplement.verification_evidence))
+
         return Finding(
             title=base.title,
             severity=max(base.severity, other.severity),  # Take highest severity
@@ -255,6 +447,14 @@ class Finding:
             remediation=base.remediation or supplement.remediation,
             ai_reasoning=base.ai_reasoning or supplement.ai_reasoning,
             ai_confidence=confidence,
+            # Verification fields - preserve the best status
+            verification_status=best_verification,
+            verification_attempts=max(base.verification_attempts, supplement.verification_attempts),
+            last_verification_at=base.last_verification_at or supplement.last_verification_at,
+            callback_id=base.callback_id or supplement.callback_id,
+            callback_received=base.callback_received or supplement.callback_received,
+            callback_data={**supplement.callback_data, **base.callback_data},
+            verification_evidence=merged_verification_evidence,
         )
 
     def to_dict(self) -> dict[str, Any]:
@@ -284,11 +484,36 @@ class Finding:
             "discovered_at": self.discovered_at.isoformat(),
             "ai_reasoning": self.ai_reasoning,
             "ai_confidence": self.ai_confidence,
+            # Verification fields
+            "verification_status": self.verification_status.value,
+            "verification_attempts": self.verification_attempts,
+            "last_verification_at": self.last_verification_at.isoformat() if self.last_verification_at else None,
+            "callback_id": self.callback_id,
+            "callback_received": self.callback_received,
+            "callback_data": self.callback_data,
+            "verification_evidence": self.verification_evidence,
+            "is_reportable": self.is_reportable(),
         }
 
     @classmethod
     def from_dict(cls, data: dict[str, Any]) -> "Finding":
         """Create Finding from dictionary"""
+        # Parse verification status
+        verification_status = VerificationStatus.UNVERIFIED
+        if "verification_status" in data:
+            try:
+                verification_status = VerificationStatus(data["verification_status"])
+            except ValueError:
+                verification_status = VerificationStatus.UNVERIFIED
+
+        # Parse last_verification_at
+        last_verification_at = None
+        if data.get("last_verification_at"):
+            try:
+                last_verification_at = datetime.fromisoformat(data["last_verification_at"])
+            except (ValueError, TypeError):
+                pass
+
         return cls(
             title=data["title"],
             severity=Severity(data["severity"]),
@@ -313,4 +538,12 @@ class Finding:
             discovered_at=datetime.fromisoformat(data["discovered_at"]) if "discovered_at" in data else datetime.utcnow(),
             ai_reasoning=data.get("ai_reasoning"),
             ai_confidence=data.get("ai_confidence"),
+            # Verification fields
+            verification_status=verification_status,
+            verification_attempts=data.get("verification_attempts", 0),
+            last_verification_at=last_verification_at,
+            callback_id=data.get("callback_id"),
+            callback_received=data.get("callback_received", False),
+            callback_data=data.get("callback_data", {}),
+            verification_evidence=data.get("verification_evidence", []),
         )

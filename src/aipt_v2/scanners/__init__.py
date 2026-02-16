@@ -86,6 +86,15 @@ from .pat import (
     update_payloads as pat_update_payloads,
 )
 
+# PowerShell Arsenal Scanner
+from aipt_v2.tools.ps_arsenal import (
+    PSArsenalScanner,
+    PSScanConfig,
+    ScanResult as PSArsenalScanResult,
+    ScanFinding as PSArsenalScanFinding,
+    create_ps_scanner,
+)
+
 __all__ = [
     # Base
     "BaseScanner",
@@ -161,4 +170,10 @@ __all__ = [
     "PayloadDatabase",
     "pat_scan_url",
     "pat_update_payloads",
+    # PowerShell Arsenal Scanner
+    "PSArsenalScanner",
+    "PSScanConfig",
+    "PSArsenalScanResult",
+    "PSArsenalScanFinding",
+    "create_ps_scanner",
 ]

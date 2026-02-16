@@ -120,7 +120,7 @@ class AgentResult:
 class AgentConfig(BaseModel):
     """Configuration for AI security agents."""
     # LLM Settings
-    model: str = Field(default="claude-sonnet-4-20250514", description="LLM model to use")
+    model: str = Field(default="claude-3-7-sonnet-20250219", description="LLM model to use")
     temperature: float = Field(default=0.7, ge=0, le=2)
     max_tokens: int = Field(default=4096, ge=1)
 

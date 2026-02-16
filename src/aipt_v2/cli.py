@@ -24,24 +24,31 @@ from pathlib import Path
 # Readline Configuration (MUST be before any input operations)
 # Fixes backspace/delete key handling on macOS and Linux
 # =============================================================================
+import platform
+_is_windows = platform.system() == "Windows"
+
 try:
-    import readline
-    # macOS uses libedit which needs different configuration
-    if 'libedit' in readline.__doc__:
-        # macOS libedit compatibility
-        readline.parse_and_bind("bind ^[[3~ delete-char")  # Delete key
-        readline.parse_and_bind("bind ^H backward-delete-char")  # Backspace
-        readline.parse_and_bind("bind ^? backward-delete-char")  # Alt backspace
+    if _is_windows:
+        # Windows: use pyreadline3 but skip Unix keybindings
+        try:
+            import pyreadline3 as readline
+            # pyreadline3 handles keys differently, no special config needed
+        except ImportError:
+            readline = None  # readline not available
     else:
-        # GNU readline (Linux)
-        readline.parse_and_bind('"\e[3~": delete-char')
-        readline.parse_and_bind('"\C-h": backward-delete-char')
+        import readline
+        # macOS uses libedit which needs different configuration
+        if readline.__doc__ and 'libedit' in readline.__doc__:
+            # macOS libedit compatibility
+            readline.parse_and_bind("bind ^[[3~ delete-char")  # Delete key
+            readline.parse_and_bind("bind ^H backward-delete-char")  # Backspace
+            readline.parse_and_bind("bind ^? backward-delete-char")  # Alt backspace
+        else:
+            # GNU readline (Linux)
+            readline.parse_and_bind('"\e[3~": delete-char')
+            readline.parse_and_bind('"\C-h": backward-delete-char')
 except ImportError:
-    # Windows doesn't have readline by default
-    try:
-        import pyreadline3 as readline
-    except ImportError:
-        pass  # readline not available, basic input will be used
+    readline = None  # readline not available, basic input will be used
 
 # Suppress noisy warnings for cleaner user experience
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -76,6 +83,82 @@ except ImportError:
     from utils.security import mask_path, sanitize_error_message
     from setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
     from interface.icons import icon, supports_emoji
+
+
+def _get_llm_model_config():
+    """
+    Get LLM model configuration from user's config file.
+    Returns (model_string, api_base) tuple formatted for litellm.
+    Also sets appropriate environment variables for the provider.
+
+    This function forcefully reloads the .env file to ensure the latest
+    configuration is used (fixes caching issues).
+    """
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
+
+    # Forcefully reload the .env file to ensure we have the latest config
+    # This fixes issues where the config was cached at module import time
+    global_env = Path.home() / ".aiptx" / ".env"
+    if global_env.exists():
+        load_dotenv(global_env, override=True)
+
+    local_env = Path(".env")
+    if local_env.exists():
+        load_dotenv(local_env, override=True)
+
+    # Now reload the config with fresh environment variables
+    config = reload_config()
+
+    # Also check environment directly as a fallback
+    provider = config.llm.provider.lower()
+    base_model = config.llm.model
+    api_key = config.llm.api_key
+    api_base = config.llm.api_base
+
+    # Fallback: Check environment variables directly if config has defaults
+    env_provider = os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER")
+    env_model = os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL")
+
+    if env_provider:
+        provider = env_provider.lower()
+    if env_model:
+        base_model = env_model
+
+    # Build the model string for litellm based on provider
+    # IMPORTANT: api_base should only be set for providers that need custom base URLs
+    # (like Ollama). For cloud providers (Anthropic, OpenAI, etc.), we must NOT pass
+    # api_base or litellm will incorrectly route requests to the wrong endpoint.
+    final_api_base = None  # Default: let litellm use the provider's default endpoint
+
+    if provider == "ollama":
+        model = f"ollama/{base_model}" if not base_model.startswith("ollama/") else base_model
+        # Ollama needs a custom base URL (defaults to localhost)
+        final_api_base = api_base or os.getenv("AIPT_LLM__OLLAMA_BASE_URL") or os.getenv("OLLAMA_API_BASE") or "http://localhost:11434"
+        os.environ["OLLAMA_API_BASE"] = final_api_base
+    elif provider == "anthropic":
+        model = f"anthropic/{base_model}" if not base_model.startswith("anthropic/") else base_model
+        # Anthropic uses their cloud API - do NOT set api_base
+        if api_key:
+            os.environ["ANTHROPIC_API_KEY"] = api_key
+    elif provider == "openai":
+        model = f"openai/{base_model}" if not base_model.startswith("openai/") else base_model
+        # For OpenAI-compatible providers (like custom deployments), api_base might be needed
+        if api_base and not api_base.startswith("http://localhost"):
+            final_api_base = api_base  # Only use if explicitly set and not localhost
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+    elif provider == "deepseek":
+        model = f"deepseek/{base_model}" if not base_model.startswith("deepseek/") else base_model
+        if api_key:
+            os.environ["DEEPSEEK_API_KEY"] = api_key
+    else:
+        model = base_model
+        if api_key:
+            os.environ["LLM_API_KEY"] = api_key
+
+    return model, final_api_base
 
 
 def main():
@@ -179,6 +262,13 @@ Installation:
     )
     scan_parser.add_argument("--validate-pocs", action="store_true", help="Validate findings with PoC execution")
     scan_parser.add_argument("--sarif-output", help="Path for SARIF output file (implies --format sarif)")
+    scan_parser.add_argument(
+        "--playbook",
+        choices=["web", "web_api", "api", "graphql", "ad", "ad_quick"],
+        default=None,
+        help="Use a structured attack playbook (v5.1)",
+    )
+    scan_parser.add_argument("--parallel", action="store_true", help="Enable parallel worker execution")
 
     # API command
     api_parser = subparsers.add_parser("api", help="Start REST API server")
@@ -381,8 +471,8 @@ Installation:
     )
     ai_code.add_argument(
         "--model", "-m",
-        default="claude-sonnet-4-20250514",
-        help="LLM model to use (default: claude-sonnet-4-20250514)"
+        default="claude-3-7-sonnet-20250219",
+        help="LLM model to use (default: claude-3-7-sonnet-20250219)"
     )
     ai_code.add_argument(
         "--max-steps",
@@ -413,7 +503,7 @@ Installation:
     )
     ai_api.add_argument(
         "--model", "-m",
-        default="claude-sonnet-4-20250514",
+        default="claude-3-7-sonnet-20250219",
         help="LLM model to use"
     )
     ai_api.add_argument(
@@ -441,7 +531,7 @@ Installation:
     )
     ai_web.add_argument(
         "--model", "-m",
-        default="claude-sonnet-4-20250514",
+        default="claude-3-7-sonnet-20250219",
         help="LLM model to use"
     )
     ai_web.add_argument(
@@ -472,7 +562,7 @@ Installation:
     )
     ai_full.add_argument(
         "--model", "-m",
-        default="claude-sonnet-4-20250514",
+        default="claude-3-7-sonnet-20250219",
         help="LLM model to use"
     )
     ai_full.add_argument(
@@ -547,6 +637,87 @@ Installation:
     # ad tools - List available AD tools
     ad_tools = ad_subparsers.add_parser("tools", help="Check available AD security tools")
 
+    # ========== MCP Commands (v5.1 - PentestAgent Integration) ==========
+    mcp_parser = subparsers.add_parser("mcp", help="Manage MCP (Model Context Protocol) servers")
+    mcp_subparsers = mcp_parser.add_subparsers(dest="mcp_command", help="MCP commands")
+
+    # mcp list - List configured servers
+    mcp_subparsers.add_parser("list", help="List configured MCP servers")
+
+    # mcp add - Add a new server
+    mcp_add = mcp_subparsers.add_parser("add", help="Add a new MCP server")
+    mcp_add.add_argument("name", help="Server name (unique identifier)")
+    mcp_add.add_argument("--command", "-c", required=True, help="Command to start the server")
+    mcp_add.add_argument("--args", "-a", nargs="*", default=[], help="Arguments for the server command")
+    mcp_add.add_argument("--env", "-e", nargs="*", default=[], help="Environment variables (KEY=VALUE)")
+
+    # mcp remove - Remove a server
+    mcp_remove = mcp_subparsers.add_parser("remove", help="Remove an MCP server")
+    mcp_remove.add_argument("name", help="Server name to remove")
+
+    # mcp connect - Connect and list available tools
+    mcp_connect = mcp_subparsers.add_parser("connect", help="Connect to MCP servers and list tools")
+    mcp_connect.add_argument("--server", "-s", help="Specific server to connect to (default: all)")
+
+    # ========== Notes Commands (v5.1 - PentestAgent Integration) ==========
+    notes_parser = subparsers.add_parser("notes", help="Quick findings and notes management")
+    notes_subparsers = notes_parser.add_subparsers(dest="notes_command", help="Notes commands")
+
+    # notes create
+    notes_create = notes_subparsers.add_parser("create", help="Create a new note")
+    notes_create.add_argument("key", help="Unique key for the note")
+    notes_create.add_argument("value", help="Note content")
+    notes_create.add_argument(
+        "--category", "-c",
+        choices=["finding", "credential", "vulnerability", "artifact", "task", "info"],
+        default="info",
+        help="Note category"
+    )
+    notes_create.add_argument(
+        "--severity", "-s",
+        choices=["critical", "high", "medium", "low", "info"],
+        default="info",
+        help="Severity level"
+    )
+    notes_create.add_argument("--evidence", "-e", help="Supporting evidence")
+
+    # notes list
+    notes_list = notes_subparsers.add_parser("list", help="List all notes")
+    notes_list.add_argument("--category", "-c", help="Filter by category")
+    notes_list.add_argument("--severity", "-s", help="Filter by severity")
+
+    # notes search
+    notes_search = notes_subparsers.add_parser("search", help="Search notes by content")
+    notes_search.add_argument("query", help="Search query")
+
+    # notes export
+    notes_export = notes_subparsers.add_parser("export", help="Export notes")
+    notes_export.add_argument(
+        "--format", "-f",
+        choices=["json", "markdown"],
+        default="json",
+        help="Export format"
+    )
+    notes_export.add_argument("--output", "-o", help="Output file (default: stdout)")
+
+    # notes delete
+    notes_delete = notes_subparsers.add_parser("delete", help="Delete a note")
+    notes_delete.add_argument("key", help="Note key to delete")
+
+    # notes clear
+    notes_subparsers.add_parser("clear", help="Clear all notes")
+
+    # ========== Playbooks Command (v5.1) ==========
+    playbook_parser = subparsers.add_parser("playbook", help="Attack playbook management")
+    playbook_subparsers = playbook_parser.add_subparsers(dest="playbook_command", help="Playbook commands")
+
+    # playbook list
+    playbook_subparsers.add_parser("list", help="List available playbooks")
+
+    # playbook show
+    playbook_show = playbook_subparsers.add_parser("show", help="Show playbook details")
+    playbook_show.add_argument("name", help="Playbook name")
+
     args = parser.parse_args()
 
     # Setup logging based on verbosity
@@ -581,6 +752,12 @@ Installation:
             return run_ai_command(args)
         elif args.command == "ad":
             return run_ad_command(args)
+        elif args.command == "mcp":
+            return run_mcp_command(args)
+        elif args.command == "notes":
+            return run_notes_command(args)
+        elif args.command == "playbook":
+            return run_playbook_command(args)
         else:
             # No command given - start interactive mode
             return run_interactive_mode()
@@ -1130,7 +1307,7 @@ def run_ai_wrapper(args_list):
         ai_command=ai_cmd,
         target=target,
         focus=None,
-        model="claude-sonnet-4-20250514",
+        model="claude-3-7-sonnet-20250219",
         max_steps=100,
         quick="--quick" in args_list or "-q" in args_list,
         output=None,
@@ -1435,11 +1612,39 @@ def show_status(args):
     """Show configuration status with actual connection validation."""
     import asyncio
     import time
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
     from rich.console import Console
     from rich.table import Table
 
     console = Console()
-    config = get_config()
+
+    # Force reload .env file with override=True to ensure fresh config
+    env_path = Path.home() / ".aiptx" / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+
+        # WINDOWS FIX: Also read .env directly to bypass any python-dotenv encoding issues
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, _, value = line.partition('=')
+                        key = key.strip()
+                        value = value.strip()
+                        # Remove surrounding quotes if present
+                        if (value.startswith('"') and value.endswith('"')) or \
+                           (value.startswith("'") and value.endswith("'")):
+                            value = value[1:-1]
+                        os.environ[key] = value
+        except Exception:
+            pass  # Fall back to dotenv
+
+    # Clear config cache and get fresh config
+    from .config import reload_config
+    config = reload_config()
 
     console.print("\n[bold cyan]AIPT v2 Configuration Status[/bold cyan]\n")
 
@@ -1450,7 +1655,11 @@ def show_status(args):
     llm_status = None
     llm_error = None
 
-    if config.llm.api_key:
+    # Check if API key is required - Ollama doesn't need one
+    provider = config.llm.provider.lower()
+    requires_api_key = provider not in ["ollama"]
+
+    if config.llm.api_key or not requires_api_key:
         with console.status("[yellow]Validating LLM connection...[/yellow]"):
             try:
                 import litellm
@@ -1465,25 +1674,64 @@ def show_status(args):
                 provider = config.llm.provider.lower()
                 model = config.llm.model
 
+                import os as _os
+
+                # Build model string and set credentials based on provider
+                api_base = config.llm.api_base
+                completion_kwargs = {
+                    "messages": [{"role": "user", "content": "Reply with only: OK"}],
+                    "max_tokens": 10,
+                    "timeout": 30,
+                }
+
+                # IMPORTANT: Clear OTHER provider keys to avoid litellm using wrong provider
+                for key in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY"]:
+                    _os.environ.pop(key, None)
+
                 if provider == "anthropic":
                     model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
-                    litellm.api_key = config.llm.api_key
+                    _os.environ["ANTHROPIC_API_KEY"] = config.llm.api_key
                 elif provider == "openai":
                     model_str = f"openai/{model}" if not model.startswith("openai/") else model
-                    litellm.api_key = config.llm.api_key
+                    _os.environ["OPENAI_API_KEY"] = config.llm.api_key
                 elif provider == "deepseek":
                     model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
-                    litellm.api_key = config.llm.api_key
+                    _os.environ["DEEPSEEK_API_KEY"] = config.llm.api_key
+                elif provider == "ollama":
+                    model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
+                    # Ollama doesn't need an API key, but needs base URL
+                    if not api_base:
+                        api_base = config.llm.ollama_base_url or "http://localhost:11434"
+                    _os.environ["OLLAMA_API_BASE"] = api_base
+                    completion_kwargs["api_base"] = api_base
                 else:
                     model_str = model
+                    litellm.api_key = config.llm.api_key
+
+                completion_kwargs["model"] = model_str
 
                 start = time.time()
-                response = litellm.completion(
-                    model=model_str,
-                    messages=[{"role": "user", "content": "Reply with only: OK"}],
-                    max_tokens=10,
-                    timeout=30,
-                )
+                # Retry logic for transient connection issues
+                max_retries = 3
+                last_error = None
+                response = None
+                for attempt in range(max_retries):
+                    try:
+                        response = litellm.completion(**completion_kwargs)
+                        break
+                    except Exception as retry_err:
+                        last_error = retry_err
+                        err_str = str(retry_err).lower()
+                        is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                        if is_connection_error and attempt < max_retries - 1:
+                            time.sleep(2 * (attempt + 1))  # 2s, 4s backoff
+                            continue
+                        elif not is_connection_error:
+                            raise
+
+                if response is None and last_error:
+                    raise last_error
+
                 elapsed = time.time() - start
                 llm_status = True
                 validation_results['llm'] = (True, f"Connected ({elapsed:.1f}s)")
@@ -1496,17 +1744,28 @@ def show_status(args):
                 llm_status = False
                 # Parse error for cleaner display
                 error_str = str(e)
+                error_type = type(e).__name__
+
                 if "<!DOCTYPE" in error_str or "<html" in error_str.lower():
                     llm_error = "Wrong API endpoint (HTML response)"
                 elif "Connection" in error_str or "connect" in error_str.lower():
-                    llm_error = "Connection failed"
+                    llm_error = "Connection failed - check network/URL"
+                elif "getaddrinfo" in error_str.lower():
+                    llm_error = "DNS resolution failed - check URL"
                 elif "401" in error_str or "Unauthorized" in error_str:
                     llm_error = "Invalid API key"
+                elif "AuthenticationError" in error_type:
+                    llm_error = "Authentication failed - check API key/provider"
                 elif "timeout" in error_str.lower():
                     llm_error = "Request timed out"
+                elif "refused" in error_str.lower():
+                    llm_error = "Connection refused - is service running?"
                 else:
-                    llm_error = error_str[:40]
-                validation_results['llm'] = (False, llm_error)
+                    # Sanitize potential API keys from error message
+                    import re
+                    sanitized = re.sub(r'sk-[a-zA-Z0-9-]{20,}', '[API_KEY]', error_str)
+                    llm_error = sanitized[:60] if len(sanitized) > 60 else sanitized
+                validation_results['llm'] = (False, f"{error_type}: {llm_error}")
     else:
         llm_status = False
         llm_error = "API key not configured"
@@ -1556,8 +1815,16 @@ def show_status(args):
         url = url.rstrip('/')
         return url
 
-    async def test_scanner_connection(name, url, test_endpoint, headers):
-        """Test scanner connectivity."""
+    async def test_scanner_connection(name, url, test_endpoint, headers, check_header=None):
+        """Test scanner connectivity.
+
+        Args:
+            name: Scanner name for logging
+            url: Base URL of the scanner
+            test_endpoint: Endpoint to test
+            headers: Request headers
+            check_header: Optional header name to verify (e.g., 'X-Burp-Version')
+        """
         if not url:
             return None, "Not configured"
         try:
@@ -1570,12 +1837,26 @@ def show_status(args):
             full_url = f"{url}{test_endpoint}"
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
                 response = await client.get(full_url, headers=headers)
+                # For Burp Suite, check for version header (more reliable than status code)
+                if check_header and check_header in response.headers:
+                    return True, f"v{response.headers[check_header]}"
                 if response.status_code == 200:
                     return True, "Connected"
                 else:
                     return False, f"HTTP {response.status_code}"
         except Exception as e:
-            return False, str(e)[:30]
+            error_str = str(e)
+            # Provide more helpful error messages
+            if "getaddrinfo" in error_str.lower() or "11001" in error_str:
+                return False, "DNS/network unreachable - check VPN/firewall"
+            elif "connection refused" in error_str.lower() or "10061" in error_str:
+                return False, "Connection refused - service not running?"
+            elif "timed out" in error_str.lower() or "timeout" in error_str.lower():
+                return False, "Connection timed out - check firewall"
+            elif "certificate" in error_str.lower() or "ssl" in error_str.lower():
+                return False, "SSL/certificate error"
+            else:
+                return False, error_str[:40]
 
     async def test_all_scanners():
         results = {}
@@ -1595,12 +1876,14 @@ def show_status(args):
         # Burp Suite
         if config.scanners.burp_url:
             with console.status("[yellow]Testing Burp Suite...[/yellow]"):
-                # Use /scan endpoint (list scans) - more reliable than /issue_definitions
+                # Use root endpoint and check for X-Burp-Version header
+                # GET /scan requires a task ID and returns 400 without one
                 results['burp'] = await test_scanner_connection(
                     "Burp Suite",
                     config.scanners.burp_url,
-                    "/scan",
-                    {"Authorization": config.scanners.burp_api_key or ''}
+                    "/",
+                    {"Authorization": config.scanners.burp_api_key or ''},
+                    check_header="X-Burp-Version"
                 )
         else:
             results['burp'] = (None, "Not configured")
@@ -1885,6 +2168,9 @@ def run_config_test(args):
     import asyncio
     import shutil
     import time
+    import os
+    from pathlib import Path
+    from dotenv import load_dotenv
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
@@ -1894,7 +2180,34 @@ def run_config_test(args):
     from rich import box
 
     console = Console()
-    config = get_config()
+
+    # CRITICAL: Force reload .env file with override=True to ensure fresh API keys are loaded
+    # This fixes the issue where config was cached before setup wizard wrote the keys
+    env_path = Path.home() / ".aiptx" / ".env"
+    if env_path.exists():
+        load_dotenv(env_path, override=True)
+
+        # WINDOWS FIX: Also read .env directly to bypass any python-dotenv encoding issues
+        # Parse manually and set env vars
+        try:
+            with open(env_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#') and '=' in line:
+                        key, _, value = line.partition('=')
+                        key = key.strip()
+                        value = value.strip()
+                        # Remove surrounding quotes if present
+                        if (value.startswith('"') and value.endswith('"')) or \
+                           (value.startswith("'") and value.endswith("'")):
+                            value = value[1:-1]
+                        os.environ[key] = value
+        except Exception:
+            pass  # Fall back to dotenv
+
+    # Clear config cache and get fresh config
+    from .config import reload_config
+    config = reload_config()
 
     # Get terminal width for full-width display
     term_width = console.size.width
@@ -1921,7 +2234,11 @@ def run_config_test(args):
     if test_all or getattr(args, 'llm', False):
         console.print(Rule("LLM API Test", style="bold cyan"))
 
-        if not config.llm.api_key:
+        # Ollama doesn't require an API key, so check provider first
+        provider = config.llm.provider.lower()
+        requires_api_key = provider not in ["ollama"]
+
+        if requires_api_key and not config.llm.api_key:
             console.print(f"  [red]{icon('cross')}[/red] No API key configured")
             console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
             results['llm'] = False
@@ -1944,38 +2261,107 @@ def run_config_test(args):
                     api_key = config.llm.api_key
                     api_base = config.llm.api_base  # May be None for cloud providers
 
+                    # Debug: show what we loaded when API key is missing
+                    if not api_key:
+                        console.print(f"    [yellow]Debug: No API key found in config[/yellow]")
+                        console.print(f"    [yellow]Debug: Provider={provider}, Model={model}[/yellow]")
+                        # Check environment variables directly
+                        env_keys = {
+                            "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
+                            "OPENAI_API_KEY": bool(os.environ.get("OPENAI_API_KEY")),
+                            "DEEPSEEK_API_KEY": bool(os.environ.get("DEEPSEEK_API_KEY")),
+                        }
+                        console.print(f"    [yellow]Debug: Env vars: {env_keys}[/yellow]")
+                        # Check .env file
+                        from pathlib import Path
+                        env_path = Path.home() / ".aiptx" / ".env"
+                        console.print(f"    [yellow]Debug: Config file exists: {env_path.exists()}[/yellow]")
+                        if env_path.exists():
+                            with open(env_path) as f:
+                                content = f.read()
+                                has_key = any(k in content for k in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY"])
+                                console.print(f"    [yellow]Debug: API key in .env file: {has_key}[/yellow]")
+
                     # Set the appropriate environment variable for litellm
                     # litellm reads API keys from environment variables
+                    # IMPORTANT: Clear OTHER provider keys to avoid litellm using wrong provider
+                    for key in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY"]:
+                        os.environ.pop(key, None)
+
+                    # IMPORTANT: api_base should ONLY be passed for providers that need it
+                    # (like Ollama). For cloud providers (Anthropic, OpenAI, DeepSeek), passing
+                    # api_base will override the default endpoint and cause connection failures.
+                    effective_api_base = None  # Default: let litellm use provider's endpoint
+
                     if provider == "anthropic":
                         model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
                         os.environ["ANTHROPIC_API_KEY"] = api_key
+                        # Do NOT set api_base - use Anthropic's cloud API
                     elif provider == "openai":
                         model_str = f"openai/{model}" if not model.startswith("openai/") else model
                         os.environ["OPENAI_API_KEY"] = api_key
+                        # Only use api_base if explicitly set and NOT localhost (for custom deployments)
+                        if api_base and not api_base.startswith("http://localhost"):
+                            effective_api_base = api_base
                     elif provider == "deepseek":
                         model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
                         os.environ["DEEPSEEK_API_KEY"] = api_key
+                        # Do NOT set api_base - use DeepSeek's cloud API
                     elif provider == "ollama":
                         model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
                         # Ollama doesn't need an API key, but needs base URL
-                        if not api_base:
-                            api_base = "http://localhost:11434"
-                        os.environ["OLLAMA_API_BASE"] = api_base
+                        effective_api_base = api_base or os.getenv("AIPT_LLM__OLLAMA_BASE_URL") or "http://localhost:11434"
+                        os.environ["OLLAMA_API_BASE"] = effective_api_base
                     else:
                         model_str = model
                         os.environ["LLM_API_KEY"] = api_key
 
+                    # Debug: show what we're about to use
+                    key_len = len(api_key) if api_key else 0
+                    key_preview = f"{api_key[:10]}...{api_key[-4:]}" if api_key and len(api_key) > 14 else "[EMPTY]"
+                    console.print(f"    [dim]Testing: {model_str} (key length: {key_len}, preview: {key_preview})[/dim]")
+
                     start = time.time()
-                    # Build completion kwargs, conditionally including api_base
+                    # Build completion kwargs
+                    # Pass api_key directly to avoid env var issues
                     completion_kwargs = {
                         "model": model_str,
                         "messages": [{"role": "user", "content": "Reply with only: OK"}],
                         "max_tokens": 10,
                         "timeout": 30,
+                        "api_key": api_key,  # Pass directly instead of relying on env var
                     }
-                    if api_base:
-                        completion_kwargs["api_base"] = api_base
-                    response = litellm.completion(**completion_kwargs)
+                    # Only pass api_base for providers that need it (like Ollama)
+                    if effective_api_base:
+                        completion_kwargs["api_base"] = effective_api_base
+
+                    # Retry logic for transient connection issues
+                    max_retries = 3
+                    last_error = None
+                    response = None
+                    for attempt in range(max_retries):
+                        try:
+                            response = litellm.completion(**completion_kwargs)
+                            break
+                        except Exception as retry_err:
+                            last_error = retry_err
+                            err_str = str(retry_err).lower()
+                            # Only retry on connection errors, not auth errors
+                            is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                            if is_connection_error and attempt < max_retries - 1:
+                                wait_time = 2 * (attempt + 1)  # 2s, 4s backoff
+                                console.print(f"    [yellow]Connection failed, retrying ({attempt + 2}/{max_retries}) in {wait_time}s...[/yellow]")
+                                import time as time_module
+                                time_module.sleep(wait_time)
+                                continue
+                            elif not is_connection_error:
+                                raise  # Don't retry auth errors etc.
+                            # Last retry failed - will fall through to for-else
+
+                    # Check if all retries exhausted
+                    if response is None and last_error:
+                        raise last_error
+
                     elapsed = time.time() - start
 
                     console.print(f"  [green]{icon('check')}[/green] LLM API connection successful")
@@ -1993,6 +2379,10 @@ def run_config_test(args):
                     error_str = str(e)
                     error_type = type(e).__name__
 
+                    # Sanitize API keys from error messages (sk-*, sk-ant-*, sk-proj-*)
+                    import re
+                    error_str = re.sub(r'sk-[a-zA-Z0-9_-]{10,}', '[REDACTED_KEY]', error_str)
+
                     # Detect common error patterns and provide helpful messages
                     if "<!DOCTYPE" in error_str or "<html" in error_str.lower():
                         error_msg = "API endpoint returned HTML (likely wrong URL or proxy error)"
@@ -2000,9 +2390,9 @@ def run_config_test(args):
                     elif "Connection" in error_str or "connect" in error_str.lower():
                         error_msg = "Connection failed - API endpoint unreachable"
                         suggestion = "Check network connection and API base URL"
-                    elif "401" in error_str or "Unauthorized" in error_str:
+                    elif "AuthenticationError" in error_type or "401" in error_str or "Unauthorized" in error_str:
                         error_msg = "Authentication failed - invalid API key"
-                        suggestion = "Verify your API key is correct"
+                        suggestion = "Verify your API key is correct and matches the provider"
                     elif "403" in error_str or "Forbidden" in error_str:
                         error_msg = "Access denied - API key lacks permissions"
                         suggestion = "Check API key permissions or quota"
@@ -2012,8 +2402,11 @@ def run_config_test(args):
                     elif "timeout" in error_str.lower():
                         error_msg = "Request timed out"
                         suggestion = "Check network connection or try again"
+                    elif "getaddrinfo" in error_str.lower():
+                        error_msg = "DNS resolution failed - check network/URL"
+                        suggestion = "Check network connection or API base URL"
                     else:
-                        # Extract just the core error message
+                        # Extract just the core error message (already sanitized)
                         if ": " in error_str:
                             error_msg = error_str.split(": ")[-1][:80]
                         else:
@@ -2023,6 +2416,11 @@ def run_config_test(args):
                     console.print(f"  [red]{icon('cross')}[/red] LLM API test failed")
                     console.print(f"    [bold red]Error:[/bold red] {error_msg}")
                     console.print(f"    [dim cyan]Fix:[/dim cyan] {suggestion}")
+                    # Show raw error for debugging (already sanitized)
+                    if len(error_str) < 200:
+                        console.print(f"    [dim yellow]Raw: {error_str}[/dim yellow]")
+                    else:
+                        console.print(f"    [dim yellow]Raw: {error_str[:200]}...[/dim yellow]")
                     results['llm'] = False
 
         console.print()
@@ -2376,7 +2774,11 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     # ======================== LLM Check (always required) ========================
     console.print(Rule("LLM API", style="bold cyan"))
 
-    if not config.llm.api_key:
+    # Ollama doesn't require an API key
+    provider = config.llm.provider.lower()
+    requires_api_key = provider not in ["ollama"]
+
+    if requires_api_key and not config.llm.api_key:
         console.print(f"  [red]{icon('cross')}[/red] No API key configured")
         console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
         results['llm'] = False
@@ -2387,33 +2789,65 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                 import litellm
                 import os
 
-                provider = config.llm.provider.lower()
                 model = config.llm.model
                 api_key = config.llm.api_key
+                api_base = config.llm.api_base
 
                 # Set the appropriate environment variable for litellm
                 if provider == "anthropic":
                     model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
-                    os.environ["ANTHROPIC_API_KEY"] = api_key
+                    if api_key:
+                        os.environ["ANTHROPIC_API_KEY"] = api_key
                 elif provider == "openai":
                     model_str = f"openai/{model}" if not model.startswith("openai/") else model
-                    os.environ["OPENAI_API_KEY"] = api_key
+                    if api_key:
+                        os.environ["OPENAI_API_KEY"] = api_key
                 elif provider == "deepseek":
                     model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
-                    os.environ["DEEPSEEK_API_KEY"] = api_key
+                    if api_key:
+                        os.environ["DEEPSEEK_API_KEY"] = api_key
                 elif provider == "ollama":
                     model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
+                    # Ollama doesn't need API key but needs base URL
+                    if not api_base:
+                        api_base = os.environ.get("OLLAMA_API_BASE") or "http://localhost:11434"
+                    os.environ["OLLAMA_API_BASE"] = api_base
                 else:
                     model_str = model
-                    os.environ["LLM_API_KEY"] = api_key
+                    if api_key:
+                        os.environ["LLM_API_KEY"] = api_key
 
                 start = time.time()
-                response = litellm.completion(
-                    model=model_str,
-                    messages=[{"role": "user", "content": "Reply with only: OK"}],
-                    max_tokens=10,
-                    timeout=30,
-                )
+                completion_kwargs = {
+                    "model": model_str,
+                    "messages": [{"role": "user", "content": "Reply with only: OK"}],
+                    "max_tokens": 10,
+                    "timeout": 30,
+                }
+                if api_base:
+                    completion_kwargs["api_base"] = api_base
+
+                # Retry logic for transient connection issues
+                max_retries = 3
+                last_error = None
+                response = None
+                for attempt in range(max_retries):
+                    try:
+                        response = litellm.completion(**completion_kwargs)
+                        break
+                    except Exception as retry_err:
+                        last_error = retry_err
+                        err_str = str(retry_err).lower()
+                        is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                        if is_connection_error and attempt < max_retries - 1:
+                            time.sleep(2 * (attempt + 1))
+                            continue
+                        elif not is_connection_error:
+                            raise
+
+                if response is None and last_error:
+                    raise last_error
+
                 elapsed = time.time() - start
 
                 console.print(f"  [green]{icon('check')}[/green] LLM ready ({provider}/{model}) - {elapsed:.1f}s")
@@ -3498,10 +3932,16 @@ def run_ai_code_review(args, console):
 
     target = args.target
     focus = getattr(args, 'focus', None)
-    model = getattr(args, 'model', 'claude-sonnet-4-20250514')
     max_steps = getattr(args, 'max_steps', 100)
     quick = getattr(args, 'quick', False)
     output_file = getattr(args, 'output', None)
+
+    # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
+    model, api_base = _get_llm_model_config()
+
+    # Override with CLI argument if provided
+    if hasattr(args, 'model') and args.model:
+        model = args.model
 
     # Verify target exists
     if not Path(target).exists():
@@ -3577,9 +4017,15 @@ def run_ai_api_test(args, console):
     target = args.target
     openapi_spec = getattr(args, 'openapi', None)
     auth_token = getattr(args, 'auth_token', None)
-    model = getattr(args, 'model', 'claude-sonnet-4-20250514')
     max_steps = getattr(args, 'max_steps', 100)
     output_file = getattr(args, 'output', None)
+
+    # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
+    model, api_base = _get_llm_model_config()
+
+    # Override with CLI argument if provided
+    if hasattr(args, 'model') and args.model:
+        model = args.model
 
     console.print()
     console.print(Panel(
@@ -3648,10 +4094,16 @@ def run_ai_web_pentest(args, console):
     target = args.target
     auth_token = getattr(args, 'auth_token', None)
     cookies_list = getattr(args, 'cookie', None) or []
-    model = getattr(args, 'model', 'claude-sonnet-4-20250514')
     max_steps = getattr(args, 'max_steps', 100)
     quick = getattr(args, 'quick', False)
     output_file = getattr(args, 'output', None)
+
+    # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
+    model, api_base = _get_llm_model_config()
+
+    # Override with CLI argument if provided
+    if hasattr(args, 'model') and args.model:
+        model = args.model
 
     # Parse cookies
     cookies = {}
@@ -3729,8 +4181,14 @@ def run_ai_full_assessment(args, console):
 
     target = args.target
     test_types = getattr(args, 'types', ['web'])
-    model = getattr(args, 'model', 'claude-sonnet-4-20250514')
     output_file = getattr(args, 'output', None)
+
+    # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
+    model, api_base = _get_llm_model_config()
+
+    # Override with CLI argument if provided
+    if hasattr(args, 'model') and args.model:
+        model = args.model
 
     console.print()
     console.print(Panel(
@@ -4393,6 +4851,392 @@ def run_ad_tools(args, console):
     except Exception as e:
         console.print(f"\n[red]{icon('error')} Tool check failed: {e}[/red]")
         return 1
+
+
+# ============================================================================
+# MCP Commands (v5.1 - PentestAgent Integration)
+# ============================================================================
+
+
+def run_mcp_command(args):
+    """Handle MCP (Model Context Protocol) server management."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    import asyncio
+
+    console = Console()
+    mcp_cmd = getattr(args, 'mcp_command', None)
+
+    if mcp_cmd == "list":
+        try:
+            from aipt_v2.mcp import MCPManager
+
+            async def do_list():
+                manager = MCPManager()
+                servers = manager.list_configured_servers()
+                return servers
+
+            servers = asyncio.run(do_list())
+
+            console.print()
+            if not servers:
+                console.print(Panel(
+                    "No MCP servers configured.\n\n"
+                    "Add a server with:\n"
+                    "  [green]aiptx mcp add <name> --command <cmd>[/green]",
+                    title=f"{icon('info')} MCP Servers",
+                    border_style="yellow",
+                ))
+            else:
+                table = Table(title="Configured MCP Servers", box=box.ROUNDED)
+                table.add_column("Name", style="cyan")
+                table.add_column("Command", style="dim")
+                table.add_column("Enabled", width=10)
+
+                for name, config in servers.items():
+                    enabled = "[green]Yes[/green]" if config.get("enabled", True) else "[red]No[/red]"
+                    table.add_row(name, config.get("command", ""), enabled)
+
+                console.print(table)
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif mcp_cmd == "add":
+        try:
+            from aipt_v2.mcp import MCPManager, MCPServerConfig
+
+            # Parse environment variables
+            env = {}
+            for e in (args.env or []):
+                if "=" in e:
+                    k, v = e.split("=", 1)
+                    env[k] = v
+
+            config = MCPServerConfig(
+                command=args.command,
+                args=args.args or [],
+                env=env if env else None,
+                enabled=True,
+            )
+
+            manager = MCPManager()
+            manager.add_server(args.name, config)
+
+            console.print(f"[green]Added MCP server '{args.name}'[/green]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif mcp_cmd == "remove":
+        try:
+            from aipt_v2.mcp import MCPManager
+
+            manager = MCPManager()
+            if manager.remove_server(args.name):
+                console.print(f"[green]Removed MCP server '{args.name}'[/green]")
+            else:
+                console.print(f"[yellow]Server '{args.name}' not found[/yellow]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif mcp_cmd == "connect":
+        try:
+            from aipt_v2.mcp import MCPManager
+
+            async def do_connect():
+                manager = MCPManager()
+                tools = await manager.connect_all()
+                return tools
+
+            console.print("[dim]Connecting to MCP servers...[/dim]")
+            tools = asyncio.run(do_connect())
+
+            if not tools:
+                console.print("[yellow]No tools available from MCP servers[/yellow]")
+            else:
+                table = Table(title="MCP Tools", box=box.ROUNDED)
+                table.add_column("Tool", style="cyan")
+                table.add_column("Description", style="dim")
+
+                for tool in tools:
+                    table.add_row(
+                        tool.get("name", ""),
+                        tool.get("description", "")[:60] + "..."
+                    )
+
+                console.print(table)
+                console.print(f"\n[green]Connected! {len(tools)} tools available[/green]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    else:
+        # Show MCP help
+        console.print()
+        console.print(Panel(
+            "[bold cyan]MCP Server Management (v5.1)[/bold cyan]\n\n"
+            "[bold]Available Commands:[/bold]\n\n"
+            "  [green]aiptx mcp list[/green]                  List configured servers\n"
+            "  [green]aiptx mcp add[/green] <name> -c <cmd>   Add a new server\n"
+            "  [green]aiptx mcp remove[/green] <name>         Remove a server\n"
+            "  [green]aiptx mcp connect[/green]               Connect and list tools\n\n"
+            "[bold]Example:[/bold]\n"
+            "  [dim]# Add a local tool server[/dim]\n"
+            "  aiptx mcp add my-tools -c python -a server.py\n\n"
+            "[dim]MCP allows extending AIPTX with external tools via JSON-RPC[/dim]",
+            title="MCP Servers",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        return 0
+
+
+# ============================================================================
+# Notes Commands (v5.1 - PentestAgent Integration)
+# ============================================================================
+
+
+def run_notes_command(args):
+    """Handle quick notes management."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+    import asyncio
+
+    console = Console()
+    notes_cmd = getattr(args, 'notes_command', None)
+
+    if notes_cmd == "create":
+        try:
+            from aipt_v2.tools.notes import notes_create
+
+            result = asyncio.run(notes_create(
+                key=args.key,
+                value=args.value,
+                category=args.category,
+                severity=args.severity,
+                evidence=args.evidence or "",
+            ))
+
+            console.print(f"[green]{result}[/green]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif notes_cmd == "list":
+        try:
+            from aipt_v2.tools.notes import notes_list
+
+            result = asyncio.run(notes_list(
+                category=args.category,
+                severity=args.severity,
+            ))
+
+            console.print(result)
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif notes_cmd == "search":
+        try:
+            from aipt_v2.tools.notes import notes_search
+
+            result = asyncio.run(notes_search(query=args.query))
+            console.print(result)
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif notes_cmd == "export":
+        try:
+            from aipt_v2.tools.notes import notes_export
+
+            result = asyncio.run(notes_export(format=args.format))
+
+            if args.output:
+                with open(args.output, "w") as f:
+                    f.write(result)
+                console.print(f"[green]Exported to {args.output}[/green]")
+            else:
+                console.print(result)
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif notes_cmd == "delete":
+        try:
+            from aipt_v2.tools.notes import notes_delete
+
+            result = asyncio.run(notes_delete(key=args.key))
+            console.print(result)
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif notes_cmd == "clear":
+        try:
+            from aipt_v2.tools.notes import notes_clear
+
+            # Confirm
+            confirm = input("Clear all notes? (yes/no): ")
+            if confirm.lower() != "yes":
+                console.print("[yellow]Cancelled[/yellow]")
+                return 0
+
+            result = asyncio.run(notes_clear())
+            console.print(f"[green]{result}[/green]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    else:
+        # Show notes help
+        console.print()
+        console.print(Panel(
+            "[bold cyan]Quick Notes Management (v5.1)[/bold cyan]\n\n"
+            "[bold]Available Commands:[/bold]\n\n"
+            "  [green]aiptx notes create[/green] <key> <value>  Create a note\n"
+            "  [green]aiptx notes list[/green]                  List all notes\n"
+            "  [green]aiptx notes search[/green] <query>        Search notes\n"
+            "  [green]aiptx notes export[/green]                Export notes\n"
+            "  [green]aiptx notes delete[/green] <key>          Delete a note\n"
+            "  [green]aiptx notes clear[/green]                 Clear all notes\n\n"
+            "[bold]Examples:[/bold]\n"
+            "  [dim]# Record a credential finding[/dim]\n"
+            "  aiptx notes create admin_creds 'admin:Password123' -c credential -s high\n\n"
+            "  [dim]# List all vulnerabilities[/dim]\n"
+            "  aiptx notes list -c vulnerability\n\n"
+            "  [dim]# Export findings as markdown[/dim]\n"
+            "  aiptx notes export -f markdown -o findings.md",
+            title="Quick Notes",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        return 0
+
+
+# ============================================================================
+# Playbook Commands (v5.1)
+# ============================================================================
+
+
+def run_playbook_command(args):
+    """Handle playbook management."""
+    from rich.console import Console
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich import box
+
+    console = Console()
+    playbook_cmd = getattr(args, 'playbook_command', None)
+
+    if playbook_cmd == "list":
+        try:
+            from aipt_v2.playbooks import list_playbooks
+
+            playbooks = list_playbooks()
+
+            console.print()
+            table = Table(title="Attack Playbooks", box=box.ROUNDED)
+            table.add_column("Name", style="cyan")
+            table.add_column("Description", style="dim")
+
+            for name, desc in playbooks:
+                table.add_row(name, desc)
+
+            console.print(table)
+            console.print("\n[dim]Use: aiptx scan <target> --playbook <name>[/dim]")
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    elif playbook_cmd == "show":
+        try:
+            from aipt_v2.playbooks import get_playbook
+
+            playbook = get_playbook(args.name)
+            if not playbook:
+                console.print(f"[red]Playbook '{args.name}' not found[/red]")
+                return 1
+
+            console.print()
+            console.print(Panel(
+                f"[bold cyan]{playbook.description}[/bold cyan]\n"
+                f"Mode: [yellow]{playbook.mode.value}[/yellow]\n"
+                f"Target Type: [yellow]{playbook.target_type}[/yellow]\n"
+                f"Estimated Duration: [yellow]{playbook.estimated_duration // 60} minutes[/yellow]",
+                title=f"Playbook: {playbook.name}",
+                border_style="cyan",
+            ))
+
+            # Show phases
+            console.print("\n[bold]Phases:[/bold]")
+            for i, phase in enumerate(playbook.phases, 1):
+                deps = f" (depends on: {', '.join(phase.depends_on)})" if phase.depends_on else ""
+                parallel = " [green][parallel][/green]" if phase.parallel_safe else ""
+                console.print(f"\n  [cyan]{i}. {phase.name}[/cyan]{deps}{parallel}")
+                console.print(f"     [dim]{phase.objective}[/dim]")
+                console.print(f"     Techniques: {len(phase.techniques)}")
+                if phase.mitre_techniques:
+                    console.print(f"     MITRE: {', '.join(phase.mitre_techniques[:3])}")
+
+            return 0
+
+        except Exception as e:
+            console.print(f"[red]Error: {e}[/red]")
+            return 1
+
+    else:
+        # Show playbook help
+        console.print()
+        console.print(Panel(
+            "[bold cyan]Attack Playbook Management (v5.1)[/bold cyan]\n\n"
+            "[bold]Available Commands:[/bold]\n\n"
+            "  [green]aiptx playbook list[/green]          List available playbooks\n"
+            "  [green]aiptx playbook show[/green] <name>   Show playbook details\n\n"
+            "[bold]Using Playbooks:[/bold]\n"
+            "  [dim]# Run a scan with web playbook[/dim]\n"
+            "  aiptx scan http://target.com --playbook web\n\n"
+            "  [dim]# Run AD assessment with quick playbook[/dim]\n"
+            "  aiptx scan dc.corp.local --playbook ad_quick\n\n"
+            "[bold]Available Playbooks:[/bold]\n"
+            "  web      - Web Application Black-Box Testing\n"
+            "  api      - REST/GraphQL API Security Testing\n"
+            "  graphql  - GraphQL-Specific Testing\n"
+            "  ad       - Active Directory Penetration Testing\n"
+            "  ad_quick - Quick AD Assessment",
+            title="Attack Playbooks",
+            border_style="cyan",
+            padding=(1, 2),
+        ))
+        return 0
 
 
 if __name__ == "__main__":

@@ -34,6 +34,8 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
+from aipt_v2.config import get_config
+
 logger = logging.getLogger(__name__)
 
 
@@ -385,18 +387,55 @@ class LLMCrawlerAnalyzer:
 
     def __init__(
         self,
-        llm_provider: str = "anthropic",
-        llm_model: str = "claude-3-5-sonnet-20241022",
+        llm_provider: str | None = None,
+        llm_model: str | None = None,
     ):
-        self.llm_provider = llm_provider
-        self.llm_model = llm_model
+        # Use centralized configuration if not explicitly provided
+        config = get_config()
+        self.llm_provider = llm_provider or config.llm.provider
+        self.llm_model = llm_model or config.llm.model
+        self.api_base = config.llm.api_base
         self._llm = None
+
+        # Format model string for litellm (provider/model format for non-Anthropic)
+        self._litellm_model = self._format_model_for_litellm()
+
+    def _format_model_for_litellm(self) -> str:
+        """
+        Format model string for litellm based on provider.
+
+        LiteLLM expects different formats:
+        - Anthropic: "claude-3-5-sonnet-20241022" (no prefix needed)
+        - OpenAI: "gpt-4" (no prefix needed)
+        - Ollama: "ollama/llama3.2:latest" (requires ollama/ prefix)
+        - Other: "provider/model" format
+
+        Returns:
+            Properly formatted model string for litellm
+        """
+        provider = self.llm_provider.lower()
+
+        # Check if model already has provider prefix
+        if "/" in self.llm_model:
+            return self.llm_model
+
+        # These providers don't need prefix for litellm
+        if provider in ["anthropic", "openai"]:
+            return self.llm_model
+
+        # Ollama and other providers need prefix
+        return f"{provider}/{self.llm_model}"
 
     async def _get_llm(self):
         """Get or create LLM client."""
         if self._llm is None:
             try:
                 import litellm
+
+                # Configure litellm for the provider
+                if self.llm_provider.lower() == "ollama" and self.api_base:
+                    litellm.api_base = self.api_base
+
                 self._llm = litellm
             except ImportError:
                 logger.warning("litellm not installed - falling back to heuristic analysis")
@@ -519,12 +558,19 @@ class LLMCrawlerAnalyzer:
         )
 
         try:
-            response = await llm.acompletion(
-                model=self.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=4000,
-            )
+            # Build completion kwargs
+            completion_kwargs = {
+                "model": self._litellm_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 4000,
+            }
+
+            # Add api_base for Ollama
+            if self.llm_provider.lower() == "ollama" and self.api_base:
+                completion_kwargs["api_base"] = self.api_base
+
+            response = await llm.acompletion(**completion_kwargs)
 
             result_text = response.choices[0].message.content
 
@@ -557,12 +603,19 @@ class LLMCrawlerAnalyzer:
         )
 
         try:
-            response = await llm.acompletion(
-                model=self.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.3,
-                max_tokens=3000,
-            )
+            # Build completion kwargs
+            completion_kwargs = {
+                "model": self._litellm_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 3000,
+            }
+
+            # Add api_base for Ollama
+            if self.llm_provider.lower() == "ollama" and self.api_base:
+                completion_kwargs["api_base"] = self.api_base
+
+            response = await llm.acompletion(**completion_kwargs)
 
             result_text = response.choices[0].message.content
 
@@ -598,12 +651,19 @@ class LLMCrawlerAnalyzer:
         )
 
         try:
-            response = await llm.acompletion(
-                model=self.llm_model,
-                messages=[{"role": "user", "content": prompt}],
-                temperature=0.5,  # Slightly higher for creativity
-                max_tokens=3000,
-            )
+            # Build completion kwargs
+            completion_kwargs = {
+                "model": self._litellm_model,
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.5,  # Slightly higher for creativity
+                "max_tokens": 3000,
+            }
+
+            # Add api_base for Ollama
+            if self.llm_provider.lower() == "ollama" and self.api_base:
+                completion_kwargs["api_base"] = self.api_base
+
+            response = await llm.acompletion(**completion_kwargs)
 
             result_text = response.choices[0].message.content
 

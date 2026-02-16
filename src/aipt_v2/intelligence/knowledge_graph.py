@@ -588,3 +588,354 @@ class SecurityKnowledgeGraph:
         self.edges.clear()
         self._adjacency.clear()
         self._reverse_adjacency.clear()
+
+    # =========================================================================
+    # Strategic Analysis Methods (PentestAgent Integration)
+    # =========================================================================
+
+    def get_strategic_insights(self) -> list[str]:
+        """
+        Analyze the graph and return strategic insights.
+
+        Returns actionable intelligence for penetration testing:
+        - Unexploited opportunities (credentials without exploitation)
+        - High-value targets with multiple vulnerabilities
+        - Potential attack chains
+        - Coverage gaps
+
+        Returns:
+            List of strategic insight strings
+        """
+        insights = []
+
+        # Analyze finding distribution
+        finding_nodes = [n for n in self.nodes.values() if n.node_type == "finding"]
+        target_nodes = [n for n in self.nodes.values() if n.node_type == "target"]
+
+        if not finding_nodes:
+            return ["No findings in graph. Begin reconnaissance phase."]
+
+        # 1. Identify high-value targets (multiple vulnerabilities)
+        target_findings = self._count_findings_per_target()
+        high_value_targets = [
+            (target, count) for target, count in target_findings.items()
+            if count >= 3
+        ]
+        for target, count in sorted(high_value_targets, key=lambda x: -x[1])[:5]:
+            insights.append(
+                f"HIGH-VALUE TARGET: {target} has {count} vulnerabilities - prioritize for exploitation"
+            )
+
+        # 2. Find unexploited credentials
+        cred_findings = [
+            n for n in finding_nodes
+            if n.metadata.get("vuln_type") in ["auth_bypass", "credential_disclosure", "default_credentials"]
+        ]
+        for cred in cred_findings:
+            if not self._has_follow_up_exploitation(cred.node_id):
+                insights.append(
+                    f"UNEXPLOITED CREDENTIAL: {cred.data.get('title', 'Unknown')} - attempt privilege escalation"
+                )
+
+        # 3. Identify attack chains
+        attack_paths = self._find_potential_chains()
+        for path in attack_paths[:3]:
+            chain_desc = " -> ".join([
+                self.nodes[n].metadata.get("vuln_type", "unknown")
+                for n in path if n in self.nodes
+            ])
+            insights.append(f"ATTACK CHAIN: {chain_desc}")
+
+        # 4. Severity distribution insight
+        severity_dist = self._get_severity_distribution()
+        critical_high = severity_dist.get("critical", 0) + severity_dist.get("high", 0)
+        if critical_high > 0:
+            insights.append(
+                f"PRIORITY: {critical_high} critical/high severity findings require immediate attention"
+            )
+
+        # 5. Coverage gaps
+        covered_types = set(n.metadata.get("vuln_type") for n in finding_nodes)
+        common_vuln_types = {
+            "sql_injection", "xss_reflected", "xss_stored", "command_injection",
+            "ssrf", "idor", "auth_bypass", "file_inclusion"
+        }
+        missing = common_vuln_types - covered_types
+        if missing and len(finding_nodes) > 5:
+            insights.append(
+                f"COVERAGE GAP: No findings for: {', '.join(list(missing)[:3])} - expand testing"
+            )
+
+        # 6. MITRE technique recommendations
+        mitre = self.get_mitre_coverage()
+        techniques_covered = len(mitre.get("techniques", []))
+        if techniques_covered > 0:
+            tactics = list(mitre.get("tactics", {}).keys())
+            insights.append(
+                f"MITRE COVERAGE: {techniques_covered} techniques across {len(tactics)} tactics"
+            )
+
+        # 7. Identify pivot points
+        pivot_vulns = [
+            n for n in finding_nodes
+            if n.metadata.get("vuln_type") in ["ssrf", "rce", "command_injection"]
+        ]
+        for pivot in pivot_vulns[:2]:
+            target = self._get_finding_target(pivot.node_id)
+            if target:
+                insights.append(
+                    f"PIVOT POINT: {pivot.metadata.get('vuln_type')} on {target} enables lateral movement"
+                )
+
+        if not insights:
+            insights.append(
+                f"Graph contains {len(finding_nodes)} findings across {len(target_nodes)} targets. "
+                "Review attack paths for exploitation opportunities."
+            )
+
+        return insights
+
+    def _count_findings_per_target(self) -> dict[str, int]:
+        """Count findings per target."""
+        counts = defaultdict(int)
+        for node_id, node in self.nodes.items():
+            if node.node_type == "finding":
+                target = self._get_finding_target(node_id)
+                if target:
+                    counts[target] += 1
+        return dict(counts)
+
+    def _get_finding_target(self, finding_id: str) -> Optional[str]:
+        """Get the target for a finding."""
+        for source, relation in self._reverse_adjacency.get(finding_id, []):
+            if source.startswith("target:"):
+                return source.replace("target:", "")
+        return None
+
+    def _has_follow_up_exploitation(self, finding_id: str) -> bool:
+        """Check if a finding has been followed up with exploitation."""
+        # Check if there are outgoing "leads_to" edges to confirmed findings
+        for neighbor, relation in self._adjacency.get(finding_id, []):
+            if relation == "leads_to" and neighbor in self.nodes:
+                neighbor_node = self.nodes[neighbor]
+                if neighbor_node.metadata.get("confirmed"):
+                    return True
+        return False
+
+    def _find_potential_chains(self) -> list[list[str]]:
+        """Find potential attack chains based on leads_to edges."""
+        chains = []
+        finding_nodes = [n for n in self.nodes.keys() if n.startswith("finding:")]
+
+        for start in finding_nodes:
+            visited = set()
+            chain = [start]
+            current = start
+
+            while True:
+                next_node = None
+                for neighbor, relation in self._adjacency.get(current, []):
+                    if relation == "leads_to" and neighbor not in visited:
+                        next_node = neighbor
+                        break
+
+                if next_node:
+                    visited.add(next_node)
+                    chain.append(next_node)
+                    current = next_node
+                else:
+                    break
+
+            if len(chain) > 1:
+                chains.append(chain)
+
+        # Sort by chain length
+        chains.sort(key=lambda c: -len(c))
+        return chains
+
+    def _get_severity_distribution(self) -> dict[str, int]:
+        """Get distribution of findings by severity."""
+        dist = defaultdict(int)
+        for node in self.nodes.values():
+            if node.node_type == "finding":
+                sev = node.metadata.get("severity", "unknown")
+                dist[sev] += 1
+        return dict(dist)
+
+    def to_mermaid(self, include_techniques: bool = True, max_nodes: int = 50) -> str:
+        """
+        Export the graph to Mermaid flowchart format.
+
+        Generates a Mermaid diagram that can be rendered in
+        Markdown, documentation, or visualization tools.
+
+        Args:
+            include_techniques: Include MITRE technique nodes
+            max_nodes: Maximum number of nodes to include
+
+        Returns:
+            Mermaid flowchart string
+
+        Example output:
+            ```mermaid
+            flowchart TD
+                T1[example.com]
+                F1[SQLi in login]
+                T1 -->|has_vulnerability| F1
+            ```
+        """
+        lines = ["flowchart TD"]
+        node_aliases = {}
+        alias_counter = {"target": 0, "finding": 0, "technique": 0, "asset": 0}
+
+        # Process nodes (limited to max_nodes)
+        processed_nodes = list(self.nodes.values())[:max_nodes]
+
+        for node in processed_nodes:
+            if node.node_type == "technique" and not include_techniques:
+                continue
+
+            # Generate alias
+            prefix = node.node_type[0].upper()
+            alias_counter[node.node_type] = alias_counter.get(node.node_type, 0) + 1
+            alias = f"{prefix}{alias_counter[node.node_type]}"
+            node_aliases[node.node_id] = alias
+
+            # Generate node label
+            label = self._mermaid_node_label(node)
+            style = self._mermaid_node_style(node)
+
+            lines.append(f"    {alias}{style}")
+
+        # Process edges
+        for edge in self.edges:
+            source_alias = node_aliases.get(edge.source_id)
+            target_alias = node_aliases.get(edge.target_id)
+
+            if source_alias and target_alias:
+                relation_label = edge.relation.replace("_", " ")
+                lines.append(f"    {source_alias} -->|{relation_label}| {target_alias}")
+
+        # Add styling
+        lines.extend([
+            "",
+            "    %% Styling",
+            "    classDef critical fill:#ff0000,stroke:#990000,color:#fff",
+            "    classDef high fill:#ff6600,stroke:#cc5500,color:#fff",
+            "    classDef medium fill:#ffcc00,stroke:#ccaa00,color:#000",
+            "    classDef low fill:#00cc00,stroke:#009900,color:#fff",
+            "    classDef target fill:#0066cc,stroke:#004499,color:#fff",
+            "    classDef technique fill:#9900cc,stroke:#660099,color:#fff",
+        ])
+
+        # Apply styles based on node types
+        for node in processed_nodes:
+            alias = node_aliases.get(node.node_id)
+            if not alias:
+                continue
+
+            if node.node_type == "target":
+                lines.append(f"    class {alias} target")
+            elif node.node_type == "technique":
+                lines.append(f"    class {alias} technique")
+            elif node.node_type == "finding":
+                severity = node.metadata.get("severity", "medium")
+                if severity in ["critical", "high", "medium", "low"]:
+                    lines.append(f"    class {alias} {severity}")
+
+        return "\n".join(lines)
+
+    def _mermaid_node_label(self, node: GraphNode) -> str:
+        """Generate Mermaid node label."""
+        if node.node_type == "target":
+            host = node.data.get("host", "Unknown")
+            return self._sanitize_mermaid(host)
+
+        elif node.node_type == "finding":
+            title = node.data.get("title", "Finding")
+            severity = node.metadata.get("severity", "")
+            short_title = title[:30] + "..." if len(title) > 30 else title
+            return self._sanitize_mermaid(f"[{severity.upper()}] {short_title}")
+
+        elif node.node_type == "technique":
+            tech_id = node.data.get("technique_id", "")
+            tech_name = node.data.get("technique_name", "")
+            return self._sanitize_mermaid(f"{tech_id}: {tech_name}")
+
+        elif node.node_type == "asset":
+            asset_id = node.data.get("asset_id", "")
+            asset_type = node.data.get("asset_type", "")
+            return self._sanitize_mermaid(f"{asset_type}: {asset_id}")
+
+        return self._sanitize_mermaid(node.node_id)
+
+    def _mermaid_node_style(self, node: GraphNode) -> str:
+        """Generate Mermaid node style based on type."""
+        label = self._mermaid_node_label(node)
+
+        if node.node_type == "target":
+            return f"[({label})]"  # Stadium shape for targets
+        elif node.node_type == "finding":
+            return f"[{label}]"  # Rectangle for findings
+        elif node.node_type == "technique":
+            return f"{{{label}}}"  # Rhombus for techniques
+        elif node.node_type == "asset":
+            return f"(({label}))"  # Circle for assets
+        return f"[{label}]"
+
+    def _sanitize_mermaid(self, text: str) -> str:
+        """Sanitize text for Mermaid syntax."""
+        # Remove or replace characters that could break Mermaid
+        sanitized = text.replace('"', "'")
+        sanitized = sanitized.replace("[", "(")
+        sanitized = sanitized.replace("]", ")")
+        sanitized = sanitized.replace("{", "(")
+        sanitized = sanitized.replace("}", ")")
+        sanitized = sanitized.replace("<", "")
+        sanitized = sanitized.replace(">", "")
+        sanitized = sanitized.replace("|", "-")
+        return f'"{sanitized}"'
+
+    def get_attack_surface_summary(self) -> dict[str, Any]:
+        """
+        Get a summary of the attack surface.
+
+        Provides a high-level overview suitable for reporting
+        and decision-making.
+
+        Returns:
+            Dictionary with attack surface metrics
+        """
+        finding_nodes = [n for n in self.nodes.values() if n.node_type == "finding"]
+        target_nodes = [n for n in self.nodes.values() if n.node_type == "target"]
+        asset_nodes = [n for n in self.nodes.values() if n.node_type == "asset"]
+
+        # Count confirmed vs unconfirmed
+        confirmed = sum(1 for n in finding_nodes if n.metadata.get("confirmed"))
+        unconfirmed = len(finding_nodes) - confirmed
+
+        # Count exploitable vulnerabilities
+        exploitable_types = {
+            "rce", "command_injection", "sql_injection", "auth_bypass",
+            "privilege_escalation", "ssrf"
+        }
+        exploitable = sum(
+            1 for n in finding_nodes
+            if n.metadata.get("vuln_type") in exploitable_types
+        )
+
+        # Find attack paths
+        attack_paths = self.find_attack_paths(max_depth=5)
+
+        return {
+            "total_targets": len(target_nodes),
+            "total_assets": len(asset_nodes),
+            "total_findings": len(finding_nodes),
+            "confirmed_findings": confirmed,
+            "unconfirmed_findings": unconfirmed,
+            "exploitable_vulnerabilities": exploitable,
+            "attack_paths_found": len(attack_paths),
+            "severity_distribution": self._get_severity_distribution(),
+            "mitre_techniques_covered": len(self.get_mitre_coverage().get("techniques", [])),
+            "strategic_insights": self.get_strategic_insights(),
+        }

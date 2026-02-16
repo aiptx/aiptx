@@ -155,7 +155,7 @@ class AnthropicProvider(LLMProvider):
 
     def __init__(
         self,
-        model: str = "claude-sonnet-4-20250514",
+        model: str = "claude-3-7-sonnet-20250219",
         api_key: Optional[str] = None,
         temperature: float = 0.7,
         max_tokens: int = 4096,
@@ -375,7 +375,7 @@ def get_llm(
 
     Example:
         llm = get_llm("openai", model="gpt-4o")
-        llm = get_llm("anthropic", model="claude-sonnet-4-20250514")
+        llm = get_llm("anthropic", model="claude-3-7-sonnet-20250219")
         llm = get_llm("ollama", model="llama3:70b")
     """
     providers = {
