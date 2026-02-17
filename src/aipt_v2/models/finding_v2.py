@@ -208,6 +208,9 @@ class FindingV2:
     exploited: bool = False
     poc_command: Optional[str] = None
 
+    # Screenshot evidence (list of dicts with 'data_uri' and 'description')
+    screenshots: list[dict[str, str]] = field(default_factory=list)
+
     def __post_init__(self):
         """Generate fingerprint and normalize URL"""
         # Normalize URL (fix double slashes)
@@ -343,6 +346,42 @@ class FindingV2:
             self.confirmed = False
             self.exploited = False
 
+    def add_screenshot(
+        self,
+        data_uri: str,
+        description: str = ""
+    ) -> None:
+        """
+        Add a screenshot as evidence.
+
+        Args:
+            data_uri: Base64 data URI (data:image/png;base64,...)
+            description: Optional description of what the screenshot shows
+        """
+        self.screenshots.append({
+            "data_uri": data_uri,
+            "description": description or f"Screenshot {len(self.screenshots) + 1}"
+        })
+
+    def add_http_evidence(
+        self,
+        request: str,
+        response: str,
+        curl_command: Optional[str] = None
+    ) -> None:
+        """
+        Add HTTP request/response evidence.
+
+        Args:
+            request: Raw HTTP request
+            response: Raw HTTP response
+            curl_command: Optional curl command for reproduction
+        """
+        self.raw_request = request
+        self.raw_response = response
+        if curl_command:
+            self.poc_command = curl_command
+
     def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for JSON serialization"""
         return {
@@ -380,6 +419,7 @@ class FindingV2:
             "confirmed": self.confirmed,
             "exploited": self.exploited,
             "poc_command": self.poc_command,
+            "screenshots": self.screenshots,
             "is_reportable": self.is_reportable(),
         }
 

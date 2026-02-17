@@ -76,7 +76,8 @@ logs/
 
 # Local data
 aipt_runs/
-reports/
+/reports/
+!src/aipt_v2/reports/
 *.db
 *.sqlite3
 
