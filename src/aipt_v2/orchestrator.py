@@ -998,6 +998,68 @@ class Orchestrator:
             }.get(result.risk_level.value, "")
             logger.info(f"{risk_emoji} Valid {result.key_info.key_type.value.upper()} key found - {result.exploitation_potential or 'See details'}")
 
+    def _validate_json_output(self, filepath: Path) -> bool:
+        """
+        Validate JSON file is not empty and parseable.
+
+        Returns True if valid, False otherwise.
+        Logs warnings for any issues found.
+        """
+        if not filepath.exists():
+            logger.warning(f"JSON validation failed - file missing: {filepath}")
+            return False
+
+        file_size = filepath.stat().st_size
+        if file_size == 0:
+            logger.warning(f"JSON validation failed - file empty: {filepath}")
+            return False
+
+        try:
+            content = filepath.read_text(encoding='utf-8')
+            data = json.loads(content)
+
+            # Additional validation based on expected structure
+            if isinstance(data, list):
+                logger.debug(f"JSON validated: {filepath.name} ({len(data)} items, {file_size} bytes)")
+            elif isinstance(data, dict):
+                logger.debug(f"JSON validated: {filepath.name} (object, {file_size} bytes)")
+            else:
+                logger.warning(f"JSON validation - unexpected root type in {filepath}: {type(data)}")
+
+            return True
+
+        except json.JSONDecodeError as e:
+            logger.error(f"JSON validation failed - parse error in {filepath}: {e}")
+            return False
+        except Exception as e:
+            logger.error(f"JSON validation failed - read error for {filepath}: {e}")
+            return False
+
+    def _validate_all_json_outputs(self) -> dict:
+        """
+        Validate all JSON output files in the output directory.
+
+        Returns a dict with validation results for each file.
+        """
+        results = {}
+        json_files = list(self.output_dir.glob("*.json"))
+
+        for json_file in json_files:
+            results[json_file.name] = self._validate_json_output(json_file)
+
+        # Log summary
+        valid_count = sum(1 for v in results.values() if v)
+        total_count = len(results)
+
+        if valid_count == total_count:
+            logger.info(f"JSON validation: All {total_count} files valid ✓")
+        else:
+            logger.warning(f"JSON validation: {valid_count}/{total_count} files valid")
+            invalid = [k for k, v in results.items() if not v]
+            logger.warning(f"Invalid files: {', '.join(invalid)}")
+
+        return results
+
     async def _test_bola_idor(self) -> List[Finding]:
         """
         Test for Broken Object Level Authorization (BOLA) / IDOR vulnerabilities.
@@ -5755,9 +5817,25 @@ class Orchestrator:
             sev_str = str(sev).lower()
 
             if sev_str in ['critical', 'high', 'medium']:
-                # Check if it's SSRF-related
+                # Check if it's a verifiable vulnerability type
                 f_type = f.type.lower() if hasattr(f, 'type') and f.type else ''
-                if 'ssrf' in f_type or 'server-side request' in f_type.lower():
+                f_desc = f.description.lower() if hasattr(f, 'description') and f.description else ''
+                f_value = str(f.value).lower() if hasattr(f, 'value') and f.value else ''
+
+                # Expanded list of verifiable categories (not just SSRF)
+                verifiable_patterns = [
+                    'ssrf', 'server-side request',  # SSRF
+                    'ssl', 'tls', 'heartbleed', 'poodle', 'beast', 'breach',  # SSL/TLS
+                    'xss', 'cross-site scripting', 'script injection',  # XSS
+                    'cors', 'cross-origin',  # CORS
+                    'header', 'x-frame', 'hsts', 'content-type',  # Security Headers
+                    'injection', 'sqli', 'sql injection',  # Injection
+                    'csrf', 'cross-site request forgery',  # CSRF
+                    'open redirect', 'redirect',  # Open Redirect
+                ]
+
+                combined_text = f'{f_type} {f_desc} {f_value}'
+                if any(pattern in combined_text for pattern in verifiable_patterns):
                     findings_to_verify.append(f)
 
         self._log_tool(f"Verifying {len(findings_to_verify)} high-priority findings", "running")
@@ -6662,7 +6740,7 @@ class Orchestrator:
         tools_run.append("summary_generator")
         self._log_tool("Summary generated", "done")
 
-        # 2. Generate Findings JSON
+        # 2. Generate Findings JSON (legacy format for backwards compatibility)
         findings_data = [
             {
                 "type": f.type,
@@ -6681,13 +6759,74 @@ class Orchestrator:
         tools_run.append("findings_export")
         self._log_tool("Findings exported", "done")
 
-        # 3. Generate HTML Report
+        # 2b. Export canonical/verified findings if pipeline ran
+        if hasattr(self, 'canonical_findings') and self.canonical_findings:
+            try:
+                canonical = self.canonical_findings
+                # Export verified findings in FindingV2 format
+                verified_data = [f.to_dict() for f in canonical.findings]
+                (self.output_dir / "verified_findings.json").write_text(
+                    json.dumps(verified_data, indent=2, default=str), encoding="utf-8"
+                )
+
+                # Export confirmed-only findings (for quick reference)
+                confirmed_data = [f.to_dict() for f in canonical.findings if f.verification_status.value == 'confirmed']
+                (self.output_dir / "confirmed_findings.json").write_text(
+                    json.dumps(confirmed_data, indent=2, default=str), encoding="utf-8"
+                )
+
+                tools_run.append("verified_findings_export")
+                self._log_tool(f"Verified findings exported ({len(confirmed_data)} confirmed)", "done")
+            except Exception as e:
+                logger.warning(f"Failed to export canonical findings: {e}")
+                errors.append(f"canonical_export: {e}")
+
+        # 3. Generate HTML Report - use new generator if canonical findings available
         if self.config.report_format == "html":
-            html_report = self._generate_html_report()
+            html_report = None
             report_file = self.output_dir / f"VAPT_Report_{self.domain.replace('.', '_')}.html"
+
+            # Try to use new ReportGenerator with canonical findings
+            if hasattr(self, 'canonical_findings') and self.canonical_findings:
+                try:
+                    from aipt_v2.reports.generator import ReportGenerator, ReportConfig
+
+                    config = ReportConfig(
+                        client_name=getattr(self.config, 'client_name', 'Security Assessment'),
+                        output_dir=self.output_dir,
+                        include_evidence=True,
+                        include_screenshots=True,
+                    )
+                    generator = ReportGenerator(config)
+
+                    # Generate from canonical findings
+                    reports = await generator.generate_from_canonical(self.canonical_findings)
+                    if reports and 'html' in reports:
+                        html_report = reports['html']
+                        tools_run.append("html_report_v2")
+                        self._log_tool(f"HTML Report (verified): {report_file.name}", "done")
+                except Exception as e:
+                    logger.warning(f"New report generator failed, falling back to legacy: {e}")
+                    html_report = None
+
+            # Fallback to legacy report generator
+            if html_report is None:
+                html_report = self._generate_html_report()
+                tools_run.append("html_report")
+                self._log_tool(f"HTML Report: {report_file.name}", "done")
+
             report_file.write_text(html_report, encoding="utf-8")
-            tools_run.append("html_report")
-            self._log_tool(f"HTML Report: {report_file.name}", "done")
+
+        # 4. Validate all JSON outputs
+        json_validation = self._validate_all_json_outputs()
+        tools_run.append("json_validator")
+
+        # Count validation issues
+        valid_count = sum(1 for v in json_validation.values() if v)
+        total_json = len(json_validation)
+        if valid_count < total_json:
+            invalid_files = [k for k, v in json_validation.items() if not v]
+            errors.append(f"json_validation: {len(invalid_files)} invalid files: {', '.join(invalid_files)}")
 
         duration = time.time() - start_time
         result = PhaseResult(
@@ -6701,7 +6840,8 @@ class Orchestrator:
             errors=errors,
             metadata={
                 "output_dir": str(self.output_dir),
-                "total_findings": len(self.findings)
+                "total_findings": len(self.findings),
+                "json_validation": json_validation,
             }
         )
 
@@ -7074,6 +7214,42 @@ class Orchestrator:
             # Collect final scanner results before report generation
             if self.scan_ids and self.config.collect_scanner_results_at_end:
                 await self._collect_final_scanner_results()
+
+            # NEW: Run the normalization/verification pipeline on all findings
+            # This processes findings through: Normalize → Dedupe → Verify → Persist
+            if self.findings and not self.config.skip_verification:
+                try:
+                    from aipt_v2.pipeline.integration import PipelineIntegration
+
+                    logger.info("Running pipeline integration (normalize, dedupe, verify)...")
+                    print("\n" + "="*70)
+                    print("  [PIPELINE] Running Finding Verification Pipeline")
+                    print("="*70 + "\n")
+
+                    integration = PipelineIntegration(
+                        self,
+                        enable_verification=True,
+                        max_concurrent_verifications=10,
+                    )
+                    self.canonical_findings = await integration.run_pipeline()
+
+                    # Store for report generation
+                    self._pipeline_integration = integration
+
+                    # Print verification summary
+                    if self.canonical_findings:
+                        summary = self.canonical_findings.summary
+                        print(f"  ✓ Pipeline Complete:")
+                        print(f"    Total Raw: {summary.total_raw}")
+                        print(f"    After Dedup: {summary.after_dedup}")
+                        print(f"    Confirmed: {summary.confirmed}")
+                        print(f"    Likely: {summary.likely}")
+                        print(f"    Needs Review: {summary.needs_review}")
+                        print(f"    False Positives: {summary.suppressed_fp}")
+                        print()
+                except Exception as e:
+                    logger.warning(f"Pipeline integration failed, continuing with legacy report: {e}")
+                    self.canonical_findings = None
 
             if Phase.REPORT in phases and not self.config.skip_report:
                 await self.run_report()

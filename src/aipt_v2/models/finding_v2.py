@@ -732,6 +732,23 @@ def determine_scanner_type(source: str) -> ScannerType:
     return ScannerType.LOCAL
 
 
+def _min_datetime(dt1: datetime, dt2: datetime) -> datetime:
+    """Compare datetimes handling timezone-aware vs naive safely."""
+    # Normalize both to naive UTC for comparison
+    def to_naive_utc(dt: datetime) -> datetime:
+        if dt.tzinfo is not None:
+            return dt.replace(tzinfo=None)
+        return dt
+
+    dt1_naive = to_naive_utc(dt1)
+    dt2_naive = to_naive_utc(dt2)
+
+    # Return the original datetime that was earlier
+    if dt1_naive <= dt2_naive:
+        return dt1
+    return dt2
+
+
 def merge_findings_v2(primary: FindingV2, duplicate: FindingV2) -> FindingV2:
     """
     Merge two duplicate findings into one.
@@ -793,7 +810,7 @@ def merge_findings_v2(primary: FindingV2, duplicate: FindingV2) -> FindingV2:
         source_tool=f"{primary.source_tool}, {duplicate.source_tool}" if primary.source_tool != duplicate.source_tool else primary.source_tool,
         source_scanner_type=primary.source_scanner_type,
         source_raw_id=primary.source_raw_id,
-        discovered_at=min(primary.discovered_at, duplicate.discovered_at),
+        discovered_at=_min_datetime(primary.discovered_at, duplicate.discovered_at),
         cvss_score=primary.cvss_score or duplicate.cvss_score,
         cwe_id=primary.cwe_id or duplicate.cwe_id,
         cve_ids=list(set(primary.cve_ids + duplicate.cve_ids)),

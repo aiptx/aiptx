@@ -162,10 +162,16 @@ class Deduplicator:
             logger.error(msg)
 
         # Sort by severity (critical first) then by discovery time
+        # Normalize datetimes to naive UTC for comparison
+        def normalize_dt(dt):
+            if dt.tzinfo is not None:
+                return dt.replace(tzinfo=None)
+            return dt
+
         deduplicated.sort(
             key=lambda f: (
                 -[SeverityV2.INFO, SeverityV2.LOW, SeverityV2.MEDIUM, SeverityV2.HIGH, SeverityV2.CRITICAL].index(f.severity),
-                f.discovered_at,
+                normalize_dt(f.discovered_at),
             )
         )
 
