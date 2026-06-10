@@ -49,7 +49,7 @@ class LLMSettings(BaseModel):
     """LLM provider configuration."""
 
     provider: str = Field(default="anthropic", description="LLM provider name")
-    model: str = Field(default="claude-3-7-sonnet-20250219", description="Model identifier")
+    model: str = Field(default="claude-sonnet-4-20250514", description="Model identifier")
     api_key: Optional[str] = Field(default=None, description="API key")
     api_base: Optional[str] = Field(default=None, description="Custom API base URL")
     timeout: int = Field(default=120, ge=10, le=600, description="Request timeout in seconds")
@@ -73,13 +73,13 @@ class LLMSettings(BaseModel):
     @classmethod
     def get_model_from_env(cls, v):
         """Load model from environment variable if not explicitly set."""
-        if v and v != "claude-3-7-sonnet-20250219":  # Only use env if no explicit value or default
+        if v and v != "claude-sonnet-4-20250514":  # Only use env if no explicit value or default
             return v
         # Check environment variables (setup wizard saves to AIPT_LLM__MODEL)
         env_model = os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL")
         if env_model:
             return env_model
-        return v or "claude-3-7-sonnet-20250219"
+        return v or "claude-sonnet-4-20250514"
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -387,7 +387,7 @@ def get_config() -> AIPTConfig:
     config = AIPTConfig(
         llm=LLMSettings(
             provider=llm_provider,
-            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-3-7-sonnet-20250219"),
+            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
             api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
             api_base=llm_api_base,
             timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),
