@@ -78,7 +78,7 @@ def _get_model_name_from_env() -> str:
     Checks multiple sources in priority order:
     1. AIPT_LLM - complete model name (e.g., "ollama/llama3.2:latest")
     2. AIPT_LLM__PROVIDER + AIPT_LLM__MODEL - separate provider and model
-    3. Default to "anthropic/claude-3-7-sonnet-20250219"
+    3. Default to "openai/gpt-4"
 
     Returns:
         Model name in litellm format
@@ -96,7 +96,7 @@ def _get_model_name_from_env() -> str:
         return _build_model_name_for_litellm(provider, model)
 
     # Fallback to default
-    return "anthropic/claude-3-7-sonnet-20250219"
+    return "openai/gpt-4"
 
 
 class LLMConfig:
