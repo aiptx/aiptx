@@ -50,6 +50,7 @@ from aipt_v2.execution.parser import Finding
 from aipt_v2.execution.local_tool_executor import (
     ToolExecution,
     ExecutionState,
+    ExecutionBatch,
 )
 from aipt_v2.execution.tool_registry import TOOL_REGISTRY
 from aipt_v2.scanners.base import ScanResult, ScanFinding, ScanSeverity
@@ -138,6 +139,33 @@ def add_scan_finding(collector: ResultCollector, scan_finding: ScanFinding, phas
     )
 
     return collector.add_execution(execution, phase=tool_phase)
+
+
+def build_execution_batch(scan_findings, phase) -> ExecutionBatch:
+    """
+    Build a realistic ExecutionBatch (the thing executor.run_phase returns)
+    carrying the given findings, so the real PhaseRunner.run_phase control
+    flow (collector.add_phase_results -> PhaseReport) can be exercised.
+    """
+    tool = _PHASE_TOOL[phase]
+    findings = [_to_finding(sf, tool.name) for sf in scan_findings]
+    execution = ToolExecution(
+        id=f"exec_{tool.name}",
+        tool=tool,
+        target="example.com",
+        command=f"{tool.binary} example.com",
+        state=ExecutionState.COMPLETED,
+        return_code=0,
+        findings=findings,
+    )
+    now = datetime.utcnow()
+    return ExecutionBatch(
+        id=f"batch_{phase.value}",
+        phase=phase,
+        executions=[execution],
+        start_time=now,
+        end_time=now,
+    )
 
 
 # ============================================================================
@@ -283,31 +311,26 @@ def temp_output_dir():
 def pipeline_config(temp_output_dir):
     """Create test pipeline configuration."""
     return PipelineConfig(
-        target="example.com",
-        output_dir=temp_output_dir,
         phases=[
             PhaseConfig(
-                name="recon",
                 phase=ToolPhase.RECON,
                 tools=["subfinder", "httpx"],
                 timeout=60,
             ),
             PhaseConfig(
-                name="scan",
                 phase=ToolPhase.SCAN,
                 tools=["nuclei", "ffuf"],
                 timeout=120,
             ),
             PhaseConfig(
-                name="exploit",
                 phase=ToolPhase.EXPLOIT,
                 tools=["sqlmap"],
                 timeout=180,
             ),
         ],
-        enable_ai_checkpoints=True,
+        ai_checkpoints_enabled=True,
         ollama_model="mistral:7b",
-        max_concurrent_tools=2,
+        max_parallel_tools=2,
     )
 
 
@@ -400,23 +423,32 @@ class TestPhaseRunner:
     @pytest.mark.asyncio
     async def test_runner_initialization(self, pipeline_config):
         """Test PhaseRunner initialization."""
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
         assert runner.state == PipelineState.IDLE
         assert runner.config == pipeline_config
 
     @pytest.mark.asyncio
     async def test_single_phase_execution(self, pipeline_config, sample_recon_findings):
         """Test execution of a single phase."""
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        with patch.object(runner, "_run_tools") as mock_run:
-            mock_run.return_value = sample_recon_findings
+        # The real run_phase calls executor.run_phase(...) -> ExecutionBatch,
+        # then collector.add_phase_results(...) -> PhaseReport. Mock the
+        # executor seam so findings flow through the real control path.
+        batch = build_execution_batch(sample_recon_findings, ToolPhase.RECON)
 
-            report = await runner.run_phase("recon")
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return batch
 
-            assert report.phase_name == "recon"
-            assert report.status in ["completed", "success"]
-            assert len(report.findings) > 0
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                # Keep AI checkpoint off the network: force fallback (offline) path.
+                with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                    report = await runner.run_phase(ToolPhase.RECON)
+
+        assert report.phase == ToolPhase.RECON
+        assert report.state in ["completed", "success"]
+        assert report.findings_count > 0
 
     @pytest.mark.asyncio
     async def test_full_pipeline_execution(
@@ -427,25 +459,26 @@ class TestPhaseRunner:
         sample_exploit_findings,
     ):
         """Test full RECON → SCAN → EXPLOIT pipeline."""
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        # Mock tool execution for each phase
-        findings_by_phase = {
-            "recon": sample_recon_findings,
-            "scan": sample_scan_findings,
-            "exploit": sample_exploit_findings,
+        # Mock tool execution for each phase at the executor seam.
+        batches = {
+            ToolPhase.RECON: build_execution_batch(sample_recon_findings, ToolPhase.RECON),
+            ToolPhase.SCAN: build_execution_batch(sample_scan_findings, ToolPhase.SCAN),
+            ToolPhase.EXPLOIT: build_execution_batch(sample_exploit_findings, ToolPhase.EXPLOIT),
         }
 
-        async def mock_run_tools(phase_name, *args, **kwargs):
-            return findings_by_phase.get(phase_name, [])
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return batches[phase]
 
-        with patch.object(runner, "_run_tools", side_effect=mock_run_tools):
-            with patch.object(runner, "_ai_checkpoint", return_value={"proceed": True}):
-                report = await runner.run()
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                    report = await runner.run_pipeline()
 
-                assert runner.state == PipelineState.COMPLETED
-                assert report.total_findings > 0
-                assert len(report.phase_reports) == 3
+        assert runner.state == PipelineState.COMPLETED
+        assert report.total_findings > 0
+        assert len(report.phases) == 3
 
     @pytest.mark.asyncio
     async def test_pipeline_with_ai_checkpoints(
@@ -455,26 +488,35 @@ class TestPhaseRunner:
         mock_ollama_response,
     ):
         """Test pipeline pauses for AI checkpoint analysis."""
-        pipeline_config.enable_ai_checkpoints = True
-        runner = PhaseRunner(pipeline_config)
+        pipeline_config.ai_checkpoints_enabled = True
+        runner = PhaseRunner("example.com", pipeline_config)
 
         checkpoint_called = False
 
-        async def mock_checkpoint(*args, **kwargs):
+        async def mock_checkpoint(phase, *args, **kwargs):
             nonlocal checkpoint_called
             checkpoint_called = True
-            return {"recommendations": [{"tool": "nuclei", "priority": 1}]}
+            return {
+                "analysis": "stub",
+                "recommendations": [{"tool": "nuclei", "priority": 1}],
+            }
 
-        with patch.object(runner, "_run_tools", return_value=sample_recon_findings):
-            with patch.object(runner, "_ai_checkpoint", side_effect=mock_checkpoint):
-                await runner.run_phase("recon")
+        batch = build_execution_batch(sample_recon_findings, ToolPhase.RECON)
+
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return batch
+
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                with patch.object(runner, "run_ai_checkpoint", side_effect=mock_checkpoint):
+                    await runner.run_phase(ToolPhase.RECON)
 
         assert checkpoint_called, "AI checkpoint should be called after phase"
 
     @pytest.mark.asyncio
     async def test_pipeline_state_transitions(self, pipeline_config):
         """Test correct state transitions during pipeline."""
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
         states_seen = [runner.state]
 
         original_run = runner.run_phase
@@ -485,32 +527,41 @@ class TestPhaseRunner:
             states_seen.append(runner.state)
             return result
 
+        empty_batch = ExecutionBatch(id="empty", phase=ToolPhase.RECON, executions=[])
+
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return ExecutionBatch(id=f"empty_{phase.value}", phase=phase, executions=[])
+
         with patch.object(runner, "run_phase", side_effect=tracking_run):
-            with patch.object(runner, "_run_tools", return_value=[]):
-                await runner.run()
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                    await runner.run_pipeline()
 
         assert PipelineState.IDLE in states_seen
         assert PipelineState.RUNNING in states_seen or PipelineState.COMPLETED in states_seen
+        assert runner.state == PipelineState.COMPLETED
 
     @pytest.mark.asyncio
     async def test_pipeline_cancellation(self, pipeline_config):
         """Test pipeline can be cancelled mid-execution."""
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        async def slow_tools(*args, **kwargs):
+        async def slow_run_phase(phase, target, *args, **kwargs):
             await asyncio.sleep(10)
-            return []
+            return ExecutionBatch(id="slow", phase=phase, executions=[])
 
-        with patch.object(runner, "_run_tools", side_effect=slow_tools):
-            task = asyncio.create_task(runner.run())
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=slow_run_phase):
+                task = asyncio.create_task(runner.run_pipeline())
 
-            await asyncio.sleep(0.1)
-            await runner.cancel()
+                await asyncio.sleep(0.1)
+                await runner.cancel()
+                task.cancel()
 
-            with pytest.raises(asyncio.CancelledError):
-                await task
+                with pytest.raises(asyncio.CancelledError):
+                    await task
 
-            assert runner.state == PipelineState.CANCELLED
+                assert runner.state == PipelineState.CANCELLED
 
 
 # ============================================================================
@@ -693,16 +744,20 @@ class TestOfflineMode:
     @pytest.mark.asyncio
     async def test_pipeline_without_internet(self, pipeline_config):
         """Test pipeline runs with local tools only."""
-        pipeline_config.offline_mode = True
-        runner = PhaseRunner(pipeline_config)
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        # Mock successful local tool execution
-        with patch.object(runner, "_run_tools", return_value=[]):
-            with patch.object(runner, "_ai_checkpoint", return_value={"fallback": True}):
-                report = await runner.run()
+        # Simulate no internet: local tools return empty batches and the
+        # AI checkpoint client reports unavailable (rule-based fallback path).
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return ExecutionBatch(id=f"offline_{phase.value}", phase=phase, executions=[])
 
-                assert report is not None
-                assert runner.state == PipelineState.COMPLETED
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                    report = await runner.run_pipeline()
+
+                    assert report is not None
+                    assert runner.state == PipelineState.COMPLETED
 
     @pytest.mark.asyncio
     async def test_ollama_local_only(self):
@@ -795,24 +850,41 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_concurrent_tool_execution(self, pipeline_config):
         """Test tools run concurrently within limits."""
-        pipeline_config.max_concurrent_tools = 3
-        runner = PhaseRunner(pipeline_config)
+        pipeline_config.max_parallel_tools = 3
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        execution_times = []
+        # Two real recon tools so executor.run_phase fans out into multiple
+        # run_tool coroutines that asyncio.gather runs concurrently.
+        recon_tools = [TOOL_REGISTRY["subfinder"], TOOL_REGISTRY["httpx"]]
 
-        async def timed_tool(*args, **kwargs):
-            start = datetime.now()
+        running = 0
+        max_concurrent = 0
+
+        async def timed_tool(tool_name, target, *args, **kwargs):
+            nonlocal running, max_concurrent
+            running += 1
+            max_concurrent = max(max_concurrent, running)
             await asyncio.sleep(0.1)
-            execution_times.append((datetime.now() - start).total_seconds())
-            return []
+            running -= 1
+            return ToolExecution(
+                id=f"exec_{tool_name}",
+                tool=TOOL_REGISTRY[tool_name],
+                target=target,
+                command=f"{tool_name} {target}",
+                state=ExecutionState.COMPLETED,
+                return_code=0,
+                findings=[],
+            )
 
-        with patch.object(runner, "_run_single_tool", side_effect=timed_tool):
-            await runner.run_phase("recon")
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.registry, "get_tools_by_phase", return_value=recon_tools):
+                with patch.object(runner.executor, "run_tool", side_effect=timed_tool):
+                    with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                        report = await runner.run_phase(ToolPhase.RECON)
 
-        # If running concurrently, total time should be less than sequential
-        if len(execution_times) > 1:
-            # Just verify concurrent execution happened
-            assert True
+        # Both tools ran, and they ran at the same time (concurrently).
+        assert report.tools_run == 2
+        assert max_concurrent == 2
 
     @pytest.mark.asyncio
     async def test_large_finding_set(self):
@@ -868,61 +940,60 @@ class TestFullE2EIntegration:
         7. Final report generation
         8. Attack path detection
         """
-        runner = PhaseRunner(pipeline_config)
-        collector = ResultCollector(target="example.com")
+        runner = PhaseRunner("example.com", pipeline_config)
 
-        # Phase execution mocks
-        phase_findings = {
-            "recon": sample_recon_findings,
-            "scan": sample_scan_findings,
-            "exploit": sample_exploit_findings,
+        # Phase execution mocks at the executor seam: each phase yields a
+        # realistic ExecutionBatch that flows through the real collector.
+        batches = {
+            ToolPhase.RECON: build_execution_batch(sample_recon_findings, ToolPhase.RECON),
+            ToolPhase.SCAN: build_execution_batch(sample_scan_findings, ToolPhase.SCAN),
+            ToolPhase.EXPLOIT: build_execution_batch(sample_exploit_findings, ToolPhase.EXPLOIT),
         }
 
-        async def mock_run_tools(phase_name, tools, *args, **kwargs):
-            findings = phase_findings.get(phase_name, [])
-            for f in findings:
-                add_scan_finding(collector, f, phase=phase_name)
-            return findings
+        async def mock_run_phase(phase, target, *args, **kwargs):
+            return batches[phase]
 
-        # AI checkpoint mock
+        # AI checkpoint mock (wraps the real run_ai_checkpoint seam).
         checkpoint_calls = []
 
-        async def mock_checkpoint(phase, findings, *args, **kwargs):
+        async def mock_checkpoint(phase, *args, **kwargs):
             checkpoint_calls.append(phase)
             return {
+                "analysis": "stub",
                 "recommendations": [{"tool": "nuclei", "priority": 1}],
                 "risk_assessment": "HIGH",
                 "proceed": True,
             }
 
-        with patch.object(runner, "_run_tools", side_effect=mock_run_tools):
-            with patch.object(runner, "_ai_checkpoint", side_effect=mock_checkpoint):
-                # Execute full pipeline
-                report = await runner.run()
+        with patch.object(runner.registry, "is_available", return_value=True):
+            with patch.object(runner.executor, "run_phase", side_effect=mock_run_phase):
+                with patch.object(runner, "run_ai_checkpoint", side_effect=mock_checkpoint):
+                    # Execute full pipeline
+                    report = await runner.run_pipeline()
 
-                # Verify pipeline completed
-                assert runner.state == PipelineState.COMPLETED
-                assert report is not None
+        # Verify pipeline completed
+        assert runner.state == PipelineState.COMPLETED
+        assert report is not None
 
-                # Verify all phases ran
-                assert len(report.phase_reports) == 3
+        # Verify all phases ran
+        assert len(report.phases) == 3
 
-                # Verify AI checkpoints were called
-                assert len(checkpoint_calls) >= 2  # After RECON and SCAN
+        # Verify AI checkpoints were called
+        assert len(checkpoint_calls) >= 2  # After RECON and SCAN
 
-                # Verify findings collected
-                stats = collector.get_statistics()
-                assert stats["total_findings"] > 0
+        # The pipeline aggregates findings in its own collector.
+        collector = runner.get_results()
+        stats = collector.get_statistics()
+        assert stats["total_findings"] > 0
 
-                # Verify attack paths detected
-                paths = collector.detect_attack_paths()
-                # Should detect SQLi attack chain
-                assert len(paths) > 0
+        # Verify attack paths detected (SQLi attack chain).
+        paths = collector.detect_attack_paths()
+        assert len(paths) > 0
 
-                # Export results
-                json_path = temp_output_dir / "full_report.json"
-                json_path.write_text(collector.to_json())
-                assert json_path.exists()
+        # Export results
+        json_path = temp_output_dir / "full_report.json"
+        json_path.write_text(collector.to_json())
+        assert json_path.exists()
 
     @pytest.mark.asyncio
     @pytest.mark.integration
