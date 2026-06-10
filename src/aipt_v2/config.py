@@ -11,6 +11,7 @@ import os
 from typing import List, Optional
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -149,9 +150,29 @@ class ScannerSettings(BaseModel):
     @field_validator("acunetix_url", "burp_url", "nessus_url", "zap_url", mode="before")
     @classmethod
     def validate_url(cls, v):
-        if v and not v.startswith(("http://", "https://")):
-            # Auto-prepend http:// if no scheme provided (user-friendly)
+        if v is None or v == "":
+            return v
+        if not isinstance(v, str):
+            raise ValueError(f"Scanner URL must be a string, got {type(v).__name__}")
+        v = v.strip()
+        if "://" in v:
+            # Reject non-http(s) schemes (ftp://, file://, gopher://, ...): a
+            # scanner endpoint must speak http/https; other schemes are either
+            # a misconfiguration or a scheme-confusion/SSRF vector.
+            scheme = v.split("://", 1)[0].lower()
+            if scheme not in ("http", "https"):
+                raise ValueError(f"Scanner URL must use http or https, got scheme: {scheme}")
+        else:
+            # No scheme: only auto-prepend http:// for values that look like a
+            # host (contain a dot, a :port, or are localhost); reject obvious
+            # garbage so an invalid URL is surfaced rather than silently coerced.
+            host_part = v.split("/", 1)[0]
+            looks_like_host = ("." in host_part) or (":" in host_part) or host_part.lower() == "localhost"
+            if not looks_like_host:
+                raise ValueError(f"Invalid scanner URL: {v}")
             v = f"http://{v}"
+        if not urlparse(v).netloc:
+            raise ValueError(f"Invalid scanner URL: {v}")
         return v
 
 
