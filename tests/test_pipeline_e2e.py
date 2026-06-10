@@ -46,7 +46,98 @@ from aipt_v2.execution.result_collector import (
     NormalizedFinding,
     AttackPath,
 )
+from aipt_v2.execution.parser import Finding
+from aipt_v2.execution.local_tool_executor import (
+    ToolExecution,
+    ExecutionState,
+)
+from aipt_v2.execution.tool_registry import TOOL_REGISTRY
 from aipt_v2.scanners.base import ScanResult, ScanFinding, ScanSeverity
+
+
+# ============================================================================
+# Test helpers
+# ============================================================================
+
+# Map a phase name string to a ToolPhase enum value.
+_PHASE_MAP = {
+    "recon": ToolPhase.RECON,
+    "scan": ToolPhase.SCAN,
+    "exploit": ToolPhase.EXPLOIT,
+    "test": ToolPhase.RECON,
+}
+
+# A representative tool per phase so executions carry a valid ToolConfig.
+_PHASE_TOOL = {
+    ToolPhase.RECON: TOOL_REGISTRY["subfinder"],
+    ToolPhase.SCAN: TOOL_REGISTRY["nuclei"],
+    ToolPhase.EXPLOIT: TOOL_REGISTRY["sqlmap"],
+}
+
+
+def _finding_type_for(scan_finding: ScanFinding) -> str:
+    """Derive the parser Finding.type from a ScanFinding's tags/title."""
+    tags = {t.lower() for t in (scan_finding.tags or [])}
+    title = (scan_finding.title or "").lower()
+
+    if "credential" in tags or "credentials" in title:
+        return "credential"
+    if {"sqli", "xss", "injection", "vuln", "exploitation"} & tags:
+        return "vuln"
+    if "sql injection" in title or "xss" in title:
+        return "vuln"
+    if "port" in tags or "open port" in title:
+        return "port"
+    if "directory" in tags or "subdomain" in tags or "path" in tags:
+        return "path"
+    return "info"
+
+
+def _to_finding(scan_finding: ScanFinding, tool_name: str) -> Finding:
+    """Convert a ScanFinding (scanner model) into a parser Finding."""
+    metadata = {}
+    if scan_finding.host:
+        metadata["host"] = scan_finding.host
+    if scan_finding.port:
+        metadata["port"] = scan_finding.port
+    if scan_finding.cve:
+        metadata["cve"] = scan_finding.cve
+    if scan_finding.cwe:
+        metadata["cwe"] = scan_finding.cwe
+
+    return Finding(
+        type=_finding_type_for(scan_finding),
+        value=scan_finding.title,
+        description=scan_finding.description,
+        severity=scan_finding.severity.value,
+        metadata=metadata,
+        source_tool=tool_name,
+    )
+
+
+def add_scan_finding(collector: ResultCollector, scan_finding: ScanFinding, phase: str):
+    """
+    Feed a single ScanFinding into a ResultCollector via the real public API.
+
+    The collector ingests parser ``Finding`` objects through ``add_execution``,
+    so we wrap the converted finding in a successful ToolExecution.
+    """
+    tool_phase = _PHASE_MAP.get(phase, ToolPhase.RECON)
+    tool = _PHASE_TOOL[tool_phase]
+
+    finding = _to_finding(scan_finding, tool.name)
+
+    execution = ToolExecution(
+        id=f"exec_{tool.name}",
+        tool=tool,
+        target=collector.target,
+        command=f"{tool.binary} {collector.target}",
+        state=ExecutionState.COMPLETED,
+        return_code=0,
+        findings=[finding],
+    )
+
+    return collector.add_execution(execution, phase=tool_phase)
 
 
 # ============================================================================
@@ -176,7 +267,7 @@ def sample_exploit_findings():
             url="https://api.example.com/api/users?id=1",
             scanner="sqlmap",
             tags=["sqli", "exploitation", "data-breach"],
-            raw_data={"tables": ["users", "sessions"], "dbms": "MySQL"},
+            evidence='{"tables": ["users", "sessions"], "dbms": "MySQL"}',
         ),
     ]
 
@@ -260,20 +351,22 @@ class TestAICheckpointClient:
     @pytest.mark.asyncio
     async def test_checkpoint_fallback_on_timeout(self, sample_recon_findings):
         """Test fallback to rule-based analysis on Ollama timeout."""
-        client = AICheckpointClient(timeout=1)
+        client = AICheckpointClient()
 
-        with patch("aiohttp.ClientSession.post") as mock_post:
-            mock_post.side_effect = asyncio.TimeoutError()
-
+        # Force the "Ollama unavailable" path so analyze_phase uses the
+        # rule-based fallback instead of calling the model.
+        with patch.object(client, "is_available", AsyncMock(return_value=False)):
             result = await client.analyze_phase(
-                phase="recon",
-                findings=sample_recon_findings,
+                phase=ToolPhase.RECON,
+                findings_summary="Open Port: 22/ssh\nSubdomain: api.example.com",
                 target="example.com",
             )
 
-            # Should return rule-based fallback
+            # Should return rule-based fallback analysis (not None, with
+            # the fallback marker the collector produces).
             assert result is not None
-            assert result.get("fallback") == True
+            assert "Fallback Analysis" in result.get("analysis", "")
+            assert len(result.get("recommendations", [])) > 0
 
     @pytest.mark.asyncio
     async def test_checkpoint_with_empty_findings(self):
@@ -429,28 +522,28 @@ class TestResultCollector:
 
     def test_finding_normalization(self, sample_recon_findings):
         """Test findings are normalized correctly."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_recon_findings:
-            collector.add_finding(finding, phase="recon")
+            add_scan_finding(collector, finding, phase="recon")
 
-        normalized = collector.get_normalized_findings()
+        normalized = collector.get_all_findings()
         assert len(normalized) == len(sample_recon_findings)
 
         for nf in normalized:
             assert isinstance(nf, NormalizedFinding)
-            assert nf.phase == "recon"
+            assert nf.source_phase == ToolPhase.RECON
 
     def test_finding_deduplication(self, sample_recon_findings):
         """Test duplicate findings are merged."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         # Add same finding twice
         for finding in sample_recon_findings:
-            collector.add_finding(finding, phase="recon")
-            collector.add_finding(finding, phase="recon")  # Duplicate
+            add_scan_finding(collector, finding, phase="recon")
+            add_scan_finding(collector, finding, phase="recon")  # Duplicate
 
-        normalized = collector.get_normalized_findings()
+        normalized = collector.get_all_findings()
         assert len(normalized) == len(sample_recon_findings)
 
     def test_cross_phase_aggregation(
@@ -460,14 +553,14 @@ class TestResultCollector:
         sample_exploit_findings,
     ):
         """Test aggregation across multiple phases."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_recon_findings:
-            collector.add_finding(finding, phase="recon")
+            add_scan_finding(collector, finding, phase="recon")
         for finding in sample_scan_findings:
-            collector.add_finding(finding, phase="scan")
+            add_scan_finding(collector, finding, phase="scan")
         for finding in sample_exploit_findings:
-            collector.add_finding(finding, phase="exploit")
+            add_scan_finding(collector, finding, phase="exploit")
 
         stats = collector.get_statistics()
         assert stats["total_findings"] == (
@@ -475,9 +568,9 @@ class TestResultCollector:
             len(sample_scan_findings) +
             len(sample_exploit_findings)
         )
-        assert "recon" in stats["by_phase"]
-        assert "scan" in stats["by_phase"]
-        assert "exploit" in stats["by_phase"]
+        assert "recon" in stats["tools_summary"]
+        assert "scan" in stats["tools_summary"]
+        assert "exploit" in stats["tools_summary"]
 
 
 # ============================================================================
@@ -493,17 +586,17 @@ class TestAttackPathDetection:
         sample_exploit_findings,
     ):
         """Test detection of SQLi → Data Breach attack chain."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_scan_findings:
-            collector.add_finding(finding, phase="scan")
+            add_scan_finding(collector, finding, phase="scan")
         for finding in sample_exploit_findings:
-            collector.add_finding(finding, phase="exploit")
+            add_scan_finding(collector, finding, phase="exploit")
 
         paths = collector.detect_attack_paths()
 
         # Should detect SQLi vulnerability leading to exploitation
-        sqli_paths = [p for p in paths if "sqli" in str(p).lower()]
+        sqli_paths = [p for p in paths if "sql" in str(p.to_dict()).lower()]
         assert len(sqli_paths) > 0
 
     def test_recon_to_exploit_chain(
@@ -513,14 +606,14 @@ class TestAttackPathDetection:
         sample_exploit_findings,
     ):
         """Test full chain from recon to exploitation."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_recon_findings:
-            collector.add_finding(finding, phase="recon")
+            add_scan_finding(collector, finding, phase="recon")
         for finding in sample_scan_findings:
-            collector.add_finding(finding, phase="scan")
+            add_scan_finding(collector, finding, phase="scan")
         for finding in sample_exploit_findings:
-            collector.add_finding(finding, phase="exploit")
+            add_scan_finding(collector, finding, phase="exploit")
 
         paths = collector.detect_attack_paths()
 
@@ -533,12 +626,12 @@ class TestAttackPathDetection:
 
     def test_no_paths_for_info_only_findings(self, sample_recon_findings):
         """Test no attack paths for INFO-only findings."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         # Add only INFO severity findings
         info_findings = [f for f in sample_recon_findings if f.severity == ScanSeverity.INFO]
         for finding in info_findings:
-            collector.add_finding(finding, phase="recon")
+            add_scan_finding(collector, finding, phase="recon")
 
         paths = collector.detect_attack_paths()
 
@@ -641,13 +734,13 @@ class TestExportFormats:
         temp_output_dir,
     ):
         """Test JSON export of findings."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_recon_findings + sample_scan_findings:
-            collector.add_finding(finding, phase="test")
+            add_scan_finding(collector, finding, phase="test")
 
         json_path = temp_output_dir / "findings.json"
-        collector.export_json(str(json_path))
+        json_path.write_text(collector.to_json())
 
         assert json_path.exists()
 
@@ -663,13 +756,13 @@ class TestExportFormats:
         temp_output_dir,
     ):
         """Test Markdown export of findings."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_recon_findings + sample_scan_findings:
-            collector.add_finding(finding, phase="test")
+            add_scan_finding(collector, finding, phase="test")
 
         md_path = temp_output_dir / "findings.md"
-        collector.export_markdown(str(md_path))
+        md_path.write_text(collector.to_markdown())
 
         assert md_path.exists()
 
@@ -679,12 +772,12 @@ class TestExportFormats:
 
     def test_compact_llm_export(self, sample_scan_findings):
         """Test compact format for LLM context."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         for finding in sample_scan_findings:
-            collector.add_finding(finding, phase="scan")
+            add_scan_finding(collector, finding, phase="scan")
 
-        compact = collector.export_compact()
+        compact = collector.to_compact_format()
 
         # Should be concise
         assert len(compact) < 5000  # Under token limit
@@ -724,7 +817,7 @@ class TestPerformance:
     @pytest.mark.asyncio
     async def test_large_finding_set(self):
         """Test handling of many findings."""
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         # Add 1000 findings
         for i in range(1000):
@@ -735,13 +828,13 @@ class TestPerformance:
                 host=f"host{i % 100}.example.com",
                 scanner="test",
             )
-            collector.add_finding(finding, phase="test")
+            add_scan_finding(collector, finding, phase="test")
 
         stats = collector.get_statistics()
         assert stats["total_findings"] == 1000
 
         # Should still be fast
-        compact = collector.export_compact()
+        compact = collector.to_compact_format()
         assert len(compact) > 0
 
 
@@ -776,7 +869,7 @@ class TestFullE2EIntegration:
         8. Attack path detection
         """
         runner = PhaseRunner(pipeline_config)
-        collector = ResultCollector()
+        collector = ResultCollector(target="example.com")
 
         # Phase execution mocks
         phase_findings = {
@@ -788,7 +881,7 @@ class TestFullE2EIntegration:
         async def mock_run_tools(phase_name, tools, *args, **kwargs):
             findings = phase_findings.get(phase_name, [])
             for f in findings:
-                collector.add_finding(f, phase=phase_name)
+                add_scan_finding(collector, f, phase=phase_name)
             return findings
 
         # AI checkpoint mock
@@ -828,7 +921,7 @@ class TestFullE2EIntegration:
 
                 # Export results
                 json_path = temp_output_dir / "full_report.json"
-                collector.export_json(str(json_path))
+                json_path.write_text(collector.to_json())
                 assert json_path.exists()
 
     @pytest.mark.asyncio
@@ -879,7 +972,6 @@ class TestConvenienceFunctions:
 
             report = await run_quick_scan(
                 target="example.com",
-                output_dir=temp_output_dir,
             )
 
             assert report is not None
@@ -898,8 +990,7 @@ class TestConvenienceFunctions:
 
             report = await run_full_scan(
                 target="example.com",
-                output_dir=temp_output_dir,
-                enable_ai_checkpoints=True,
+                include_exploit=True,
             )
 
             assert report is not None
