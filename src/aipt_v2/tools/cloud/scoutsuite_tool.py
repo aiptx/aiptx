@@ -99,8 +99,8 @@ class ScoutSuiteTool:
             return self._installed
 
         try:
-            process = await asyncio.create_subprocess_shell(
-                "scout --version",
+            process = await asyncio.create_subprocess_exec(
+                "scout", "--version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -111,8 +111,8 @@ class ScoutSuiteTool:
 
         return self._installed
 
-    def _build_command(self) -> str:
-        """Build ScoutSuite command from configuration."""
+    def _build_command(self) -> List[str]:
+        """Build ScoutSuite command argument list from configuration."""
         cmd_parts = ["scout", self.config.provider]
 
         # Add provider-specific options
@@ -153,7 +153,7 @@ class ScoutSuiteTool:
         if self.config.timestamp:
             cmd_parts.append("--timestamp")
 
-        return " ".join(cmd_parts)
+        return cmd_parts
 
     async def scan(self, timeout: int = 3600) -> ScoutSuiteResult:
         """
@@ -172,13 +172,14 @@ class ScoutSuiteTool:
         start_time = current_time()
 
         cmd = self._build_command()
-        print(f"[*] Running: {cmd}")
+        cmd_display = " ".join(cmd)
+        print(f"[*] Running: {cmd_display}")
 
         # Set up environment
         env = os.environ.copy()
 
-        process = await asyncio.create_subprocess_shell(
-            cmd,
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
@@ -221,7 +222,7 @@ class ScoutSuiteTool:
             report_path=str(report_path) if report_path else "",
             summary=summary,
             metadata={
-                "command": cmd,
+                "command": cmd_display,
                 "return_code": process.returncode,
                 "stderr": stderr.decode() if process.returncode != 0 else ""
             }

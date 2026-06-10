@@ -123,8 +123,8 @@ class ProwlerTool:
             return self._installed
 
         try:
-            process = await asyncio.create_subprocess_shell(
-                "prowler --version",
+            process = await asyncio.create_subprocess_exec(
+                "prowler", "--version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
@@ -143,8 +143,8 @@ class ProwlerTool:
             return "Not installed"
         return self._version or "Unknown"
 
-    def _build_command(self) -> str:
-        """Build Prowler command from configuration."""
+    def _build_command(self) -> List[str]:
+        """Build Prowler command argument list from configuration."""
         cmd_parts = ["prowler", self.config.provider]
 
         # Add provider-specific options
@@ -184,7 +184,7 @@ class ProwlerTool:
         # Quiet mode for cleaner output
         cmd_parts.append("--no-banner")
 
-        return " ".join(cmd_parts)
+        return cmd_parts
 
     async def scan(self, timeout: int = 3600) -> ProwlerResult:
         """
@@ -203,13 +203,14 @@ class ProwlerTool:
         start_time = current_time()
 
         cmd = self._build_command()
-        print(f"[*] Running: {cmd}")
+        cmd_display = " ".join(cmd)
+        print(f"[*] Running: {cmd_display}")
 
         # Set up environment
         env = os.environ.copy()
 
-        process = await asyncio.create_subprocess_shell(
-            cmd,
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
@@ -260,7 +261,7 @@ class ProwlerTool:
             report_path=str(report_path) if report_path else "",
             summary=summary,
             metadata={
-                "command": cmd,
+                "command": cmd_display,
                 "return_code": process.returncode,
                 "version": self._version,
                 "stderr": stderr.decode() if process.returncode != 0 else ""
@@ -425,8 +426,8 @@ async def list_available_checks(provider: str = "aws") -> List[Dict[str, str]]:
         List of check definitions
     """
     try:
-        process = await asyncio.create_subprocess_shell(
-            f"prowler {provider} --list-checks --no-banner",
+        process = await asyncio.create_subprocess_exec(
+            "prowler", provider, "--list-checks", "--no-banner",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )
@@ -459,8 +460,8 @@ async def list_compliance_frameworks(provider: str = "aws") -> List[str]:
         List of framework names
     """
     try:
-        process = await asyncio.create_subprocess_shell(
-            f"prowler {provider} --list-compliance --no-banner",
+        process = await asyncio.create_subprocess_exec(
+            "prowler", provider, "--list-compliance", "--no-banner",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE
         )

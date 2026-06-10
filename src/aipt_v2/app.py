@@ -841,10 +841,20 @@ def create_app(
         if any(c in target for c in dangerous_chars):
             raise HTTPException(status_code=400, detail="Invalid target: contains dangerous characters")
 
-        # Validate options if provided
+        import shlex
+
+        # Parse options into discrete tokens up front. The previous denylist
+        # ([";","&","|","$","`"]) omitted newline, carriage return and
+        # redirection (< >), so a value like "\nid" or "x > /file" injected a
+        # whole new shell command. shlex.split parses the operator's intended
+        # arguments; each token is re-quoted below so no metacharacter (incl.
+        # newline/redirection) can reach the shell (CWE-78).
+        option_tokens: list[str] = []
         if options:
-            if any(c in options for c in [";", "&", "|", "$", "`"]):
-                raise HTTPException(status_code=400, detail="Invalid options: contains dangerous characters")
+            try:
+                option_tokens = shlex.split(options)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid options: malformed quoting")
 
         # Get tool from RAG
         tool = tools_rag.get_tool_by_name(tool_name)
@@ -852,14 +862,12 @@ def create_app(
             raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found")
 
         # Build command. The tool template is a freeform shell string, so
-        # shell-quote the target before substituting it. The denylist above is
-        # kept as defense-in-depth, but it allowed spaces and redirection
-        # (< >), which permit argument injection; shlex.quote collapses the
-        # target into a single safe token regardless (CWE-78).
-        import shlex
+        # shell-quote the target before substituting it, and append each option
+        # token shell-quoted. shlex.quote collapses every value into a single
+        # safe token regardless of spaces/redirection/newlines (CWE-78).
         cmd = tool.get("cmd", "").replace("{target}", shlex.quote(target))
-        if options:
-            cmd = f"{cmd} {options}"
+        if option_tokens:
+            cmd = cmd + " " + " ".join(shlex.quote(tok) for tok in option_tokens)
 
         # Execute
         start_time = time.time()
