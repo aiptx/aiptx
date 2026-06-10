@@ -97,7 +97,7 @@ class HTTPCallbackServer:
     and correlates them with pending callbacks.
 
     Usage:
-        server = HTTPCallbackServer(port=8888, host="0.0.0.0")
+        server = HTTPCallbackServer(port=8888)  # binds 127.0.0.1 by default
         callback_url = await server.start()
 
         # Generate unique callback ID
@@ -110,18 +110,25 @@ class HTTPCallbackServer:
             print(f"Callback received from {result.source_ip}")
     """
 
+    # Cap retained callbacks so a target that floods the listener cannot
+    # exhaust operator memory (each entry holds attacker-controlled data).
+    _MAX_CALLBACKS = 1000
+
     def __init__(
         self,
         port: int = 8888,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         external_host: Optional[str] = None,
     ):
         """
         Initialize HTTP callback server.
 
         Args:
-            port: Port to listen on
-            host: Host to bind to
+            port: Port to listen on. Binds to 127.0.0.1 by default; set
+                host="0.0.0.0" explicitly (and front it with a reverse proxy
+                or firewall) only when out-of-band callbacks from a remote
+                target must reach the operator directly.
+            host: Host to bind to (default loopback for safety)
             external_host: External hostname/IP for callback URLs
         """
         self.port = port
@@ -207,8 +214,14 @@ class HTTPCallbackServer:
             logger.info("HTTP Callback server stopped")
 
     def generate_callback_id(self) -> str:
-        """Generate unique callback identifier."""
-        return f"cb-{uuid.uuid4().hex[:16]}"
+        """Generate unique callback identifier.
+
+        Uses the full 128-bit uuid4 (not a 64-bit truncation) so the ID is
+        unguessable: only the target that received the payload can trigger a
+        matching callback, preventing forged "CONFIRMED" results across other
+        findings.
+        """
+        return f"cb-{uuid.uuid4().hex}"
 
     def register_pending(
         self,
@@ -304,6 +317,9 @@ class HTTPCallbackServer:
         )
 
         self._callbacks.append(result)
+        if len(self._callbacks) > self._MAX_CALLBACKS:
+            # Drop oldest; keep the listener bounded under callback floods.
+            del self._callbacks[: len(self._callbacks) - self._MAX_CALLBACKS]
         logger.info(f"Received callback: {callback_id} from {result.source_ip}")
 
         # Notify pending waiters
@@ -375,17 +391,21 @@ class DNSCallbackServer:
         result = await server.wait_for_callback(callback_id, timeout=30.0)
     """
 
+    _MAX_CALLBACKS = 1000
+
     def __init__(
         self,
         port: int = 5353,
-        host: str = "0.0.0.0",
+        host: str = "127.0.0.1",
         domain: str = "callback.aiptx.local",
     ):
         """
         Initialize DNS callback server.
 
         Args:
-            port: Port to listen on (53 requires root)
+            port: Port to listen on (53 requires root). Binds to 127.0.0.1 by
+                default; set host="0.0.0.0" explicitly when external resolvers
+                must reach this server for out-of-band DNS callbacks.
             host: Host to bind to
             domain: Base domain for callbacks
         """
@@ -502,6 +522,8 @@ class DNSCallbackServer:
         )
 
         self._callbacks.append(result)
+        if len(self._callbacks) > self._MAX_CALLBACKS:
+            del self._callbacks[: len(self._callbacks) - self._MAX_CALLBACKS]
         logger.info(f"DNS callback: {callback_id} from {source_ip} ({query_name})")
 
         # Notify pending waiters
@@ -727,7 +749,7 @@ class CallbackManager:
     def __init__(
         self,
         http_port: int = 8888,
-        http_host: str = "0.0.0.0",
+        http_host: str = "127.0.0.1",
         external_host: Optional[str] = None,
         enable_dns: bool = False,
         dns_port: int = 5353,

@@ -1,6 +1,9 @@
 import os
 # from googlesearch import search
 import re
+import ipaddress
+import socket
+from urllib.parse import urlparse
 from tqdm import tqdm
 # import csv
 from deep_translator import GoogleTranslator
@@ -20,6 +23,42 @@ from aipt_v2.utils.model_manager import get_model
 dotenv.load_dotenv()
 
 nlp = spacy.load("en_core_web_sm")
+
+# Cap on fetched page size to avoid memory exhaustion from a hostile/oversized
+# response.
+_MAX_FETCH_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _is_safe_public_url(url: str) -> bool:
+    """Return True only for http(s) URLs that resolve to a public IP.
+
+    These pages come from search/LLM output, so they are attacker-influenceable.
+    Fetching them on the operator's box must not reach internal hosts or the
+    cloud metadata endpoint (operator-side SSRF, CWE-918).
+    """
+    try:
+        parsed = urlparse(url)
+    except Exception:
+        return False
+    if parsed.scheme not in ("http", "https"):
+        return False
+    host = parsed.hostname
+    if not host:
+        return False
+    try:
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except OSError:
+        return False
+    for info in infos:
+        ip = info[4][0]
+        try:
+            addr = ipaddress.ip_address(ip)
+        except ValueError:
+            return False
+        if (addr.is_private or addr.is_loopback or addr.is_link_local
+                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+            return False
+    return True
 
 def google_search(query, api_key, cse_id, num=10, **kwargs):
     """
@@ -55,11 +94,29 @@ class GoogleSearcher:
     def __init__(self, model_name: str = "openai"):
         self.llm = get_model(model_name)
 
-    def fetch_webpage_content(self,url, timeout=180):
+    def fetch_webpage_content(self, url, timeout=30):
+        # SSRF guard: never fetch internal/metadata hosts derived from
+        # search/LLM output (CWE-918).
+        if not _is_safe_public_url(url):
+            print(f"Refusing to fetch non-public/unsafe URL: {url}")
+            return None
         try:
-            response = requests.get(url, timeout=timeout) # set timeout management
-            response.raise_for_status()  # check if request is successful
-            return response.text
+            # Stream so we can enforce a hard size cap (CWE-400) instead of
+            # buffering an unbounded response into memory.
+            response = requests.get(url, timeout=timeout, stream=True)
+            response.raise_for_status()
+            chunks = []
+            total = 0
+            for chunk in response.iter_content(chunk_size=65536):
+                if not chunk:
+                    continue
+                total += len(chunk)
+                if total > _MAX_FETCH_BYTES:
+                    print(f"Response exceeded {_MAX_FETCH_BYTES} bytes, truncating: {url}")
+                    break
+                chunks.append(chunk)
+            encoding = response.encoding or "utf-8"
+            return b"".join(chunks).decode(encoding, errors="replace")
         except requests.RequestException as e:
             print(f"Request Error: {e}")
             return None

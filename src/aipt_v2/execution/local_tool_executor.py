@@ -12,6 +12,7 @@ Enhanced executor for local security tools with:
 
 import asyncio
 import logging
+import shlex
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -44,7 +45,8 @@ class ToolExecution:
     id: str
     tool: ToolConfig
     target: str
-    command: str
+    command: str  # Display/log string only; execution uses command_args (argv).
+    command_args: List[str] = field(default_factory=list)
     args: List[str] = field(default_factory=list)
 
     # State
@@ -235,9 +237,11 @@ class LocalToolExecutor:
         if not self.registry.is_available(tool_name):
             raise RuntimeError(f"Tool not available: {tool_name}")
 
-        # Build command
+        # Build command as an argv list. Keep a shell-quoted string copy for
+        # display/logging only; execution uses the argv list via
+        # create_subprocess_exec so target/args are never shell-interpreted.
         command_args = self._build_command(tool, target, args or [])
-        command = " ".join(command_args)
+        command = shlex.join(command_args)
 
         # Create execution record
         execution = ToolExecution(
@@ -245,6 +249,7 @@ class LocalToolExecutor:
             tool=tool,
             target=target,
             command=command,
+            command_args=command_args,
             args=args or [],
         )
 
@@ -371,8 +376,8 @@ class LocalToolExecutor:
         timeout: int,
     ) -> ExecutionResult:
         """Simple execution without streaming."""
-        proc = await asyncio.create_subprocess_shell(
-            execution.command,
+        proc = await asyncio.create_subprocess_exec(
+            *execution.command_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -408,8 +413,8 @@ class LocalToolExecutor:
         timeout: int,
     ) -> ExecutionResult:
         """Execute with streaming output."""
-        proc = await asyncio.create_subprocess_shell(
-            execution.command,
+        proc = await asyncio.create_subprocess_exec(
+            *execution.command_args,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )

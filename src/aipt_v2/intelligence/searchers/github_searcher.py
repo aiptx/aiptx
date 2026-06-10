@@ -164,7 +164,7 @@ class GithubSearcher:
             # get the difference in days
             days_difference = (current_time - given_time).days
             lamda = c.times_2 * norm.pdf(days_difference, loc=c.mus[2], scale=c.sigmas[2]) + c.base_line
-            item['efct_score'] = lamda * item['stars_count'] / item['forks_count']
+            item['efct_score'] = lamda * item['stars_count'] / max(1, item['forks_count'])
 
 
         filtered_extracted_items = [item for item in extracted_items if item['conf_score'] >= c.threshold]

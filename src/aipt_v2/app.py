@@ -792,8 +792,13 @@ def create_app(
         nmap_path = shutil.which("nmap")
         if nmap_path:
             try:
-                proc = await asyncio.create_subprocess_shell(
-                    f"nmap -F {scan_request.target}",
+                # Use exec (argv list) not shell: the target is passed as a
+                # discrete argument, so shell metacharacters in it can never be
+                # interpreted (CWE-78). The URL-branch of validate_target does
+                # not inspect the path/query, so shell interpolation here was
+                # injectable (e.g. https://example.com/$(id)).
+                proc = await asyncio.create_subprocess_exec(
+                    "nmap", "-F", scan_request.target,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -846,8 +851,13 @@ def create_app(
         if not tool:
             raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found")
 
-        # Build command
-        cmd = tool.get("cmd", "").replace("{target}", target)
+        # Build command. The tool template is a freeform shell string, so
+        # shell-quote the target before substituting it. The denylist above is
+        # kept as defense-in-depth, but it allowed spaces and redirection
+        # (< >), which permit argument injection; shlex.quote collapses the
+        # target into a single safe token regardless (CWE-78).
+        import shlex
+        cmd = tool.get("cmd", "").replace("{target}", shlex.quote(target))
         if options:
             cmd = f"{cmd} {options}"
 

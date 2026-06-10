@@ -2564,7 +2564,7 @@ def run_config_test(args):
                     response = httpx.get(
                         f"{config.scanners.acunetix_url}/api/v1/me",
                         headers={"X-Auth": config.scanners.acunetix_api_key},
-                        verify=False,
+                        verify=config.scanners.verify_tls,
                         timeout=10,
                     )
                     if response.status_code == 200:
@@ -2587,7 +2587,7 @@ def run_config_test(args):
                     response = httpx.get(
                         f"{config.scanners.burp_url}/api-internal/versions",
                         headers={"Authorization": f"Bearer {config.scanners.burp_api_key}"},
-                        verify=False,
+                        verify=config.scanners.verify_tls,
                         timeout=10,
                     )
                     if response.status_code == 200:
@@ -2612,7 +2612,7 @@ def run_config_test(args):
                         headers={
                             "X-ApiKeys": f"accessKey={config.scanners.nessus_access_key};secretKey={config.scanners.nessus_secret_key}"
                         },
-                        verify=False,
+                        verify=config.scanners.verify_tls,
                         timeout=10,
                     )
                     if response.status_code == 200:
@@ -2941,7 +2941,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                         response = httpx.get(
                             f"{config.scanners.acunetix_url}/api/v1/me",
                             headers={"X-Auth": config.scanners.acunetix_api_key or ""},
-                            verify=False,
+                            verify=config.scanners.verify_tls,
                             timeout=10,
                         )
                         if response.status_code == 200:
@@ -2969,7 +2969,7 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                         response = httpx.get(
                             f"{config.scanners.burp_url}/api-internal/versions",
                             headers={"Authorization": f"Bearer {config.scanners.burp_api_key or ''}"},
-                            verify=False,
+                            verify=config.scanners.verify_tls,
                             timeout=10,
                         )
                         if response.status_code == 200:

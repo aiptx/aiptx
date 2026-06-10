@@ -622,6 +622,24 @@ class Orchestrator:
         """
         return sanitize_for_shell(self.domain)
 
+    @property
+    def safe_target(self) -> str:
+        """
+        Get shell-safe full target URL for command interpolation.
+
+        Security: ``_normalize_target`` only prepends a scheme and
+        ``_extract_domain`` validates the host only, so the URL path/query
+        of ``self.target`` is otherwise unsanitized. Any command that
+        interpolates the full target into a shell string MUST use this
+        property to prevent command injection (CWE-78), e.g. a target of
+        ``https://example.com/$(id)`` whose host passes validation but whose
+        path would otherwise execute.
+
+        Returns:
+            Shell-escaped target string
+        """
+        return sanitize_for_shell(self.target)
+
     def _get_terminal_width(self) -> int:
         """Get terminal width, with fallback to 80."""
         try:
@@ -825,6 +843,7 @@ class Orchestrator:
                     await proc.wait()
                 except asyncio.TimeoutError:
                     proc.kill()
+                    await proc.wait()  # Reap the killed process (avoid zombie)
                     return -1, f"Command timed out after {timeout}s"
 
                 output = "\n".join(output_lines)
@@ -836,10 +855,16 @@ class Orchestrator:
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
-                stdout, stderr = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=timeout
-                )
+                try:
+                    stdout, stderr = await asyncio.wait_for(
+                        proc.communicate(),
+                        timeout=timeout
+                    )
+                except asyncio.TimeoutError:
+                    # Kill and reap so the external tool is not left running.
+                    proc.kill()
+                    await proc.wait()
+                    return -1, f"Command timed out after {timeout}s"
                 output = (stdout.decode() if stdout else "") + (stderr.decode() if stderr else "")
                 return proc.returncode or 0, output
         except asyncio.TimeoutError:
@@ -912,7 +937,9 @@ class Orchestrator:
             f"--tamper={tampers}",
             "--random-agent",
             "--delay=1",  # Slow down to avoid rate limiting
-            "--safe-url=" + self.target,  # Keep session alive
+            # Shell-quote: this string is interpolated into a shell command
+            # (CWE-78); self.target is otherwise unescaped on its path/query.
+            "--safe-url=" + sanitize_for_shell(self.target),  # Keep session alive
             "--safe-freq=3",
             "--hpp",  # HTTP Parameter Pollution
         ]
@@ -2845,7 +2872,7 @@ class Orchestrator:
         if "wafw00f" in self.config.recon_tools:
             self._log_tool("wafw00f", "running")
             ret, output = await self._run_command(
-                f"wafw00f {self.target} 2>/dev/null"
+                f"wafw00f {self.safe_target} 2>/dev/null"
             )
             if ret == 0:
                 (self.output_dir / f"wafw00f_{self.domain}.txt").write_text(output)
@@ -2885,7 +2912,7 @@ class Orchestrator:
         if "whatweb" in self.config.recon_tools:
             self._log_tool("whatweb", "running")
             ret, output = await self._run_command(
-                f"whatweb -a 3 {self.target} --log-json={self.output_dir}/whatweb_{self.domain}.json 2>/dev/null"
+                f"whatweb -a 3 {self.safe_target} --log-json={self.output_dir}/whatweb_{self.domain}.json 2>/dev/null"
             )
             if ret == 0:
                 (self.output_dir / f"whatweb_{self.domain}.txt").write_text(output)
@@ -3114,7 +3141,7 @@ class Orchestrator:
             auth_header_args = self._get_auth_header_args(auth_headers)
 
             # Use JSON output for reliable parsing, exclude info level for cleaner results
-            nuclei_cmd = f"nuclei -u {self.target} -severity low,medium,high,critical -json -silent"
+            nuclei_cmd = f"nuclei -u {self.safe_target} -severity low,medium,high,critical -json -silent"
             if auth_header_args:
                 nuclei_cmd += f" {auth_header_args}"
             nuclei_cmd += " 2>/dev/null"
@@ -3576,7 +3603,7 @@ class Orchestrator:
 
                 # Use JSON output for reliable parsing
                 ret, output = await self._run_command(
-                    f"ffuf -u {self.target}/FUZZ -w {wordlist} -mc 200,301,302,403 -t 50 -o {ffuf_output_file} -of json 2>&1",
+                    f"ffuf -u {self.safe_target}/FUZZ -w {wordlist} -mc 200,301,302,403 -t 50 -o {ffuf_output_file} -of json 2>&1",
                     timeout=300
                 )
                 tool_elapsed = time.time() - tool_start
@@ -3667,7 +3694,7 @@ class Orchestrator:
             tool_start = time.time()
             nikto_output_file = self.output_dir / f"nikto_{self.domain}.txt"
             ret, output = await self._run_command(
-                f"nikto -h {self.target} -Format txt -output {nikto_output_file} -Tuning 123bde 2>/dev/null",
+                f"nikto -h {self.safe_target} -Format txt -output {nikto_output_file} -Tuning 123bde 2>/dev/null",
                 timeout=600
             )
             tool_elapsed = time.time() - tool_start
@@ -3815,13 +3842,13 @@ class Orchestrator:
             self._log_tool("wpscan", "running")
             # Check if WordPress
             ret, check_output = await self._run_command(
-                f"curl -sL {self.target}/wp-login.php --connect-timeout 5 | head -1"
+                f"curl -sL {self.safe_target}/wp-login.php --connect-timeout 5 | head -1"
             )
             if "wp-" in check_output.lower() or "wordpress" in check_output.lower():
                 wpscan_token = os.getenv("WPSCAN_API_TOKEN", "")
                 token_flag = f"--api-token {wpscan_token}" if wpscan_token else ""
                 ret, output = await self._run_command(
-                    f"wpscan --url {self.target} {token_flag} --enumerate vp,vt,u --format json --output {self.output_dir}/wpscan_{self.domain}.json 2>/dev/null",
+                    f"wpscan --url {self.safe_target} {token_flag} --enumerate vp,vt,u --format json --output {self.output_dir}/wpscan_{self.domain}.json 2>/dev/null",
                     timeout=600
                 )
                 if ret == 0:
@@ -3992,7 +4019,7 @@ class Orchestrator:
 
                 # Use output file for reliable results
                 ret, output = await self._run_command(
-                    f"gobuster dir -u {self.target} -w {wordlist} -q -t 20 --no-error --no-color -o {gobuster_output_file} 2>&1",
+                    f"gobuster dir -u {self.safe_target} -w {wordlist} -q -t 20 --no-error --no-color -o {gobuster_output_file} 2>&1",
                     timeout=300
                 )
                 tool_elapsed = time.time() - tool_start
@@ -4070,7 +4097,7 @@ class Orchestrator:
             tool_start = time.time()
             dirsearch_txt_file = self.output_dir / f"dirsearch_{self.domain}.txt"
             ret, output = await self._run_command(
-                f"dirsearch -u {self.target} -e php,asp,aspx,jsp,html,js -t 20 --format plain -o {dirsearch_txt_file} 2>/dev/null",
+                f"dirsearch -u {self.safe_target} -e php,asp,aspx,jsp,html,js -t 20 --format plain -o {dirsearch_txt_file} 2>/dev/null",
                 timeout=300
             )
             tool_elapsed = time.time() - tool_start
@@ -4252,7 +4279,7 @@ class Orchestrator:
 
                 # First, try to detect Docker presence via common paths
                 ret, output = await self._run_command(
-                    f"curl -sI {self.target}/docker-compose.yml --connect-timeout 5 | head -1",
+                    f"curl -sI {self.safe_target}/docker-compose.yml --connect-timeout 5 | head -1",
                     timeout=10
                 )
                 has_docker = "200" in output
@@ -4305,7 +4332,7 @@ class Orchestrator:
             try:
                 # Check if .git is exposed
                 ret, git_check = await self._run_command(
-                    f"curl -sI {self.target}/.git/config --connect-timeout 5 | head -1",
+                    f"curl -sI {self.safe_target}/.git/config --connect-timeout 5 | head -1",
                     timeout=10
                 )
                 if "200" in git_check:
@@ -4708,7 +4735,7 @@ class Orchestrator:
             # This helps detect custom 404 pages that return 200
             baseline_path = f"/aiptx_nonexistent_{int(time.time())}_test"
             ret, baseline_info = await self._run_command(
-                f"curl -s -w '\\n%{{http_code}}\\n%{{size_download}}' '{self.target}{baseline_path}' --connect-timeout 5 | tail -2",
+                f"curl -s -w '\\n%{{http_code}}\\n%{{size_download}}' {sanitize_for_shell(self.target + baseline_path)} --connect-timeout 5 | tail -2",
                 timeout=10
             )
             baseline_status = "404"
@@ -4747,7 +4774,7 @@ class Orchestrator:
                 try:
                     # Get both status code and response body
                     ret, response = await self._run_command(
-                        f"curl -s -w '\\n---HTTP_CODE---%{{http_code}}---SIZE---%{{size_download}}' '{self.target}{path}' --connect-timeout 5 2>/dev/null",
+                        f"curl -s -w '\\n---HTTP_CODE---%{{http_code}}---SIZE---%{{size_download}}' {sanitize_for_shell(self.target + path)} --connect-timeout 5 2>/dev/null",
                         timeout=15
                     )
                     if ret != 0:
@@ -4840,8 +4867,12 @@ class Orchestrator:
 
         # 2. WAF Detection
         self._log_tool("WAF Detection", "running")
+        # Build the SQLi probe URL then shell-quote the whole thing; the manual
+        # double-quote wrapper used previously did not stop injection if the
+        # target contained a quote (CWE-78).
+        waf_probe_url = self.target + "/?id=1'%20OR%20'1'='1"
         ret, output = await self._run_command(
-            f"curl -sI \"{self.target}/?id=1'%20OR%20'1'='1\" --connect-timeout 5 | head -1",
+            f"curl -sI {sanitize_for_shell(waf_probe_url)} --connect-timeout 5 | head -1",
             timeout=10
         )
         waf_detected = "403" in output or "406" in output or "429" in output

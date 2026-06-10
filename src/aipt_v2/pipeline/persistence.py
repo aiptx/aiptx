@@ -24,7 +24,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
@@ -164,7 +164,7 @@ class CanonicalFindings:
         return cls(
             scan_id=data.get("scan_id", ""),
             target=data.get("target", ""),
-            verified_at=datetime.fromisoformat(data["verified_at"]) if data.get("verified_at") else datetime.utcnow(),
+            verified_at=datetime.fromisoformat(data["verified_at"]) if data.get("verified_at") else datetime.now(timezone.utc),
             pipeline_version=data.get("pipeline_version", "2.0"),
             summary=summary,
             findings=findings,
@@ -251,7 +251,7 @@ class PipelinePersistence:
         data = {
             "scan_id": scan_id,
             "target": target,
-            "normalized_at": datetime.utcnow().isoformat(),
+            "normalized_at": datetime.now(timezone.utc).isoformat(),
             "total_raw_findings": len(findings),
             "findings": [f.to_dict() for f in findings],
             "tool_stats": tool_stats or {},
@@ -480,13 +480,17 @@ def save_canonical_findings(
     # Calculate duration
     duration = None
     if scan_started_at and scan_completed_at:
-        duration = (scan_completed_at - scan_started_at).total_seconds()
+        # Guard against naive/aware mismatch: normalize both to tz-aware UTC
+        # before subtracting so a naive timestamp can never raise TypeError.
+        start = scan_started_at if scan_started_at.tzinfo else scan_started_at.replace(tzinfo=timezone.utc)
+        end = scan_completed_at if scan_completed_at.tzinfo else scan_completed_at.replace(tzinfo=timezone.utc)
+        duration = (end - start).total_seconds()
 
     # Create container
     canonical = CanonicalFindings(
         scan_id=scan_id,
         target=target,
-        verified_at=datetime.utcnow(),
+        verified_at=datetime.now(timezone.utc),
         summary=summary,
         findings=findings,
         tool_status=tool_status,

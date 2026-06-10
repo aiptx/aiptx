@@ -138,6 +138,14 @@ class ScannerSettings(BaseModel):
     zap_url: Optional[str] = Field(default=None, description="ZAP API URL")
     zap_api_key: Optional[str] = Field(default=None, description="ZAP API key")
 
+    # TLS verification for scanner-appliance API calls. Defaults to True so
+    # API keys/bearer tokens are never sent over an unverified channel
+    # (MITM risk). Set to False only for appliances using self-signed certs.
+    verify_tls: bool = Field(
+        default=True,
+        description="Verify TLS certs when calling scanner appliance APIs",
+    )
+
     @field_validator("acunetix_url", "burp_url", "nessus_url", "zap_url", mode="before")
     @classmethod
     def validate_url(cls, v):
@@ -394,6 +402,8 @@ def get_config() -> AIPTConfig:
             nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY"),
             zap_url=os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL"),
             zap_api_key=os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY"),
+            verify_tls=(os.getenv("AIPT_SCANNERS__VERIFY_TLS") or os.getenv("SCANNERS_VERIFY_TLS") or "true").lower()
+            not in ("0", "false", "no"),
         ),
         intelligence=IntelligenceSettings(
             zoomeye_api_key=os.getenv("AIPT_INTELLIGENCE__ZOOMEYE_API_KEY") or os.getenv("ZOOMEYE_API_KEY"),
