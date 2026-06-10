@@ -340,8 +340,8 @@ class TestAICheckpointClient:
             mock_post.return_value.__aenter__.return_value = mock_response
 
             result = await client.analyze_phase(
-                phase="recon",
-                findings=sample_recon_findings,
+                phase=ToolPhase.RECON,
+                findings_summary="Open Port: 22/ssh\nSubdomain: api.example.com",
                 target="example.com",
             )
 
@@ -382,8 +382,8 @@ class TestAICheckpointClient:
             mock_post.return_value.__aenter__.return_value = mock_response
 
             result = await client.analyze_phase(
-                phase="recon",
-                findings=[],
+                phase=ToolPhase.RECON,
+                findings_summary="",
                 target="example.com",
             )
 
@@ -942,8 +942,8 @@ class TestFullE2EIntegration:
         )
 
         result = await client.analyze_phase(
-            phase="recon",
-            findings=sample_recon_findings,
+            phase=ToolPhase.RECON,
+            findings_summary="Open Port: 22/ssh\nSubdomain: api.example.com",
             target="example.com",
         )
 
