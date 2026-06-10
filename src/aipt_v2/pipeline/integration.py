@@ -25,7 +25,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional, TYPE_CHECKING
 
@@ -153,7 +153,7 @@ class PipelineIntegration:
                     list(self.orchestrator.phase_results.keys())[0]
                 ).started_at
             ) if self.orchestrator.phase_results else None,
-            scan_completed_at=datetime.utcnow(),
+            scan_completed_at=datetime.now(timezone.utc),
         )
 
         # Load and store canonical

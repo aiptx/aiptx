@@ -386,7 +386,8 @@ class TestOrchestratorHelperMethods:
         """Test default severity parsing."""
         assert orchestrator._parse_nuclei_severity("[template] target") == "info"
 
-    def test_add_finding_triggers_callback(self, orchestrator):
+    @pytest.mark.asyncio
+    async def test_add_finding_triggers_callback(self, orchestrator):
         """Test adding finding triggers callback."""
         from aipt_v2.orchestrator import Finding
 
@@ -405,6 +406,9 @@ class TestOrchestratorHelperMethods:
             phase="test",
             tool="test",
         )
+        # _add_finding may schedule async key-validation via
+        # asyncio.create_task, which requires a running event loop. Run inside
+        # an async test so that scheduling succeeds.
         orchestrator._add_finding(finding)
 
         assert len(callback_called) == 1
@@ -569,11 +573,26 @@ class TestExploitPhase:
     @pytest.mark.asyncio
     async def test_exploit_checks_sensitive_paths(self, orchestrator):
         """Test exploit phase checks sensitive paths."""
-        # Mock curl returning 200 for /.env
+        # The sensitive-path check uses curl with
+        #   -w '...---HTTP_CODE---%{http_code}---SIZE---%{size_download}'
+        # so the parser expects the response body followed by that marker.
+        # For /.env to be flagged as an exposed_endpoint the body must:
+        #   - return status 200
+        #   - be larger than the 50-byte error-page threshold
+        #   - contain one of the expected content patterns (e.g. DB_PASSWORD)
+        env_body = (
+            "DB_PASSWORD=supersecretvalue\n"
+            "API_KEY=abcdef0123456789\n"
+            "AWS_ACCESS_KEY_ID=AKIAEXAMPLE\n"
+        )
+        env_response = f"{env_body}---HTTP_CODE---200---SIZE---{len(env_body)}"
+
         async def mock_run(cmd, timeout=300):
             if "/.env" in cmd:
-                return (0, "200")
-            return (0, "404")
+                return (0, env_response)
+            # Everything else (incl. the baseline non-existent path) is a 404
+            # with an empty body.
+            return (0, "---HTTP_CODE---404---SIZE---0")
 
         with patch.object(orchestrator, "_run_command", side_effect=mock_run):
             result = await orchestrator.run_exploit()

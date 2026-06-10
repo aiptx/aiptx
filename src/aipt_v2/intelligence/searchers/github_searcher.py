@@ -18,6 +18,40 @@ import shutil
 
 dotenv.load_dotenv()
 
+# Security: Cap on response body read into memory / written to disk (CWE-400).
+# Prevents a hostile or oversized 3rd-party response from exhausting memory/disk.
+_MAX_FETCH_BYTES = 5 * 1024 * 1024  # 5 MiB
+
+
+def _read_capped_content(response, max_bytes=_MAX_FETCH_BYTES, label=""):
+    """
+    Stream a response body into memory up to ``max_bytes``.
+
+    Returns a tuple ``(content, truncated)`` where ``truncated`` is True if the
+    body exceeded the cap and was cut off. Logs/prints when truncating.
+    """
+    chunks = []
+    total = 0
+    truncated = False
+    for chunk in response.iter_content(chunk_size=65536):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > max_bytes:
+            remaining = max_bytes - (total - len(chunk))
+            if remaining > 0:
+                chunks.append(chunk[:remaining])
+            truncated = True
+            break
+        chunks.append(chunk)
+    if truncated:
+        print(
+            f"Warning: response{(' for ' + label) if label else ''} exceeded "
+            f"{max_bytes} bytes; truncating download."
+        )
+    return b"".join(chunks), truncated
+
+
 class GithubSearcher:
     search_limit_remaining = 30
     search_limit_reset = 0
@@ -164,7 +198,7 @@ class GithubSearcher:
             # get the difference in days
             days_difference = (current_time - given_time).days
             lamda = c.times_2 * norm.pdf(days_difference, loc=c.mus[2], scale=c.sigmas[2]) + c.base_line
-            item['efct_score'] = lamda * item['stars_count'] / item['forks_count']
+            item['efct_score'] = lamda * item['stars_count'] / max(1, item['forks_count'])
 
 
         filtered_extracted_items = [item for item in extracted_items if item['conf_score'] >= c.threshold]
@@ -246,10 +280,13 @@ class GithubSearcher:
             'X-GitHub-Api-Version': '2022-11-28'
         }
 
+        # Stream + timeout: requests sessions do not honour a per-session
+        # default timeout, so it must be passed per call (CWE-400). stream=True
+        # lets us cap the body via _read_capped_content below.
         if self.USE_PROXY:
-            resp = self.session.get(url, headers=header, proxies=self.proxies)
+            resp = self.session.get(url, headers=header, proxies=self.proxies, timeout=30, stream=True)
         else:
-            resp = self.session.get(url, headers=header)
+            resp = self.session.get(url, headers=header, timeout=30, stream=True)
         next_page = None
         # print(resp.text)
 
@@ -278,7 +315,12 @@ class GithubSearcher:
             # print(resp.text)
             return None, None
 
-        result = json.loads(resp.text)
+        # Bound the API response body too (CWE-400): a hostile/oversized or
+        # proxy-MITM'd response could otherwise be buffered unbounded by .text.
+        body, truncated = _read_capped_content(resp, label=url)
+        if truncated:
+            return None, None
+        result = json.loads(body.decode('utf-8', errors='replace'))
         items = result.get('items', [])
 
         mode = True if loose_mode else False
@@ -423,13 +465,21 @@ class GithubSearcher:
 
                     # download file
                     # Security: Add timeout to prevent indefinite hangs (CWE-400)
-                    response = requests.get(file_url, timeout=30)
+                    # Security: stream + cap body size to avoid memory/disk exhaustion
+                    response = requests.get(file_url, timeout=30, stream=True)
                     if response.status_code == 200:
-                        if not result_matches_cve(keyword, response.content):
+                        file_content, truncated = _read_capped_content(
+                            response, label=file_url
+                        )
+                        if truncated:
+                            # Skip oversized files rather than persist a partial,
+                            # untrustworthy artifact.
+                            continue
+                        if not result_matches_cve(keyword, file_content):
                             continue
                         # save file content to local
                         with open(os.path.join(code_output_dir, unique_name), 'wb') as f:
-                            f.write(response.content)
+                            f.write(file_content)
                         # update index.csv
                         with open(index_csv_path, 'a', newline='') as csvfile:
                             writer = csv.DictWriter(csvfile, fieldnames=fieldnames)

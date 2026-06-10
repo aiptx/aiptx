@@ -77,12 +77,28 @@ class ScanPlan:
         ordered = []
 
         while len(ordered) < len(self.phases):
+            progressed = False
             for phase in self.phases:
                 if phase.name in executed:
                     continue
                 if all(dep in executed for dep in phase.depends_on):
                     ordered.append(phase)
                     executed.add(phase.name)
+                    progressed = True
+
+            # Termination guard: if no phase was added this pass, the
+            # remaining phases have unsatisfiable or cyclic dependencies.
+            # Append them in declaration order so we never loop forever.
+            if not progressed:
+                logger.warning(
+                    "[AI Planner] Unsatisfiable/cyclic phase dependencies "
+                    "detected; appending remaining phases in declaration order."
+                )
+                for phase in self.phases:
+                    if phase.name not in executed:
+                        ordered.append(phase)
+                        executed.add(phase.name)
+                break
 
         return ordered
 

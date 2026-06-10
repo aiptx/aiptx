@@ -11,6 +11,7 @@ import os
 from typing import List, Optional
 from functools import lru_cache
 from pathlib import Path
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -49,7 +50,7 @@ class LLMSettings(BaseModel):
     """LLM provider configuration."""
 
     provider: str = Field(default="anthropic", description="LLM provider name")
-    model: str = Field(default="claude-3-7-sonnet-20250219", description="Model identifier")
+    model: str = Field(default="claude-sonnet-4-20250514", description="Model identifier")
     api_key: Optional[str] = Field(default=None, description="API key")
     api_base: Optional[str] = Field(default=None, description="Custom API base URL")
     timeout: int = Field(default=120, ge=10, le=600, description="Request timeout in seconds")
@@ -73,13 +74,13 @@ class LLMSettings(BaseModel):
     @classmethod
     def get_model_from_env(cls, v):
         """Load model from environment variable if not explicitly set."""
-        if v and v != "claude-3-7-sonnet-20250219":  # Only use env if no explicit value or default
+        if v and v != "claude-sonnet-4-20250514":  # Only use env if no explicit value or default
             return v
         # Check environment variables (setup wizard saves to AIPT_LLM__MODEL)
         env_model = os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL")
         if env_model:
             return env_model
-        return v or "claude-3-7-sonnet-20250219"
+        return v or "claude-sonnet-4-20250514"
 
     @field_validator("api_key", mode="before")
     @classmethod
@@ -138,12 +139,40 @@ class ScannerSettings(BaseModel):
     zap_url: Optional[str] = Field(default=None, description="ZAP API URL")
     zap_api_key: Optional[str] = Field(default=None, description="ZAP API key")
 
+    # TLS verification for scanner-appliance API calls. Defaults to True so
+    # API keys/bearer tokens are never sent over an unverified channel
+    # (MITM risk). Set to False only for appliances using self-signed certs.
+    verify_tls: bool = Field(
+        default=True,
+        description="Verify TLS certs when calling scanner appliance APIs",
+    )
+
     @field_validator("acunetix_url", "burp_url", "nessus_url", "zap_url", mode="before")
     @classmethod
     def validate_url(cls, v):
-        if v and not v.startswith(("http://", "https://")):
-            # Auto-prepend http:// if no scheme provided (user-friendly)
+        if v is None or v == "":
+            return v
+        if not isinstance(v, str):
+            raise ValueError(f"Scanner URL must be a string, got {type(v).__name__}")
+        v = v.strip()
+        if "://" in v:
+            # Reject non-http(s) schemes (ftp://, file://, gopher://, ...): a
+            # scanner endpoint must speak http/https; other schemes are either
+            # a misconfiguration or a scheme-confusion/SSRF vector.
+            scheme = v.split("://", 1)[0].lower()
+            if scheme not in ("http", "https"):
+                raise ValueError(f"Scanner URL must use http or https, got scheme: {scheme}")
+        else:
+            # No scheme: only auto-prepend http:// for values that look like a
+            # host (contain a dot, a :port, or are localhost); reject obvious
+            # garbage so an invalid URL is surfaced rather than silently coerced.
+            host_part = v.split("/", 1)[0]
+            looks_like_host = ("." in host_part) or (":" in host_part) or host_part.lower() == "localhost"
+            if not looks_like_host:
+                raise ValueError(f"Invalid scanner URL: {v}")
             v = f"http://{v}"
+        if not urlparse(v).netloc:
+            raise ValueError(f"Invalid scanner URL: {v}")
         return v
 
 
@@ -379,7 +408,7 @@ def get_config() -> AIPTConfig:
     config = AIPTConfig(
         llm=LLMSettings(
             provider=llm_provider,
-            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-3-7-sonnet-20250219"),
+            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
             api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
             api_base=llm_api_base,
             timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),
@@ -394,6 +423,8 @@ def get_config() -> AIPTConfig:
             nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY"),
             zap_url=os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL"),
             zap_api_key=os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY"),
+            verify_tls=(os.getenv("AIPT_SCANNERS__VERIFY_TLS") or os.getenv("SCANNERS_VERIFY_TLS") or "true").lower()
+            not in ("0", "false", "no"),
         ),
         intelligence=IntelligenceSettings(
             zoomeye_api_key=os.getenv("AIPT_INTELLIGENCE__ZOOMEYE_API_KEY") or os.getenv("ZOOMEYE_API_KEY"),

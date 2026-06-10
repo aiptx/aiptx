@@ -73,3 +73,4 @@ mypy>=1.7.0              # Type checking
 bandit>=1.7.0            # Security linting
 safety>=2.3.0            # Dependency security
 pre-commit>=3.5.0        # Git hooks
+cryptography>=42.0.0

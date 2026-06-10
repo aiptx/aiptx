@@ -278,12 +278,12 @@ class CloudScanner:
         output_dir = self.output_dir / f"scoutsuite_{provider}"
         output_dir.mkdir(exist_ok=True)
 
-        cmd = f"scout {provider} --report-dir {output_dir} --no-browser"
+        cmd = ["scout", provider, "--report-dir", str(output_dir), "--no-browser"]
 
         self._log(f"Running ScoutSuite for {provider}...")
 
-        process = await asyncio.create_subprocess_shell(
-            cmd,
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env
@@ -308,12 +308,12 @@ class CloudScanner:
         findings = []
         output_file = self.output_dir / "prowler_results.json"
 
-        cmd = f"prowler aws --output-formats json --output-filename {output_file}"
+        cmd = ["prowler", "aws", "--output-formats", "json", "--output-filename", str(output_file)]
 
         self._log("Running Prowler for AWS...")
 
-        process = await asyncio.create_subprocess_shell(
-            cmd,
+        process = await asyncio.create_subprocess_exec(
+            *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=env

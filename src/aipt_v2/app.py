@@ -792,8 +792,13 @@ def create_app(
         nmap_path = shutil.which("nmap")
         if nmap_path:
             try:
-                proc = await asyncio.create_subprocess_shell(
-                    f"nmap -F {scan_request.target}",
+                # Use exec (argv list) not shell: the target is passed as a
+                # discrete argument, so shell metacharacters in it can never be
+                # interpreted (CWE-78). The URL-branch of validate_target does
+                # not inspect the path/query, so shell interpolation here was
+                # injectable (e.g. https://example.com/$(id)).
+                proc = await asyncio.create_subprocess_exec(
+                    "nmap", "-F", scan_request.target,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -836,20 +841,33 @@ def create_app(
         if any(c in target for c in dangerous_chars):
             raise HTTPException(status_code=400, detail="Invalid target: contains dangerous characters")
 
-        # Validate options if provided
+        import shlex
+
+        # Parse options into discrete tokens up front. The previous denylist
+        # ([";","&","|","$","`"]) omitted newline, carriage return and
+        # redirection (< >), so a value like "\nid" or "x > /file" injected a
+        # whole new shell command. shlex.split parses the operator's intended
+        # arguments; each token is re-quoted below so no metacharacter (incl.
+        # newline/redirection) can reach the shell (CWE-78).
+        option_tokens: list[str] = []
         if options:
-            if any(c in options for c in [";", "&", "|", "$", "`"]):
-                raise HTTPException(status_code=400, detail="Invalid options: contains dangerous characters")
+            try:
+                option_tokens = shlex.split(options)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid options: malformed quoting")
 
         # Get tool from RAG
         tool = tools_rag.get_tool_by_name(tool_name)
         if not tool:
             raise HTTPException(status_code=404, detail=f"Tool {tool_name} not found")
 
-        # Build command
-        cmd = tool.get("cmd", "").replace("{target}", target)
-        if options:
-            cmd = f"{cmd} {options}"
+        # Build command. The tool template is a freeform shell string, so
+        # shell-quote the target before substituting it, and append each option
+        # token shell-quoted. shlex.quote collapses every value into a single
+        # safe token regardless of spaces/redirection/newlines (CWE-78).
+        cmd = tool.get("cmd", "").replace("{target}", shlex.quote(target))
+        if option_tokens:
+            cmd = cmd + " " + " ".join(shlex.quote(tok) for tok in option_tokens)
 
         # Execute
         start_time = time.time()

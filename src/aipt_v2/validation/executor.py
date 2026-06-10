@@ -265,23 +265,45 @@ class ExploitExecutor:
             )
 
     def _generate_request_script(self, context: ExecutionContext) -> str:
-        """Generate Python script for Docker execution."""
+        """Generate Python script for Docker execution.
+
+        Security: request inputs (method, target, headers, params, body) are
+        attacker/target-influenced. They are passed as a single JSON config
+        embedded via repr() rather than string-formatted into the source, so a
+        value containing quotes/newlines cannot break out of the literal and
+        inject arbitrary Python into the container (code injection).
+        """
+        import json as _json
+
+        config = {
+            "method": context.method,
+            "target": context.target,
+            "headers": context.headers,
+            "params": context.params,
+            "data": context.body or context.payload,
+            "timeout": self.config.timeout,
+            "verify": context.verify_ssl,
+            "allow_redirects": context.follow_redirects,
+        }
+        config_literal = repr(_json.dumps(config))
         return f'''
 import json
 import requests
 import time
 
+cfg = json.loads({config_literal})
+
 start = time.time()
 try:
     response = requests.request(
-        "{context.method}",
-        "{context.target}",
-        headers={context.headers},
-        params={context.params},
-        data={repr(context.body or context.payload)},
-        timeout={self.config.timeout},
-        verify={context.verify_ssl},
-        allow_redirects={context.follow_redirects},
+        cfg["method"],
+        cfg["target"],
+        headers=cfg["headers"],
+        params=cfg["params"],
+        data=cfg["data"],
+        timeout=cfg["timeout"],
+        verify=cfg["verify"],
+        allow_redirects=cfg["allow_redirects"],
     )
     result = {{
         "success": True,
