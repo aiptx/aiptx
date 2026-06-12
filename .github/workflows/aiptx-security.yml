@@ -41,7 +41,10 @@ jobs:
           fetch-depth: 0
 
       - name: Run AIPTX Security Scan
-        uses: aiptx/aiptx-action@v1
+        # Use the in-repo composite action; the published aiptx/aiptx-action
+        # repository does not exist ("Unable to resolve action ... repository
+        # not found").
+        uses: ./.github/actions/aiptx-scan
         id: scan
         with:
           target: '.'
