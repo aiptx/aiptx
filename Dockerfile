@@ -81,7 +81,9 @@ RUN mkdir -p /app/data /app/logs /app/reports && \
 # Environment variables
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PYTHONPATH=/app \
+    # src-layout: the package lives at /app/src/aipt_v2, so src must be on the
+    # path for `import aipt_v2` to resolve (was /app, which has no aipt_v2).
+    PYTHONPATH=/app/src:/app \
     # AIPT Configuration
     AIPT_LOG_LEVEL=INFO \
     AIPT_LOG_FORMAT=json \
