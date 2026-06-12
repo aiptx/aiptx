@@ -6,12 +6,11 @@ and authorization bypass vulnerabilities.
 """
 
 from aipt_v2.business_logic.patterns.base import (
-    TestPattern,
-    TestCase,
     PatternCategory,
+    TestCase,
+    TestPattern,
     TestSeverity,
 )
-
 
 ACCESS_CONTROL_PATTERNS = [
     TestPattern(
@@ -24,8 +23,14 @@ ACCESS_CONTROL_PATTERNS = [
         owasp_category="A01:2021 - Broken Access Control",
         remediation="Implement proper authorization checks, verify resource ownership server-side",
         endpoint_patterns=[
-            r"/user", r"/profile", r"/account", r"/document", r"/file",
-            r"/order", r"/invoice", r"/message"
+            r"/user",
+            r"/profile",
+            r"/account",
+            r"/document",
+            r"/file",
+            r"/order",
+            r"/invoice",
+            r"/message",
         ],
         applicable_to=["multi-tenant", "user-data"],
         test_cases=[
@@ -37,7 +42,7 @@ ACCESS_CONTROL_PATTERNS = [
                 body_template={},
                 manipulation={"id": ["1", "2", "3", "100", "admin"]},
                 success_indicators=["email", "profile", "name"],
-                failure_indicators=["forbidden", "unauthorized", "not found"]
+                failure_indicators=["forbidden", "unauthorized", "not found"],
             ),
             TestCase(
                 name="Document Access",
@@ -46,7 +51,7 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/document/|/file/|/attachment/",
                 manipulation={"document_id": ["1", "2", "3", "1000"]},
                 success_indicators=["content", "download"],
-                failure_indicators=["forbidden", "unauthorized"]
+                failure_indicators=["forbidden", "unauthorized"],
             ),
             TestCase(
                 name="Order Details Access",
@@ -55,11 +60,10 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/order/\d+",
                 manipulation={"order_id": ["1", "2", "1000", "99999"]},
                 success_indicators=["items", "total", "shipping"],
-                failure_indicators=["forbidden", "not found"]
-            )
-        ]
+                failure_indicators=["forbidden", "not found"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="IDOR-002",
         name="IDOR in Modifications",
@@ -69,9 +73,7 @@ ACCESS_CONTROL_PATTERNS = [
         cwe_ids=["CWE-639", "CWE-284"],
         owasp_category="A01:2021 - Broken Access Control",
         remediation="Check ownership before any modification operation",
-        endpoint_patterns=[
-            r"/user", r"/profile", r"/settings", r"/update"
-        ],
+        endpoint_patterns=[r"/user", r"/profile", r"/settings", r"/update"],
         applicable_to=["multi-tenant"],
         test_cases=[
             TestCase(
@@ -81,7 +83,7 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/user/|/profile/",
                 body_template={"user_id": "{{other_user_id}}", "email": "attacker@test.com"},
                 success_indicators=["updated", "success"],
-                failure_indicators=["forbidden", "unauthorized"]
+                failure_indicators=["forbidden", "unauthorized"],
             ),
             TestCase(
                 name="Delete Other Resource",
@@ -90,11 +92,10 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/user/|/document/|/post/",
                 manipulation={"id": ["1", "2", "100"]},
                 success_indicators=["deleted", "success"],
-                failure_indicators=["forbidden", "unauthorized"]
-            )
-        ]
+                failure_indicators=["forbidden", "unauthorized"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="PRIV-001",
         name="Vertical Privilege Escalation",
@@ -104,9 +105,7 @@ ACCESS_CONTROL_PATTERNS = [
         cwe_ids=["CWE-269", "CWE-266"],
         owasp_category="A01:2021 - Broken Access Control",
         remediation="Never trust client-provided role/permission data, validate server-side",
-        endpoint_patterns=[
-            r"/user", r"/admin", r"/role", r"/permission"
-        ],
+        endpoint_patterns=[r"/user", r"/admin", r"/role", r"/permission"],
         applicable_to=["role-based"],
         test_cases=[
             TestCase(
@@ -116,7 +115,7 @@ ACCESS_CONTROL_PATTERNS = [
                 body_template={"username": "test", "role": "admin"},
                 manipulation={"role": ["admin", "administrator", "superuser", "root"]},
                 success_indicators=["admin", "elevated"],
-                failure_indicators=["denied", "insufficient"]
+                failure_indicators=["denied", "insufficient"],
             ),
             TestCase(
                 name="Permission Flag Manipulation",
@@ -125,7 +124,7 @@ ACCESS_CONTROL_PATTERNS = [
                 body_template={"is_admin": True, "is_superuser": True},
                 manipulation={"is_admin": [True, 1, "true"]},
                 success_indicators=["updated"],
-                failure_indicators=["denied", "cannot modify"]
+                failure_indicators=["denied", "cannot modify"],
             ),
             TestCase(
                 name="Admin Endpoint Access",
@@ -133,11 +132,10 @@ ACCESS_CONTROL_PATTERNS = [
                 method="GET",
                 endpoint_pattern=r"/admin",
                 success_indicators=["dashboard", "users", "settings"],
-                failure_indicators=["forbidden", "unauthorized", "login"]
-            )
-        ]
+                failure_indicators=["forbidden", "unauthorized", "login"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="AUTH-001",
         name="Function-Level Access Control",
@@ -147,9 +145,7 @@ ACCESS_CONTROL_PATTERNS = [
         cwe_ids=["CWE-285"],
         owasp_category="A01:2021 - Broken Access Control",
         remediation="Implement consistent authorization checks for all sensitive functions",
-        endpoint_patterns=[
-            r"/admin", r"/manage", r"/config", r"/system"
-        ],
+        endpoint_patterns=[r"/admin", r"/manage", r"/config", r"/system"],
         applicable_to=["admin-functions"],
         test_cases=[
             TestCase(
@@ -158,9 +154,11 @@ ACCESS_CONTROL_PATTERNS = [
                 method="POST",
                 endpoint_pattern=r"/admin/|/manage/",
                 body_template={"action": "{{admin_action}}"},
-                manipulation={"action": ["create_user", "delete_user", "export_data", "change_config"]},
+                manipulation={
+                    "action": ["create_user", "delete_user", "export_data", "change_config"]
+                },
                 success_indicators=["success", "completed"],
-                failure_indicators=["forbidden", "admin required"]
+                failure_indicators=["forbidden", "admin required"],
             ),
             TestCase(
                 name="Mass Data Export",
@@ -168,11 +166,10 @@ ACCESS_CONTROL_PATTERNS = [
                 method="GET",
                 endpoint_pattern=r"/export|/download.*all|/backup",
                 success_indicators=["csv", "json", "xml", "download"],
-                failure_indicators=["forbidden", "unauthorized"]
-            )
-        ]
+                failure_indicators=["forbidden", "unauthorized"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="AUTH-002",
         name="Insecure Direct Object References in APIs",
@@ -182,9 +179,7 @@ ACCESS_CONTROL_PATTERNS = [
         cwe_ids=["CWE-639"],
         owasp_category="A01:2021 - Broken Access Control",
         remediation="Use indirect references or verify authorization for each request",
-        endpoint_patterns=[
-            r"/api/", r"/v1/", r"/v2/"
-        ],
+        endpoint_patterns=[r"/api/", r"/v1/", r"/v2/"],
         applicable_to=["api"],
         test_cases=[
             TestCase(
@@ -194,7 +189,7 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/api/.*/\d+",
                 manipulation={"id": ["1", "2", "10", "100", "1000"]},
                 success_indicators=["data", "id"],
-                failure_indicators=["forbidden", "not found"]
+                failure_indicators=["forbidden", "not found"],
             ),
             TestCase(
                 name="Batch API Access",
@@ -203,11 +198,10 @@ ACCESS_CONTROL_PATTERNS = [
                 endpoint_pattern=r"/api/batch|/api/bulk",
                 body_template={"ids": [1, 2, 3, 100, 1000]},
                 success_indicators=["results"],
-                failure_indicators=["partial", "forbidden"]
-            )
-        ]
+                failure_indicators=["partial", "forbidden"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="AUTH-003",
         name="JWT/Token Manipulation",
@@ -217,9 +211,7 @@ ACCESS_CONTROL_PATTERNS = [
         cwe_ids=["CWE-287", "CWE-345"],
         owasp_category="A07:2021 - Identification and Authentication Failures",
         remediation="Validate JWT signatures properly, use strong algorithms, don't trust client claims",
-        endpoint_patterns=[
-            r"/api/", r"/protected/"
-        ],
+        endpoint_patterns=[r"/api/", r"/protected/"],
         applicable_to=["jwt-auth"],
         test_cases=[
             TestCase(
@@ -228,7 +220,7 @@ ACCESS_CONTROL_PATTERNS = [
                 method="GET",
                 headers={"Authorization": "Bearer {{tampered_jwt}}"},
                 success_indicators=["data"],
-                failure_indicators=["invalid token", "unauthorized"]
+                failure_indicators=["invalid token", "unauthorized"],
             ),
             TestCase(
                 name="Role Claim Manipulation",
@@ -236,8 +228,8 @@ ACCESS_CONTROL_PATTERNS = [
                 method="GET",
                 headers={"Authorization": "Bearer {{modified_jwt}}"},
                 success_indicators=["admin", "elevated"],
-                failure_indicators=["invalid signature"]
-            )
-        ]
+                failure_indicators=["invalid signature"],
+            ),
+        ],
     ),
 ]

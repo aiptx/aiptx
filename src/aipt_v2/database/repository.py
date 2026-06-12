@@ -9,17 +9,14 @@ Usage:
     repo.add_finding(project.id, session.id, "port", "80/tcp", "HTTP server")
 """
 
-from datetime import datetime
-from typing import Optional, List
 from contextlib import contextmanager
+from datetime import datetime
+from typing import List, Optional
 
 from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session as DBSession
+from sqlalchemy.orm import sessionmaker
 
-from .models import (
-    Base, Project, Session, Finding, Task,
-    SeverityLevel, TaskStatus, PhaseType
-)
+from .models import Base, Finding, PhaseType, Project, Session, SeverityLevel, Task, TaskStatus
 
 
 class Repository:
@@ -107,11 +104,7 @@ class Repository:
                 query = query.filter(Project.status == status)
             return query.order_by(Project.created_at.desc()).all()
 
-    def update_project(
-        self,
-        project_id: int,
-        **kwargs
-    ) -> Optional[Project]:
+    def update_project(self, project_id: int, **kwargs) -> Optional[Project]:
         """Update project fields"""
         with self._get_db() as session:
             project = session.query(Project).filter(Project.id == project_id).first()
@@ -162,23 +155,23 @@ class Repository:
     def get_active_session(self, project_id: int) -> Optional[Session]:
         """Get active session for project"""
         with self._get_db() as db_session:
-            return db_session.query(Session).filter(
-                Session.project_id == project_id,
-                Session.status == "running"
-            ).first()
+            return (
+                db_session.query(Session)
+                .filter(Session.project_id == project_id, Session.status == "running")
+                .first()
+            )
 
     def list_sessions(self, project_id: int) -> List[Session]:
         """List all sessions for a project"""
         with self._get_db() as db_session:
-            return db_session.query(Session).filter(
-                Session.project_id == project_id
-            ).order_by(Session.started_at.desc()).all()
+            return (
+                db_session.query(Session)
+                .filter(Session.project_id == project_id)
+                .order_by(Session.started_at.desc())
+                .all()
+            )
 
-    def update_session(
-        self,
-        session_id: int,
-        **kwargs
-    ) -> Optional[Session]:
+    def update_session(self, session_id: int, **kwargs) -> Optional[Session]:
         """Update session fields"""
         with self._get_db() as db_session:
             session = db_session.query(Session).filter(Session.id == session_id).first()
@@ -229,11 +222,15 @@ class Repository:
         """Add a new finding"""
         with self._get_db() as db_session:
             # Check for duplicate
-            existing = db_session.query(Finding).filter(
-                Finding.project_id == project_id,
-                Finding.type == type,
-                Finding.value == value,
-            ).first()
+            existing = (
+                db_session.query(Finding)
+                .filter(
+                    Finding.project_id == project_id,
+                    Finding.type == type,
+                    Finding.value == value,
+                )
+                .first()
+            )
 
             if existing:
                 # Update existing finding
@@ -282,7 +279,9 @@ class Repository:
 
             return query.order_by(Finding.discovered_at.desc()).all()
 
-    def verify_finding(self, finding_id: int, verified: bool = True, notes: Optional[str] = None) -> None:
+    def verify_finding(
+        self, finding_id: int, verified: bool = True, notes: Optional[str] = None
+    ) -> None:
         """Mark finding as verified"""
         with self._get_db() as db_session:
             finding = db_session.query(Finding).filter(Finding.id == finding_id).first()
@@ -303,10 +302,14 @@ class Repository:
     def get_findings_summary(self, project_id: int) -> dict:
         """Get summary of findings by severity"""
         with self._get_db() as db_session:
-            findings = db_session.query(Finding).filter(
-                Finding.project_id == project_id,
-                Finding.false_positive == False,
-            ).all()
+            findings = (
+                db_session.query(Finding)
+                .filter(
+                    Finding.project_id == project_id,
+                    Finding.false_positive == False,
+                )
+                .all()
+            )
 
             summary = {
                 "total": len(findings),
@@ -379,6 +382,9 @@ class Repository:
     def get_tasks(self, session_id: int) -> List[Task]:
         """Get all tasks for a session"""
         with self._get_db() as db_session:
-            return db_session.query(Task).filter(
-                Task.session_id == session_id
-            ).order_by(Task.created_at).all()
+            return (
+                db_session.query(Task)
+                .filter(Task.session_id == session_id)
+                .order_by(Task.created_at)
+                .all()
+            )

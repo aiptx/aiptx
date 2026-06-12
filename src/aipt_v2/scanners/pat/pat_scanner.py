@@ -4,38 +4,34 @@ PAT Scanner - PayloadsAllTheThings Integration
 Main scanner class that integrates payload library with automated
 vulnerability testing using parallel HTTP execution and evidence-based detection.
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import Iterator, Optional, Callable
+from typing import Callable, Coroutine, Optional
 
 from aipt_v2.scanners.base import (
     BaseScanner,
-    ScanResult,
     ScanFinding,
+    ScanResult,
     ScanSeverity,
 )
 
+from .analyzer import AnalysisResult, ResponseAnalyzer
 from .config import (
-    PATScanConfig,
-    EnhancedPATScanConfig,
-    VulnerabilityType,
-    PayloadConfig,
-    PayloadTechnique,
-    ExecutorConfig,
-    AnalyzerConfig,
     AuthorizationError,
+    EnhancedPATScanConfig,
+    PATScanConfig,
+    PayloadTechnique,
     ScopeViolation,
+    VulnerabilityType,
 )
+from .executor import ExecutionResult, ParallelExecutor, WAFAwareExecutor
 from .payload_database import PayloadDatabase, get_payload_database
 from .payload_parser import ParsedPayload
-from .request_generator import RequestGenerator, EnhancedRequestGenerator, InjectionRequest
-from .executor import ParallelExecutor, WAFAwareExecutor, ExecutionResult
-from .analyzer import ResponseAnalyzer, AnalysisResult
+from .request_generator import EnhancedRequestGenerator, RequestGenerator
 
 # Lazy import for learning system
 _exploitation_learner = None
@@ -47,6 +43,7 @@ def _get_exploitation_learner():
     if _exploitation_learner is None:
         try:
             from aipt_v2.intelligence.learning import ExploitationLearner
+
             _exploitation_learner = ExploitationLearner
         except ImportError:
             return None
@@ -81,81 +78,73 @@ VULN_SEVERITY_MAP = {
     VulnerabilityType.GRAPHQL: ScanSeverity.MEDIUM,
     VulnerabilityType.WEBSOCKET: ScanSeverity.MEDIUM,
     VulnerabilityType.FILE_UPLOAD: ScanSeverity.HIGH,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Authentication & Access Control (5)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.CSRF: ScanSeverity.HIGH,             # Can lead to account takeover
-    VulnerabilityType.IDOR: ScanSeverity.HIGH,             # Direct data access
+    VulnerabilityType.CSRF: ScanSeverity.HIGH,  # Can lead to account takeover
+    VulnerabilityType.IDOR: ScanSeverity.HIGH,  # Direct data access
     VulnerabilityType.OAUTH_MISCONFIG: ScanSeverity.HIGH,  # Token theft possible
     VulnerabilityType.SAML_INJECTION: ScanSeverity.CRITICAL,  # Auth bypass
     VulnerabilityType.ACCOUNT_TAKEOVER: ScanSeverity.CRITICAL,  # Full account compromise
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Protocol/Request Attacks (6)
     # ═══════════════════════════════════════════════════════════════════════════
     VulnerabilityType.HTTP_SMUGGLING: ScanSeverity.CRITICAL,  # Request hijacking, cache poisoning
-    VulnerabilityType.HPP: ScanSeverity.MEDIUM,               # Parameter manipulation
-    VulnerabilityType.DNS_REBINDING: ScanSeverity.HIGH,       # Internal network access
-    VulnerabilityType.CORS_MISCONFIG: ScanSeverity.HIGH,      # Cross-origin data theft
-    VulnerabilityType.TABNABBING: ScanSeverity.LOW,           # Phishing vector
-    VulnerabilityType.CACHE_POISONING: ScanSeverity.HIGH,     # Mass user impact
-
+    VulnerabilityType.HPP: ScanSeverity.MEDIUM,  # Parameter manipulation
+    VulnerabilityType.DNS_REBINDING: ScanSeverity.HIGH,  # Internal network access
+    VulnerabilityType.CORS_MISCONFIG: ScanSeverity.HIGH,  # Cross-origin data theft
+    VulnerabilityType.TABNABBING: ScanSeverity.LOW,  # Phishing vector
+    VulnerabilityType.CACHE_POISONING: ScanSeverity.HIGH,  # Mass user impact
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Client-Side Attacks (4)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.DOM_CLOBBERING: ScanSeverity.MEDIUM,    # DOM manipulation
-    VulnerabilityType.CLICKJACKING: ScanSeverity.MEDIUM,      # UI redress attacks
+    VulnerabilityType.DOM_CLOBBERING: ScanSeverity.MEDIUM,  # DOM manipulation
+    VulnerabilityType.CLICKJACKING: ScanSeverity.MEDIUM,  # UI redress attacks
     VulnerabilityType.PROTOTYPE_POLLUTION: ScanSeverity.CRITICAL,  # Can lead to RCE in Node.js
     VulnerabilityType.CLIENT_PATH_TRAVERSAL: ScanSeverity.MEDIUM,  # Client-side path abuse
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - File & Data Attacks (5)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.CSV_INJECTION: ScanSeverity.MEDIUM,     # Formula injection
-    VulnerabilityType.ZIP_SLIP: ScanSeverity.HIGH,            # Path traversal via archive
-    VulnerabilityType.ORM_LEAK: ScanSeverity.MEDIUM,          # Data exposure
+    VulnerabilityType.CSV_INJECTION: ScanSeverity.MEDIUM,  # Formula injection
+    VulnerabilityType.ZIP_SLIP: ScanSeverity.HIGH,  # Path traversal via archive
+    VulnerabilityType.ORM_LEAK: ScanSeverity.MEDIUM,  # Data exposure
     VulnerabilityType.SECRETS_EXPOSURE: ScanSeverity.CRITICAL,  # Direct credential theft
-    VulnerabilityType.API_KEY_LEAK: ScanSeverity.HIGH,        # API access compromise
-
+    VulnerabilityType.API_KEY_LEAK: ScanSeverity.HIGH,  # API access compromise
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Business Logic & Timing (5)
     # ═══════════════════════════════════════════════════════════════════════════
     VulnerabilityType.RACE_CONDITION: ScanSeverity.CRITICAL,  # Double-spend, TOCTOU
-    VulnerabilityType.MASS_ASSIGNMENT: ScanSeverity.HIGH,     # Privilege escalation
-    VulnerabilityType.TYPE_JUGGLING: ScanSeverity.HIGH,       # Auth bypass
-    VulnerabilityType.BUSINESS_LOGIC: ScanSeverity.HIGH,      # Context-dependent
-    VulnerabilityType.INSECURE_RANDOM: ScanSeverity.MEDIUM,   # Predictable tokens
-
+    VulnerabilityType.MASS_ASSIGNMENT: ScanSeverity.HIGH,  # Privilege escalation
+    VulnerabilityType.TYPE_JUGGLING: ScanSeverity.HIGH,  # Auth bypass
+    VulnerabilityType.BUSINESS_LOGIC: ScanSeverity.HIGH,  # Context-dependent
+    VulnerabilityType.INSECURE_RANDOM: ScanSeverity.MEDIUM,  # Predictable tokens
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Injection Variants (6)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.LATEX_INJECTION: ScanSeverity.HIGH,     # Can lead to file read/RCE
-    VulnerabilityType.SSI_INJECTION: ScanSeverity.HIGH,       # Server-side include RCE
-    VulnerabilityType.XSLT_INJECTION: ScanSeverity.HIGH,      # Can lead to RCE
+    VulnerabilityType.LATEX_INJECTION: ScanSeverity.HIGH,  # Can lead to file read/RCE
+    VulnerabilityType.SSI_INJECTION: ScanSeverity.HIGH,  # Server-side include RCE
+    VulnerabilityType.XSLT_INJECTION: ScanSeverity.HIGH,  # Can lead to RCE
     VulnerabilityType.PROMPT_INJECTION: ScanSeverity.MEDIUM,  # LLM manipulation
-    VulnerabilityType.REGEX_DOS: ScanSeverity.MEDIUM,         # DoS only
-    VulnerabilityType.JAVA_RMI: ScanSeverity.CRITICAL,        # Direct RCE via deserialization
-
+    VulnerabilityType.REGEX_DOS: ScanSeverity.MEDIUM,  # DoS only
+    VulnerabilityType.JAVA_RMI: ScanSeverity.CRITICAL,  # Direct RCE via deserialization
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Misconfiguration & Exposure (8)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.GIT_EXPOSURE: ScanSeverity.HIGH,        # Source code disclosure
-    VulnerabilityType.HIDDEN_PARAMS: ScanSeverity.LOW,        # Information disclosure
-    VulnerabilityType.ADMIN_INTERFACE: ScanSeverity.HIGH,     # Admin access possible
-    VulnerabilityType.VIRTUAL_HOST: ScanSeverity.LOW,         # Information disclosure
-    VulnerabilityType.REVERSE_PROXY: ScanSeverity.MEDIUM,     # Can enable SSRF
-    VulnerabilityType.GWT_VULN: ScanSeverity.MEDIUM,          # Deserialization risk
+    VulnerabilityType.GIT_EXPOSURE: ScanSeverity.HIGH,  # Source code disclosure
+    VulnerabilityType.HIDDEN_PARAMS: ScanSeverity.LOW,  # Information disclosure
+    VulnerabilityType.ADMIN_INTERFACE: ScanSeverity.HIGH,  # Admin access possible
+    VulnerabilityType.VIRTUAL_HOST: ScanSeverity.LOW,  # Information disclosure
+    VulnerabilityType.REVERSE_PROXY: ScanSeverity.MEDIUM,  # Can enable SSRF
+    VulnerabilityType.GWT_VULN: ScanSeverity.MEDIUM,  # Deserialization risk
     VulnerabilityType.DEPENDENCY_CONFUSION: ScanSeverity.CRITICAL,  # Supply chain attack
-    VulnerabilityType.CVE_EXPLOITS: ScanSeverity.CRITICAL,    # Known exploits
-
+    VulnerabilityType.CVE_EXPLOITS: ScanSeverity.CRITICAL,  # Known exploits
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Additional Edge Cases (6)
     # ═══════════════════════════════════════════════════════════════════════════
-    VulnerabilityType.ENV_INJECTION: ScanSeverity.HIGH,       # Environment manipulation
+    VulnerabilityType.ENV_INJECTION: ScanSeverity.HIGH,  # Environment manipulation
     VulnerabilityType.HEADLESS_BROWSER: ScanSeverity.MEDIUM,  # Browser-based attacks
-    VulnerabilityType.ENCODING_BYPASS: ScanSeverity.MEDIUM,   # Filter bypass
-    VulnerabilityType.HOST_HEADER: ScanSeverity.MEDIUM,       # Cache/password reset poisoning
+    VulnerabilityType.ENCODING_BYPASS: ScanSeverity.MEDIUM,  # Filter bypass
+    VulnerabilityType.HOST_HEADER: ScanSeverity.MEDIUM,  # Cache/password reset poisoning
     VulnerabilityType.HTTP_VERB_TAMPERING: ScanSeverity.LOW,  # Auth bypass potential
     VulnerabilityType.SUBDOMAIN_TAKEOVER: ScanSeverity.HIGH,  # Domain hijacking
 }
@@ -164,6 +153,7 @@ VULN_SEVERITY_MAP = {
 @dataclass
 class PATScanResult:
     """Extended result from PAT scan."""
+
     scanner: str = "pat"
     target: str = ""
     status: str = "pending"
@@ -257,6 +247,7 @@ class PATScanner(BaseScanner):
         """
         try:
             import httpx
+
             return True
         except ImportError:
             return False
@@ -335,7 +326,9 @@ class PATScanner(BaseScanner):
             on_finding = kwargs.get("on_finding")
 
             logger.info(f"Starting PAT scan on {target_url}")
-            logger.info(f"Testing {len(vuln_types)} vulnerability types, {len(parameters)} parameters")
+            logger.info(
+                f"Testing {len(vuln_types)} vulnerability types, {len(parameters)} parameters"
+            )
 
             # Execute baseline requests
             baseline_requests = self._generator.generate_baseline_requests(
@@ -370,9 +363,9 @@ class PATScanner(BaseScanner):
             result.status = "completed"
             pat_result.status = "completed"
             pat_result.vulnerabilities_found = len(pat_result.findings)
-            pat_result.vuln_types_found = list(set(
-                f.template for f in pat_result.findings if f.template
-            ))
+            pat_result.vuln_types_found = list(
+                set(f.template for f in pat_result.findings if f.template)
+            )
 
             logger.info(
                 f"PAT scan completed: {len(pat_result.findings)} findings, "
@@ -405,9 +398,7 @@ class PATScanner(BaseScanner):
             pat_result.end_time = datetime.now(timezone.utc)
 
             if result.start_time and result.end_time:
-                result.duration_seconds = (
-                    result.end_time - result.start_time
-                ).total_seconds()
+                result.duration_seconds = (result.end_time - result.start_time).total_seconds()
                 pat_result.duration_seconds = result.duration_seconds
 
             result.requests_made = pat_result.requests_made
@@ -440,15 +431,17 @@ class PATScanner(BaseScanner):
         pat_result.payloads_tested += len(payloads)
 
         # Generate requests
-        requests = list(self._generator.generate_requests(
-            target_url=target_url,
-            payloads=payloads,
-            parameters=parameters,
-            method=self.config.method,
-            headers=self.config.headers,
-            cookies=self.config.cookies,
-            body=self.config.body,
-        ))
+        requests = list(
+            self._generator.generate_requests(
+                target_url=target_url,
+                payloads=payloads,
+                parameters=parameters,
+                method=self.config.method,
+                headers=self.config.headers,
+                cookies=self.config.cookies,
+                body=self.config.body,
+            )
+        )
 
         if not requests:
             return findings
@@ -500,8 +493,13 @@ class PATScanner(BaseScanner):
         # Adjust severity based on confidence
         if analysis.confidence < 0.7:
             # Lower severity for low confidence findings
-            severity_order = [ScanSeverity.INFO, ScanSeverity.LOW, ScanSeverity.MEDIUM,
-                           ScanSeverity.HIGH, ScanSeverity.CRITICAL]
+            severity_order = [
+                ScanSeverity.INFO,
+                ScanSeverity.LOW,
+                ScanSeverity.MEDIUM,
+                ScanSeverity.HIGH,
+                ScanSeverity.CRITICAL,
+            ]
             idx = severity_order.index(severity)
             if idx > 0:
                 severity = severity_order[idx - 1]
@@ -596,17 +594,17 @@ class PATScanner(BaseScanner):
 
 # Payload technique priority order (fastest detection first)
 TECHNIQUE_PRIORITY = {
-    PayloadTechnique.ERROR_BASED: 100,      # Immediate feedback
-    PayloadTechnique.UNION_BASED: 80,       # Fast if columns match
-    PayloadTechnique.REFLECTED: 75,         # XSS - immediate if reflected
-    PayloadTechnique.BOOLEAN_BASED: 60,     # Requires comparison
-    PayloadTechnique.DIRECT: 50,            # Default/generic
-    PayloadTechnique.FILTER_BYPASS: 45,     # May require multiple tries
-    PayloadTechnique.WAF_BYPASS: 40,        # WAF bypass variants
-    PayloadTechnique.ENCODING_BYPASS: 35,   # Encoding tricks
-    PayloadTechnique.STACKED_QUERIES: 30,   # Less common
-    PayloadTechnique.TIME_BASED: 20,        # Slowest - multiple second delays
-    PayloadTechnique.OUT_OF_BAND: 10,       # Requires external server
+    PayloadTechnique.ERROR_BASED: 100,  # Immediate feedback
+    PayloadTechnique.UNION_BASED: 80,  # Fast if columns match
+    PayloadTechnique.REFLECTED: 75,  # XSS - immediate if reflected
+    PayloadTechnique.BOOLEAN_BASED: 60,  # Requires comparison
+    PayloadTechnique.DIRECT: 50,  # Default/generic
+    PayloadTechnique.FILTER_BYPASS: 45,  # May require multiple tries
+    PayloadTechnique.WAF_BYPASS: 40,  # WAF bypass variants
+    PayloadTechnique.ENCODING_BYPASS: 35,  # Encoding tricks
+    PayloadTechnique.STACKED_QUERIES: 30,  # Less common
+    PayloadTechnique.TIME_BASED: 20,  # Slowest - multiple second delays
+    PayloadTechnique.OUT_OF_BAND: 10,  # Requires external server
 }
 
 
@@ -672,7 +670,7 @@ class EnhancedPATScanner(PATScanner):
             if not self._executor:
                 self._executor = ParallelExecutor(self.config.executor)
 
-        if self.config.scope_patterns and hasattr(self._executor, 'set_scope'):
+        if self.config.scope_patterns and hasattr(self._executor, "set_scope"):
             self._executor.set_scope(self.config.scope_patterns)
 
         if not self._analyzer:
@@ -743,25 +741,29 @@ class EnhancedPATScanner(PATScanner):
 
         # Generate requests (with mutations if enabled)
         if isinstance(self._generator, EnhancedRequestGenerator):
-            requests = list(self._generator.generate_mutated_requests(
-                target_url=target_url,
-                payloads=payloads,
-                parameters=parameters,
-                method=self.config.method,
-                headers=self.config.headers,
-                cookies=self.config.cookies,
-                body=self.config.body,
-            ))
+            requests = list(
+                self._generator.generate_mutated_requests(
+                    target_url=target_url,
+                    payloads=payloads,
+                    parameters=parameters,
+                    method=self.config.method,
+                    headers=self.config.headers,
+                    cookies=self.config.cookies,
+                    body=self.config.body,
+                )
+            )
         else:
-            requests = list(self._generator.generate_requests(
-                target_url=target_url,
-                payloads=payloads,
-                parameters=parameters,
-                method=self.config.method,
-                headers=self.config.headers,
-                cookies=self.config.cookies,
-                body=self.config.body,
-            ))
+            requests = list(
+                self._generator.generate_requests(
+                    target_url=target_url,
+                    payloads=payloads,
+                    parameters=parameters,
+                    method=self.config.method,
+                    headers=self.config.headers,
+                    cookies=self.config.cookies,
+                    body=self.config.body,
+                )
+            )
 
         if not requests:
             return findings
@@ -775,8 +777,7 @@ class EnhancedPATScanner(PATScanner):
             for exec_result in exec_results:
                 pat_result.requests_made += 1
                 finding = await self._process_result(
-                    exec_result, vuln_type, found_params, findings,
-                    pat_result, on_finding
+                    exec_result, vuln_type, found_params, findings, pat_result, on_finding
                 )
                 if finding and self.enhanced_config.global_early_stop:
                     self._global_stop = True
@@ -786,8 +787,7 @@ class EnhancedPATScanner(PATScanner):
             async for exec_result in self._executor.execute_stream(requests):
                 pat_result.requests_made += 1
                 finding = await self._process_result(
-                    exec_result, vuln_type, found_params, findings,
-                    pat_result, on_finding
+                    exec_result, vuln_type, found_params, findings, pat_result, on_finding
                 )
                 if finding and self.enhanced_config.global_early_stop:
                     self._global_stop = True
@@ -928,7 +928,7 @@ class EnhancedPATScanner(PATScanner):
             )
 
             self._learner.record_attempt(attempt)
-            logger.debug(f"Recorded successful attempt to learning system")
+            logger.debug("Recorded successful attempt to learning system")
 
         except Exception as e:
             logger.debug(f"Failed to record to learning system: {e}")
@@ -965,6 +965,7 @@ def _get_poc_validator():
     if _poc_validator is None:
         try:
             from aipt_v2.validation.poc_validator import PoCValidator, ValidatorConfig
+
             _poc_validator = (PoCValidator, ValidatorConfig)
         except ImportError:
             return None, None
@@ -976,7 +977,8 @@ def _get_evidence_collector():
     global _evidence_collector
     if _evidence_collector is None:
         try:
-            from aipt_v2.validation.evidence import EvidenceCollector, Evidence
+            from aipt_v2.validation.evidence import Evidence, EvidenceCollector
+
             _evidence_collector = (EvidenceCollector, Evidence)
         except ImportError:
             return None, None
@@ -988,7 +990,8 @@ def _get_chain_builder():
     global _chain_builder
     if _chain_builder is None:
         try:
-            from aipt_v2.exploitation.chain_builder import ExploitChainBuilder, AttackChain
+            from aipt_v2.exploitation.chain_builder import AttackChain, ExploitChainBuilder
+
             _chain_builder = (ExploitChainBuilder, AttackChain)
         except ImportError:
             return None, None
@@ -1000,7 +1003,9 @@ def _get_chain_executor():
     global _chain_executor
     if _chain_executor is None:
         try:
-            from aipt_v2.exploitation.chain_executor import ChainExecutor, ExecutionResult as ChainResult
+            from aipt_v2.exploitation.chain_executor import ChainExecutor
+            from aipt_v2.exploitation.chain_executor import ExecutionResult as ChainResult
+
             _chain_executor = (ChainExecutor, ChainResult)
         except ImportError:
             return None, None
@@ -1010,6 +1015,7 @@ def _get_chain_executor():
 @dataclass
 class ValidatedScanFinding:
     """A scan finding that has been validated with PoC."""
+
     finding: ScanFinding
     validated: bool = False
     poc_code: str = ""
@@ -1061,10 +1067,12 @@ class ValidatingPATScanner(EnhancedPATScanner):
         if self.enhanced_config.auto_validate:
             PoCValidator, ValidatorConfig = _get_poc_validator()
             if PoCValidator and ValidatorConfig:
-                self._validator = PoCValidator(ValidatorConfig(
-                    timeout_per_finding=30.0,
-                    max_concurrent=1,  # Sequential for accuracy
-                ))
+                self._validator = PoCValidator(
+                    ValidatorConfig(
+                        timeout_per_finding=30.0,
+                        max_concurrent=1,  # Sequential for accuracy
+                    )
+                )
 
     async def _process_result(
         self,
@@ -1078,8 +1086,7 @@ class ValidatingPATScanner(EnhancedPATScanner):
         """Process result with optional PoC validation."""
         # First run normal detection
         finding = await super()._process_result(
-            exec_result, vuln_type, found_params, findings,
-            pat_result, on_finding
+            exec_result, vuln_type, found_params, findings, pat_result, on_finding
         )
 
         if finding is None:
@@ -1125,6 +1132,7 @@ class ValidatingPATScanner(EnhancedPATScanner):
         4. Collecting comprehensive evidence
         """
         import time
+
         start_time = time.time()
 
         validated = ValidatedScanFinding(
@@ -1392,13 +1400,14 @@ class ValidatingPATScanner(EnhancedPATScanner):
         """Enrich finding with validation evidence."""
         # Add PoC to evidence
         if validated.poc_code:
-            poc_section = f"\n\n## Working PoC ({validated.poc_type})\n```\n{validated.poc_code}\n```"
+            poc_section = (
+                f"\n\n## Working PoC ({validated.poc_type})\n```\n{validated.poc_code}\n```"
+            )
             finding.evidence = (finding.evidence or "") + poc_section
 
         # Update description with validation status
-        finding.description = (
-            f"[VALIDATED - {validated.confidence:.0%} confidence] " +
-            (finding.description or "")
+        finding.description = f"[VALIDATED - {validated.confidence:.0%} confidence] " + (
+            finding.description or ""
         )
 
         # Add validation tag
@@ -1438,17 +1447,17 @@ def exploit():
 '''
 
         if req.method == "GET":
-            poc += f'''
+            poc += """
     response = requests.get(url, headers=headers, verify=False)
-'''
+"""
         else:
-            body_escaped = (req.body or "").replace('"', '\\"').replace('\n', '\\n')
-            poc += f'''
+            body_escaped = (req.body or "").replace('"', '\\"').replace("\n", "\\n")
+            poc += f"""
     data = "{body_escaped}"
     response = requests.{req.method.lower()}(url, headers=headers, data=data, verify=False)
-'''
+"""
 
-        poc += f'''
+        poc += f"""
     print(f"Status: {{response.status_code}}")
     print(f"Response: {{response.text[:500]}}")
 
@@ -1460,7 +1469,7 @@ def exploit():
 
 if __name__ == "__main__":
     exploit()
-'''
+"""
         return poc
 
     @property
@@ -1479,8 +1488,7 @@ if __name__ == "__main__":
             "false_positives_filtered": total - validated,
             "validation_rate": validated / total if total > 0 else 0,
             "avg_confidence": (
-                sum(v.confidence for v in self._validated_findings) / total
-                if total > 0 else 0
+                sum(v.confidence for v in self._validated_findings) / total if total > 0 else 0
             ),
         }
 
@@ -1501,7 +1509,6 @@ VULN_TO_CHAIN_TEMPLATE = {
     VulnerabilityType.XXE: "xxe_to_ssrf",
     VulnerabilityType.INSECURE_DESERIALIZATION: "deser_to_rce",
     VulnerabilityType.FILE_UPLOAD: "upload_to_webshell",
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Authentication/Access Escalation Chains
     # ═══════════════════════════════════════════════════════════════════════════
@@ -1510,7 +1517,6 @@ VULN_TO_CHAIN_TEMPLATE = {
     VulnerabilityType.OAUTH_MISCONFIG: "oauth_to_account_takeover",
     VulnerabilityType.SAML_INJECTION: "saml_to_admin_access",
     VulnerabilityType.ACCOUNT_TAKEOVER: "ato_to_privilege_escalation",
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Protocol Attack Chains
     # ═══════════════════════════════════════════════════════════════════════════
@@ -1518,13 +1524,11 @@ VULN_TO_CHAIN_TEMPLATE = {
     VulnerabilityType.CORS_MISCONFIG: "cors_to_data_theft",
     VulnerabilityType.DNS_REBINDING: "dns_rebind_to_internal_access",
     VulnerabilityType.CACHE_POISONING: "cache_poison_to_mass_xss",
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Client-Side Escalation Chains
     # ═══════════════════════════════════════════════════════════════════════════
     VulnerabilityType.PROTOTYPE_POLLUTION: "proto_pollution_to_rce",
     VulnerabilityType.DOM_CLOBBERING: "dom_clobber_to_xss",
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Injection Variant Chains
     # ═══════════════════════════════════════════════════════════════════════════
@@ -1533,7 +1537,6 @@ VULN_TO_CHAIN_TEMPLATE = {
     VulnerabilityType.XSLT_INJECTION: "xslt_to_rce",
     VulnerabilityType.JAVA_RMI: "rmi_to_rce",
     VulnerabilityType.NOSQL_INJECTION: "nosqli_to_data_exfil",
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Exposure/Misconfig Chains
     # ═══════════════════════════════════════════════════════════════════════════
@@ -1549,6 +1552,7 @@ VULN_TO_CHAIN_TEMPLATE = {
 @dataclass
 class ChainEnrichedFinding:
     """A finding enriched with exploit chain information."""
+
     finding: ScanFinding
     chain_name: str = ""
     chain_description: str = ""
@@ -1624,17 +1628,14 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
         """Process result with exploit chain escalation."""
         # First run validation
         finding = await super()._process_result(
-            exec_result, vuln_type, found_params, findings,
-            pat_result, on_finding
+            exec_result, vuln_type, found_params, findings, pat_result, on_finding
         )
 
         if finding is None:
             return None
 
         # Build exploit chain for validated finding
-        chain_enriched = await self._build_chain_for_finding(
-            finding, exec_result, vuln_type
-        )
+        chain_enriched = await self._build_chain_for_finding(finding, exec_result, vuln_type)
 
         if chain_enriched and chain_enriched.chain_name:
             self._chain_enriched_findings.append(chain_enriched)
@@ -1672,7 +1673,11 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
                 "title": finding.title,
                 "url": finding.url,
                 "parameter": exec_result.request.parameter_name if exec_result.request else "",
-                "payload": exec_result.request.payload.content if exec_result.request and exec_result.request.payload else "",
+                "payload": (
+                    exec_result.request.payload.content
+                    if exec_result.request and exec_result.request.payload
+                    else ""
+                ),
                 "severity": finding.severity.value,
                 "confidence": finding.evidence[:100] if finding.evidence else "",
             }
@@ -1725,7 +1730,7 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
         try:
             # Find the chain for this finding
             chain_id = None
-            for tag in (chain_enriched.finding.tags or []):
+            for tag in chain_enriched.finding.tags or []:
                 if tag.startswith("chain:"):
                     chain_id = tag.split(":")[1]
                     break
@@ -1746,13 +1751,15 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
             chain_enriched.chain_success = result.success
             chain_enriched.chain_result = result.to_dict()
 
-            self._chains_executed.append({
-                "chain_id": chain_id,
-                "chain_name": chain.name,
-                "success": result.success,
-                "steps_completed": result.steps_completed,
-                "steps_total": result.steps_total,
-            })
+            self._chains_executed.append(
+                {
+                    "chain_id": chain_id,
+                    "chain_name": chain.name,
+                    "success": result.success,
+                    "steps_completed": result.steps_completed,
+                    "steps_total": result.steps_total,
+                }
+            )
 
             if result.success:
                 logger.info(
@@ -1826,12 +1833,14 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
         vulns = []
         for enriched in self._chain_enriched_findings:
             finding = enriched.finding
-            vulns.append({
-                "type": finding.template or "unknown",
-                "url": finding.url,
-                "severity": finding.severity.value,
-                "title": finding.title,
-            })
+            vulns.append(
+                {
+                    "type": finding.template or "unknown",
+                    "url": finding.url,
+                    "severity": finding.severity.value,
+                    "title": finding.title,
+                }
+            )
 
         if not vulns:
             return []
@@ -1878,9 +1887,9 @@ class ChainEscalatingPATScanner(ValidatingPATScanner):
             "chains_executed": executed,
             "chains_successful": successful,
             "execution_success_rate": successful / executed if executed > 0 else 0,
-            "chain_types": list(set(
-                e.chain_name for e in self._chain_enriched_findings if e.chain_name
-            )),
+            "chain_types": list(
+                set(e.chain_name for e in self._chain_enriched_findings if e.chain_name)
+            ),
         }
 
 
@@ -1893,7 +1902,12 @@ def _get_callback_manager():
     global _callback_manager
     if _callback_manager is None:
         try:
-            from aipt_v2.validation.callback_server import CallbackManager, CallbackResult, generate_oob_payloads
+            from aipt_v2.validation.callback_server import (
+                CallbackManager,
+                CallbackResult,
+                generate_oob_payloads,
+            )
+
             _callback_manager = (CallbackManager, CallbackResult, generate_oob_payloads)
         except ImportError:
             return None, None, None
@@ -1982,16 +1996,16 @@ class OOBEnabledPATScanner(ChainEscalatingPATScanner):
         CallbackManager, CallbackResult, generate_oob_payloads = _get_callback_manager()
 
         # Check if we should enable OOB
-        oob_enabled = getattr(self.enhanced_config, 'oob_callback_enabled', True)
+        oob_enabled = getattr(self.enhanced_config, "oob_callback_enabled", True)
         oob_types_requested = any(
             vt in self.OOB_VULN_TYPES for vt in self.enhanced_config.vuln_types
         )
 
         if oob_enabled and oob_types_requested and CallbackManager:
             # Start callback server
-            callback_port = getattr(self.enhanced_config, 'oob_callback_port', 8888)
-            callback_timeout = getattr(self.enhanced_config, 'oob_callback_timeout', 30.0)
-            use_interactsh = getattr(self.enhanced_config, 'oob_use_interactsh', False)
+            callback_port = getattr(self.enhanced_config, "oob_callback_port", 8888)
+            callback_timeout = getattr(self.enhanced_config, "oob_callback_timeout", 30.0)
+            use_interactsh = getattr(self.enhanced_config, "oob_use_interactsh", False)
 
             self._callback_manager = CallbackManager(
                 http_port=callback_port,
@@ -2106,9 +2120,9 @@ class OOBEnabledPATScanner(ChainEscalatingPATScanner):
                     f"Received at: {callback.received_at.isoformat()}\n"
                     f"Source IP: {callback.source_ip}"
                 ),
-                template=metadata['vuln_type'],
-                request=metadata['payload'],
-                tags=["oob_validated", "blind", metadata['vuln_type']],
+                template=metadata["vuln_type"],
+                request=metadata["payload"],
+                tags=["oob_validated", "blind", metadata["vuln_type"]],
             )
 
             result.findings.append(finding)
@@ -2149,9 +2163,10 @@ def _get_browser_validator():
     if _browser_validator is None:
         try:
             from aipt_v2.scanners.pat.browser_validator import (
-                PATBrowserValidator,
                 BrowserValidationResult,
+                PATBrowserValidator,
             )
+
             _browser_validator = (PATBrowserValidator, BrowserValidationResult)
         except ImportError:
             return None, None
@@ -2222,7 +2237,7 @@ class BrowserValidatingPATScanner(ValidatingPATScanner):
         super()._initialize_components()
 
         # Initialize browser validator if needed
-        browser_enabled = getattr(self.enhanced_config, 'browser_validation', True)
+        browser_enabled = getattr(self.enhanced_config, "browser_validation", True)
         browser_types_requested = any(
             vt in self.BROWSER_VULN_TYPES for vt in self.enhanced_config.vuln_types
         )
@@ -2230,7 +2245,7 @@ class BrowserValidatingPATScanner(ValidatingPATScanner):
         if browser_enabled and browser_types_requested:
             PATBrowserValidator, _ = _get_browser_validator()
             if PATBrowserValidator:
-                headless = getattr(self.enhanced_config, 'browser_headless', True)
+                headless = getattr(self.enhanced_config, "browser_headless", True)
                 self._browser_validator = PATBrowserValidator(headless=headless)
                 logger.info("Browser validator initialized for client-side vuln testing")
 
@@ -2276,6 +2291,7 @@ class BrowserValidatingPATScanner(ValidatingPATScanner):
             ValidatedScanFinding with browser validation evidence
         """
         import time
+
         start_time = time.time()
 
         validated = ValidatedScanFinding(
@@ -2293,7 +2309,7 @@ class BrowserValidatingPATScanner(ValidatingPATScanner):
                 result = await self._browser_validator.validate_xss(
                     url=url,
                     payload=payload,
-                    context=getattr(self.enhanced_config, 'mutation_xss_context', 'html_body'),
+                    context=getattr(self.enhanced_config, "mutation_xss_context", "html_body"),
                 )
             elif vuln_type == VulnerabilityType.PROTOTYPE_POLLUTION:
                 result = await self._browser_validator.validate_prototype_pollution(
@@ -2394,6 +2410,7 @@ class BrowserValidatingPATScanner(ValidatingPATScanner):
 
 # Convenience functions for CLI/API usage
 
+
 async def scan_url(
     url: str,
     parameters: Optional[list[str]] = None,
@@ -2417,7 +2434,8 @@ async def scan_url(
     config = PATScanConfig(
         target_url=url,
         parameters=parameters or [],
-        vuln_types=vuln_types or [
+        vuln_types=vuln_types
+        or [
             VulnerabilityType.SQL_INJECTION,
             VulnerabilityType.XSS,
             VulnerabilityType.COMMAND_INJECTION,

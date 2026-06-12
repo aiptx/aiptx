@@ -10,15 +10,16 @@ Enhanced pipeline orchestration with:
 The main Orchestrator class is re-exported from the original orchestrator.py
 for backward compatibility.
 """
+
 from __future__ import annotations
 
 # Import from the original orchestrator (backward compatibility)
 try:
     from aipt_v2.orchestrator import (
         Orchestrator,
+        OrchestratorConfig,
         Phase,
         PhaseResult,
-        OrchestratorConfig,
         validate_domain,
         validate_ip,
     )
@@ -29,9 +30,9 @@ except ImportError:
     OrchestratorConfig = None
 
 # New orchestration components
-from .pipeline import Pipeline, PipelineStage, PipelineResult
-from .scheduler import TaskScheduler, ScheduledTask, TaskPriority
-from .progress import ProgressTracker, ProgressCallback
+from .pipeline import Pipeline, PipelineResult, PipelineStage
+from .progress import ProgressCallback, ProgressTracker
+from .scheduler import ScheduledTask, TaskPriority, TaskScheduler
 
 __all__ = [
     # Original orchestrator

@@ -3,6 +3,7 @@ AIPT Phase Result Model
 
 Tracks results and status for each phase of the scanning pipeline.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -25,6 +26,7 @@ class Phase(Enum):
     5. VERIFY - Verification phase to eliminate false positives
     6. REPORT - Report generation and delivery
     """
+
     RECON = "recon"
     SCAN = "scan"
     AI_PENTEST = "ai_pentest"  # NEW: Strix integration
@@ -35,6 +37,7 @@ class Phase(Enum):
 
 class PhaseStatus(Enum):
     """Status of a pipeline phase"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -115,6 +118,7 @@ class PhaseResult:
     def finding_counts(self) -> dict[str, int]:
         """Get finding counts by severity"""
         from .findings import Severity
+
         counts = {s.value: 0 for s in Severity}
         for finding in self.findings:
             counts[finding.severity.value] += 1
@@ -240,7 +244,7 @@ class PipelineResult:
         Note: This is slower but more accurate than fingerprint-based dedup.
         """
         try:
-            from aipt_v2.llm.dedupe import quick_hash_check, check_duplicate
+            from aipt_v2.llm.dedupe import check_duplicate, quick_hash_check
         except ImportError:
             # Fallback to smart dedup if LLM module not available
             return self._deduplicate_smart(findings)
@@ -298,6 +302,7 @@ class PipelineResult:
             reportable_only: If True, only includes verified/reportable findings
         """
         from .findings import Severity
+
         grouped = {s.value: [] for s in Severity}
         for finding in self.get_all_findings(reportable_only=reportable_only):
             grouped[finding.severity.value].append(finding)
@@ -327,15 +332,41 @@ class PipelineResult:
             "reportable_count": len([f for f in all_findings if f.is_reportable()]),
             "critical_findings": {
                 "total": len(critical),
-                "confirmed": len([f for f in critical if f.verification_status == VerificationStatus.CONFIRMED]),
-                "false_positive": len([f for f in critical if f.verification_status == VerificationStatus.FALSE_POSITIVE]),
-                "pending": len([f for f in critical if f.verification_status in [VerificationStatus.UNVERIFIED, VerificationStatus.PENDING]]),
+                "confirmed": len(
+                    [f for f in critical if f.verification_status == VerificationStatus.CONFIRMED]
+                ),
+                "false_positive": len(
+                    [
+                        f
+                        for f in critical
+                        if f.verification_status == VerificationStatus.FALSE_POSITIVE
+                    ]
+                ),
+                "pending": len(
+                    [
+                        f
+                        for f in critical
+                        if f.verification_status
+                        in [VerificationStatus.UNVERIFIED, VerificationStatus.PENDING]
+                    ]
+                ),
             },
             "high_findings": {
                 "total": len(high),
-                "confirmed": len([f for f in high if f.verification_status == VerificationStatus.CONFIRMED]),
-                "false_positive": len([f for f in high if f.verification_status == VerificationStatus.FALSE_POSITIVE]),
-                "pending": len([f for f in high if f.verification_status in [VerificationStatus.UNVERIFIED, VerificationStatus.PENDING]]),
+                "confirmed": len(
+                    [f for f in high if f.verification_status == VerificationStatus.CONFIRMED]
+                ),
+                "false_positive": len(
+                    [f for f in high if f.verification_status == VerificationStatus.FALSE_POSITIVE]
+                ),
+                "pending": len(
+                    [
+                        f
+                        for f in high
+                        if f.verification_status
+                        in [VerificationStatus.UNVERIFIED, VerificationStatus.PENDING]
+                    ]
+                ),
             },
         }
 
@@ -350,9 +381,15 @@ class PipelineResult:
         reportable = [f for f in all_findings if f.is_reportable()]
 
         # Verification statistics
-        confirmed = [f for f in all_findings if f.verification_status == VerificationStatus.CONFIRMED]
-        false_positives = [f for f in all_findings if f.verification_status == VerificationStatus.FALSE_POSITIVE]
-        pending_review = [f for f in all_findings if f.verification_status == VerificationStatus.MANUAL_REVIEW]
+        confirmed = [
+            f for f in all_findings if f.verification_status == VerificationStatus.CONFIRMED
+        ]
+        false_positives = [
+            f for f in all_findings if f.verification_status == VerificationStatus.FALSE_POSITIVE
+        ]
+        pending_review = [
+            f for f in all_findings if f.verification_status == VerificationStatus.MANUAL_REVIEW
+        ]
 
         return {
             "scan_id": self.scan_id,
@@ -373,8 +410,12 @@ class PipelineResult:
             "confirmed_findings": len([f for f in reportable if f.confirmed]),
             "exploited_findings": len([f for f in reportable if f.exploited]),
             "ai_findings": len([f for f in reportable if f.source == "aipt"]),
-            "phases_completed": len([p for p in self.phases.values() if p.status == PhaseStatus.COMPLETED]),
-            "phases_failed": len([p for p in self.phases.values() if p.status == PhaseStatus.FAILED]),
+            "phases_completed": len(
+                [p for p in self.phases.values() if p.status == PhaseStatus.COMPLETED]
+            ),
+            "phases_failed": len(
+                [p for p in self.phases.values() if p.status == PhaseStatus.FAILED]
+            ),
         }
 
     def to_dict(self) -> dict[str, Any]:

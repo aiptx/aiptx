@@ -9,6 +9,7 @@ Uses LLM intelligence to generate context-aware exploitation payloads:
 
 This provides intelligent, adaptive payload generation for exploitation.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,8 +18,6 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
-
-from aipt_v2.models.findings import VulnerabilityType
 
 logger = logging.getLogger(__name__)
 
@@ -229,6 +228,7 @@ For each payload, explain:
 @dataclass
 class GeneratedPayload:
     """A generated exploitation payload."""
+
     payload: str
     technique: str
     waf_bypass_method: str
@@ -249,6 +249,7 @@ class GeneratedPayload:
 @dataclass
 class PayloadGenerationResult:
     """Result of payload generation."""
+
     payloads: list[GeneratedPayload]
     recommendations: str
     vuln_type: str
@@ -313,6 +314,7 @@ class AdaptivePayloadGenerator:
         if self._llm is None:
             try:
                 import litellm
+
                 self._llm = litellm
             except ImportError:
                 return None
@@ -323,6 +325,7 @@ class AdaptivePayloadGenerator:
         if self._learner is None and self.use_learning:
             try:
                 from aipt_v2.intelligence.learning import ExploitationLearner
+
                 self._learner = ExploitationLearner()
             except ImportError:
                 pass
@@ -367,19 +370,21 @@ class AdaptivePayloadGenerator:
         if llm and self._has_api_key():
             try:
                 result = await self._llm_generate(
-                    vuln_type, target_url, parameter, waf,
-                    tech_stack, failed_payloads, objective
+                    vuln_type, target_url, parameter, waf, tech_stack, failed_payloads, objective
                 )
                 # Prepend historical successes
                 for hp in historical_payloads:
                     if hp not in [p.payload for p in result.payloads]:
-                        result.payloads.insert(0, GeneratedPayload(
-                            payload=hp,
-                            technique="Historical success",
-                            waf_bypass_method="Previously successful",
-                            explanation="This payload succeeded in similar contexts",
-                            confidence="high",
-                        ))
+                        result.payloads.insert(
+                            0,
+                            GeneratedPayload(
+                                payload=hp,
+                                technique="Historical success",
+                                waf_bypass_method="Previously successful",
+                                explanation="This payload succeeded in similar contexts",
+                                confidence="high",
+                            ),
+                        )
                 return result
             except Exception as e:
                 logger.warning(f"LLM payload generation failed: {e}")
@@ -443,13 +448,15 @@ class AdaptivePayloadGenerator:
 
             payloads = []
             for p in data.get("payloads", []):
-                payloads.append(GeneratedPayload(
-                    payload=p.get("payload", ""),
-                    technique=p.get("technique", ""),
-                    waf_bypass_method=p.get("waf_bypass_method", ""),
-                    explanation=p.get("explanation", ""),
-                    confidence=p.get("confidence", "medium"),
-                ))
+                payloads.append(
+                    GeneratedPayload(
+                        payload=p.get("payload", ""),
+                        technique=p.get("technique", ""),
+                        waf_bypass_method=p.get("waf_bypass_method", ""),
+                        explanation=p.get("explanation", ""),
+                        confidence=p.get("confidence", "medium"),
+                    )
+                )
 
             return PayloadGenerationResult(
                 payloads=payloads,
@@ -476,13 +483,15 @@ class AdaptivePayloadGenerator:
 
         # Add historical successes first
         for hp in historical_payloads:
-            payloads.append(GeneratedPayload(
-                payload=hp,
-                technique="Historical success",
-                waf_bypass_method="Previously successful",
-                explanation="This payload succeeded in similar contexts",
-                confidence="high",
-            ))
+            payloads.append(
+                GeneratedPayload(
+                    payload=hp,
+                    technique="Historical success",
+                    waf_bypass_method="Previously successful",
+                    explanation="This payload succeeded in similar contexts",
+                    confidence="high",
+                )
+            )
 
         # Add template payloads
         for category, category_payloads in templates.items():
@@ -496,13 +505,15 @@ class AdaptivePayloadGenerator:
                 if waf:
                     payload = self._apply_waf_bypass(payload, waf, vuln_type)
 
-                payloads.append(GeneratedPayload(
-                    payload=payload,
-                    technique=category,
-                    waf_bypass_method=f"Adapted for {waf}" if waf else "None",
-                    explanation=f"Standard {vuln_type} payload ({category})",
-                    confidence="medium",
-                ))
+                payloads.append(
+                    GeneratedPayload(
+                        payload=payload,
+                        technique=category,
+                        waf_bypass_method=f"Adapted for {waf}" if waf else "None",
+                        explanation=f"Standard {vuln_type} payload ({category})",
+                        confidence="medium",
+                    )
+                )
 
         return PayloadGenerationResult(
             payloads=payloads[:10],
@@ -524,12 +535,22 @@ class AdaptivePayloadGenerator:
         if waf_config.get("case_variation"):
             # Randomly vary case for SQL keywords
             import random
-            sql_keywords = ["SELECT", "UNION", "FROM", "WHERE", "AND", "OR", "INSERT", "UPDATE", "DELETE"]
+
+            sql_keywords = [
+                "SELECT",
+                "UNION",
+                "FROM",
+                "WHERE",
+                "AND",
+                "OR",
+                "INSERT",
+                "UPDATE",
+                "DELETE",
+            ]
             for keyword in sql_keywords:
                 if keyword.lower() in modified.lower():
                     varied = "".join(
-                        c.upper() if random.random() > 0.5 else c.lower()
-                        for c in keyword
+                        c.upper() if random.random() > 0.5 else c.lower() for c in keyword
                     )
                     modified = modified.replace(keyword, varied)
                     modified = modified.replace(keyword.lower(), varied)
@@ -539,6 +560,7 @@ class AdaptivePayloadGenerator:
         if "double_url_encode" in encodings and vuln_type in ["sql_injection", "xss_reflected"]:
             # Double URL encode special chars
             import urllib.parse
+
             modified = urllib.parse.quote(urllib.parse.quote(modified, safe=""), safe="")
 
         # Apply comment injection for SQL

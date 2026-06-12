@@ -8,6 +8,7 @@ subprocess. It handles:
 - Output capture and parsing
 - Tool availability checking
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -181,8 +182,15 @@ class LocalRunner(BaseRunner):
         """Get local runner status"""
         # Check commonly used tools
         common_tools = [
-            "nuclei", "ffuf", "nmap", "sslscan", "testssl.sh",
-            "sqlmap", "nikto", "subfinder", "httpx",
+            "nuclei",
+            "ffuf",
+            "nmap",
+            "sslscan",
+            "testssl.sh",
+            "sqlmap",
+            "nikto",
+            "subfinder",
+            "httpx",
         ]
 
         available_tools = []
@@ -326,10 +334,12 @@ class LocalRunner(BaseRunner):
             # Nuclei output format: [severity] [template-id] [protocol] matched-url
             parts = line.split()
             if len(parts) >= 3:
-                findings.append({
-                    "source": "nuclei",
-                    "raw": line,
-                })
+                findings.append(
+                    {
+                        "source": "nuclei",
+                        "raw": line,
+                    }
+                )
 
         return findings
 
@@ -347,10 +357,12 @@ class LocalRunner(BaseRunner):
 
             # ffuf output has status codes and response info
             if "[Status:" in line:
-                findings.append({
-                    "source": "ffuf",
-                    "raw": line,
-                })
+                findings.append(
+                    {
+                        "source": "ffuf",
+                        "raw": line,
+                    }
+                )
 
         return findings
 
@@ -358,8 +370,8 @@ class LocalRunner(BaseRunner):
         """Check if exit code is acceptable for specific tools"""
         # Some tools return 1 when no findings (which is success)
         acceptable_codes = {
-            "grep": [0, 1],      # 1 = no matches
-            "ffuf": [0, 1],     # 1 = no results
-            "nuclei": [0, 1],   # 1 = no matches
+            "grep": [0, 1],  # 1 = no matches
+            "ffuf": [0, 1],  # 1 = no results
+            "nuclei": [0, 1],  # 1 = no matches
         }
         return exit_code in acceptable_codes.get(tool.lower(), [0])

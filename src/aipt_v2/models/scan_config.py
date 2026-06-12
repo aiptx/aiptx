@@ -3,6 +3,7 @@ AIPT Scan Configuration
 
 Defines scan modes and configuration options for the unified pipeline.
 """
+
 from __future__ import annotations
 
 from dataclasses import dataclass, field
@@ -19,6 +20,7 @@ class ScanMode(Enum):
     COMPREHENSIVE: All scanners + aggressive AI testing + exploitation
     STEALTH: Low-noise scanning with minimal active probing
     """
+
     QUICK = "quick"
     STANDARD = "standard"
     COMPREHENSIVE = "comprehensive"
@@ -27,6 +29,7 @@ class ScanMode(Enum):
 
 class ScannerType(Enum):
     """Available scanners in the pipeline"""
+
     # Traditional DAST
     ACUNETIX = "acunetix"
     BURP_SUITE = "burp"
@@ -76,10 +79,12 @@ class ScanConfig:
     enable_reporting: bool = True
 
     # Scanner selection
-    enabled_scanners: list[ScannerType] = field(default_factory=lambda: [
-        ScannerType.NUCLEI,
-        ScannerType.STRIX,
-    ])
+    enabled_scanners: list[ScannerType] = field(
+        default_factory=lambda: [
+            ScannerType.NUCLEI,
+            ScannerType.STRIX,
+        ]
+    )
 
     # Traditional scanner configs
     acunetix_config: dict[str, Any] = field(default_factory=dict)
@@ -175,13 +180,15 @@ class AiptConfig:
     llm_api_key: str | None = None  # If None, uses environment variable
 
     # Prompt modules to load (vulnerability knowledge)
-    modules: list[str] = field(default_factory=lambda: [
-        "sql_injection",
-        "xss",
-        "rce",
-        "ssrf",
-        "auth_bypass",
-    ])
+    modules: list[str] = field(
+        default_factory=lambda: [
+            "sql_injection",
+            "xss",
+            "rce",
+            "ssrf",
+            "auth_bypass",
+        ]
+    )
 
     # Agent behavior
     max_agent_iterations: int = 30  # Max tool calls per session
@@ -191,11 +198,13 @@ class AiptConfig:
     # Scope constraints
     stay_in_scope: bool = True
     allowed_methods: list[str] = field(default_factory=lambda: ["GET", "POST"])
-    disallowed_paths: list[str] = field(default_factory=lambda: [
-        "/admin",
-        "/logout",
-        "/delete",
-    ])
+    disallowed_paths: list[str] = field(
+        default_factory=lambda: [
+            "/admin",
+            "/logout",
+            "/delete",
+        ]
+    )
 
     # Sandbox settings
     use_docker_sandbox: bool = True

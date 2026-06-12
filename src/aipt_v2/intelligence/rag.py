@@ -7,14 +7,13 @@ Score = 0.5 * description_similarity + 0.5 * sample_similarity + 2.0 * keyword_m
 """
 
 import json
-import os
-from pathlib import Path
-from typing import Optional, TYPE_CHECKING
 from dataclasses import dataclass
+from pathlib import Path
+from typing import TYPE_CHECKING, Optional
 
 # Lazy import for numpy - only required when RAG features are actually used
 if TYPE_CHECKING:
-    import numpy as np
+    pass
 
 _np = None  # Lazy-loaded numpy module
 
@@ -25,6 +24,7 @@ def _get_numpy():
     if _np is None:
         try:
             import numpy
+
             _np = numpy
         except ImportError:
             raise ImportError(
@@ -37,6 +37,7 @@ def _get_numpy():
 @dataclass
 class ToolMatch:
     """A matched tool with its score"""
+
     name: str
     score: float
     tool: dict
@@ -96,6 +97,7 @@ class ToolRAG:
         if self._embedder is None:
             try:
                 from sentence_transformers import SentenceTransformer
+
                 self._embedder = SentenceTransformer(self.embedding_model_name)
             except ImportError:
                 raise ImportError(
@@ -114,7 +116,11 @@ class ToolRAG:
 
                 self._embeddings_cache[name] = {
                     "desc": self._embedder.encode(desc, normalize_embeddings=True),
-                    "samples": self._embedder.encode(samples, normalize_embeddings=True) if samples else None,
+                    "samples": (
+                        self._embedder.encode(samples, normalize_embeddings=True)
+                        if samples
+                        else None
+                    ),
                 }
 
     def search(
@@ -152,11 +158,13 @@ class ToolRAG:
 
         for tool in candidates:
             score = self._score_tool(query, query_embedding, tool)
-            scored_tools.append(ToolMatch(
-                name=tool.get("name", "unknown"),
-                score=score,
-                tool=tool,
-            ))
+            scored_tools.append(
+                ToolMatch(
+                    name=tool.get("name", "unknown"),
+                    score=score,
+                    tool=tool,
+                )
+            )
 
         # Sort by score (descending)
         scored_tools.sort(key=lambda x: x.score, reverse=True)
@@ -186,23 +194,27 @@ class ToolRAG:
             samples = " ".join(tool.get("samples", []))
 
             desc_emb = self._embedder.encode(desc, normalize_embeddings=True)
-            sample_emb = self._embedder.encode(samples, normalize_embeddings=True) if samples else None
+            sample_emb = (
+                self._embedder.encode(samples, normalize_embeddings=True) if samples else None
+            )
 
             # Cache for future use
             self._embeddings_cache[name] = {"desc": desc_emb, "samples": sample_emb}
 
         # Compute similarities
         desc_score = self._cosine_similarity(query_embedding, desc_emb)
-        sample_score = self._cosine_similarity(query_embedding, sample_emb) if sample_emb is not None else 0.0
+        sample_score = (
+            self._cosine_similarity(query_embedding, sample_emb) if sample_emb is not None else 0.0
+        )
 
         # Keyword matching
         keyword_score = self._keyword_match(query, tool)
 
         # Combined score (the magic formula from PentestAssistant)
         score = (
-            self.WEIGHT_DESCRIPTION * desc_score +
-            self.WEIGHT_SAMPLES * sample_score +
-            self.WEIGHT_KEYWORDS * keyword_score
+            self.WEIGHT_DESCRIPTION * desc_score
+            + self.WEIGHT_SAMPLES * sample_score
+            + self.WEIGHT_KEYWORDS * keyword_score
         )
 
         return float(score)

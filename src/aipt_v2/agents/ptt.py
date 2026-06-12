@@ -12,15 +12,16 @@ Format:
 """
 
 import json
-from enum import Enum
-from typing import Optional
 from dataclasses import dataclass, field
 from datetime import datetime
+from enum import Enum
 from pathlib import Path
+from typing import Optional
 
 
 class TaskStatus(str, Enum):
     """Status of a task"""
+
     TODO = "to-do"
     IN_PROGRESS = "in-progress"
     COMPLETED = "completed"
@@ -29,6 +30,7 @@ class TaskStatus(str, Enum):
 
 class PhaseType(str, Enum):
     """Penetration testing phases"""
+
     RECON = "recon"
     SCANNING = "enum"
     EXPLOITATION = "exploit"
@@ -39,6 +41,7 @@ class PhaseType(str, Enum):
 @dataclass
 class Task:
     """A single task in the PTT"""
+
     id: str
     description: str
     status: TaskStatus = TaskStatus.TODO
@@ -51,6 +54,7 @@ class Task:
 @dataclass
 class Phase:
     """A phase containing multiple tasks"""
+
     name: str
     description: str
     status: TaskStatus = TaskStatus.TODO
@@ -379,10 +383,7 @@ class PTT:
                     completed_tasks += 1
                 total_findings += len(task.findings)
 
-        completed_phases = sum(
-            1 for p in self.phases.values()
-            if p.status == TaskStatus.COMPLETED
-        )
+        completed_phases = sum(1 for p in self.phases.values() if p.status == TaskStatus.COMPLETED)
 
         return {
             "target": self.target,

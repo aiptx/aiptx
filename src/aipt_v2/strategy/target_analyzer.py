@@ -10,13 +10,12 @@ Automatically analyzes targets to determine:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import os
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class TargetType(str, Enum):
     """Types of scan targets."""
+
     WEB_APP = "web_app"
     REST_API = "rest_api"
     GRAPHQL_API = "graphql_api"
@@ -37,6 +37,7 @@ class TargetType(str, Enum):
 
 class Technology(str, Enum):
     """Detected technologies."""
+
     # Frontend
     REACT = "react"
     VUE = "vue"
@@ -87,6 +88,7 @@ class Technology(str, Enum):
 @dataclass
 class TargetProfile:
     """Complete profile of a scan target."""
+
     target: str
     target_type: TargetType
     technologies: list[Technology] = field(default_factory=list)
@@ -317,8 +319,13 @@ class TargetAnalyzer:
 
         # Authentication
         auth_indicators = [
-            "login", "signin", "sign-in", "password",
-            "username", "email", "authenticate"
+            "login",
+            "signin",
+            "sign-in",
+            "password",
+            "username",
+            "email",
+            "authenticate",
         ]
         profile.has_auth = any(ind in html_lower for ind in auth_indicators)
 
@@ -327,8 +334,7 @@ class TargetAnalyzer:
 
         # File upload
         profile.has_file_upload = (
-            'type="file"' in html_lower or
-            'enctype="multipart/form-data"' in html_lower
+            'type="file"' in html_lower or 'enctype="multipart/form-data"' in html_lower
         )
 
         # API indicators
@@ -363,9 +369,7 @@ class TargetAnalyzer:
 
     def _is_spa(self, html: str, profile: TargetProfile) -> bool:
         """Check if target is a Single-Page Application."""
-        spa_frameworks = [
-            Technology.REACT, Technology.VUE, Technology.ANGULAR, Technology.NEXT_JS
-        ]
+        spa_frameworks = [Technology.REACT, Technology.VUE, Technology.ANGULAR, Technology.NEXT_JS]
 
         # Has SPA framework
         if any(f in profile.technologies for f in spa_frameworks):
@@ -374,7 +378,7 @@ class TargetAnalyzer:
             if body_match:
                 body_content = body_match.group(1).strip()
                 # SPAs typically have minimal body content
-                if len(body_content) < 1000 and ("id=\"root\"" in html or "id=\"app\"" in html):
+                if len(body_content) < 1000 and ('id="root"' in html or 'id="app"' in html):
                     return True
 
         return False
@@ -469,16 +473,15 @@ class TargetAnalyzer:
 
         # SAST for source code
         if profile.source_path or profile.target_type in [
-            TargetType.LOCAL_DIRECTORY, TargetType.GITHUB_REPO
+            TargetType.LOCAL_DIRECTORY,
+            TargetType.GITHUB_REPO,
         ]:
             agents.append("SASTAgent")
             scans.append("sast_analysis")
             scans.append("secret_detection")
 
         # DAST for web targets
-        if profile.target_type in [
-            TargetType.WEB_APP, TargetType.SPA, TargetType.REST_API
-        ]:
+        if profile.target_type in [TargetType.WEB_APP, TargetType.SPA, TargetType.REST_API]:
             agents.append("DASTAgent")
             scans.append("xss_scan")
             scans.append("sqli_scan")

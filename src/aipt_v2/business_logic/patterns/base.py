@@ -3,13 +3,14 @@ Base classes for business logic test patterns.
 """
 
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import Any, Dict, List, Optional, Callable
 from datetime import datetime, timezone
+from enum import Enum
+from typing import Any, Callable, Dict, List, Optional
 
 
 class PatternCategory(Enum):
     """Categories of business logic vulnerabilities."""
+
     RACE_CONDITION = "race_condition"
     PRICE_MANIPULATION = "price_manipulation"
     WORKFLOW = "workflow"
@@ -21,6 +22,7 @@ class PatternCategory(Enum):
 
 class TestSeverity(Enum):
     """Severity levels for findings."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -33,6 +35,7 @@ class TestCase:
     """
     A single test case for a business logic pattern.
     """
+
     name: str
     description: str
 
@@ -61,6 +64,7 @@ class TestCase:
 @dataclass
 class TestResult:
     """Result of a business logic test execution."""
+
     test_case: str
     pattern_id: str
     success: bool
@@ -91,6 +95,7 @@ class TestPattern:
 
     Patterns define a class of vulnerability and how to test for it.
     """
+
     id: str
     name: str
     description: str
@@ -118,6 +123,7 @@ class TestPattern:
     def matches_endpoint(self, endpoint: str) -> bool:
         """Check if pattern applies to given endpoint."""
         import re
+
         if not self.endpoint_patterns:
             return True  # Apply to all endpoints
         return any(re.search(p, endpoint, re.I) for p in self.endpoint_patterns)
@@ -133,5 +139,5 @@ class TestPattern:
             "cwe_ids": self.cwe_ids,
             "owasp_category": self.owasp_category,
             "remediation": self.remediation,
-            "test_case_count": len(self.test_cases)
+            "test_case_count": len(self.test_cases),
         }

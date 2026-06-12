@@ -1,24 +1,28 @@
+import ipaddress
 import os
+
 # from googlesearch import search
 import re
-import ipaddress
 import socket
+import time
 from urllib.parse import urlparse
-from tqdm import tqdm
-# import csv
-from deep_translator import GoogleTranslator
+
+import dotenv
+import requests
 import spacy
 from bs4 import BeautifulSoup
-import requests
+
+# import csv
+from deep_translator import GoogleTranslator
+from inscriptis import get_text
+from langdetect import detect
+from readability import Document
+from tqdm import tqdm
+
+from aipt_v2.utils.model_manager import get_model
 from aipt_v2.utils.searchers.Domain_Filter import domain_filter
 from aipt_v2.utils.searchers.Extension_Filter import for_google_webpage
 from aipt_v2.utils.searchers.util import *
-from langdetect import detect
-import time
-from readability import Document
-from inscriptis import get_text
-import dotenv
-from aipt_v2.utils.model_manager import get_model
 
 dotenv.load_dotenv()
 
@@ -55,42 +59,46 @@ def _is_safe_public_url(url: str) -> bool:
             addr = ipaddress.ip_address(ip)
         except ValueError:
             return False
-        if (addr.is_private or addr.is_loopback or addr.is_link_local
-                or addr.is_reserved or addr.is_multicast or addr.is_unspecified):
+        if (
+            addr.is_private
+            or addr.is_loopback
+            or addr.is_link_local
+            or addr.is_reserved
+            or addr.is_multicast
+            or addr.is_unspecified
+        ):
             return False
     return True
+
 
 def google_search(query, api_key, cse_id, num=10, **kwargs):
     """
     use Google Custom Search JSON API toexecute search
-    
+
     Args:
         query (str): search key word
         api_key (str): your Google API key
         cse_id (str): your self defined serch engine ID (cx parameter)
         num (int, optional): num of search results
         **kwargs: other parameters
-    
+
     Returns:
         dict: a JSON from API
     """
     url = "https://www.googleapis.com/customsearch/v1"
-    params = {
-        'q': query,
-        'key': api_key,
-        'cx': cse_id,
-        'num': num
-    }
+    params = {"q": query, "key": api_key, "cx": cse_id, "num": num}
     # merge other parameters
     params.update(kwargs)
-    
+
     # Security: Add timeout to prevent indefinite hangs (CWE-400)
     response = requests.get(url, params=params, timeout=30)
     response.raise_for_status()  # if request fails
     return response.json()
 
+
 class GoogleSearcher:
-    '''Given a query with exploit name and app number, search on Google, get 10 hyperlinks, create folder with 10 different files from 10 links'''
+    """Given a query with exploit name and app number, search on Google, get 10 hyperlinks, create folder with 10 different files from 10 links"""
+
     def __init__(self, model_name: str = "openai"):
         self.llm = get_model(model_name)
 
@@ -121,11 +129,11 @@ class GoogleSearcher:
             print(f"Request Error: {e}")
             return None
 
-    def translate_text(self, text, source='auto', target='en', max_length=5000):
+    def translate_text(self, text, source="auto", target="en", max_length=5000):
         doc = nlp(text)
         parts = []
         current_part = ""
-        
+
         for sent in doc.sents:
             if len(current_part) + len(sent.text) <= max_length:
                 current_part += sent.text + " "
@@ -134,26 +142,31 @@ class GoogleSearcher:
                 current_part = sent.text + " "
         if current_part:
             parts.append(current_part)
-        
-        translated_parts = [GoogleTranslator(source=source, target=target).translate(part.strip()) for part in parts if len(part.strip()) > 0]
-        return ' '.join(translated_parts)
-    
+
+        translated_parts = [
+            GoogleTranslator(source=source, target=target).translate(part.strip())
+            for part in parts
+            if len(part.strip()) > 0
+        ]
+        return " ".join(translated_parts)
+
     def extract_content(self, result, start_marker, end_marker):
         # define regular expression pattern
-        pattern = f'{start_marker}(.*?){end_marker}'
+        pattern = f"{start_marker}(.*?){end_marker}"
         # use re.DOTALL allows . to match any character, including newline characters
         matches = re.findall(pattern, result, re.DOTALL)
         return matches
-    
+
     def filter_full_file(self, file_content):
         # use configed LLM to filter files
         if not self.llm:
             print("LLM not initialized, skipping file filtering")
             return "<<@#%_tag useless >>@#%_tag"
-            
+
         from langchain_core.messages import HumanMessage, SystemMessage
-        
-        system_message = SystemMessage(content="""You're an excellent cybersecurity penetration tester assistant. 
+
+        system_message = SystemMessage(
+            content="""You're an excellent cybersecurity penetration tester assistant. 
         You need to help the tester in filtering a file's content, and your commitment is essential to the task. 
         You will be provided a file's content, you need to read it, and then use your knowledge to determine if the file is directly useful for an actual penetration.
         "DIRECTLY USEFUL" means you can directly follow the instructions provided by the file to penetrate.
@@ -185,12 +198,15 @@ class GoogleSearcher:
         Meanwhile, to reduce your co-workers' burdens, you need to be strict. It is okay that you find the file is not actually useful to execute penetration. If so, feel free to skip those parts.
         You do not need to make assumption that a strange URL or link may contain something useful. We can access them through other approaches. So if these things appear in the file, make sure they do not affect your judgement.
         You can summarize but do not conclude or make assumptions, and your answer should be your most confident one. Keep the answer concise.
-        """)
+        """
+        )
 
-        user_message = HumanMessage(content=f"""Please make judgement and filter the following content: \n\n{file_content}
+        user_message = HumanMessage(
+            content=f"""Please make judgement and filter the following content: \n\n{file_content}
         \n\n\n\n\n
 
-        Please make sure that you have used the unique string pair("<<@#%_tag", ">>@#%_tag"), especially do not forget to add ">>@#%_tag" as an end.""")
+        Please make sure that you have used the unique string pair("<<@#%_tag", ">>@#%_tag"), especially do not forget to add ">>@#%_tag" as an end."""
+        )
 
         try:
             response = self.llm.invoke([system_message, user_message])
@@ -203,13 +219,15 @@ class GoogleSearcher:
     def search_keyword(self, keyword: str, output_dir: str):
         # print("google called")
         links = []
-        search_keyword = keyword 
+        search_keyword = keyword
         # domain_filter = ["github", "suibian"]
         # + " exploit"
         search_results = []
         try:
             time.sleep(5)
-            search_results = google_search(search_keyword, os.environ.get("GOOGLE_API_KEY"), os.environ.get("GOOGLE_CSE_ID"))
+            search_results = google_search(
+                search_keyword, os.environ.get("GOOGLE_API_KEY"), os.environ.get("GOOGLE_CSE_ID")
+            )
         except:
             print("Error occurred during google search. Continuing...")
 
@@ -225,11 +243,11 @@ class GoogleSearcher:
         #         links.append((web_name, result))
         # if not os.path.exists(output_dir):
 
-        if 'items' in search_results:
-            for i, item in enumerate(search_results['items'], 1):
-                
+        if "items" in search_results:
+            for i, item in enumerate(search_results["items"], 1):
+
                 # process links - filter with domain name
-                result_link = item['link']
+                result_link = item["link"]
                 if domain_filter:
                     if all(domain not in result_link.lower() for domain in domain_filter):
                         web_name = result_link.split("//")[-1].split("/")[0]
@@ -244,12 +262,12 @@ class GoogleSearcher:
         else:
             print("Cannot find related info.")
         self.create_directories(output_dir, links)
-    
+
     def create_directories(self, output_dir, links):
         # create a folder if it doesn't exist already
         # print("called!")
         os.makedirs(output_dir, exist_ok=True)
-        for (name, link) in tqdm(links, desc="Crawling Google pages"):
+        for name, link in tqdm(links, desc="Crawling Google pages"):
             try:
                 # if exist, then skip
                 if os.path.exists(os.path.join(output_dir, name)):
@@ -263,8 +281,8 @@ class GoogleSearcher:
                 extensions_to_remove = for_google_webpage
 
                 # remove images
-                for ule_tag in soup.find_all('True'):
-                    src = ule_tag.get('src')
+                for ule_tag in soup.find_all("True"):
+                    src = ule_tag.get("src")
                     if src and any(src.lower().endswith(ext) for ext in extensions_to_remove):
                         ule_tag.decompose()
 
@@ -274,9 +292,11 @@ class GoogleSearcher:
                 #     if href and any(href.lower().endswith(ext) for ext in extensions_to_remove):
                 #         a_tag.decompose()
 
-                doc = Document(soup.prettify()) # restore to html format, then transfer to the format can be processed by readability
-                content = doc.summary() # summarize, remove nonrelated content, html format
-                full_text = get_text(content) # get clean text, with relative location remained
+                doc = Document(
+                    soup.prettify()
+                )  # restore to html format, then transfer to the format can be processed by readability
+                content = doc.summary()  # summarize, remove nonrelated content, html format
+                full_text = get_text(content)  # get clean text, with relative location remained
 
                 # not empty -> creaye directory, else skip
                 if full_text.strip():
@@ -284,7 +304,7 @@ class GoogleSearcher:
                 else:
                     continue
 
-                # translate Chinese webpages 
+                # translate Chinese webpages
                 if full_text.strip():
                     lan = detect(full_text)
                     # print(language)
@@ -300,11 +320,11 @@ class GoogleSearcher:
 
             if len(full_doc) > 1000000:
                 continue
-            
-            # use LLM to filter, then create md doc 
+
+            # use LLM to filter, then create md doc
             full_doc_judgement = self.filter_full_file(full_doc)
             # print(full_doc_judgement)
-            full_doc_judgement = self.extract_content(full_doc_judgement, '<<@#%_tag', '>>@#%_tag')
+            full_doc_judgement = self.extract_content(full_doc_judgement, "<<@#%_tag", ">>@#%_tag")
             # print(full_doc_judgement)
             if full_doc_judgement[0].strip() == "useful":
                 with open(os.path.join(output_dir, name, "R_DOC.md"), "w") as f:
@@ -312,10 +332,7 @@ class GoogleSearcher:
                     f.write(full_doc)
 
         remove_empty_directories(output_dir)
-        
-            
 
-            
 
 # def main():
 #     g = GoogleSearcher()
@@ -331,8 +348,6 @@ class GoogleSearcher:
 #                 g.search_keyword(f"{cve_id} exlpoit", os.path.join(base_dir, level, avd_id, "temp"))
 #             time.sleep(30)
 
-    
 
 # if __name__ == "__main__":
 #     main()
-

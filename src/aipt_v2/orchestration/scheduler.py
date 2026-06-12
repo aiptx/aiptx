@@ -7,21 +7,23 @@ Provides task scheduling with:
 - Concurrent execution limits
 - Task dependencies
 """
+
 from __future__ import annotations
 
 import asyncio
 import heapq
-from typing import Optional, List, Dict, Any, Callable, Awaitable
-from dataclasses import dataclass, field
-from enum import IntEnum
-from datetime import datetime
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import IntEnum
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class TaskPriority(IntEnum):
     """Task priority levels (lower value = higher priority)"""
+
     CRITICAL = 0
     HIGH = 1
     NORMAL = 2
@@ -41,6 +43,7 @@ class TaskStatus(str):
 @dataclass(order=True)
 class ScheduledTask:
     """A task in the scheduler queue"""
+
     priority: TaskPriority
     task_id: str = field(compare=False)
     name: str = field(compare=False)
@@ -114,16 +117,10 @@ class TaskScheduler:
         name: str,
         handler: Callable[..., Awaitable[Any]],
         priority: TaskPriority = TaskPriority.NORMAL,
-        **kwargs
+        **kwargs,
     ) -> str:
         """Create and add a task"""
-        task = ScheduledTask(
-            priority=priority,
-            task_id="",
-            name=name,
-            handler=handler,
-            **kwargs
-        )
+        task = ScheduledTask(priority=priority, task_id="", name=name, handler=handler, **kwargs)
         return self.add_task(task)
 
     def cancel_task(self, task_id: str) -> bool:
@@ -167,11 +164,7 @@ class TaskScheduler:
                 break
 
             # Start new tasks if we have capacity
-            while (
-                self._queue
-                and len(self._running) < self.max_concurrent
-                and self._can_run_next()
-            ):
+            while self._queue and len(self._running) < self.max_concurrent and self._can_run_next():
                 task = self._get_next_runnable_task()
                 if task:
                     await self._start_task(task)
@@ -216,6 +209,7 @@ class TaskScheduler:
         # Respect rate limit
         if self.rate_limit:
             import time
+
             now = time.time()
             min_interval = 1.0 / self.rate_limit
             if now - self._last_task_time < min_interval:
@@ -223,9 +217,7 @@ class TaskScheduler:
             self._last_task_time = time.time()
 
         # Create async task
-        async_task = asyncio.create_task(
-            self._execute_task(task)
-        )
+        async_task = asyncio.create_task(self._execute_task(task))
         self._running[task.task_id] = async_task
 
     async def _execute_task(self, task: ScheduledTask) -> Any:

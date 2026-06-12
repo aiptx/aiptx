@@ -7,13 +7,14 @@ Provides progress tracking with:
 - Event callbacks
 - Logging integration
 """
+
 from __future__ import annotations
 
+import logging
 import time
-from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-import logging
+from typing import Any, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +26,7 @@ ProgressCallback = Callable[[float, str, Dict[str, Any]], None]
 @dataclass
 class ProgressEvent:
     """A progress event"""
+
     timestamp: str
     progress: float  # 0.0 to 1.0
     message: str
@@ -35,6 +37,7 @@ class ProgressEvent:
 @dataclass
 class PhaseProgress:
     """Progress within a phase"""
+
     name: str
     total_steps: int
     completed_steps: int = 0
@@ -293,8 +296,8 @@ class ProgressTracker:
             f"Phases: {summary['completed_phases']}/{summary['total_phases']}",
         ]
 
-        if summary['current_phase']:
-            phase = self.phases[summary['current_phase']]
+        if summary["current_phase"]:
+            phase = self.phases[summary["current_phase"]]
             lines.append(f"Current: {summary['current_phase']} ({phase.current_step})")
 
         return " | ".join(lines)

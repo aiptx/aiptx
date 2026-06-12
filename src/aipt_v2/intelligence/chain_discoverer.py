@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NovelChain:
     """A discovered novel attack chain."""
+
     name: str
     description: str
     steps: list[dict[str, str]]
@@ -167,18 +168,20 @@ class ChainDiscoverer:
             if trigger in vuln_types:
                 # Found a potential chain start
                 for enabled in pattern["enables"]:
-                    chains.append(NovelChain(
-                        name=f"{trigger}_to_{enabled}",
-                        description=pattern["description"],
-                        steps=[
-                            {"step": 1, "action": f"Exploit {trigger}"},
-                            {"step": 2, "action": f"Achieve {enabled}"},
-                        ],
-                        initial_vuln=trigger,
-                        final_impact=enabled,
-                        confidence=0.7,
-                        novelty_score=0.3,  # Known pattern
-                    ))
+                    chains.append(
+                        NovelChain(
+                            name=f"{trigger}_to_{enabled}",
+                            description=pattern["description"],
+                            steps=[
+                                {"step": 1, "action": f"Exploit {trigger}"},
+                                {"step": 2, "action": f"Achieve {enabled}"},
+                            ],
+                            initial_vuln=trigger,
+                            final_impact=enabled,
+                            confidence=0.7,
+                            novelty_score=0.3,  # Known pattern
+                        )
+                    )
 
         return chains
 
@@ -191,18 +194,19 @@ class ChainDiscoverer:
         # Check for uncommon combinations
         for combo in UNCOMMON_CHAINS:
             if all(t in vuln_types for t in combo):
-                chains.append(NovelChain(
-                    name=f"novel_{combo[0]}_chain",
-                    description=f"Novel chain combining {combo[0]} with {combo[1]}",
-                    steps=[
-                        {"step": i + 1, "action": f"Exploit {t}"}
-                        for i, t in enumerate(combo)
-                    ],
-                    initial_vuln=combo[0],
-                    final_impact=combo[-1],
-                    confidence=0.5,  # Lower confidence for novel
-                    novelty_score=0.9,  # High novelty
-                ))
+                chains.append(
+                    NovelChain(
+                        name=f"novel_{combo[0]}_chain",
+                        description=f"Novel chain combining {combo[0]} with {combo[1]}",
+                        steps=[
+                            {"step": i + 1, "action": f"Exploit {t}"} for i, t in enumerate(combo)
+                        ],
+                        initial_vuln=combo[0],
+                        final_impact=combo[-1],
+                        confidence=0.5,  # Lower confidence for novel
+                        novelty_score=0.9,  # High novelty
+                    )
+                )
 
         return chains
 
@@ -216,19 +220,21 @@ class ChainDiscoverer:
 
         for trigger in privesc_triggers:
             if any(trigger in vt for vt in vuln_types):
-                chains.append(NovelChain(
-                    name=f"{trigger}_to_root",
-                    description=f"Privilege escalation via {trigger}",
-                    steps=[
-                        {"step": 1, "action": f"Identify {trigger}"},
-                        {"step": 2, "action": "Exploit for elevated privileges"},
-                        {"step": 3, "action": "Verify root/admin access"},
-                    ],
-                    initial_vuln=trigger,
-                    final_impact="root_access",
-                    confidence=0.6,
-                    novelty_score=0.4,
-                ))
+                chains.append(
+                    NovelChain(
+                        name=f"{trigger}_to_root",
+                        description=f"Privilege escalation via {trigger}",
+                        steps=[
+                            {"step": 1, "action": f"Identify {trigger}"},
+                            {"step": 2, "action": "Exploit for elevated privileges"},
+                            {"step": 3, "action": "Verify root/admin access"},
+                        ],
+                        initial_vuln=trigger,
+                        final_impact="root_access",
+                        confidence=0.6,
+                        novelty_score=0.4,
+                    )
+                )
 
         return chains
 
@@ -272,13 +278,15 @@ class ChainDiscoverer:
             for pattern_name, pattern in CHAIN_PATTERNS.items():
                 if pattern["trigger"] == vuln_type:
                     for outcome in pattern["enables"]:
-                        recommendations.append({
-                            "vulnerability": vuln.get("name", vuln_type),
-                            "potential_chain": pattern_name,
-                            "possible_outcome": outcome,
-                            "confidence": 0.6,
-                            "next_steps": self._get_chain_steps(vuln_type, outcome),
-                        })
+                        recommendations.append(
+                            {
+                                "vulnerability": vuln.get("name", vuln_type),
+                                "potential_chain": pattern_name,
+                                "possible_outcome": outcome,
+                                "confidence": 0.6,
+                                "next_steps": self._get_chain_steps(vuln_type, outcome),
+                            }
+                        )
 
         return recommendations
 
@@ -333,8 +341,7 @@ class ChainDiscoverer:
             LLM prompt
         """
         vuln_list = "\n".join(
-            f"- {v.get('type', 'Unknown')}: {v.get('description', 'No description')}"
-            for v in vulns
+            f"- {v.get('type', 'Unknown')}: {v.get('description', 'No description')}" for v in vulns
         )
 
         return f"""As a security researcher, analyze these vulnerabilities for potential attack chains:

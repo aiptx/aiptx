@@ -15,16 +15,17 @@ Usage:
 
 import argparse
 import asyncio
-import sys
 import os
-import warnings
-from pathlib import Path
 
 # =============================================================================
 # Readline Configuration (MUST be before any input operations)
 # Fixes backspace/delete key handling on macOS and Linux
 # =============================================================================
 import platform
+import sys
+import warnings
+from pathlib import Path
+
 _is_windows = platform.system() == "Windows"
 
 try:
@@ -32,21 +33,23 @@ try:
         # Windows: use pyreadline3 but skip Unix keybindings
         try:
             import pyreadline3 as readline
+
             # pyreadline3 handles keys differently, no special config needed
         except ImportError:
             readline = None  # readline not available
     else:
         import readline
+
         # macOS uses libedit which needs different configuration
-        if readline.__doc__ and 'libedit' in readline.__doc__:
+        if readline.__doc__ and "libedit" in readline.__doc__:
             # macOS libedit compatibility
             readline.parse_and_bind("bind ^[[3~ delete-char")  # Delete key
             readline.parse_and_bind("bind ^H backward-delete-char")  # Backspace
             readline.parse_and_bind("bind ^? backward-delete-char")  # Alt backspace
         else:
             # GNU readline (Linux)
-            readline.parse_and_bind('"\e[3~": delete-char')
-            readline.parse_and_bind('"\C-h": backward-delete-char')
+            readline.parse_and_bind(r'"\e[3~": delete-char')
+            readline.parse_and_bind(r'"\C-h": backward-delete-char')
 except ImportError:
     readline = None  # readline not available, basic input will be used
 
@@ -59,7 +62,7 @@ warnings.filterwarnings("ignore", message=".*coroutine.*was never awaited.*")
 warnings.filterwarnings("ignore", message=".*Enable tracemalloc.*")
 
 # Suppress litellm verbose output
-import os
+
 os.environ.setdefault("LITELLM_LOG", "ERROR")
 os.environ.setdefault("LITELLM_TELEMETRY", "false")
 
@@ -69,20 +72,20 @@ os.environ.setdefault("AIPT_LOG_LEVEL", "WARNING")
 # Handle imports for both installed package and local development
 try:
     from . import __version__
-    from .config import get_config, validate_config_for_features, reload_config
-    from .utils.logging import setup_logging, logger
-    from .utils.security import mask_path, sanitize_error_message
-    from .setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
+    from .config import get_config, reload_config, validate_config_for_features
     from .interface.icons import icon, supports_emoji
+    from .setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
+    from .utils.logging import logger, setup_logging
+    from .utils.security import mask_path, sanitize_error_message
 except ImportError:
     # Local development fallback
     sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
     from __init__ import __version__
-    from config import get_config, validate_config_for_features, reload_config
-    from utils.logging import setup_logging, logger
-    from utils.security import mask_path, sanitize_error_message
+    from config import get_config, reload_config, validate_config_for_features
+    from interface.icons import icon
     from setup_wizard import is_configured, prompt_first_run_setup, run_setup_wizard
-    from interface.icons import icon, supports_emoji
+    from utils.logging import logger, setup_logging
+    from utils.security import mask_path
 
 
 def _get_llm_model_config():
@@ -96,6 +99,7 @@ def _get_llm_model_config():
     """
     import os
     from pathlib import Path
+
     from dotenv import load_dotenv
 
     # Forcefully reload the .env file to ensure we have the latest config
@@ -135,7 +139,12 @@ def _get_llm_model_config():
     if provider == "ollama":
         model = f"ollama/{base_model}" if not base_model.startswith("ollama/") else base_model
         # Ollama needs a custom base URL (defaults to localhost)
-        final_api_base = api_base or os.getenv("AIPT_LLM__OLLAMA_BASE_URL") or os.getenv("OLLAMA_API_BASE") or "http://localhost:11434"
+        final_api_base = (
+            api_base
+            or os.getenv("AIPT_LLM__OLLAMA_BASE_URL")
+            or os.getenv("OLLAMA_API_BASE")
+            or "http://localhost:11434"
+        )
         os.environ["OLLAMA_API_BASE"] = final_api_base
     elif provider == "anthropic":
         model = f"anthropic/{base_model}" if not base_model.startswith("anthropic/") else base_model
@@ -169,6 +178,7 @@ def main():
     def signal_handler(signum, frame):
         """Handle interrupt signals gracefully."""
         from rich.console import Console
+
         Console().print("\n[yellow]Operation cancelled.[/yellow]")
         sys.exit(130)  # Standard exit code for Ctrl+C
 
@@ -199,13 +209,15 @@ Installation:
     )
 
     parser.add_argument(
-        "--version", "-V",
+        "--version",
+        "-V",
         action="version",
         version=f"AIPTX v{__version__}",
     )
 
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="count",
         default=0,
         help="Increase verbosity (use -vv for debug)",
@@ -225,89 +237,125 @@ Installation:
     scan_parser.add_argument("--client", "-c", help="Client name")
     scan_parser.add_argument("--output", "-o", help="Output directory")
     scan_parser.add_argument(
-        "--mode", "-m",
+        "--mode",
+        "-m",
         choices=["quick", "standard", "full", "ai"],
         default="standard",
         help="Scan mode (default: standard)",
     )
-    scan_parser.add_argument("--full", action="store_true", help="Run full comprehensive scan (60-90 min with enterprise scanners)")
-    scan_parser.add_argument("--quick", action="store_true", help="Quick scan - skip enterprise scanners (Acunetix/Nessus/Burp/ZAP)")
+    scan_parser.add_argument(
+        "--full",
+        action="store_true",
+        help="Run full comprehensive scan (60-90 min with enterprise scanners)",
+    )
+    scan_parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Quick scan - skip enterprise scanners (Acunetix/Nessus/Burp/ZAP)",
+    )
     scan_parser.add_argument("--ai", action="store_true", help="Enable AI-guided scanning")
     scan_parser.add_argument("--use-vps", action="store_true", help="Use VPS for tool execution")
     scan_parser.add_argument("--use-acunetix", action="store_true", help="Include Acunetix scan")
     scan_parser.add_argument("--use-burp", action="store_true", help="Include Burp Suite scan")
     scan_parser.add_argument("--skip-recon", action="store_true", help="Skip reconnaissance phase")
-    scan_parser.add_argument("--quiet", "-q", action="store_true", help="Quiet mode - minimal output")
-    scan_parser.add_argument("--no-stream", action="store_true", help="Don't stream command output (show progress only)")
-    scan_parser.add_argument("--check", action="store_true", help="Run pre-flight checks to validate config/connections before scan")
+    scan_parser.add_argument(
+        "--quiet", "-q", action="store_true", help="Quiet mode - minimal output"
+    )
+    scan_parser.add_argument(
+        "--no-stream", action="store_true", help="Don't stream command output (show progress only)"
+    )
+    scan_parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Run pre-flight checks to validate config/connections before scan",
+    )
 
     # v4.0 Enhanced scanning options
     scan_parser.add_argument(
-        "--format", "-f",
+        "--format",
+        "-f",
         choices=["text", "json", "sarif", "html"],
         default="text",
         help="Output format (default: text, use sarif for GitHub Security integration)",
     )
-    scan_parser.add_argument("--sast", action="store_true", help="Include SAST (source code) analysis")
+    scan_parser.add_argument(
+        "--sast", action="store_true", help="Include SAST (source code) analysis"
+    )
     scan_parser.add_argument("--dast", action="store_true", help="Include DAST (runtime) analysis")
-    scan_parser.add_argument("--business-logic", action="store_true", help="Enable business logic testing")
-    scan_parser.add_argument("--websocket", action="store_true", help="Include WebSocket endpoint testing")
-    scan_parser.add_argument("--spa", action="store_true", help="Enable SPA (browser-based) scanning")
-    scan_parser.add_argument("--graphql", action="store_true", help="Enhanced GraphQL security testing")
+    scan_parser.add_argument(
+        "--business-logic", action="store_true", help="Enable business logic testing"
+    )
+    scan_parser.add_argument(
+        "--websocket", action="store_true", help="Include WebSocket endpoint testing"
+    )
+    scan_parser.add_argument(
+        "--spa", action="store_true", help="Enable SPA (browser-based) scanning"
+    )
+    scan_parser.add_argument(
+        "--graphql", action="store_true", help="Enhanced GraphQL security testing"
+    )
     scan_parser.add_argument(
         "--fail-on-severity",
         choices=["critical", "high", "medium", "low", "info"],
         default=None,
         help="Exit with error if findings >= severity (for CI/CD)",
     )
-    scan_parser.add_argument("--validate-pocs", action="store_true", help="Validate findings with PoC execution")
-    scan_parser.add_argument("--sarif-output", help="Path for SARIF output file (implies --format sarif)")
+    scan_parser.add_argument(
+        "--validate-pocs", action="store_true", help="Validate findings with PoC execution"
+    )
+    scan_parser.add_argument(
+        "--sarif-output", help="Path for SARIF output file (implies --format sarif)"
+    )
     scan_parser.add_argument(
         "--playbook",
         choices=["web", "web_api", "api", "graphql", "ad", "ad_quick"],
         default=None,
         help="Use a structured attack playbook (v5.1)",
     )
-    scan_parser.add_argument("--parallel", action="store_true", help="Enable parallel worker execution")
+    scan_parser.add_argument(
+        "--parallel", action="store_true", help="Enable parallel worker execution"
+    )
 
     # API command
     api_parser = subparsers.add_parser("api", help="Start REST API server")
     # Security: Default to localhost to prevent accidental network exposure
-    api_parser.add_argument("--host", default="127.0.0.1", help="API host (default: 127.0.0.1, use 0.0.0.0 for network access)")
+    api_parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="API host (default: 127.0.0.1, use 0.0.0.0 for network access)",
+    )
     api_parser.add_argument("--port", "-p", type=int, default=8000, help="API port (default: 8000)")
-    api_parser.add_argument("--reload", action="store_true", help="Enable auto-reload for development")
+    api_parser.add_argument(
+        "--reload", action="store_true", help="Enable auto-reload for development"
+    )
 
     # Status command
     subparsers.add_parser("status", help="Check configuration and dependencies")
 
     # Check command - Enterprise prerequisites validation
-    check_parser = subparsers.add_parser("check", help="Run enterprise prerequisites check before operations")
-    check_parser.add_argument(
-        "--strict", "-s",
-        action="store_true",
-        help="Fail on warnings (for CI/CD pipelines)"
+    check_parser = subparsers.add_parser(
+        "check", help="Run enterprise prerequisites check before operations"
     )
     check_parser.add_argument(
-        "--json", "-j",
-        action="store_true",
-        help="Output JSON format for automation"
+        "--strict", "-s", action="store_true", help="Fail on warnings (for CI/CD pipelines)"
     )
     check_parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Show all checks including passed ones"
+        "--json", "-j", action="store_true", help="Output JSON format for automation"
     )
     check_parser.add_argument(
-        "--minimal", "-m",
-        action="store_true",
-        help="Skip optional dependency checks"
+        "--verbose", "-v", action="store_true", help="Show all checks including passed ones"
+    )
+    check_parser.add_argument(
+        "--minimal", "-m", action="store_true", help="Skip optional dependency checks"
     )
 
     # Test command - validate all configurations
     test_parser = subparsers.add_parser("test", help="Test and validate all configurations")
     test_parser.add_argument("--llm", action="store_true", help="Test LLM API key only")
     test_parser.add_argument("--vps", action="store_true", help="Test VPS connection only")
-    test_parser.add_argument("--scanners", action="store_true", help="Test scanner integrations only")
+    test_parser.add_argument(
+        "--scanners", action="store_true", help="Test scanner integrations only"
+    )
     test_parser.add_argument("--tools", action="store_true", help="Test local tool availability")
     test_parser.add_argument("--all", "-a", action="store_true", help="Test everything (default)")
 
@@ -317,9 +365,10 @@ Installation:
     # Setup command
     setup_parser = subparsers.add_parser("setup", help="Run interactive setup wizard")
     setup_parser.add_argument(
-        "--force", "-f",
+        "--force",
+        "-f",
         action="store_true",
-        help="Force reconfiguration even if already configured"
+        help="Force reconfiguration even if already configured",
     )
 
     # VPS command with subcommands
@@ -329,16 +378,13 @@ Installation:
     # vps setup - Install tools on VPS
     vps_setup = vps_subparsers.add_parser("setup", help="Install security tools on VPS")
     vps_setup.add_argument(
-        "--categories", "-c",
+        "--categories",
+        "-c",
         nargs="+",
         choices=["recon", "scan", "exploit", "post_exploit", "api", "network"],
-        help="Tool categories to install (default: all)"
+        help="Tool categories to install (default: all)",
     )
-    vps_setup.add_argument(
-        "--tools", "-t",
-        nargs="+",
-        help="Specific tools to install"
-    )
+    vps_setup.add_argument("--tools", "-t", nargs="+", help="Specific tools to install")
 
     # vps status - Check VPS connection and tools
     vps_subparsers.add_parser("status", help="Check VPS connection and installed tools")
@@ -347,228 +393,175 @@ Installation:
     vps_scan = vps_subparsers.add_parser("scan", help="Run security scan from VPS")
     vps_scan.add_argument("target", help="Target URL or domain")
     vps_scan.add_argument(
-        "--mode", "-m",
-        choices=["quick", "standard", "full"],
-        default="standard",
-        help="Scan mode"
+        "--mode", "-m", choices=["quick", "standard", "full"], default="standard", help="Scan mode"
     )
-    vps_scan.add_argument(
-        "--tools", "-t",
-        nargs="+",
-        help="Specific tools to run"
-    )
+    vps_scan.add_argument("--tools", "-t", nargs="+", help="Specific tools to run")
 
     # vps script - Generate setup script
     vps_script = vps_subparsers.add_parser("script", help="Generate VPS setup script")
-    vps_script.add_argument(
-        "--output", "-o",
-        help="Output file (default: stdout)"
-    )
-    vps_script.add_argument(
-        "--categories", "-c",
-        nargs="+",
-        help="Tool categories to include"
-    )
+    vps_script.add_argument("--output", "-o", help="Output file (default: stdout)")
+    vps_script.add_argument("--categories", "-c", nargs="+", help="Tool categories to include")
 
     # Verify command - Installation verification
     verify_parser = subparsers.add_parser("verify", help="Verify installation and configuration")
-    verify_parser.add_argument(
-        "--quick", "-q",
-        action="store_true",
-        help="Run quick checks only"
-    )
-    verify_parser.add_argument(
-        "--fix",
-        action="store_true",
-        help="Attempt to auto-fix issues"
-    )
-    verify_parser.add_argument(
-        "--report", "-r",
-        help="Save markdown report to file"
-    )
+    verify_parser.add_argument("--quick", "-q", action="store_true", help="Run quick checks only")
+    verify_parser.add_argument("--fix", action="store_true", help="Attempt to auto-fix issues")
+    verify_parser.add_argument("--report", "-r", help="Save markdown report to file")
 
     # Shell command - Interactive shell
     shell_parser = subparsers.add_parser("shell", help="Start interactive security shell")
-    shell_parser.add_argument(
-        "--log", "-l",
-        help="Log session to file"
-    )
-    shell_parser.add_argument(
-        "--dir", "-d",
-        help="Working directory"
-    )
+    shell_parser.add_argument("--log", "-l", help="Log session to file")
+    shell_parser.add_argument("--dir", "-d", help="Working directory")
 
     # Tools command with subcommands
     tools_parser = subparsers.add_parser("tools", help="Manage local security tools")
     tools_subparsers = tools_parser.add_subparsers(dest="tools_command", help="Tools commands")
 
     # tools install - Install security tools
-    tools_install = tools_subparsers.add_parser("install", help="Install security tools on local system")
+    tools_install = tools_subparsers.add_parser(
+        "install", help="Install security tools on local system"
+    )
     tools_install.add_argument(
-        "--categories", "-c",
+        "--categories",
+        "-c",
         nargs="+",
         choices=[
-            "recon", "scan", "exploit", "post_exploit", "api", "network",
-            "prerequisite", "active_directory", "cloud", "container",
-            "osint", "wireless", "web", "secrets", "mobile"
+            "recon",
+            "scan",
+            "exploit",
+            "post_exploit",
+            "api",
+            "network",
+            "prerequisite",
+            "active_directory",
+            "cloud",
+            "container",
+            "osint",
+            "wireless",
+            "web",
+            "secrets",
+            "mobile",
         ],
-        help="Tool categories to install (default: core tools)"
+        help="Tool categories to install (default: core tools)",
+    )
+    tools_install.add_argument("--tools", "-t", nargs="+", help="Specific tools to install")
+    tools_install.add_argument(
+        "--all", "-a", action="store_true", help="Install all available tools"
     )
     tools_install.add_argument(
-        "--tools", "-t",
-        nargs="+",
-        help="Specific tools to install"
+        "--core", action="store_true", help="Install only core essential tools (default)"
     )
     tools_install.add_argument(
-        "--all", "-a",
-        action="store_true",
-        help="Install all available tools"
-    )
-    tools_install.add_argument(
-        "--core",
-        action="store_true",
-        help="Install only core essential tools (default)"
-    )
-    tools_install.add_argument(
-        "--no-sudo",
-        action="store_true",
-        help="Don't use sudo for installation"
+        "--no-sudo", action="store_true", help="Don't use sudo for installation"
     )
 
     # tools list - List available/installed tools
     tools_list = tools_subparsers.add_parser("list", help="List available and installed tools")
     tools_list.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         choices=[
-            "recon", "scan", "exploit", "post_exploit", "api", "network",
-            "prerequisite", "active_directory", "cloud", "container",
-            "osint", "wireless", "web", "secrets", "mobile", "all"
+            "recon",
+            "scan",
+            "exploit",
+            "post_exploit",
+            "api",
+            "network",
+            "prerequisite",
+            "active_directory",
+            "cloud",
+            "container",
+            "osint",
+            "wireless",
+            "web",
+            "secrets",
+            "mobile",
+            "all",
         ],
         default="all",
-        help="Filter by category"
+        help="Filter by category",
     )
     tools_list.add_argument(
-        "--installed-only",
-        action="store_true",
-        help="Show only installed tools"
+        "--installed-only", action="store_true", help="Show only installed tools"
     )
 
     # tools check - Check tool availability
     tools_subparsers.add_parser("check", help="Check which tools are installed")
 
     # AI Skills command with subcommands
-    ai_parser = subparsers.add_parser("ai", help="AI-powered security testing (code review, API testing, web pentesting)")
+    ai_parser = subparsers.add_parser(
+        "ai", help="AI-powered security testing (code review, API testing, web pentesting)"
+    )
     ai_subparsers = ai_parser.add_subparsers(dest="ai_command", help="AI testing commands")
 
     # ai code-review - AI source code security review
     ai_code = ai_subparsers.add_parser("code-review", help="AI-powered source code security review")
     ai_code.add_argument("target", help="Path to code directory to review")
     ai_code.add_argument(
-        "--focus", "-f",
+        "--focus",
+        "-f",
         nargs="+",
         choices=["sqli", "xss", "auth", "crypto", "secrets", "injection"],
-        help="Focus areas for review"
+        help="Focus areas for review",
     )
     ai_code.add_argument(
-        "--model", "-m",
+        "--model",
+        "-m",
         default="claude-3-7-sonnet-20250219",
-        help="LLM model to use (default: claude-3-7-sonnet-20250219)"
+        help="LLM model to use (default: claude-3-7-sonnet-20250219)",
     )
     ai_code.add_argument(
-        "--max-steps",
-        type=int,
-        default=100,
-        help="Maximum agent steps (default: 100)"
+        "--max-steps", type=int, default=100, help="Maximum agent steps (default: 100)"
     )
     ai_code.add_argument(
-        "--quick", "-q",
-        action="store_true",
-        help="Quick scan focusing on high-priority patterns"
+        "--quick", "-q", action="store_true", help="Quick scan focusing on high-priority patterns"
     )
-    ai_code.add_argument(
-        "--output", "-o",
-        help="Output file for results (JSON)"
-    )
+    ai_code.add_argument("--output", "-o", help="Output file for results (JSON)")
 
     # ai api-test - AI API security testing
     ai_api = ai_subparsers.add_parser("api-test", help="AI-powered REST API security testing")
     ai_api.add_argument("target", help="Base URL of the API to test")
+    ai_api.add_argument("--openapi", "-s", help="Path or URL to OpenAPI/Swagger spec")
+    ai_api.add_argument("--auth-token", "-t", help="Bearer token for API authentication")
     ai_api.add_argument(
-        "--openapi", "-s",
-        help="Path or URL to OpenAPI/Swagger spec"
+        "--model", "-m", default="claude-3-7-sonnet-20250219", help="LLM model to use"
     )
-    ai_api.add_argument(
-        "--auth-token", "-t",
-        help="Bearer token for API authentication"
-    )
-    ai_api.add_argument(
-        "--model", "-m",
-        default="claude-3-7-sonnet-20250219",
-        help="LLM model to use"
-    )
-    ai_api.add_argument(
-        "--max-steps",
-        type=int,
-        default=100,
-        help="Maximum agent steps"
-    )
-    ai_api.add_argument(
-        "--output", "-o",
-        help="Output file for results (JSON)"
-    )
+    ai_api.add_argument("--max-steps", type=int, default=100, help="Maximum agent steps")
+    ai_api.add_argument("--output", "-o", help="Output file for results (JSON)")
 
     # ai web-pentest - AI web penetration testing
-    ai_web = ai_subparsers.add_parser("web-pentest", help="AI-powered web application penetration testing")
+    ai_web = ai_subparsers.add_parser(
+        "web-pentest", help="AI-powered web application penetration testing"
+    )
     ai_web.add_argument("target", help="Target URL to test")
+    ai_web.add_argument("--auth-token", "-t", help="Bearer token for authentication")
     ai_web.add_argument(
-        "--auth-token", "-t",
-        help="Bearer token for authentication"
+        "--cookie", "-c", action="append", help="Cookies for authenticated testing (key=value)"
     )
     ai_web.add_argument(
-        "--cookie", "-c",
-        action="append",
-        help="Cookies for authenticated testing (key=value)"
+        "--model", "-m", default="claude-3-7-sonnet-20250219", help="LLM model to use"
     )
+    ai_web.add_argument("--max-steps", type=int, default=100, help="Maximum agent steps")
     ai_web.add_argument(
-        "--model", "-m",
-        default="claude-3-7-sonnet-20250219",
-        help="LLM model to use"
+        "--quick", "-q", action="store_true", help="Quick scan focusing on critical vulnerabilities"
     )
-    ai_web.add_argument(
-        "--max-steps",
-        type=int,
-        default=100,
-        help="Maximum agent steps"
-    )
-    ai_web.add_argument(
-        "--quick", "-q",
-        action="store_true",
-        help="Quick scan focusing on critical vulnerabilities"
-    )
-    ai_web.add_argument(
-        "--output", "-o",
-        help="Output file for results (JSON)"
-    )
+    ai_web.add_argument("--output", "-o", help="Output file for results (JSON)")
 
     # ai full - Full AI-driven security assessment
     ai_full = ai_subparsers.add_parser("full", help="Full AI-driven security assessment")
     ai_full.add_argument("target", help="Target URL or code path")
     ai_full.add_argument(
-        "--types", "-t",
+        "--types",
+        "-t",
         nargs="+",
         choices=["web", "api", "code"],
         default=["web"],
-        help="Types of testing to perform"
+        help="Types of testing to perform",
     )
     ai_full.add_argument(
-        "--model", "-m",
-        default="claude-3-7-sonnet-20250219",
-        help="LLM model to use"
+        "--model", "-m", default="claude-3-7-sonnet-20250219", help="LLM model to use"
     )
-    ai_full.add_argument(
-        "--output", "-o",
-        help="Output file for results (JSON)"
-    )
+    ai_full.add_argument("--output", "-o", help="Output file for results (JSON)")
 
     # ========== AD (Active Directory) Commands (v5.0) ==========
     ad_parser = subparsers.add_parser("ad", help="Active Directory penetration testing (v5.0)")
@@ -582,56 +575,77 @@ Installation:
     ad_recon.add_argument("--password", "-p", help="Password (will prompt if not provided)")
     ad_recon.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
     ad_recon.add_argument(
-        "--method", "-m",
+        "--method",
+        "-m",
         choices=["dns", "ldap", "smb", "kerberos", "all"],
         default="all",
-        help="Reconnaissance method (default: all)"
+        help="Reconnaissance method (default: all)",
     )
     ad_recon.add_argument("--output", "-o", help="Output file for results (JSON)")
     ad_recon.add_argument("--bloodhound", "-b", action="store_true", help="Collect BloodHound data")
 
     # ad scan - AD vulnerability scanning
-    ad_scan = ad_subparsers.add_parser("scan", help="Scan AD for vulnerabilities and misconfigurations")
+    ad_scan = ad_subparsers.add_parser(
+        "scan", help="Scan AD for vulnerabilities and misconfigurations"
+    )
     ad_scan.add_argument("domain", help="Target AD domain")
     ad_scan.add_argument("--dc", "-d", required=True, help="Domain Controller IP address")
     ad_scan.add_argument("--username", "-u", required=True, help="Username for scanning")
     ad_scan.add_argument("--password", "-p", help="Password (will prompt if not provided)")
     ad_scan.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
     ad_scan.add_argument(
-        "--type", "-t",
+        "--type",
+        "-t",
         nargs="+",
         choices=["privesc", "adcs", "delegation", "acl", "winpwn", "all"],
         default=["all"],
-        help="Scan types (default: all)"
+        help="Scan types (default: all)",
     )
     ad_scan.add_argument("--output", "-o", help="Output file for results (JSON)")
-    ad_scan.add_argument("--winpwn-script", dest="winpwn_script", help="Path to WinPwn.ps1 for WinPwn scans")
-    ad_scan.add_argument("--extract-creds", dest="extract_creds", action="store_true", help="Enable credential extraction in WinPwn scan")
+    ad_scan.add_argument(
+        "--winpwn-script", dest="winpwn_script", help="Path to WinPwn.ps1 for WinPwn scans"
+    )
+    ad_scan.add_argument(
+        "--extract-creds",
+        dest="extract_creds",
+        action="store_true",
+        help="Enable credential extraction in WinPwn scan",
+    )
 
     # ad attack - Execute AD attack chains
-    ad_attack = ad_subparsers.add_parser("attack", help="Execute AD attack chains (authorized testing only)")
+    ad_attack = ad_subparsers.add_parser(
+        "attack", help="Execute AD attack chains (authorized testing only)"
+    )
     ad_attack.add_argument("domain", help="Target AD domain")
     ad_attack.add_argument("--dc", "-d", required=True, help="Domain Controller IP address")
     ad_attack.add_argument("--username", "-u", required=True, help="Username")
     ad_attack.add_argument("--password", "-p", help="Password (will prompt if not provided)")
     ad_attack.add_argument("--hash", "-H", help="NTLM hash for Pass-the-Hash")
     ad_attack.add_argument(
-        "--chain", "-c",
-        choices=["kerberoast", "asreproast", "rbcd", "adcs-esc1", "adcs-esc8", "golden-ticket", "auto"],
+        "--chain",
+        "-c",
+        choices=[
+            "kerberoast",
+            "asreproast",
+            "rbcd",
+            "adcs-esc1",
+            "adcs-esc8",
+            "golden-ticket",
+            "auto",
+        ],
         default="auto",
-        help="Attack chain to execute (default: auto - LLM selects)"
+        help="Attack chain to execute (default: auto - LLM selects)",
     )
     ad_attack.add_argument(
-        "--stealth", "-s",
+        "--stealth",
+        "-s",
         choices=["fast", "balanced", "stealth", "paranoid"],
         default="balanced",
-        help="Stealth profile (default: balanced)"
+        help="Stealth profile (default: balanced)",
     )
     ad_attack.add_argument("--output", "-o", help="Output file for results (JSON)")
     ad_attack.add_argument(
-        "--dry-run",
-        action="store_true",
-        help="Show attack plan without executing"
+        "--dry-run", action="store_true", help="Show attack plan without executing"
     )
 
     # ad tools - List available AD tools
@@ -648,8 +662,12 @@ Installation:
     mcp_add = mcp_subparsers.add_parser("add", help="Add a new MCP server")
     mcp_add.add_argument("name", help="Server name (unique identifier)")
     mcp_add.add_argument("--command", "-c", required=True, help="Command to start the server")
-    mcp_add.add_argument("--args", "-a", nargs="*", default=[], help="Arguments for the server command")
-    mcp_add.add_argument("--env", "-e", nargs="*", default=[], help="Environment variables (KEY=VALUE)")
+    mcp_add.add_argument(
+        "--args", "-a", nargs="*", default=[], help="Arguments for the server command"
+    )
+    mcp_add.add_argument(
+        "--env", "-e", nargs="*", default=[], help="Environment variables (KEY=VALUE)"
+    )
 
     # mcp remove - Remove a server
     mcp_remove = mcp_subparsers.add_parser("remove", help="Remove an MCP server")
@@ -668,16 +686,18 @@ Installation:
     notes_create.add_argument("key", help="Unique key for the note")
     notes_create.add_argument("value", help="Note content")
     notes_create.add_argument(
-        "--category", "-c",
+        "--category",
+        "-c",
         choices=["finding", "credential", "vulnerability", "artifact", "task", "info"],
         default="info",
-        help="Note category"
+        help="Note category",
     )
     notes_create.add_argument(
-        "--severity", "-s",
+        "--severity",
+        "-s",
         choices=["critical", "high", "medium", "low", "info"],
         default="info",
-        help="Severity level"
+        help="Severity level",
     )
     notes_create.add_argument("--evidence", "-e", help="Supporting evidence")
 
@@ -693,10 +713,7 @@ Installation:
     # notes export
     notes_export = notes_subparsers.add_parser("export", help="Export notes")
     notes_export.add_argument(
-        "--format", "-f",
-        choices=["json", "markdown"],
-        default="json",
-        help="Export format"
+        "--format", "-f", choices=["json", "markdown"], default="json", help="Export format"
     )
     notes_export.add_argument("--output", "-o", help="Output file (default: stdout)")
 
@@ -709,7 +726,9 @@ Installation:
 
     # ========== Playbooks Command (v5.1) ==========
     playbook_parser = subparsers.add_parser("playbook", help="Attack playbook management")
-    playbook_subparsers = playbook_parser.add_subparsers(dest="playbook_command", help="Playbook commands")
+    playbook_subparsers = playbook_parser.add_subparsers(
+        dest="playbook_command", help="Playbook commands"
+    )
 
     # playbook list
     playbook_subparsers.add_parser("list", help="List available playbooks")
@@ -764,6 +783,7 @@ Installation:
     except KeyboardInterrupt:
         # Gracefully handle Ctrl+C
         from rich.console import Console
+
         Console().print("\n[yellow]Operation cancelled.[/yellow]")
         return 130
 
@@ -776,20 +796,22 @@ def show_first_run_help():
     console = Console()
 
     console.print()
-    console.print(Panel(
-        "[bold cyan]Welcome to AIPTX![/bold cyan]\n\n"
-        "[bold yellow]First-time setup required[/bold yellow]\n\n"
-        "AIPTX needs an LLM API key to power AI-guided security testing.\n\n"
-        "[bold]Quick Start:[/bold]\n"
-        "  1. Run [bold green]aiptx setup[/bold green] to configure interactively\n"
-        "  2. Or set environment variable:\n"
-        "     [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]\n\n"
-        "[bold]Then run:[/bold]\n"
-        "  [bold green]aiptx scan example.com[/bold green]",
-        title=f"{icon('rocket')} AIPTX - AI-Powered Penetration Testing",
-        border_style="cyan",
-        padding=(1, 2),
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]Welcome to AIPTX![/bold cyan]\n\n"
+            "[bold yellow]First-time setup required[/bold yellow]\n\n"
+            "AIPTX needs an LLM API key to power AI-guided security testing.\n\n"
+            "[bold]Quick Start:[/bold]\n"
+            "  1. Run [bold green]aiptx setup[/bold green] to configure interactively\n"
+            "  2. Or set environment variable:\n"
+            "     [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]\n\n"
+            "[bold]Then run:[/bold]\n"
+            "  [bold green]aiptx scan example.com[/bold green]",
+            title=f"{icon('rocket')} AIPTX - AI-Powered Penetration Testing",
+            border_style="cyan",
+            padding=(1, 2),
+        )
+    )
     console.print()
 
     return 0
@@ -797,18 +819,19 @@ def show_first_run_help():
 
 def run_interactive_mode():
     """Run AIPTX in interactive shell mode with hacker aesthetic."""
+    import os
     import platform
     import socket
-    import os
     from datetime import datetime
-    from rich.console import Console, Group
+
+    from rich import box
+    from rich.align import Align
+    from rich.columns import Columns
+    from rich.console import Console
     from rich.panel import Panel
     from rich.prompt import Prompt
     from rich.table import Table
-    from rich.align import Align
-    from rich.columns import Columns
     from rich.text import Text
-    from rich import box
 
     console = Console()
     term_width = console.size.width
@@ -851,7 +874,11 @@ def run_interactive_mode():
         current_time = datetime.now().strftime("%H:%M:%S")
 
     # Status indicators
-    config_status = f"[bold {NEON_GREEN}]●[/] READY" if is_configured() else f"[bold {BLOOD_RED}]●[/] UNCONFIGURED"
+    config_status = (
+        f"[bold {NEON_GREEN}]●[/] READY"
+        if is_configured()
+        else f"[bold {BLOOD_RED}]●[/] UNCONFIGURED"
+    )
 
     sys_info = Text()
     sys_info.append("    ┌─", style=f"dim {DARK_GREEN}")
@@ -887,11 +914,11 @@ def run_interactive_mode():
     modules_left.add_column("⚡ ATTACK MODULES", style=f"bold {NEON_GREEN}")
     modules_left.add_column("", style=f"dim {GHOST_WHITE}")
 
-    modules_left.add_row(f"[bold]scan[/] <target>", "→ Execute security scan")
-    modules_left.add_row(f"[bold]scan[/] <target> [cyan]--ai[/]", "→ AI-guided exploitation")
-    modules_left.add_row(f"[bold]scan[/] <target> [cyan]--full[/]", "→ Deep penetration test")
-    modules_left.add_row(f"[bold]ai[/] <command>", "→ AI security analysis")
-    modules_left.add_row(f"[bold]vps[/] <command>", "→ Remote VPS execution")
+    modules_left.add_row("[bold]scan[/] <target>", "→ Execute security scan")
+    modules_left.add_row("[bold]scan[/] <target> [cyan]--ai[/]", "→ AI-guided exploitation")
+    modules_left.add_row("[bold]scan[/] <target> [cyan]--full[/]", "→ Deep penetration test")
+    modules_left.add_row("[bold]ai[/] <command>", "→ AI security analysis")
+    modules_left.add_row("[bold]vps[/] <command>", "→ Remote VPS execution")
 
     modules_right = Table(
         show_header=True,
@@ -904,11 +931,11 @@ def run_interactive_mode():
     modules_right.add_column("🔧 SYSTEM", style=f"bold {NEON_GREEN}")
     modules_right.add_column("", style=f"dim {GHOST_WHITE}")
 
-    modules_right.add_row(f"[bold]setup[/]", "→ Configure framework")
-    modules_right.add_row(f"[bold]status[/]", "→ System diagnostics")
-    modules_right.add_row(f"[bold]test[/]", "→ Validate connections")
-    modules_right.add_row(f"[bold]help[/]", "→ Command reference")
-    modules_right.add_row(f"[bold]exit[/]", "→ Terminate session")
+    modules_right.add_row("[bold]setup[/]", "→ Configure framework")
+    modules_right.add_row("[bold]status[/]", "→ System diagnostics")
+    modules_right.add_row("[bold]test[/]", "→ Validate connections")
+    modules_right.add_row("[bold]help[/]", "→ Command reference")
+    modules_right.add_row("[bold]exit[/]", "→ Terminate session")
 
     # Display modules side by side
     console.print(Columns([modules_left, modules_right], expand=True, padding=2))
@@ -955,14 +982,17 @@ def run_interactive_mode():
         try:
             # Flush stdin to avoid stale input from previous commands
             import sys
+
             if sys.stdin.isatty():
                 # Clear any buffered input (platform-specific)
                 if platform.system() == "Windows":
                     import msvcrt
+
                     while msvcrt.kbhit():
                         msvcrt.getch()
                 else:
                     import select
+
                     while select.select([sys.stdin], [], [], 0)[0]:
                         sys.stdin.read(1)
 
@@ -1048,11 +1078,10 @@ def run_interactive_mode():
 
 def show_interactive_help(console):
     """Show help for interactive mode with hacker aesthetic."""
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.text import Text
-    from rich.align import Align
     from rich import box
+    from rich.align import Align
+    from rich.table import Table
+    from rich.text import Text
 
     # Hacker colors
     NEON_GREEN = "#00ff41"
@@ -1065,11 +1094,20 @@ def show_interactive_help(console):
 
     # Header
     header = Text()
-    header.append("╔══════════════════════════════════════════════════════════════════╗\n", style=f"bold {DARK_GREEN}")
+    header.append(
+        "╔══════════════════════════════════════════════════════════════════╗\n",
+        style=f"bold {DARK_GREEN}",
+    )
     header.append("║", style=f"bold {DARK_GREEN}")
-    header.append("                    AIPTX COMMAND REFERENCE                       ", style=f"bold {CYBER_BLUE}")
+    header.append(
+        "                    AIPTX COMMAND REFERENCE                       ",
+        style=f"bold {CYBER_BLUE}",
+    )
     header.append("║\n", style=f"bold {DARK_GREEN}")
-    header.append("╚══════════════════════════════════════════════════════════════════╝", style=f"bold {DARK_GREEN}")
+    header.append(
+        "╚══════════════════════════════════════════════════════════════════╝",
+        style=f"bold {DARK_GREEN}",
+    )
 
     console.print()
     console.print(Align.center(header))
@@ -1090,9 +1128,15 @@ def show_interactive_help(console):
     attack_table.add_column("SYNTAX", style=f"dim {CYBER_BLUE}", ratio=2)
 
     attack_table.add_row("scan", "Execute automated security scan", "scan <target> [--ai|--full]")
-    attack_table.add_row("ai code-review", "AI-powered source code analysis", "ai code-review ./path")
-    attack_table.add_row("ai api-test", "Intelligent API security testing", "ai api-test https://api.target.com")
-    attack_table.add_row("ai web-pentest", "Full AI-guided web exploitation", "ai web-pentest https://target.com")
+    attack_table.add_row(
+        "ai code-review", "AI-powered source code analysis", "ai code-review ./path"
+    )
+    attack_table.add_row(
+        "ai api-test", "Intelligent API security testing", "ai api-test https://api.target.com"
+    )
+    attack_table.add_row(
+        "ai web-pentest", "Full AI-guided web exploitation", "ai web-pentest https://target.com"
+    )
     attack_table.add_row("vps scan", "Execute scan from remote VPS", "vps scan <target>")
 
     console.print(attack_table)
@@ -1145,6 +1189,7 @@ def show_interactive_help(console):
 def run_setup_wrapper():
     """Wrapper to run setup from interactive mode."""
     from rich.console import Console
+
     console = Console()
     try:
         success = run_setup_wizard(force=True)
@@ -1158,6 +1203,7 @@ def run_setup_wrapper():
 def show_status_wrapper():
     """Wrapper to show status from interactive mode."""
     import argparse
+
     args = argparse.Namespace(verbose=0, json=False)
     show_status(args)
 
@@ -1165,7 +1211,9 @@ def show_status_wrapper():
 def run_test_wrapper(args_list=None):
     """Wrapper to run config test from interactive mode."""
     import argparse
+
     from rich.console import Console
+
     console = Console()
 
     # Parse test arguments
@@ -1207,7 +1255,9 @@ def run_test_wrapper(args_list=None):
 def run_scan_wrapper(args_list):
     """Wrapper to run scan from interactive mode."""
     import argparse
+
     from rich.console import Console
+
     console = Console()
 
     # Parse scan arguments
@@ -1256,7 +1306,9 @@ def run_scan_wrapper(args_list):
 def run_vps_wrapper(args_list):
     """Wrapper to run VPS commands from interactive mode."""
     import argparse
+
     from rich.console import Console
+
     console = Console()
 
     if not args_list:
@@ -1285,7 +1337,9 @@ def run_vps_wrapper(args_list):
 def run_ai_wrapper(args_list):
     """Wrapper to run AI commands from interactive mode."""
     import argparse
+
     from rich.console import Console
+
     console = Console()
 
     if not args_list:
@@ -1325,7 +1379,7 @@ def run_ai_wrapper(args_list):
 
 def run_setup(args):
     """Run the interactive setup wizard."""
-    force = getattr(args, 'force', False)
+    force = getattr(args, "force", False)
     success = run_setup_wizard(force=force)
 
     # Reload configuration after successful setup so it's immediately available
@@ -1348,18 +1402,20 @@ def run_scan(args):
         # Provide helpful error message for missing dependencies
         error_msg = str(e)
         console.print()
-        console.print(Panel(
-            "[bold red]Missing Dependencies[/bold red]\n\n"
-            f"[dim]Import error: {error_msg}[/dim]\n\n"
-            "The scan module requires additional dependencies.\n\n"
-            "[bold]To fix, install the full package:[/bold]\n"
-            "  [bold green]pip install aiptx[full][/bold green]\n\n"
-            "[bold]Or install specific dependencies:[/bold]\n"
-            "  [dim]pip install sentence-transformers torch langchain-core[/dim]",
-            title=f"{icon('warning')} Scan Module Not Available",
-            border_style="yellow",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold red]Missing Dependencies[/bold red]\n\n"
+                f"[dim]Import error: {error_msg}[/dim]\n\n"
+                "The scan module requires additional dependencies.\n\n"
+                "[bold]To fix, install the full package:[/bold]\n"
+                "  [bold green]pip install aiptx[full][/bold green]\n\n"
+                "[bold]Or install specific dependencies:[/bold]\n"
+                "  [dim]pip install sentence-transformers torch langchain-core[/dim]",
+                title=f"{icon('warning')} Scan Module Not Available",
+                border_style="yellow",
+                padding=(1, 2),
+            )
+        )
         console.print()
         return 1
 
@@ -1381,23 +1437,26 @@ def run_scan(args):
     errors = validate_config_for_features(features)
     if errors:
         console.print()
-        console.print(Panel(
-            "[bold red]Configuration Error[/bold red]\n\n"
-            "The following issues need to be resolved:\n\n" +
-            "\n".join(f"  [yellow]{icon('bullet')}[/yellow] {error}" for error in errors) +
-            "\n\n[bold]To fix:[/bold]\n"
-            "  Run [bold green]aiptx setup[/bold green] to configure interactively\n\n"
-            "[bold]Or set environment variables:[/bold]\n"
-            "  [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]",
-            title=f"{icon('warning')} Setup Required",
-            border_style="yellow",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold red]Configuration Error[/bold red]\n\n"
+                "The following issues need to be resolved:\n\n"
+                + "\n".join(f"  [yellow]{icon('bullet')}[/yellow] {error}" for error in errors)
+                + "\n\n[bold]To fix:[/bold]\n"
+                "  Run [bold green]aiptx setup[/bold green] to configure interactively\n\n"
+                "[bold]Or set environment variables:[/bold]\n"
+                "  [dim]export ANTHROPIC_API_KEY=your-key-here[/dim]",
+                title=f"{icon('warning')} Setup Required",
+                border_style="yellow",
+                padding=(1, 2),
+            )
+        )
         console.print()
         return 1
 
     # Run quick prerequisites check (always runs, but non-blocking for core features)
     from .prerequisites import check_prerequisites_sync
+
     is_ready, prereq_errors = check_prerequisites_sync(
         require_llm=True,
         require_tools=False,  # Tools are optional for basic scan
@@ -1405,23 +1464,25 @@ def run_scan(args):
 
     if not is_ready:
         console.print()
-        console.print(Panel(
-            "[bold red]Prerequisites Check Failed[/bold red]\n\n" +
-            "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors) +
-            "\n\n[bold]To diagnose:[/bold]\n"
-            "  Run [bold green]aiptx check[/bold green] for detailed report\n\n"
-            "[bold]To fix common issues:[/bold]\n"
-            "  [dim]aiptx setup          # Configure API keys[/dim]\n"
-            "  [dim]pip install aiptx[full]  # Install all dependencies[/dim]",
-            title=f"{icon('warning')} System Not Ready",
-            border_style="red",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold red]Prerequisites Check Failed[/bold red]\n\n"
+                + "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors)
+                + "\n\n[bold]To diagnose:[/bold]\n"
+                "  Run [bold green]aiptx check[/bold green] for detailed report\n\n"
+                "[bold]To fix common issues:[/bold]\n"
+                "  [dim]aiptx setup          # Configure API keys[/dim]\n"
+                "  [dim]pip install aiptx[full]  # Install all dependencies[/dim]",
+                title=f"{icon('warning')} System Not Ready",
+                border_style="red",
+                padding=(1, 2),
+            )
+        )
         console.print()
         return 1
 
     # Run pre-flight checks if requested (connection validation)
-    if getattr(args, 'check', False):
+    if getattr(args, "check", False):
         ai_mode = args.ai or args.mode == "ai"
         checks_passed = run_preflight_check(
             console=console,
@@ -1433,7 +1494,9 @@ def run_scan(args):
 
         if not checks_passed:
             console.print("[yellow]Scan aborted due to failed pre-flight checks.[/yellow]")
-            console.print("[dim]Fix the issues above and try again, or run without --check to skip validation.[/dim]")
+            console.print(
+                "[dim]Fix the issues above and try again, or run without --check to skip validation.[/dim]"
+            )
             return 1
 
         console.print("[dim]Pre-flight checks passed. Starting scan...[/dim]")
@@ -1442,10 +1505,10 @@ def run_scan(args):
     # Create config
     # Verbose mode is OFF by default, -v enables it (cleaner output)
     # Use args.verbose from global parser (count type)
-    verbose_level = getattr(args, 'verbose', 0)
-    verbose = verbose_level > 0 or getattr(args, 'quiet', False) is False and verbose_level > 0
+    verbose_level = getattr(args, "verbose", 0)
+    verbose = verbose_level > 0 or getattr(args, "quiet", False) is False and verbose_level > 0
     # Show command output only if verbose, or if not in quiet mode with --no-stream
-    show_command_output = verbose_level > 0 and not getattr(args, 'no_stream', False)
+    show_command_output = verbose_level > 0 and not getattr(args, "no_stream", False)
 
     config = OrchestratorConfig(
         target=args.target,
@@ -1458,21 +1521,21 @@ def run_scan(args):
     )
 
     # v4.0 Enhanced scanning options
-    output_format = getattr(args, 'format', 'text')
-    sarif_output = getattr(args, 'sarif_output', None)
+    output_format = getattr(args, "format", "text")
+    sarif_output = getattr(args, "sarif_output", None)
     if sarif_output:
-        output_format = 'sarif'
+        output_format = "sarif"
 
     # Add v4.0 scanning flags to config if OrchestratorConfig supports them
     # These may need to be added to OrchestratorConfig in a future update
     scan_options = {
-        'sast': getattr(args, 'sast', False),
-        'dast': getattr(args, 'dast', False),
-        'business_logic': getattr(args, 'business_logic', False),
-        'websocket': getattr(args, 'websocket', False),
-        'spa': getattr(args, 'spa', False),
-        'graphql': getattr(args, 'graphql', False),
-        'validate_pocs': getattr(args, 'validate_pocs', False),
+        "sast": getattr(args, "sast", False),
+        "dast": getattr(args, "dast", False),
+        "business_logic": getattr(args, "business_logic", False),
+        "websocket": getattr(args, "websocket", False),
+        "spa": getattr(args, "spa", False),
+        "graphql": getattr(args, "graphql", False),
+        "validate_pocs": getattr(args, "validate_pocs", False),
     }
 
     # Determine mode
@@ -1481,7 +1544,7 @@ def run_scan(args):
     elif args.full or args.mode == "full":
         mode = "full"
         config.full_mode = True
-    elif getattr(args, 'quick', False) or args.mode == "quick":
+    elif getattr(args, "quick", False) or args.mode == "quick":
         mode = "quick"
         # Quick mode: Disable enterprise scanners for faster scan
         config.use_acunetix = False
@@ -1524,17 +1587,17 @@ def run_scan(args):
         console.print(f"[bold green]{icon('check')} Scan completed successfully[/bold green]")
 
         # v4.0: Generate SARIF output if requested
-        if output_format == 'sarif' or sarif_output:
+        if output_format == "sarif" or sarif_output:
             try:
-                from .reports.sarif import SARIFGenerator, SARIFConfig
                 from .agents.shared.finding_repository import FindingRepository
+                from .reports.sarif import SARIFConfig, SARIFGenerator
 
                 # Get findings from the scan result
-                findings = getattr(orchestrator, 'findings', [])
+                findings = getattr(orchestrator, "findings", [])
 
                 if findings:
                     sarif_config = SARIFConfig(
-                        include_poc=getattr(args, 'validate_pocs', False),
+                        include_poc=getattr(args, "validate_pocs", False),
                         include_evidence=True,
                     )
                     generator = SARIFGenerator(sarif_config)
@@ -1545,10 +1608,11 @@ def run_scan(args):
                     console.print(f"[dim]SARIF report written to {output_path}[/dim]")
 
                     # v4.0: Check fail-on-severity threshold
-                    fail_on = getattr(args, 'fail_on_severity', None)
+                    fail_on = getattr(args, "fail_on_severity", None)
                     if fail_on:
                         from .agents.shared.finding_repository import FindingSeverity
-                        severity_order = ['info', 'low', 'medium', 'high', 'critical']
+
+                        severity_order = ["info", "low", "medium", "high", "critical"]
                         threshold_index = severity_order.index(fail_on)
 
                         max_severity = 0
@@ -1558,7 +1622,9 @@ def run_scan(args):
 
                         if max_severity >= threshold_index:
                             severity_name = severity_order[max_severity]
-                            console.print(f"[bold red]CI/CD: Found {severity_name} severity findings (threshold: {fail_on})[/bold red]")
+                            console.print(
+                                f"[bold red]CI/CD: Found {severity_name} severity findings (threshold: {fail_on})[/bold red]"
+                            )
                             return 1
 
             except ImportError as e:
@@ -1574,8 +1640,9 @@ def run_scan(args):
     except Exception as e:
         console.print()
         console.print(f"[bold red]{icon('cross')} Scan failed:[/bold red] {e}")
-        if getattr(args, 'verbose', 0) > 0:
+        if getattr(args, "verbose", 0) > 0:
             import traceback
+
             console.print(f"[dim]{traceback.format_exc()}[/dim]")
         return 1
 
@@ -1611,9 +1678,10 @@ def run_api(args):
 def show_status(args):
     """Show configuration status with actual connection validation."""
     import asyncio
-    import time
     import os
+    import time
     from pathlib import Path
+
     from dotenv import load_dotenv
     from rich.console import Console
     from rich.table import Table
@@ -1627,16 +1695,17 @@ def show_status(args):
 
         # WINDOWS FIX: Also read .env directly to bypass any python-dotenv encoding issues
         try:
-            with open(env_path, 'r', encoding='utf-8') as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, _, value = line.partition('=')
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, value = line.partition("=")
                         key = key.strip()
                         value = value.strip()
                         # Remove surrounding quotes if present
-                        if (value.startswith('"') and value.endswith('"')) or \
-                           (value.startswith("'") and value.endswith("'")):
+                        if (value.startswith('"') and value.endswith('"')) or (
+                            value.startswith("'") and value.endswith("'")
+                        ):
                             value = value[1:-1]
                         os.environ[key] = value
         except Exception:
@@ -1644,6 +1713,7 @@ def show_status(args):
 
     # Clear config cache and get fresh config
     from .config import reload_config
+
     config = reload_config()
 
     console.print("\n[bold cyan]AIPT v2 Configuration Status[/bold cyan]\n")
@@ -1662,8 +1732,9 @@ def show_status(args):
     if config.llm.api_key or not requires_api_key:
         with console.status("[yellow]Validating LLM connection...[/yellow]"):
             try:
-                import litellm
                 import logging
+
+                import litellm
 
                 # Suppress litellm verbose output
                 litellm.suppress_debug_info = True
@@ -1689,7 +1760,9 @@ def show_status(args):
                     _os.environ.pop(key, None)
 
                 if provider == "anthropic":
-                    model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    model_str = (
+                        f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    )
                     _os.environ["ANTHROPIC_API_KEY"] = config.llm.api_key
                 elif provider == "openai":
                     model_str = f"openai/{model}" if not model.startswith("openai/") else model
@@ -1722,7 +1795,12 @@ def show_status(args):
                     except Exception as retry_err:
                         last_error = retry_err
                         err_str = str(retry_err).lower()
-                        is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                        is_connection_error = (
+                            "connection" in err_str
+                            or "refused" in err_str
+                            or "timeout" in err_str
+                            or "errno" in err_str
+                        )
                         if is_connection_error and attempt < max_retries - 1:
                             time.sleep(2 * (attempt + 1))  # 2s, 4s backoff
                             continue
@@ -1734,12 +1812,12 @@ def show_status(args):
 
                 elapsed = time.time() - start
                 llm_status = True
-                validation_results['llm'] = (True, f"Connected ({elapsed:.1f}s)")
+                validation_results["llm"] = (True, f"Connected ({elapsed:.1f}s)")
 
             except ImportError:
                 llm_status = None
                 llm_error = "litellm not installed"
-                validation_results['llm'] = (None, "litellm not installed")
+                validation_results["llm"] = (None, "litellm not installed")
             except Exception as e:
                 llm_status = False
                 # Parse error for cleaner display
@@ -1763,13 +1841,14 @@ def show_status(args):
                 else:
                     # Sanitize potential API keys from error message
                     import re
-                    sanitized = re.sub(r'sk-[a-zA-Z0-9-]{20,}', '[API_KEY]', error_str)
+
+                    sanitized = re.sub(r"sk-[a-zA-Z0-9-]{20,}", "[API_KEY]", error_str)
                     llm_error = sanitized[:60] if len(sanitized) > 60 else sanitized
-                validation_results['llm'] = (False, f"{error_type}: {llm_error}")
+                validation_results["llm"] = (False, f"{error_type}: {llm_error}")
     else:
         llm_status = False
         llm_error = "API key not configured"
-        validation_results['llm'] = (False, "API key not configured")
+        validation_results["llm"] = (False, "API key not configured")
 
     # LLM Status Table
     table = Table(title="LLM Configuration")
@@ -1809,10 +1888,10 @@ def show_status(args):
             return url
         url = url.strip()
         # Add http:// if no protocol specified
-        if not url.startswith(('http://', 'https://')):
+        if not url.startswith(("http://", "https://")):
             url = f"http://{url}"
         # Remove trailing slashes
-        url = url.rstrip('/')
+        url = url.rstrip("/")
         return url
 
     async def test_scanner_connection(name, url, test_endpoint, headers, check_header=None):
@@ -1829,11 +1908,12 @@ def show_status(args):
             return None, "Not configured"
         try:
             import httpx
+
             # Normalize URL before testing
             url = normalize_scanner_url(url)
             # Ensure endpoint starts with /
-            if not test_endpoint.startswith('/'):
-                test_endpoint = '/' + test_endpoint
+            if not test_endpoint.startswith("/"):
+                test_endpoint = "/" + test_endpoint
             full_url = f"{url}{test_endpoint}"
             async with httpx.AsyncClient(verify=False, timeout=10) as client:
                 response = await client.get(full_url, headers=headers)
@@ -1864,41 +1944,43 @@ def show_status(args):
         # Acunetix
         if config.scanners.acunetix_url:
             with console.status("[yellow]Testing Acunetix...[/yellow]"):
-                results['acunetix'] = await test_scanner_connection(
+                results["acunetix"] = await test_scanner_connection(
                     "Acunetix",
                     config.scanners.acunetix_url,
                     "/api/v1/me",
-                    {"X-Auth": config.scanners.acunetix_api_key or ""}
+                    {"X-Auth": config.scanners.acunetix_api_key or ""},
                 )
         else:
-            results['acunetix'] = (None, "Not configured")
+            results["acunetix"] = (None, "Not configured")
 
         # Burp Suite
         if config.scanners.burp_url:
             with console.status("[yellow]Testing Burp Suite...[/yellow]"):
                 # Use root endpoint and check for X-Burp-Version header
                 # GET /scan requires a task ID and returns 400 without one
-                results['burp'] = await test_scanner_connection(
+                results["burp"] = await test_scanner_connection(
                     "Burp Suite",
                     config.scanners.burp_url,
                     "/",
-                    {"Authorization": config.scanners.burp_api_key or ''},
-                    check_header="X-Burp-Version"
+                    {"Authorization": config.scanners.burp_api_key or ""},
+                    check_header="X-Burp-Version",
                 )
         else:
-            results['burp'] = (None, "Not configured")
+            results["burp"] = (None, "Not configured")
 
         # Nessus
         if config.scanners.nessus_url:
             with console.status("[yellow]Testing Nessus...[/yellow]"):
-                results['nessus'] = await test_scanner_connection(
+                results["nessus"] = await test_scanner_connection(
                     "Nessus",
                     config.scanners.nessus_url,
                     "/server/status",
-                    {"X-ApiKeys": f"accessKey={config.scanners.nessus_access_key or ''};secretKey={config.scanners.nessus_secret_key or ''}"}
+                    {
+                        "X-ApiKeys": f"accessKey={config.scanners.nessus_access_key or ''};secretKey={config.scanners.nessus_secret_key or ''}"
+                    },
                 )
         else:
-            results['nessus'] = (None, "Not configured")
+            results["nessus"] = (None, "Not configured")
 
         # OWASP ZAP
         if config.scanners.zap_url:
@@ -1906,14 +1988,11 @@ def show_status(args):
                 zap_endpoint = "/JSON/core/view/version/"
                 if config.scanners.zap_api_key:
                     zap_endpoint += f"?apikey={config.scanners.zap_api_key}"
-                results['zap'] = await test_scanner_connection(
-                    "OWASP ZAP",
-                    config.scanners.zap_url,
-                    zap_endpoint,
-                    {}
+                results["zap"] = await test_scanner_connection(
+                    "OWASP ZAP", config.scanners.zap_url, zap_endpoint, {}
                 )
         else:
-            results['zap'] = (None, "Not configured")
+            results["zap"] = (None, "Not configured")
 
         return results
 
@@ -1939,22 +2018,22 @@ def show_status(args):
     table.add_row(
         "Acunetix",
         config.scanners.acunetix_url or "Not configured",
-        get_scanner_status_display(scanner_results['acunetix']),
+        get_scanner_status_display(scanner_results["acunetix"]),
     )
     table.add_row(
         "Burp Suite",
         config.scanners.burp_url or "Not configured",
-        get_scanner_status_display(scanner_results['burp']),
+        get_scanner_status_display(scanner_results["burp"]),
     )
     table.add_row(
         "Nessus",
         config.scanners.nessus_url or "Not configured",
-        get_scanner_status_display(scanner_results['nessus']),
+        get_scanner_status_display(scanner_results["nessus"]),
     )
     table.add_row(
         "OWASP ZAP",
         config.scanners.zap_url or "Not configured",
-        get_scanner_status_display(scanner_results['zap']),
+        get_scanner_status_display(scanner_results["zap"]),
     )
 
     console.print(table)
@@ -1969,16 +2048,19 @@ def show_status(args):
         with console.status("[yellow]Testing VPS connection...[/yellow]"):
             try:
                 from pathlib import Path
+
                 key_path = Path(config.vps.key_path).expanduser()
 
                 if not key_path.exists():
                     vps_status = False
                     vps_error = "SSH key not found"
                 else:
+
                     async def test_vps():
-                        import asyncssh
-                        import tempfile
                         import os
+                        import tempfile
+
+                        import asyncssh
 
                         conn = await asyncssh.connect(
                             config.vps.host,
@@ -2002,7 +2084,7 @@ def show_status(args):
 
                         result = await conn.run(
                             f"mkdir -p {results_dir} && echo '{test_content}' > {test_file}",
-                            check=False
+                            check=False,
                         )
                         if result.exit_status != 0:
                             conn.close()
@@ -2013,14 +2095,16 @@ def show_status(args):
                         try:
                             async with conn.start_sftp_client() as sftp:
                                 # Create a temp local file to receive the test file
-                                with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tmp:
+                                with tempfile.NamedTemporaryFile(
+                                    delete=False, suffix=".txt"
+                                ) as tmp:
                                     local_test_path = tmp.name
 
                                 # Download the test file
                                 await sftp.get(test_file, local_test_path)
 
                                 # Verify content
-                                with open(local_test_path, 'r') as f:
+                                with open(local_test_path, "r") as f:
                                     downloaded_content = f.read().strip()
 
                                 # Clean up local temp file
@@ -2069,16 +2153,16 @@ def show_status(args):
 
         # Use the detailed message for successful connections
         if vps_status and not vps_error:
-            validation_results['vps'] = (vps_status, vps_message)
+            validation_results["vps"] = (vps_status, vps_message)
         else:
-            validation_results['vps'] = (vps_status, vps_error if vps_error else "Connected")
+            validation_results["vps"] = (vps_status, vps_error if vps_error else "Connected")
     elif config.vps.host:
         vps_status = False
         vps_error = "SSH key not configured"
-        validation_results['vps'] = (False, vps_error)
+        validation_results["vps"] = (False, vps_error)
     else:
         vps_status = None
-        validation_results['vps'] = (None, "Not configured")
+        validation_results["vps"] = (None, "Not configured")
 
     # VPS Status Table
     table = Table(title="VPS Configuration")
@@ -2095,7 +2179,9 @@ def show_status(args):
     table.add_row("Host", host_display)
     table.add_row("User", config.vps.user)
     # Mask SSH key path to avoid exposing full filesystem structure
-    table.add_row("SSH Key", mask_path(config.vps.key_path) if config.vps.key_path else "Not configured")
+    table.add_row(
+        "SSH Key", mask_path(config.vps.key_path) if config.vps.key_path else "Not configured"
+    )
 
     console.print(table)
 
@@ -2103,7 +2189,7 @@ def show_status(args):
     console.print("\n[bold]Configuration Validation:[/bold]")
 
     # LLM
-    llm_result = validation_results.get('llm', (False, "Unknown"))
+    llm_result = validation_results.get("llm", (False, "Unknown"))
     if llm_result[0] is True:
         console.print(f"  [green]{icon('check')}[/green] llm: {llm_result[1]}")
     elif llm_result[0] is None:
@@ -2112,7 +2198,7 @@ def show_status(args):
         console.print(f"  [red]{icon('cross')}[/red] llm: {llm_result[1]}")
 
     # Scanners - only show configured ones
-    for scanner_name in ['acunetix', 'burp', 'nessus', 'zap']:
+    for scanner_name in ["acunetix", "burp", "nessus", "zap"]:
         result = scanner_results.get(scanner_name, (None, "Unknown"))
         if result[0] is True:
             console.print(f"  [green]{icon('check')}[/green] {scanner_name}: {result[1]}")
@@ -2123,7 +2209,7 @@ def show_status(args):
             console.print(f"  [red]{icon('cross')}[/red] {scanner_name}: {result[1]}")
 
     # VPS
-    vps_result = validation_results.get('vps', (None, "Unknown"))
+    vps_result = validation_results.get("vps", (None, "Unknown"))
     if vps_result[0] is True:
         console.print(f"  [green]{icon('check')}[/green] vps: {vps_result[1]}")
     elif vps_result[0] is None:
@@ -2143,19 +2229,22 @@ def run_check(args):
     way to validate system readiness for enterprise deployments.
     """
     import asyncio
+
     from .prerequisites import run_prerequisites_check
 
-    verbose = getattr(args, 'verbose', False)
-    strict = getattr(args, 'strict', False)
-    json_output = getattr(args, 'json', False)
-    minimal = getattr(args, 'minimal', False)
+    verbose = getattr(args, "verbose", False)
+    strict = getattr(args, "strict", False)
+    json_output = getattr(args, "json", False)
+    minimal = getattr(args, "minimal", False)
 
-    return asyncio.run(run_prerequisites_check(
-        verbose=verbose,
-        strict=strict,
-        json_output=json_output,
-        include_optional=not minimal,
-    ))
+    return asyncio.run(
+        run_prerequisites_check(
+            verbose=verbose,
+            strict=strict,
+            json_output=json_output,
+            include_optional=not minimal,
+        )
+    )
 
 
 def run_config_test(args):
@@ -2166,18 +2255,18 @@ def run_config_test(args):
     validates that services are reachable and credentials work.
     """
     import asyncio
+    import os
     import shutil
     import time
-    import os
     from pathlib import Path
+
     from dotenv import load_dotenv
+    from rich import box
+    from rich.align import Align
     from rich.console import Console
     from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich.align import Align
     from rich.rule import Rule
-    from rich import box
+    from rich.table import Table
 
     console = Console()
 
@@ -2190,16 +2279,17 @@ def run_config_test(args):
         # WINDOWS FIX: Also read .env directly to bypass any python-dotenv encoding issues
         # Parse manually and set env vars
         try:
-            with open(env_path, 'r', encoding='utf-8') as f:
+            with open(env_path, "r", encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
-                    if line and not line.startswith('#') and '=' in line:
-                        key, _, value = line.partition('=')
+                    if line and not line.startswith("#") and "=" in line:
+                        key, _, value = line.partition("=")
                         key = key.strip()
                         value = value.strip()
                         # Remove surrounding quotes if present
-                        if (value.startswith('"') and value.endswith('"')) or \
-                           (value.startswith("'") and value.endswith("'")):
+                        if (value.startswith('"') and value.endswith('"')) or (
+                            value.startswith("'") and value.endswith("'")
+                        ):
                             value = value[1:-1]
                         os.environ[key] = value
         except Exception:
@@ -2207,31 +2297,38 @@ def run_config_test(args):
 
     # Clear config cache and get fresh config
     from .config import reload_config
+
     config = reload_config()
 
     # Get terminal width for full-width display
     term_width = console.size.width
 
     console.print()
-    console.print(Panel(
-        Align.center("[bold]AIPTX Configuration Validator[/bold]\n\n"
-        "Testing all configured services and credentials..."),
-        title=f"{icon('search')} Self-Test",
-        border_style="cyan",
-        width=term_width,
-    ))
+    console.print(
+        Panel(
+            Align.center(
+                "[bold]AIPTX Configuration Validator[/bold]\n\n"
+                "Testing all configured services and credentials..."
+            ),
+            title=f"{icon('search')} Self-Test",
+            border_style="cyan",
+            width=term_width,
+        )
+    )
     console.print()
 
     results = {}
-    test_all = getattr(args, 'all', False) or not any([
-        getattr(args, 'llm', False),
-        getattr(args, 'vps', False),
-        getattr(args, 'scanners', False),
-        getattr(args, 'tools', False),
-    ])
+    test_all = getattr(args, "all", False) or not any(
+        [
+            getattr(args, "llm", False),
+            getattr(args, "vps", False),
+            getattr(args, "scanners", False),
+            getattr(args, "tools", False),
+        ]
+    )
 
     # ======================== LLM Test ========================
-    if test_all or getattr(args, 'llm', False):
+    if test_all or getattr(args, "llm", False):
         console.print(Rule("LLM API Test", style="bold cyan"))
 
         # Ollama doesn't require an API key, so check provider first
@@ -2241,13 +2338,14 @@ def run_config_test(args):
         if requires_api_key and not config.llm.api_key:
             console.print(f"  [red]{icon('cross')}[/red] No API key configured")
             console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
-            results['llm'] = False
+            results["llm"] = False
         else:
             with console.status("[yellow]Testing LLM API connection...[/yellow]"):
                 try:
-                    import litellm
-                    import os
                     import logging
+                    import os
+
+                    import litellm
 
                     # Suppress litellm verbose output
                     litellm.suppress_debug_info = True
@@ -2263,8 +2361,10 @@ def run_config_test(args):
 
                     # Debug: show what we loaded when API key is missing
                     if not api_key:
-                        console.print(f"    [yellow]Debug: No API key found in config[/yellow]")
-                        console.print(f"    [yellow]Debug: Provider={provider}, Model={model}[/yellow]")
+                        console.print("    [yellow]Debug: No API key found in config[/yellow]")
+                        console.print(
+                            f"    [yellow]Debug: Provider={provider}, Model={model}[/yellow]"
+                        )
                         # Check environment variables directly
                         env_keys = {
                             "ANTHROPIC_API_KEY": bool(os.environ.get("ANTHROPIC_API_KEY")),
@@ -2274,13 +2374,25 @@ def run_config_test(args):
                         console.print(f"    [yellow]Debug: Env vars: {env_keys}[/yellow]")
                         # Check .env file
                         from pathlib import Path
+
                         env_path = Path.home() / ".aiptx" / ".env"
-                        console.print(f"    [yellow]Debug: Config file exists: {env_path.exists()}[/yellow]")
+                        console.print(
+                            f"    [yellow]Debug: Config file exists: {env_path.exists()}[/yellow]"
+                        )
                         if env_path.exists():
                             with open(env_path) as f:
                                 content = f.read()
-                                has_key = any(k in content for k in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "DEEPSEEK_API_KEY"])
-                                console.print(f"    [yellow]Debug: API key in .env file: {has_key}[/yellow]")
+                                has_key = any(
+                                    k in content
+                                    for k in [
+                                        "OPENAI_API_KEY",
+                                        "ANTHROPIC_API_KEY",
+                                        "DEEPSEEK_API_KEY",
+                                    ]
+                                )
+                                console.print(
+                                    f"    [yellow]Debug: API key in .env file: {has_key}[/yellow]"
+                                )
 
                     # Set the appropriate environment variable for litellm
                     # litellm reads API keys from environment variables
@@ -2294,7 +2406,9 @@ def run_config_test(args):
                     effective_api_base = None  # Default: let litellm use provider's endpoint
 
                     if provider == "anthropic":
-                        model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                        model_str = (
+                            f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                        )
                         os.environ["ANTHROPIC_API_KEY"] = api_key
                         # Do NOT set api_base - use Anthropic's cloud API
                     elif provider == "openai":
@@ -2304,13 +2418,19 @@ def run_config_test(args):
                         if api_base and not api_base.startswith("http://localhost"):
                             effective_api_base = api_base
                     elif provider == "deepseek":
-                        model_str = f"deepseek/{model}" if not model.startswith("deepseek/") else model
+                        model_str = (
+                            f"deepseek/{model}" if not model.startswith("deepseek/") else model
+                        )
                         os.environ["DEEPSEEK_API_KEY"] = api_key
                         # Do NOT set api_base - use DeepSeek's cloud API
                     elif provider == "ollama":
                         model_str = f"ollama/{model}" if not model.startswith("ollama/") else model
                         # Ollama doesn't need an API key, but needs base URL
-                        effective_api_base = api_base or os.getenv("AIPT_LLM__OLLAMA_BASE_URL") or "http://localhost:11434"
+                        effective_api_base = (
+                            api_base
+                            or os.getenv("AIPT_LLM__OLLAMA_BASE_URL")
+                            or "http://localhost:11434"
+                        )
                         os.environ["OLLAMA_API_BASE"] = effective_api_base
                     else:
                         model_str = model
@@ -2318,8 +2438,14 @@ def run_config_test(args):
 
                     # Debug: show what we're about to use
                     key_len = len(api_key) if api_key else 0
-                    key_preview = f"{api_key[:10]}...{api_key[-4:]}" if api_key and len(api_key) > 14 else "[EMPTY]"
-                    console.print(f"    [dim]Testing: {model_str} (key length: {key_len}, preview: {key_preview})[/dim]")
+                    key_preview = (
+                        f"{api_key[:10]}...{api_key[-4:]}"
+                        if api_key and len(api_key) > 14
+                        else "[EMPTY]"
+                    )
+                    console.print(
+                        f"    [dim]Testing: {model_str} (key length: {key_len}, preview: {key_preview})[/dim]"
+                    )
 
                     start = time.time()
                     # Build completion kwargs
@@ -2347,11 +2473,19 @@ def run_config_test(args):
                             last_error = retry_err
                             err_str = str(retry_err).lower()
                             # Only retry on connection errors, not auth errors
-                            is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                            is_connection_error = (
+                                "connection" in err_str
+                                or "refused" in err_str
+                                or "timeout" in err_str
+                                or "errno" in err_str
+                            )
                             if is_connection_error and attempt < max_retries - 1:
                                 wait_time = 2 * (attempt + 1)  # 2s, 4s backoff
-                                console.print(f"    [yellow]Connection failed, retrying ({attempt + 2}/{max_retries}) in {wait_time}s...[/yellow]")
+                                console.print(
+                                    f"    [yellow]Connection failed, retrying ({attempt + 2}/{max_retries}) in {wait_time}s...[/yellow]"
+                                )
                                 import time as time_module
+
                                 time_module.sleep(wait_time)
                                 continue
                             elif not is_connection_error:
@@ -2368,12 +2502,12 @@ def run_config_test(args):
                     console.print(f"    [dim]Provider: {provider}[/dim]")
                     console.print(f"    [dim]Model: {model}[/dim]")
                     console.print(f"    [dim]Response time: {elapsed:.2f}s[/dim]")
-                    results['llm'] = True
+                    results["llm"] = True
 
                 except ImportError:
                     console.print(f"  [red]{icon('cross')}[/red] litellm not installed")
                     console.print("    [dim]Install with: pip install litellm[/dim]")
-                    results['llm'] = None
+                    results["llm"] = None
                 except Exception as e:
                     # Parse and clean the error message
                     error_str = str(e)
@@ -2381,7 +2515,8 @@ def run_config_test(args):
 
                     # Sanitize API keys from error messages (sk-*, sk-ant-*, sk-proj-*)
                     import re
-                    error_str = re.sub(r'sk-[a-zA-Z0-9_-]{10,}', '[REDACTED_KEY]', error_str)
+
+                    error_str = re.sub(r"sk-[a-zA-Z0-9_-]{10,}", "[REDACTED_KEY]", error_str)
 
                     # Detect common error patterns and provide helpful messages
                     if "<!DOCTYPE" in error_str or "<html" in error_str.lower():
@@ -2390,7 +2525,11 @@ def run_config_test(args):
                     elif "Connection" in error_str or "connect" in error_str.lower():
                         error_msg = "Connection failed - API endpoint unreachable"
                         suggestion = "Check network connection and API base URL"
-                    elif "AuthenticationError" in error_type or "401" in error_str or "Unauthorized" in error_str:
+                    elif (
+                        "AuthenticationError" in error_type
+                        or "401" in error_str
+                        or "Unauthorized" in error_str
+                    ):
                         error_msg = "Authentication failed - invalid API key"
                         suggestion = "Verify your API key is correct and matches the provider"
                     elif "403" in error_str or "Forbidden" in error_str:
@@ -2421,20 +2560,22 @@ def run_config_test(args):
                         console.print(f"    [dim yellow]Raw: {error_str}[/dim yellow]")
                     else:
                         console.print(f"    [dim yellow]Raw: {error_str[:200]}...[/dim yellow]")
-                    results['llm'] = False
+                    results["llm"] = False
 
         console.print()
 
     # ======================== VPS Test ========================
-    if test_all or getattr(args, 'vps', False):
+    if test_all or getattr(args, "vps", False):
         console.print(Rule("VPS Connection Test", style="bold cyan"))
 
         if not config.vps.host:
-            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] VPS not configured (optional)")
-            results['vps'] = None
+            console.print(
+                f"  [yellow]{icon('circle_empty')}[/yellow] VPS not configured (optional)"
+            )
+            results["vps"] = None
         elif not config.vps.key_path:
             console.print(f"  [red]{icon('cross')}[/red] SSH key path not configured")
-            results['vps'] = False
+            results["vps"] = False
         else:
             with console.status("[yellow]Testing SSH connection to VPS...[/yellow]"):
                 try:
@@ -2443,14 +2584,17 @@ def run_config_test(args):
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
                         # Mask the path to avoid exposing full filesystem structure
-                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}")
-                        results['vps'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}"
+                        )
+                        results["vps"] = False
                     else:
                         # Test SSH connection and SFTP report retrieval using asyncssh
                         async def test_ssh_and_sftp():
-                            import asyncssh
-                            import tempfile
                             import os as _os
+                            import tempfile
+
+                            import asyncssh
 
                             start = time.time()
                             conn = await asyncssh.connect(
@@ -2477,23 +2621,30 @@ def run_config_test(args):
 
                             result = await conn.run(
                                 f"mkdir -p {results_dir} && echo '{test_content}' > {test_file}",
-                                check=False
+                                check=False,
                             )
                             if result.exit_status != 0:
                                 conn.close()
                                 await conn.wait_closed()
-                                return False, f"Cannot write to {results_dir}", None, time.time() - start
+                                return (
+                                    False,
+                                    f"Cannot write to {results_dir}",
+                                    None,
+                                    time.time() - start,
+                                )
 
                             # Test 3: SFTP retrieval (report download simulation)
                             sftp_ok = False
                             try:
                                 async with conn.start_sftp_client() as sftp:
-                                    with tempfile.NamedTemporaryFile(delete=False, suffix='.txt') as tmp:
+                                    with tempfile.NamedTemporaryFile(
+                                        delete=False, suffix=".txt"
+                                    ) as tmp:
                                         local_test_path = tmp.name
 
                                     await sftp.get(test_file, local_test_path)
 
-                                    with open(local_test_path, 'r') as f:
+                                    with open(local_test_path, "r") as f:
                                         downloaded = f.read().strip()
 
                                     _os.unlink(local_test_path)
@@ -2503,7 +2654,12 @@ def run_config_test(args):
                                 await conn.run(f"rm -f {test_file}", check=False)
                                 conn.close()
                                 await conn.wait_closed()
-                                return False, f"SFTP failed: {str(sftp_err)[:40]}", None, time.time() - start
+                                return (
+                                    False,
+                                    f"SFTP failed: {str(sftp_err)[:40]}",
+                                    None,
+                                    time.time() - start,
+                                )
 
                             # Cleanup remote test file
                             await conn.run(f"rm -f {test_file}", check=False)
@@ -2511,7 +2667,12 @@ def run_config_test(args):
                             if not sftp_ok:
                                 conn.close()
                                 await conn.wait_closed()
-                                return False, "SFTP content verification failed", None, time.time() - start
+                                return (
+                                    False,
+                                    "SFTP content verification failed",
+                                    None,
+                                    time.time() - start,
+                                )
 
                             elapsed = time.time() - start
                             uname = uname_output.replace("AIPTX_TEST_OK", "").strip()
@@ -2523,34 +2684,48 @@ def run_config_test(args):
                         loop = asyncio.new_event_loop()
                         try:
                             asyncio.set_event_loop(loop)
-                            success, message, uname, elapsed = loop.run_until_complete(test_ssh_and_sftp())
+                            success, message, uname, elapsed = loop.run_until_complete(
+                                test_ssh_and_sftp()
+                            )
                         finally:
                             loop.close()
 
                         if success:
-                            console.print(f"  [green]{icon('check')}[/green] VPS connection successful")
-                            console.print(f"    [dim]Host: {config.vps.user}@{config.vps.host}:{config.vps.port}[/dim]")
-                            console.print(f"    [dim]System: {uname[:60]}...[/dim]" if uname and len(uname) > 60 else f"    [dim]System: {uname}[/dim]")
+                            console.print(
+                                f"  [green]{icon('check')}[/green] VPS connection successful"
+                            )
+                            console.print(
+                                f"    [dim]Host: {config.vps.user}@{config.vps.host}:{config.vps.port}[/dim]"
+                            )
+                            console.print(
+                                f"    [dim]System: {uname[:60]}...[/dim]"
+                                if uname and len(uname) > 60
+                                else f"    [dim]System: {uname}[/dim]"
+                            )
                             console.print(f"    [dim]Response time: {elapsed:.2f}s[/dim]")
-                            console.print(f"    [green]{icon('check')}[/green] [dim]Report retrieval (SFTP): Verified[/dim]")
-                            results['vps'] = True
+                            console.print(
+                                f"    [green]{icon('check')}[/green] [dim]Report retrieval (SFTP): Verified[/dim]"
+                            )
+                            results["vps"] = True
                         else:
-                            console.print(f"  [red]{icon('cross')}[/red] VPS connection failed - {message}")
-                            results['vps'] = False
+                            console.print(
+                                f"  [red]{icon('cross')}[/red] VPS connection failed - {message}"
+                            )
+                            results["vps"] = False
 
                 except ImportError:
                     console.print(f"  [yellow]{icon('warning')}[/yellow] asyncssh not installed")
                     console.print("    [dim]Install with: pip install asyncssh[/dim]")
-                    results['vps'] = None
+                    results["vps"] = None
                 except Exception as e:
                     console.print(f"  [red]{icon('cross')}[/red] VPS connection failed")
                     console.print(f"    [dim]Error: {str(e)[:100]}[/dim]")
-                    results['vps'] = False
+                    results["vps"] = False
 
         console.print()
 
     # ======================== Scanner Tests ========================
-    if test_all or getattr(args, 'scanners', False):
+    if test_all or getattr(args, "scanners", False):
         console.print(Rule("Scanner Integration Tests", style="bold cyan"))
 
         scanners_tested = 0
@@ -2561,6 +2736,7 @@ def run_config_test(args):
             with console.status("[yellow]Testing Acunetix connection...[/yellow]"):
                 try:
                     import httpx
+
                     response = httpx.get(
                         f"{config.scanners.acunetix_url}/api/v1/me",
                         headers={"X-Auth": config.scanners.acunetix_api_key},
@@ -2570,13 +2746,17 @@ def run_config_test(args):
                     if response.status_code == 200:
                         console.print(f"  [green]{icon('check')}[/green] Acunetix connected")
                         console.print(f"    [dim]URL: {config.scanners.acunetix_url}[/dim]")
-                        results['acunetix'] = True
+                        results["acunetix"] = True
                     else:
-                        console.print(f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})")
-                        results['acunetix'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})"
+                        )
+                        results["acunetix"] = False
                 except Exception as e:
-                    console.print(f"  [red]{icon('cross')}[/red] Acunetix connection failed: {str(e)[:50]}")
-                    results['acunetix'] = False
+                    console.print(
+                        f"  [red]{icon('cross')}[/red] Acunetix connection failed: {str(e)[:50]}"
+                    )
+                    results["acunetix"] = False
 
         # Burp Suite
         if config.scanners.burp_url:
@@ -2584,6 +2764,7 @@ def run_config_test(args):
             with console.status("[yellow]Testing Burp Suite connection...[/yellow]"):
                 try:
                     import httpx
+
                     response = httpx.get(
                         f"{config.scanners.burp_url}/api-internal/versions",
                         headers={"Authorization": f"Bearer {config.scanners.burp_api_key}"},
@@ -2593,13 +2774,17 @@ def run_config_test(args):
                     if response.status_code == 200:
                         console.print(f"  [green]{icon('check')}[/green] Burp Suite connected")
                         console.print(f"    [dim]URL: {config.scanners.burp_url}[/dim]")
-                        results['burp'] = True
+                        results["burp"] = True
                     else:
-                        console.print(f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})")
-                        results['burp'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})"
+                        )
+                        results["burp"] = False
                 except Exception as e:
-                    console.print(f"  [red]{icon('cross')}[/red] Burp Suite connection failed: {str(e)[:50]}")
-                    results['burp'] = False
+                    console.print(
+                        f"  [red]{icon('cross')}[/red] Burp Suite connection failed: {str(e)[:50]}"
+                    )
+                    results["burp"] = False
 
         # Nessus
         if config.scanners.nessus_url:
@@ -2607,6 +2792,7 @@ def run_config_test(args):
             with console.status("[yellow]Testing Nessus connection...[/yellow]"):
                 try:
                     import httpx
+
                     response = httpx.get(
                         f"{config.scanners.nessus_url}/server/status",
                         headers={
@@ -2618,13 +2804,17 @@ def run_config_test(args):
                     if response.status_code == 200:
                         console.print(f"  [green]{icon('check')}[/green] Nessus connected")
                         console.print(f"    [dim]URL: {config.scanners.nessus_url}[/dim]")
-                        results['nessus'] = True
+                        results["nessus"] = True
                     else:
-                        console.print(f"  [red]{icon('cross')}[/red] Nessus auth failed (HTTP {response.status_code})")
-                        results['nessus'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] Nessus auth failed (HTTP {response.status_code})"
+                        )
+                        results["nessus"] = False
                 except Exception as e:
-                    console.print(f"  [red]{icon('cross')}[/red] Nessus connection failed: {str(e)[:50]}")
-                    results['nessus'] = False
+                    console.print(
+                        f"  [red]{icon('cross')}[/red] Nessus connection failed: {str(e)[:50]}"
+                    )
+                    results["nessus"] = False
 
         # ZAP
         if config.scanners.zap_url:
@@ -2632,29 +2822,38 @@ def run_config_test(args):
             with console.status("[yellow]Testing OWASP ZAP connection...[/yellow]"):
                 try:
                     import httpx
+
                     url = f"{config.scanners.zap_url}/JSON/core/view/version/"
                     if config.scanners.zap_api_key:
                         url += f"?apikey={config.scanners.zap_api_key}"
                     response = httpx.get(url, timeout=10)
                     if response.status_code == 200:
                         version = response.json().get("version", "unknown")
-                        console.print(f"  [green]{icon('check')}[/green] OWASP ZAP connected (v{version})")
+                        console.print(
+                            f"  [green]{icon('check')}[/green] OWASP ZAP connected (v{version})"
+                        )
                         console.print(f"    [dim]URL: {config.scanners.zap_url}[/dim]")
-                        results['zap'] = True
+                        results["zap"] = True
                     else:
-                        console.print(f"  [red]{icon('cross')}[/red] ZAP connection failed (HTTP {response.status_code})")
-                        results['zap'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] ZAP connection failed (HTTP {response.status_code})"
+                        )
+                        results["zap"] = False
                 except Exception as e:
-                    console.print(f"  [red]{icon('cross')}[/red] ZAP connection failed: {str(e)[:50]}")
-                    results['zap'] = False
+                    console.print(
+                        f"  [red]{icon('cross')}[/red] ZAP connection failed: {str(e)[:50]}"
+                    )
+                    results["zap"] = False
 
         if scanners_tested == 0:
-            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] No scanners configured (optional)")
+            console.print(
+                f"  [yellow]{icon('circle_empty')}[/yellow] No scanners configured (optional)"
+            )
 
         console.print()
 
     # ======================== Local Tools Test ========================
-    if test_all or getattr(args, 'tools', False):
+    if test_all or getattr(args, "tools", False):
         console.print(Rule("Local Security Tools", style="bold cyan"))
 
         tools = {
@@ -2683,10 +2882,12 @@ def run_config_test(args):
             console.print(f"  [green]{icon('check')}[/green] Available: {', '.join(found_tools)}")
 
         if missing_tools:
-            console.print(f"  [yellow]{icon('circle_empty')}[/yellow] Not found: {', '.join(missing_tools)}")
+            console.print(
+                f"  [yellow]{icon('circle_empty')}[/yellow] Not found: {', '.join(missing_tools)}"
+            )
             console.print("    [dim]Install missing tools or use --use-vps to run on VPS[/dim]")
 
-        results['tools'] = len(found_tools)
+        results["tools"] = len(found_tools)
         console.print()
 
     # ======================== Summary ========================
@@ -2724,7 +2925,9 @@ def run_config_test(args):
         console.print(f"\n[bold green]{icon('check')} All tests passed![/bold green]")
         return 0
     else:
-        console.print(f"\n[bold yellow]{icon('warning')} {failures} test(s) failed. Run 'aiptx setup' to fix.[/bold yellow]")
+        console.print(
+            f"\n[bold yellow]{icon('warning')} {failures} test(s) failed. Run 'aiptx setup' to fix.[/bold yellow]"
+        )
         return 1
 
 
@@ -2748,11 +2951,12 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     import asyncio
     import shutil
     import time
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.align import Align
-    from rich.rule import Rule
+
     from rich import box
+    from rich.align import Align
+    from rich.panel import Panel
+    from rich.rule import Rule
+    from rich.table import Table
 
     config = get_config()
     results = {}
@@ -2762,13 +2966,17 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     term_width = console.size.width
 
     console.print()
-    console.print(Panel(
-        Align.center("[bold]Pre-flight Configuration Check[/bold]\n\n"
-        "Validating all required services before scan..."),
-        title=f"{icon('airplane')} Pre-flight Check",
-        border_style="cyan",
-        width=term_width,
-    ))
+    console.print(
+        Panel(
+            Align.center(
+                "[bold]Pre-flight Configuration Check[/bold]\n\n"
+                "Validating all required services before scan..."
+            ),
+            title=f"{icon('airplane')} Pre-flight Check",
+            border_style="cyan",
+            width=term_width,
+        )
+    )
     console.print()
 
     # ======================== LLM Check (always required) ========================
@@ -2781,13 +2989,14 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     if requires_api_key and not config.llm.api_key:
         console.print(f"  [red]{icon('cross')}[/red] No API key configured")
         console.print("    [dim]Run 'aiptx setup' to configure[/dim]")
-        results['llm'] = False
+        results["llm"] = False
         all_passed = False
     else:
         with console.status("[yellow]Testing LLM API...[/yellow]"):
             try:
-                import litellm
                 import os
+
+                import litellm
 
                 model = config.llm.model
                 api_key = config.llm.api_key
@@ -2795,7 +3004,9 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
                 # Set the appropriate environment variable for litellm
                 if provider == "anthropic":
-                    model_str = f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    model_str = (
+                        f"anthropic/{model}" if not model.startswith("anthropic/") else model
+                    )
                     if api_key:
                         os.environ["ANTHROPIC_API_KEY"] = api_key
                 elif provider == "openai":
@@ -2838,7 +3049,12 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                     except Exception as retry_err:
                         last_error = retry_err
                         err_str = str(retry_err).lower()
-                        is_connection_error = "connection" in err_str or "refused" in err_str or "timeout" in err_str or "errno" in err_str
+                        is_connection_error = (
+                            "connection" in err_str
+                            or "refused" in err_str
+                            or "timeout" in err_str
+                            or "errno" in err_str
+                        )
                         if is_connection_error and attempt < max_retries - 1:
                             time.sleep(2 * (attempt + 1))
                             continue
@@ -2850,15 +3066,17 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
 
                 elapsed = time.time() - start
 
-                console.print(f"  [green]{icon('check')}[/green] LLM ready ({provider}/{model}) - {elapsed:.1f}s")
-                results['llm'] = True
+                console.print(
+                    f"  [green]{icon('check')}[/green] LLM ready ({provider}/{model}) - {elapsed:.1f}s"
+                )
+                results["llm"] = True
 
             except ImportError:
                 console.print(f"  [yellow]{icon('warning')}[/yellow] litellm not installed")
-                results['llm'] = None
+                results["llm"] = None
             except Exception as e:
                 console.print(f"  [red]{icon('cross')}[/red] LLM connection failed: {str(e)[:60]}")
-                results['llm'] = False
+                results["llm"] = False
                 all_passed = False
 
     console.print()
@@ -2870,25 +3088,29 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         if not config.vps.host:
             console.print(f"  [red]{icon('cross')}[/red] VPS not configured")
             console.print("    [dim]Run 'aiptx setup' to configure VPS[/dim]")
-            results['vps'] = False
+            results["vps"] = False
             all_passed = False
         elif not config.vps.key_path:
             console.print(f"  [red]{icon('cross')}[/red] SSH key path not configured")
-            results['vps'] = False
+            results["vps"] = False
             all_passed = False
         else:
             with console.status("[yellow]Testing SSH connection...[/yellow]"):
                 try:
                     from pathlib import Path
+
                     import asyncssh
 
                     key_path = Path(config.vps.key_path).expanduser()
                     if not key_path.exists():
                         # Mask the path to avoid exposing full filesystem structure
-                        console.print(f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}")
-                        results['vps'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] SSH key not found: {mask_path(key_path)}"
+                        )
+                        results["vps"] = False
                         all_passed = False
                     else:
+
                         async def test_ssh():
                             start = time.time()
                             conn = await asyncssh.connect(
@@ -2910,16 +3132,20 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                             elapsed = loop.run_until_complete(test_ssh())
                         finally:
                             loop.close()
-                        console.print(f"  [green]{icon('check')}[/green] VPS connected ({config.vps.user}@{config.vps.host}) - {elapsed:.1f}s")
-                        results['vps'] = True
+                        console.print(
+                            f"  [green]{icon('check')}[/green] VPS connected ({config.vps.user}@{config.vps.host}) - {elapsed:.1f}s"
+                        )
+                        results["vps"] = True
 
                 except ImportError:
                     console.print(f"  [yellow]{icon('warning')}[/yellow] asyncssh not installed")
                     console.print("    [dim]Install with: pip install asyncssh[/dim]")
-                    results['vps'] = None
+                    results["vps"] = None
                 except Exception as e:
-                    console.print(f"  [red]{icon('cross')}[/red] VPS connection failed: {str(e)[:60]}")
-                    results['vps'] = False
+                    console.print(
+                        f"  [red]{icon('cross')}[/red] VPS connection failed: {str(e)[:60]}"
+                    )
+                    results["vps"] = False
                     all_passed = False
 
         console.print()
@@ -2932,12 +3158,13 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
         if use_acunetix:
             if not config.scanners.acunetix_url:
                 console.print(f"  [red]{icon('cross')}[/red] Acunetix URL not configured")
-                results['acunetix'] = False
+                results["acunetix"] = False
                 all_passed = False
             else:
                 with console.status("[yellow]Testing Acunetix...[/yellow]"):
                     try:
                         import httpx
+
                         response = httpx.get(
                             f"{config.scanners.acunetix_url}/api/v1/me",
                             headers={"X-Auth": config.scanners.acunetix_api_key or ""},
@@ -2946,42 +3173,53 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
                         )
                         if response.status_code == 200:
                             console.print(f"  [green]{icon('check')}[/green] Acunetix connected")
-                            results['acunetix'] = True
+                            results["acunetix"] = True
                         else:
-                            console.print(f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})")
-                            results['acunetix'] = False
+                            console.print(
+                                f"  [red]{icon('cross')}[/red] Acunetix auth failed (HTTP {response.status_code})"
+                            )
+                            results["acunetix"] = False
                             all_passed = False
                     except Exception as e:
-                        console.print(f"  [red]{icon('cross')}[/red] Acunetix failed: {str(e)[:50]}")
-                        results['acunetix'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] Acunetix failed: {str(e)[:50]}"
+                        )
+                        results["acunetix"] = False
                         all_passed = False
 
         # Burp Suite
         if use_burp:
             if not config.scanners.burp_url:
                 console.print(f"  [red]{icon('cross')}[/red] Burp Suite URL not configured")
-                results['burp'] = False
+                results["burp"] = False
                 all_passed = False
             else:
                 with console.status("[yellow]Testing Burp Suite...[/yellow]"):
                     try:
                         import httpx
+
                         response = httpx.get(
                             f"{config.scanners.burp_url}/api-internal/versions",
-                            headers={"Authorization": f"Bearer {config.scanners.burp_api_key or ''}"},
+                            headers={
+                                "Authorization": f"Bearer {config.scanners.burp_api_key or ''}"
+                            },
                             verify=config.scanners.verify_tls,
                             timeout=10,
                         )
                         if response.status_code == 200:
                             console.print(f"  [green]{icon('check')}[/green] Burp Suite connected")
-                            results['burp'] = True
+                            results["burp"] = True
                         else:
-                            console.print(f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})")
-                            results['burp'] = False
+                            console.print(
+                                f"  [red]{icon('cross')}[/red] Burp Suite auth failed (HTTP {response.status_code})"
+                            )
+                            results["burp"] = False
                             all_passed = False
                     except Exception as e:
-                        console.print(f"  [red]{icon('cross')}[/red] Burp Suite failed: {str(e)[:50]}")
-                        results['burp'] = False
+                        console.print(
+                            f"  [red]{icon('cross')}[/red] Burp Suite failed: {str(e)[:50]}"
+                        )
+                        results["burp"] = False
                         all_passed = False
 
         console.print()
@@ -3006,13 +3244,17 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     if found_essential:
         console.print(f"  [green]{icon('check')}[/green] Essential: {', '.join(found_essential)}")
     if missing_essential:
-        console.print(f"  [yellow]{icon('warning')}[/yellow] Missing essential: {', '.join(missing_essential)}")
+        console.print(
+            f"  [yellow]{icon('warning')}[/yellow] Missing essential: {', '.join(missing_essential)}"
+        )
         if not use_vps:
             console.print("    [dim]Consider using --use-vps or install locally[/dim]")
     if found_optional:
-        console.print(f"  [dim]{icon('circle_empty')}[/dim] Optional available: {', '.join(found_optional)}")
+        console.print(
+            f"  [dim]{icon('circle_empty')}[/dim] Optional available: {', '.join(found_optional)}"
+        )
 
-    results['tools'] = len(missing_essential) == 0 or use_vps
+    results["tools"] = len(missing_essential) == 0 or use_vps
 
     console.print()
 
@@ -3038,9 +3280,13 @@ def run_preflight_check(console, use_vps=False, use_acunetix=False, use_burp=Fal
     console.print()
 
     if all_passed:
-        console.print(f"[bold green]{icon('check')} All pre-flight checks passed! Ready to scan.[/bold green]")
+        console.print(
+            f"[bold green]{icon('check')} All pre-flight checks passed! Ready to scan.[/bold green]"
+        )
     else:
-        console.print(f"[bold red]{icon('cross')} Some checks failed. Fix issues above before scanning.[/bold red]")
+        console.print(
+            f"[bold red]{icon('cross')} Some checks failed. Fix issues above before scanning.[/bold red]"
+        )
         console.print("[dim]Run 'aiptx setup' to configure missing components.[/dim]")
 
     console.print()
@@ -3084,15 +3330,17 @@ def run_verify(args):
 
     from aipt_v2.verify_install import verify_installation
 
-    quick = getattr(args, 'quick', False)
-    auto_fix = getattr(args, 'fix', False)
-    report_file = getattr(args, 'report', None)
+    quick = getattr(args, "quick", False)
+    auto_fix = getattr(args, "fix", False)
+    report_file = getattr(args, "report", None)
 
-    return asyncio.run(verify_installation(
-        quick=quick,
-        auto_fix=auto_fix,
-        report_file=report_file,
-    ))
+    return asyncio.run(
+        verify_installation(
+            quick=quick,
+            auto_fix=auto_fix,
+            report_file=report_file,
+        )
+    )
 
 
 def run_shell(args):
@@ -3101,26 +3349,26 @@ def run_shell(args):
 
     from aipt_v2.interactive_shell import start_interactive_shell
 
-    log_file = getattr(args, 'log', None)
-    working_dir = getattr(args, 'dir', None)
+    log_file = getattr(args, "log", None)
+    working_dir = getattr(args, "dir", None)
 
-    return asyncio.run(start_interactive_shell(
-        log_file=log_file,
-        working_dir=working_dir,
-    ))
+    return asyncio.run(
+        start_interactive_shell(
+            log_file=log_file,
+            working_dir=working_dir,
+        )
+    )
 
 
 def run_tools_command(args):
     """Handle tools subcommands for local tool management."""
-    import asyncio
+
     from rich.console import Console
     from rich.panel import Panel
-    from rich.table import Table
-    from rich import box
 
     console = Console()
 
-    tools_cmd = getattr(args, 'tools_command', None)
+    tools_cmd = getattr(args, "tools_command", None)
 
     if tools_cmd == "install":
         return run_tools_install(args, console)
@@ -3129,61 +3377,70 @@ def run_tools_command(args):
     elif tools_cmd == "check":
         return run_tools_check(args, console)
     else:
-        console.print(Panel(
-            "[bold cyan]AIPTX Local Tools Management[/bold cyan]\n\n"
-            "[bold]aiptx tools install[/bold]  - Install security tools locally\n"
-            "[bold]aiptx tools list[/bold]     - List available/installed tools\n"
-            "[bold]aiptx tools check[/bold]    - Check installed tool status\n\n"
-            "[dim]Examples:[/dim]\n"
-            "  aiptx tools install --core          # Install core tools\n"
-            "  aiptx tools install -c recon scan   # Install by category\n"
-            "  aiptx tools install -t nmap nuclei  # Install specific tools",
-            title=f"{icon('wrench')} Local Security Tools",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]AIPTX Local Tools Management[/bold cyan]\n\n"
+                "[bold]aiptx tools install[/bold]  - Install security tools locally\n"
+                "[bold]aiptx tools list[/bold]     - List available/installed tools\n"
+                "[bold]aiptx tools check[/bold]    - Check installed tool status\n\n"
+                "[dim]Examples:[/dim]\n"
+                "  aiptx tools install --core          # Install core tools\n"
+                "  aiptx tools install -c recon scan   # Install by category\n"
+                "  aiptx tools install -t nmap nuclei  # Install specific tools",
+                title=f"{icon('wrench')} Local Security Tools",
+                border_style="cyan",
+            )
+        )
         return 0
 
 
 def run_tools_install(args, console):
     """Install security tools on local system."""
     import asyncio
+
     from rich.panel import Panel
 
     console.print()
-    console.print(Panel(
-        "[bold cyan]Local Tool Installation[/bold cyan]\n\n"
-        "Installing security tools on your local system.\n"
-        "Some tools may require sudo/admin privileges.",
-        title=f"{icon('wrench')} Installation",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]Local Tool Installation[/bold cyan]\n\n"
+            "Installing security tools on your local system.\n"
+            "Some tools may require sudo/admin privileges.",
+            title=f"{icon('wrench')} Installation",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     async def _install():
         try:
+            from aipt_v2.local_tool_installer import TOOLS, LocalToolInstaller
             from aipt_v2.system_detector import SystemDetector
-            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
 
             # Detect system first
             detector = SystemDetector()
             with console.status("[bold cyan]Detecting system...[/bold cyan]"):
                 system_info = await detector.detect()
 
-            console.print(f"[dim]Detected: {system_info.os_name} with {system_info.package_manager.value}[/dim]")
+            console.print(
+                f"[dim]Detected: {system_info.os_name} with {system_info.package_manager.value}[/dim]"
+            )
 
             installer = LocalToolInstaller(system_info)
-            use_sudo = not getattr(args, 'no_sudo', False)
+            use_sudo = not getattr(args, "no_sudo", False)
 
             # Determine what to install
-            if getattr(args, 'all', False):
+            if getattr(args, "all", False):
                 console.print("[cyan]Installing all available tools...[/cyan]")
                 results = await installer.install_all()
-            elif getattr(args, 'tools', None):
+            elif getattr(args, "tools", None):
                 console.print(f"[cyan]Installing specific tools: {', '.join(args.tools)}[/cyan]")
                 results = await installer.install_tools(tools=args.tools, use_sudo=use_sudo)
-            elif getattr(args, 'categories', None):
+            elif getattr(args, "categories", None):
                 console.print(f"[cyan]Installing categories: {', '.join(args.categories)}[/cyan]")
-                results = await installer.install_tools(categories=args.categories, use_sudo=use_sudo)
+                results = await installer.install_tools(
+                    categories=args.categories, use_sudo=use_sudo
+                )
             else:
                 # Default: core tools
                 console.print("[cyan]Installing core security tools...[/cyan]")
@@ -3211,18 +3468,19 @@ def run_tools_install(args, console):
 def run_tools_list(args, console):
     """List available and installed tools."""
     import asyncio
-    from rich.table import Table
+
     from rich import box
+    from rich.table import Table
 
     async def _list():
         try:
-            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
+            from aipt_v2.local_tool_installer import TOOLS, LocalToolInstaller
 
             installer = LocalToolInstaller()
             installed = await installer.get_installed_tools()
 
-            category = getattr(args, 'category', 'all')
-            installed_only = getattr(args, 'installed_only', False)
+            category = getattr(args, "category", "all")
+            installed_only = getattr(args, "installed_only", False)
 
             table = Table(title="Security Tools", box=box.ROUNDED)
             table.add_column("Tool", style="cyan")
@@ -3231,7 +3489,7 @@ def run_tools_list(args, console):
             table.add_column("Description")
 
             for tool_name, tool_def in sorted(TOOLS.items()):
-                if category != 'all' and tool_def.category.value != category:
+                if category != "all" and tool_def.category.value != category:
                     continue
 
                 is_installed = installed.get(tool_name, False)
@@ -3239,20 +3497,30 @@ def run_tools_list(args, console):
                 if installed_only and not is_installed:
                     continue
 
-                status = f"[green]{icon('check')} Installed[/green]" if is_installed else f"[dim]{icon('circle_empty')} Not installed[/dim]"
+                status = (
+                    f"[green]{icon('check')} Installed[/green]"
+                    if is_installed
+                    else f"[dim]{icon('circle_empty')} Not installed[/dim]"
+                )
                 core_badge = f" [yellow]{icon('sparkles')}[/yellow]" if tool_def.is_core else ""
 
                 table.add_row(
                     f"{tool_name}{core_badge}",
                     tool_def.category.value,
                     status,
-                    tool_def.description[:50] + "..." if len(tool_def.description) > 50 else tool_def.description
+                    (
+                        tool_def.description[:50] + "..."
+                        if len(tool_def.description) > 50
+                        else tool_def.description
+                    ),
                 )
 
             console.print()
             console.print(table)
             console.print()
-            console.print(f"[dim]Legend: [yellow]{icon('sparkles')}[/yellow] = Core tool (recommended)[/dim]")
+            console.print(
+                f"[dim]Legend: [yellow]{icon('sparkles')}[/yellow] = Core tool (recommended)[/dim]"
+            )
 
             return 0
 
@@ -3271,13 +3539,14 @@ def run_tools_list(args, console):
 def run_tools_check(args, console):
     """Check installed tool status."""
     import asyncio
-    from rich.table import Table
-    from rich.panel import Panel
+
     from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
 
     async def _check():
         try:
-            from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS
+            from aipt_v2.local_tool_installer import TOOLS, LocalToolInstaller
 
             console.print()
             with console.status("[bold cyan]Checking installed tools...[/bold cyan]"):
@@ -3305,14 +3574,18 @@ def run_tools_check(args, console):
             total_tools = 0
 
             for cat, counts in sorted(categories.items()):
-                coverage = (counts["installed"] / counts["total"] * 100) if counts["total"] > 0 else 0
-                coverage_color = "green" if coverage >= 75 else "yellow" if coverage >= 50 else "red"
+                coverage = (
+                    (counts["installed"] / counts["total"] * 100) if counts["total"] > 0 else 0
+                )
+                coverage_color = (
+                    "green" if coverage >= 75 else "yellow" if coverage >= 50 else "red"
+                )
 
                 table.add_row(
                     cat,
                     str(counts["installed"]),
                     str(counts["total"]),
-                    f"[{coverage_color}]{coverage:.0f}%[/{coverage_color}]"
+                    f"[{coverage_color}]{coverage:.0f}%[/{coverage_color}]",
                 )
 
                 total_installed += counts["installed"]
@@ -3324,7 +3597,7 @@ def run_tools_check(args, console):
                 "[bold]Total[/bold]",
                 f"[bold]{total_installed}[/bold]",
                 f"[bold]{total_tools}[/bold]",
-                f"[bold]{total_coverage:.0f}%[/bold]"
+                f"[bold]{total_coverage:.0f}%[/bold]",
             )
 
             console.print()
@@ -3332,12 +3605,14 @@ def run_tools_check(args, console):
             console.print()
 
             if total_coverage < 50:
-                console.print(Panel(
-                    "[yellow]Many security tools are not installed.[/yellow]\n\n"
-                    "Run [bold]aiptx tools install --core[/bold] to install essential tools.",
-                    title=f"{icon('lightbulb')} Recommendation",
-                    border_style="yellow"
-                ))
+                console.print(
+                    Panel(
+                        "[yellow]Many security tools are not installed.[/yellow]\n\n"
+                        "Run [bold]aiptx tools install --core[/bold] to install essential tools.",
+                        title=f"{icon('lightbulb')} Recommendation",
+                        border_style="yellow",
+                    )
+                )
 
             return 0
 
@@ -3357,27 +3632,27 @@ def run_vps_command(args):
     """Handle VPS subcommands."""
     from rich.console import Console
     from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
 
     console = Console()
 
     # Check VPS configuration
     config = get_config()
     if not config.vps.host:
-        console.print(Panel(
-            "[bold red]VPS not configured![/bold red]\n\n"
-            "Run [bold green]aiptx setup[/bold green] to configure VPS settings.\n\n"
-            "[bold]Required settings:[/bold]\n"
-            "  • VPS_HOST - VPS IP or hostname\n"
-            "  • VPS_USER - SSH username (default: ubuntu)\n"
-            "  • VPS_KEY  - Path to SSH private key",
-            title=f"{icon('warning')} VPS Configuration Required",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "[bold red]VPS not configured![/bold red]\n\n"
+                "Run [bold green]aiptx setup[/bold green] to configure VPS settings.\n\n"
+                "[bold]Required settings:[/bold]\n"
+                "  • VPS_HOST - VPS IP or hostname\n"
+                "  • VPS_USER - SSH username (default: ubuntu)\n"
+                "  • VPS_KEY  - Path to SSH private key",
+                title=f"{icon('warning')} VPS Configuration Required",
+                border_style="yellow",
+            )
+        )
         return 1
 
-    vps_cmd = getattr(args, 'vps_command', None)
+    vps_cmd = getattr(args, "vps_command", None)
 
     if vps_cmd == "setup":
         return run_vps_setup(args, console)
@@ -3388,63 +3663,68 @@ def run_vps_command(args):
     elif vps_cmd == "script":
         return run_vps_script(args, console)
     else:
-        console.print(Panel(
-            "[bold cyan]AIPTX VPS Commands[/bold cyan]\n\n"
-            "[bold]aiptx vps setup[/bold]   - Install security tools on VPS\n"
-            "[bold]aiptx vps status[/bold]  - Check VPS connection and tools\n"
-            "[bold]aiptx vps scan[/bold]    - Run security scan from VPS\n"
-            "[bold]aiptx vps script[/bold]  - Generate setup script",
-            title=f"{icon('desktop')} VPS Remote Execution",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]AIPTX VPS Commands[/bold cyan]\n\n"
+                "[bold]aiptx vps setup[/bold]   - Install security tools on VPS\n"
+                "[bold]aiptx vps status[/bold]  - Check VPS connection and tools\n"
+                "[bold]aiptx vps scan[/bold]    - Run security scan from VPS\n"
+                "[bold]aiptx vps script[/bold]  - Generate setup script",
+                title=f"{icon('desktop')} VPS Remote Execution",
+                border_style="cyan",
+            )
+        )
         return 0
 
 
 def run_vps_setup(args, console):
     """Install security tools on VPS with real-time progress."""
-    from rich.live import Live
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.text import Text
-    from rich.console import Group
-    from rich.spinner import Spinner
     from rich import box
+    from rich.console import Group
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
 
     # Check for asyncssh FIRST before any VPS operations
     try:
         import asyncssh
     except ImportError:
         console.print()
-        console.print(Panel(
-            "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
-            "The VPS module requires asyncssh for SSH connectivity.\n\n"
-            "[bold]Install with:[/bold]\n"
-            "  [green]pip install asyncssh[/green]\n"
-            "  [dim]or[/dim]\n"
-            "  [green]pip install aiptx[vps][/green]\n"
-            "  [dim]or[/dim]\n"
-            "  [green]pip install aiptx[full][/green]",
-            title=f"{icon('warning')} Dependency Required",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
+                "The VPS module requires asyncssh for SSH connectivity.\n\n"
+                "[bold]Install with:[/bold]\n"
+                "  [green]pip install asyncssh[/green]\n"
+                "  [dim]or[/dim]\n"
+                "  [green]pip install aiptx[vps][/green]\n"
+                "  [dim]or[/dim]\n"
+                "  [green]pip install aiptx[full][/green]",
+                title=f"{icon('warning')} Dependency Required",
+                border_style="yellow",
+            )
+        )
         console.print()
         return 1
 
-    from aipt_v2.runtime.vps import VPSRuntime, VPS_TOOLS
+    from aipt_v2.runtime.vps import VPS_TOOLS, VPSRuntime
 
     console.print()
-    console.print(Panel(
-        "[bold cyan]VPS Tool Installation[/bold cyan]\n\n"
-        "Installing security tools on your VPS.\n"
-        "This may take 10-30 minutes depending on your VPS speed.",
-        title=f"{icon('wrench')} Setup",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]VPS Tool Installation[/bold cyan]\n\n"
+            "Installing security tools on your VPS.\n"
+            "This may take 10-30 minutes depending on your VPS speed.",
+            title=f"{icon('wrench')} Setup",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Get categories and tools to install
-    categories = getattr(args, 'categories', None)
-    specific_tools = getattr(args, 'tools', None)
+    categories = getattr(args, "categories", None)
+    specific_tools = getattr(args, "tools", None)
 
     # Build list of tools to install
     tools_to_install = []
@@ -3536,7 +3816,9 @@ def run_vps_setup(args, console):
         mkdir -p $GOPATH/bin
         echo 'Base dependencies installed'
         """
-        stdout, stderr, code = await runtime._run_command(f"sudo bash -c '{setup_script}'", timeout=300)
+        stdout, stderr, code = await runtime._run_command(
+            f"sudo bash -c '{setup_script}'", timeout=300
+        )
         state["output"].append(f"{icon('check')} Base dependencies installed")
         live.update(make_display())
 
@@ -3594,13 +3876,15 @@ def run_vps_setup(args, console):
     console.print()
 
     if failed == 0:
-        console.print(Panel(
-            f"[bold green]{icon('check')} All {installed} tools installed successfully![/bold green]\n\n"
-            "You can now run:\n"
-            "  [bold]aiptx vps scan target.com[/bold]",
-            title=f"{icon('sparkles')} Setup Complete",
-            border_style="green",
-        ))
+        console.print(
+            Panel(
+                f"[bold green]{icon('check')} All {installed} tools installed successfully![/bold green]\n\n"
+                "You can now run:\n"
+                "  [bold]aiptx vps scan target.com[/bold]",
+                title=f"{icon('sparkles')} Setup Complete",
+                border_style="green",
+            )
+        )
     else:
         console.print(f"[bold]Summary:[/bold] {installed} installed, [red]{failed} failed[/red]")
         console.print("[dim]Failed tools may require manual installation on VPS[/dim]")
@@ -3610,32 +3894,33 @@ def run_vps_setup(args, console):
 
 def run_vps_status(args, console):
     """Check VPS connection and installed tools."""
-    from rich.table import Table
-    from rich.panel import Panel
-    from rich.live import Live
-    from rich.text import Text
-    from rich.console import Group
     from rich import box
+    from rich.live import Live
+    from rich.panel import Panel
+    from rich.table import Table
+    from rich.text import Text
 
     # Check for asyncssh FIRST
     try:
         import asyncssh
     except ImportError:
         console.print()
-        console.print(Panel(
-            "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
-            "The VPS module requires asyncssh for SSH connectivity.\n\n"
-            "[bold]Install with:[/bold]\n"
-            "  [green]pip install asyncssh[/green]\n"
-            "  [dim]or[/dim]\n"
-            "  [green]pip install aiptx[vps][/green]",
-            title=f"{icon('warning')} Dependency Required",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
+                "The VPS module requires asyncssh for SSH connectivity.\n\n"
+                "[bold]Install with:[/bold]\n"
+                "  [green]pip install asyncssh[/green]\n"
+                "  [dim]or[/dim]\n"
+                "  [green]pip install aiptx[vps][/green]",
+                title=f"{icon('warning')} Dependency Required",
+                border_style="yellow",
+            )
+        )
         console.print()
         return 1
 
-    from aipt_v2.runtime.vps import VPSRuntime, VPS_TOOLS
+    from aipt_v2.runtime.vps import VPS_TOOLS, VPSRuntime
 
     config = get_config()
 
@@ -3719,7 +4004,11 @@ def run_vps_status(args, console):
     for category, tools in VPS_TOOLS.items():
         for tool_name in tools:
             status = tools_status.get(tool_name, False)
-            status_str = f"[green]{icon('check')} Installed[/green]" if status else f"[dim]{icon('circle_empty')} Not installed[/dim]"
+            status_str = (
+                f"[green]{icon('check')} Installed[/green]"
+                if status
+                else f"[dim]{icon('circle_empty')} Not installed[/dim]"
+            )
             table.add_row(category, tool_name, status_str)
 
     console.print(table)
@@ -3730,13 +4019,15 @@ def run_vps_status(args, console):
     console.print()
 
     if installed == total:
-        console.print(Panel(
-            f"[bold green]{icon('check')} All {total} tools installed![/bold green]\n\n"
-            "Your VPS is ready for scanning.\n"
-            "Run: [bold]aiptx vps scan target.com[/bold]",
-            title=f"{icon('sparkles')} VPS Ready",
-            border_style="green",
-        ))
+        console.print(
+            Panel(
+                f"[bold green]{icon('check')} All {total} tools installed![/bold green]\n\n"
+                "Your VPS is ready for scanning.\n"
+                "Run: [bold]aiptx vps scan target.com[/bold]",
+                title=f"{icon('sparkles')} VPS Ready",
+                border_style="green",
+            )
+        )
     else:
         console.print(f"[bold]Tools:[/bold] {installed}/{total} installed")
         console.print()
@@ -3747,39 +4038,43 @@ def run_vps_status(args, console):
 
 def run_vps_scan(args, console):
     """Run security scan from VPS."""
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
 
     # Check for asyncssh FIRST
     try:
         import asyncssh
     except ImportError:
         console.print()
-        console.print(Panel(
-            "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
-            "The VPS module requires asyncssh for SSH connectivity.\n\n"
-            "[bold]Install with:[/bold]\n"
-            "  [green]pip install asyncssh[/green]\n"
-            "  [dim]or[/dim]\n"
-            "  [green]pip install aiptx[vps][/green]",
-            title=f"{icon('warning')} Dependency Required",
-            border_style="yellow",
-        ))
+        console.print(
+            Panel(
+                "[bold red]Missing Dependency: asyncssh[/bold red]\n\n"
+                "The VPS module requires asyncssh for SSH connectivity.\n\n"
+                "[bold]Install with:[/bold]\n"
+                "  [green]pip install asyncssh[/green]\n"
+                "  [dim]or[/dim]\n"
+                "  [green]pip install aiptx[vps][/green]",
+                title=f"{icon('warning')} Dependency Required",
+                border_style="yellow",
+            )
+        )
         console.print()
         return 1
 
     target = args.target
-    mode = getattr(args, 'mode', 'standard')
-    tools = getattr(args, 'tools', None)
+    mode = getattr(args, "mode", "standard")
+    tools = getattr(args, "tools", None)
 
     console.print()
-    console.print(Panel(
-        f"[bold]Target:[/bold] {target}\n"
-        f"[bold]Mode:[/bold] {mode}\n"
-        f"[bold]Tools:[/bold] {', '.join(tools) if tools else 'Auto-selected'}",
-        title=f"{icon('target')} VPS Scan Configuration",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Target:[/bold] {target}\n"
+            f"[bold]Mode:[/bold] {mode}\n"
+            f"[bold]Tools:[/bold] {', '.join(tools) if tools else 'Auto-selected'}",
+            title=f"{icon('target')} VPS Scan Configuration",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     from aipt_v2.runtime.vps import VPSRuntime
@@ -3813,18 +4108,21 @@ def run_vps_scan(args, console):
     console.print()
 
     # Show tool outputs summary
-    tool_outputs = results.get('tool_outputs', {})
+    tool_outputs = results.get("tool_outputs", {})
     if tool_outputs:
         from rich.table import Table
+
         table = Table(title="Tool Execution Summary")
         table.add_column("Tool", style="cyan")
         table.add_column("Exit Code", style="green")
         table.add_column("Output Size", style="yellow")
 
         for tool, output in tool_outputs.items():
-            exit_code = output.get('exit_code', -1)
-            status = "[green]{icon('check')}[/green]" if exit_code == 0 else f"[red]{exit_code}[/red]"
-            stdout_len = len(output.get('stdout', ''))
+            exit_code = output.get("exit_code", -1)
+            status = (
+                "[green]{icon('check')}[/green]" if exit_code == 0 else f"[red]{exit_code}[/red]"
+            )
+            stdout_len = len(output.get("stdout", ""))
             table.add_row(tool, status, f"{stdout_len} bytes")
 
         console.print(table)
@@ -3836,16 +4134,16 @@ def run_vps_script(args, console):
     """Generate VPS setup script."""
     from aipt_v2.runtime.vps import generate_vps_setup_script
 
-    categories = getattr(args, 'categories', None)
-    output_file = getattr(args, 'output', None)
+    categories = getattr(args, "categories", None)
+    output_file = getattr(args, "output", None)
 
     script = generate_vps_setup_script(categories=categories)
 
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write(script)
         console.print(f"[green]{icon('check')}[/green] Script saved to: {output_file}")
-        console.print(f"[dim]Run on VPS: curl -sL <url> | sudo bash[/dim]")
+        console.print("[dim]Run on VPS: curl -sL <url> | sudo bash[/dim]")
     else:
         console.print(script)
 
@@ -3854,20 +4152,18 @@ def run_vps_script(args, console):
 
 def run_ai_command(args):
     """Handle AI security testing commands."""
+
     from rich.console import Console
     from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich import box
-    import json
 
     console = Console()
 
-    ai_cmd = getattr(args, 'ai_command', None)
+    ai_cmd = getattr(args, "ai_command", None)
 
     # Run prerequisites check for AI commands (requires LLM key)
     if ai_cmd in ("code-review", "api-test", "web-pentest", "full"):
         from .prerequisites import check_prerequisites_sync
+
         is_ready, prereq_errors = check_prerequisites_sync(
             require_llm=True,
             require_tools=False,
@@ -3875,19 +4171,21 @@ def run_ai_command(args):
 
         if not is_ready:
             console.print()
-            console.print(Panel(
-                "[bold red]Prerequisites Check Failed[/bold red]\n\n"
-                "AI security testing requires an LLM API key.\n\n" +
-                "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors) +
-                "\n\n[bold]To fix:[/bold]\n"
-                "  Run [bold green]aiptx setup[/bold green] to configure\n"
-                "  Or set: [dim]export ANTHROPIC_API_KEY=your-key[/dim]\n\n"
-                "[bold]For detailed diagnostics:[/bold]\n"
-                "  Run [bold green]aiptx check[/bold green]",
-                title=f"{icon('warning')} Configuration Required",
-                border_style="red",
-                padding=(1, 2),
-            ))
+            console.print(
+                Panel(
+                    "[bold red]Prerequisites Check Failed[/bold red]\n\n"
+                    "AI security testing requires an LLM API key.\n\n"
+                    + "\n".join(f"  [red]•[/red] {e}" for e in prereq_errors)
+                    + "\n\n[bold]To fix:[/bold]\n"
+                    "  Run [bold green]aiptx setup[/bold green] to configure\n"
+                    "  Or set: [dim]export ANTHROPIC_API_KEY=your-key[/dim]\n\n"
+                    "[bold]For detailed diagnostics:[/bold]\n"
+                    "  Run [bold green]aiptx check[/bold green]",
+                    title=f"{icon('warning')} Configuration Required",
+                    border_style="red",
+                    padding=(1, 2),
+                )
+            )
             console.print()
             return 1
 
@@ -3901,46 +4199,45 @@ def run_ai_command(args):
         return run_ai_full_assessment(args, console)
     else:
         console.print()
-        console.print(Panel(
-            "[bold cyan]AIPTX AI Security Testing[/bold cyan]\n\n"
-            "AI-powered security testing using LLMs (Claude, GPT, etc.)\n\n"
-            "[bold]Commands:[/bold]\n"
-            "  [bold green]aiptx ai code-review[/bold green] <path>  - AI source code security review\n"
-            "  [bold green]aiptx ai api-test[/bold green] <url>     - AI REST API security testing\n"
-            "  [bold green]aiptx ai web-pentest[/bold green] <url>  - AI web penetration testing\n"
-            "  [bold green]aiptx ai full[/bold green] <target>      - Full AI-driven assessment\n\n"
-            "[bold]Examples:[/bold]\n"
-            "  aiptx ai code-review ./src --focus sqli xss\n"
-            "  aiptx ai api-test https://api.example.com --openapi swagger.json\n"
-            "  aiptx ai web-pentest https://example.com --quick",
-            title=f"{icon('robot')} AI Security Testing",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]AIPTX AI Security Testing[/bold cyan]\n\n"
+                "AI-powered security testing using LLMs (Claude, GPT, etc.)\n\n"
+                "[bold]Commands:[/bold]\n"
+                "  [bold green]aiptx ai code-review[/bold green] <path>  - AI source code security review\n"
+                "  [bold green]aiptx ai api-test[/bold green] <url>     - AI REST API security testing\n"
+                "  [bold green]aiptx ai web-pentest[/bold green] <url>  - AI web penetration testing\n"
+                "  [bold green]aiptx ai full[/bold green] <target>      - Full AI-driven assessment\n\n"
+                "[bold]Examples:[/bold]\n"
+                "  aiptx ai code-review ./src --focus sqli xss\n"
+                "  aiptx ai api-test https://api.example.com --openapi swagger.json\n"
+                "  aiptx ai web-pentest https://example.com --quick",
+                title=f"{icon('robot')} AI Security Testing",
+                border_style="cyan",
+            )
+        )
         console.print()
         return 0
 
 
 def run_ai_code_review(args, console):
     """Run AI-powered source code security review."""
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn
-    from rich.live import Live
-    from rich.text import Text
-    from rich import box
     import json
 
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
     target = args.target
-    focus = getattr(args, 'focus', None)
-    max_steps = getattr(args, 'max_steps', 100)
-    quick = getattr(args, 'quick', False)
-    output_file = getattr(args, 'output', None)
+    focus = getattr(args, "focus", None)
+    max_steps = getattr(args, "max_steps", 100)
+    quick = getattr(args, "quick", False)
+    output_file = getattr(args, "output", None)
 
     # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
     model, api_base = _get_llm_model_config()
 
     # Override with CLI argument if provided
-    if hasattr(args, 'model') and args.model:
+    if hasattr(args, "model") and args.model:
         model = args.model
 
     # Verify target exists
@@ -3949,19 +4246,21 @@ def run_ai_code_review(args, console):
         return 1
 
     console.print()
-    console.print(Panel(
-        f"[bold]Target:[/bold] {target}\n"
-        f"[bold]Model:[/bold] {model}\n"
-        f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full review'}\n"
-        f"[bold]Focus:[/bold] {', '.join(focus) if focus else 'All vulnerabilities'}",
-        title=f"{icon('search')} AI Code Review",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Target:[/bold] {target}\n"
+            f"[bold]Model:[/bold] {model}\n"
+            f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full review'}\n"
+            f"[bold]Focus:[/bold] {', '.join(focus) if focus else 'All vulnerabilities'}",
+            title=f"{icon('search')} AI Code Review",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Import agent
-    from aipt_v2.skills.agents.code_review import CodeReviewAgent
     from aipt_v2.skills.agents.base import AgentConfig
+    from aipt_v2.skills.agents.code_review import CodeReviewAgent
 
     config = AgentConfig(
         model=model,
@@ -4001,7 +4300,7 @@ def run_ai_code_review(args, console):
 
     # Save to file if requested
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(result.to_dict(), f, indent=2)
         console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
@@ -4010,32 +4309,35 @@ def run_ai_code_review(args, console):
 
 def run_ai_api_test(args, console):
     """Run AI-powered API security testing."""
-    from rich.panel import Panel
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     import json
 
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
     target = args.target
-    openapi_spec = getattr(args, 'openapi', None)
-    auth_token = getattr(args, 'auth_token', None)
-    max_steps = getattr(args, 'max_steps', 100)
-    output_file = getattr(args, 'output', None)
+    openapi_spec = getattr(args, "openapi", None)
+    auth_token = getattr(args, "auth_token", None)
+    max_steps = getattr(args, "max_steps", 100)
+    output_file = getattr(args, "output", None)
 
     # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
     model, api_base = _get_llm_model_config()
 
     # Override with CLI argument if provided
-    if hasattr(args, 'model') and args.model:
+    if hasattr(args, "model") and args.model:
         model = args.model
 
     console.print()
-    console.print(Panel(
-        f"[bold]Target:[/bold] {target}\n"
-        f"[bold]Model:[/bold] {model}\n"
-        f"[bold]OpenAPI Spec:[/bold] {openapi_spec or 'Not provided'}\n"
-        f"[bold]Authentication:[/bold] {'Bearer token' if auth_token else 'None'}",
-        title="🔌 AI API Security Test",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Target:[/bold] {target}\n"
+            f"[bold]Model:[/bold] {model}\n"
+            f"[bold]OpenAPI Spec:[/bold] {openapi_spec or 'Not provided'}\n"
+            f"[bold]Authentication:[/bold] {'Bearer token' if auth_token else 'None'}",
+            title="🔌 AI API Security Test",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Import agent
@@ -4078,7 +4380,7 @@ def run_ai_api_test(args, console):
 
     # Save to file if requested
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(result.to_dict(), f, indent=2)
         console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
@@ -4087,45 +4389,48 @@ def run_ai_api_test(args, console):
 
 def run_ai_web_pentest(args, console):
     """Run AI-powered web penetration testing."""
-    from rich.panel import Panel
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     import json
 
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
     target = args.target
-    auth_token = getattr(args, 'auth_token', None)
-    cookies_list = getattr(args, 'cookie', None) or []
-    max_steps = getattr(args, 'max_steps', 100)
-    quick = getattr(args, 'quick', False)
-    output_file = getattr(args, 'output', None)
+    auth_token = getattr(args, "auth_token", None)
+    cookies_list = getattr(args, "cookie", None) or []
+    max_steps = getattr(args, "max_steps", 100)
+    quick = getattr(args, "quick", False)
+    output_file = getattr(args, "output", None)
 
     # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
     model, api_base = _get_llm_model_config()
 
     # Override with CLI argument if provided
-    if hasattr(args, 'model') and args.model:
+    if hasattr(args, "model") and args.model:
         model = args.model
 
     # Parse cookies
     cookies = {}
     for cookie in cookies_list:
-        if '=' in cookie:
-            key, value = cookie.split('=', 1)
+        if "=" in cookie:
+            key, value = cookie.split("=", 1)
             cookies[key] = value
 
     console.print()
-    console.print(Panel(
-        f"[bold]Target:[/bold] {target}\n"
-        f"[bold]Model:[/bold] {model}\n"
-        f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full pentest'}\n"
-        f"[bold]Authentication:[/bold] {'Token + Cookies' if auth_token and cookies else 'Token' if auth_token else 'Cookies' if cookies else 'None'}",
-        title=f"{icon('globe')} AI Web Penetration Test",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Target:[/bold] {target}\n"
+            f"[bold]Model:[/bold] {model}\n"
+            f"[bold]Mode:[/bold] {'Quick scan' if quick else 'Full pentest'}\n"
+            f"[bold]Authentication:[/bold] {'Token + Cookies' if auth_token and cookies else 'Token' if auth_token else 'Cookies' if cookies else 'None'}",
+            title=f"{icon('globe')} AI Web Penetration Test",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Import agent
-    from aipt_v2.skills.agents.web_pentest import WebPentestAgent
     from aipt_v2.skills.agents.base import AgentConfig
+    from aipt_v2.skills.agents.web_pentest import WebPentestAgent
 
     config = AgentConfig(
         model=model,
@@ -4166,7 +4471,7 @@ def run_ai_web_pentest(args, console):
 
     # Save to file if requested
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(result.to_dict(), f, indent=2)
         console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
@@ -4175,34 +4480,37 @@ def run_ai_web_pentest(args, console):
 
 def run_ai_full_assessment(args, console):
     """Run full AI-driven security assessment."""
-    from rich.panel import Panel
-    from rich.progress import Progress, SpinnerColumn, TextColumn
     import json
 
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+
     target = args.target
-    test_types = getattr(args, 'types', ['web'])
-    output_file = getattr(args, 'output', None)
+    test_types = getattr(args, "types", ["web"])
+    output_file = getattr(args, "output", None)
 
     # Get model from user's config (supports Ollama, OpenAI, Anthropic, etc.)
     model, api_base = _get_llm_model_config()
 
     # Override with CLI argument if provided
-    if hasattr(args, 'model') and args.model:
+    if hasattr(args, "model") and args.model:
         model = args.model
 
     console.print()
-    console.print(Panel(
-        f"[bold]Target:[/bold] {target}\n"
-        f"[bold]Model:[/bold] {model}\n"
-        f"[bold]Test Types:[/bold] {', '.join(test_types)}",
-        title=f"{icon('target')} Full AI Security Assessment",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Target:[/bold] {target}\n"
+            f"[bold]Model:[/bold] {model}\n"
+            f"[bold]Test Types:[/bold] {', '.join(test_types)}",
+            title=f"{icon('target')} Full AI Security Assessment",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Import agent
-    from aipt_v2.skills.agents.security_agent import SecurityAgent
     from aipt_v2.skills.agents.base import AgentConfig
+    from aipt_v2.skills.agents.security_agent import SecurityAgent
 
     config = AgentConfig(
         model=model,
@@ -4245,7 +4553,7 @@ def run_ai_full_assessment(args, console):
 
     # Save to file if requested
     if output_file:
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             json.dump(combined.to_dict(), f, indent=2)
         console.print(f"\n[green]{icon('check')}[/green] Results saved to: {output_file}")
 
@@ -4254,9 +4562,9 @@ def run_ai_full_assessment(args, console):
 
 def display_ai_results(console, result, test_name):
     """Display AI testing results in a formatted way."""
-    from rich.table import Table
-    from rich.panel import Panel
     from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
 
     # Summary panel
     severity_colors = {
@@ -4280,17 +4588,21 @@ def display_ai_results(console, result, test_name):
             color = severity_colors.get(sev, "white")
             summary_parts.append(f"[{color}]{sev.upper()}: {count}[/{color}]")
 
-    summary = " | ".join(summary_parts) if summary_parts else "[green]No vulnerabilities found[/green]"
+    summary = (
+        " | ".join(summary_parts) if summary_parts else "[green]No vulnerabilities found[/green]"
+    )
 
-    console.print(Panel(
-        f"[bold]Findings:[/bold] {len(result.findings)}\n"
-        f"[bold]Severity:[/bold] {summary}\n"
-        f"[bold]Steps:[/bold] {result.total_steps}\n"
-        f"[bold]Time:[/bold] {result.execution_time:.1f}s\n"
-        f"[bold]Model:[/bold] {result.model_used}",
-        title=f"{icon('chart')} {test_name} Results",
-        border_style="green" if result.success else "red",
-    ))
+    console.print(
+        Panel(
+            f"[bold]Findings:[/bold] {len(result.findings)}\n"
+            f"[bold]Severity:[/bold] {summary}\n"
+            f"[bold]Steps:[/bold] {result.total_steps}\n"
+            f"[bold]Time:[/bold] {result.execution_time:.1f}s\n"
+            f"[bold]Model:[/bold] {result.model_used}",
+            title=f"{icon('chart')} {test_name} Results",
+            border_style="green" if result.success else "red",
+        )
+    )
 
     # Findings table
     if result.findings:
@@ -4337,17 +4649,16 @@ def display_ai_results(console, result, test_name):
 # Active Directory Commands (v5.0)
 # =============================================================================
 
+
 def run_ad_command(args):
     """Handle Active Directory penetration testing commands."""
+
     from rich.console import Console
     from rich.panel import Panel
-    from rich.table import Table
-    from rich import box
-    import getpass
 
     console = Console()
 
-    ad_cmd = getattr(args, 'ad_command', None)
+    ad_cmd = getattr(args, "ad_command", None)
 
     if ad_cmd == "recon":
         return run_ad_recon(args, console)
@@ -4360,50 +4671,55 @@ def run_ad_command(args):
     else:
         # Show AD help
         console.print()
-        console.print(Panel(
-            "[bold cyan]AIPTX Active Directory Testing (v5.0)[/bold cyan]\n\n"
-            "[bold]Available Commands:[/bold]\n\n"
-            f"  {icon('search')} [green]aiptx ad recon[/green] <domain>      Domain reconnaissance\n"
-            f"  {icon('scan')} [green]aiptx ad scan[/green] <domain>       Vulnerability scanning\n"
-            f"  {icon('exploit')} [green]aiptx ad attack[/green] <domain>     Execute attack chains\n"
-            f"  {icon('tool')} [green]aiptx ad tools[/green]              Check available tools\n\n"
-            "[bold]Examples:[/bold]\n"
-            "  [dim]# Enumerate domain without credentials[/dim]\n"
-            "  aiptx ad recon corp.local --dc 10.0.0.1 --method dns\n\n"
-            "  [dim]# Authenticated enumeration with BloodHound[/dim]\n"
-            "  aiptx ad recon corp.local --dc 10.0.0.1 -u jdoe -p pass123 --bloodhound\n\n"
-            "  [dim]# Scan for ADCS vulnerabilities[/dim]\n"
-            "  aiptx ad scan corp.local --dc 10.0.0.1 -u jdoe -p pass123 --type adcs\n\n"
-            "  [dim]# Run Kerberoasting attack[/dim]\n"
-            "  aiptx ad attack corp.local --dc 10.0.0.1 -u jdoe -p pass123 --chain kerberoast\n\n"
-            "[bold yellow]WARNING:[/bold yellow] Use only for authorized penetration testing!",
-            title=f"{icon('shield')} AD Security Testing",
-            border_style="cyan",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]AIPTX Active Directory Testing (v5.0)[/bold cyan]\n\n"
+                "[bold]Available Commands:[/bold]\n\n"
+                f"  {icon('search')} [green]aiptx ad recon[/green] <domain>      Domain reconnaissance\n"
+                f"  {icon('scan')} [green]aiptx ad scan[/green] <domain>       Vulnerability scanning\n"
+                f"  {icon('exploit')} [green]aiptx ad attack[/green] <domain>     Execute attack chains\n"
+                f"  {icon('tool')} [green]aiptx ad tools[/green]              Check available tools\n\n"
+                "[bold]Examples:[/bold]\n"
+                "  [dim]# Enumerate domain without credentials[/dim]\n"
+                "  aiptx ad recon corp.local --dc 10.0.0.1 --method dns\n\n"
+                "  [dim]# Authenticated enumeration with BloodHound[/dim]\n"
+                "  aiptx ad recon corp.local --dc 10.0.0.1 -u jdoe -p pass123 --bloodhound\n\n"
+                "  [dim]# Scan for ADCS vulnerabilities[/dim]\n"
+                "  aiptx ad scan corp.local --dc 10.0.0.1 -u jdoe -p pass123 --type adcs\n\n"
+                "  [dim]# Run Kerberoasting attack[/dim]\n"
+                "  aiptx ad attack corp.local --dc 10.0.0.1 -u jdoe -p pass123 --chain kerberoast\n\n"
+                "[bold yellow]WARNING:[/bold yellow] Use only for authorized penetration testing!",
+                title=f"{icon('shield')} AD Security Testing",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
         console.print()
         return 0
 
 
 def run_ad_recon(args, console):
     """Run AD reconnaissance."""
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich import box
     import asyncio
-    import json
     import getpass
+    import json
+
+    from rich import box
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich.table import Table
 
     console.print()
-    console.print(Panel(
-        f"[bold cyan]AD Reconnaissance[/bold cyan]\n"
-        f"Target: [yellow]{args.domain}[/yellow]\n"
-        f"DC: [yellow]{args.dc or 'Auto-detect'}[/yellow]\n"
-        f"Method: [yellow]{args.method}[/yellow]",
-        title=f"{icon('search')} Domain Enumeration",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]AD Reconnaissance[/bold cyan]\n"
+            f"Target: [yellow]{args.domain}[/yellow]\n"
+            f"DC: [yellow]{args.dc or 'Auto-detect'}[/yellow]\n"
+            f"Method: [yellow]{args.method}[/yellow]",
+            title=f"{icon('search')} Domain Enumeration",
+            border_style="cyan",
+        )
+    )
 
     # Prompt for password if username provided but no password/hash
     password = args.password
@@ -4412,7 +4728,7 @@ def run_ad_recon(args, console):
 
     try:
         from aipt_v2.recon.ad_discovery import ADDiscovery, ADDiscoveryConfig
-        from aipt_v2.recon.ad_users import ADUserEnumerator, ADUserEnumConfig
+        from aipt_v2.recon.ad_users import ADUserEnumConfig, ADUserEnumerator
 
         async def do_recon():
             results = {"domain": args.domain, "dcs": [], "users": [], "trusts": []}
@@ -4430,16 +4746,21 @@ def run_ad_recon(args, console):
                 disc_result = await discovery.discover()
 
                 results["dcs"] = [dc.hostname for dc in disc_result.domain_controllers]
-                results["trusts"] = [{"source": t.source_domain, "target": t.target_domain}
-                                    for t in disc_result.trusts]
+                results["trusts"] = [
+                    {"source": t.source_domain, "target": t.target_domain}
+                    for t in disc_result.trusts
+                ]
                 progress.update(task, completed=True)
 
                 # User enumeration if we have credentials or anonymous methods
                 if args.username or args.method in ("kerberos", "all"):
                     progress.update(task, description="Enumerating users...")
 
-                    dc_ip = args.dc or (disc_result.domain_controllers[0].ip
-                                       if disc_result.domain_controllers else None)
+                    dc_ip = args.dc or (
+                        disc_result.domain_controllers[0].ip
+                        if disc_result.domain_controllers
+                        else None
+                    )
 
                     if dc_ip:
                         enum_config = ADUserEnumConfig(
@@ -4447,14 +4768,17 @@ def run_ad_recon(args, console):
                             use_ldap=(args.method in ("ldap", "all") and args.username),
                         )
                         enumerator = ADUserEnumerator(
-                            args.domain, dc_ip,
+                            args.domain,
+                            dc_ip,
                             username=args.username,
                             password=password,
                             ntlm_hash=args.hash,
-                            config=enum_config
+                            config=enum_config,
                         )
                         enum_result = await enumerator.enumerate()
-                        results["users"] = [u.username for u in enum_result.users[:50]]  # Limit output
+                        results["users"] = [
+                            u.username for u in enum_result.users[:50]
+                        ]  # Limit output
                         results["user_count"] = enum_result.total_found
                         results["kerberoastable"] = enum_result.kerberoastable_count
                         results["asrep_roastable"] = enum_result.asrep_roastable_count
@@ -4477,17 +4801,19 @@ def run_ad_recon(args, console):
         # Users summary
         if results.get("user_count"):
             console.print()
-            console.print(Panel(
-                f"[bold]Total Users:[/bold] {results['user_count']}\n"
-                f"[bold]Kerberoastable:[/bold] [yellow]{results.get('kerberoastable', 0)}[/yellow]\n"
-                f"[bold]AS-REP Roastable:[/bold] [yellow]{results.get('asrep_roastable', 0)}[/yellow]",
-                title=f"{icon('user')} User Enumeration",
-                border_style="green",
-            ))
+            console.print(
+                Panel(
+                    f"[bold]Total Users:[/bold] {results['user_count']}\n"
+                    f"[bold]Kerberoastable:[/bold] [yellow]{results.get('kerberoastable', 0)}[/yellow]\n"
+                    f"[bold]AS-REP Roastable:[/bold] [yellow]{results.get('asrep_roastable', 0)}[/yellow]",
+                    title=f"{icon('user')} User Enumeration",
+                    border_style="green",
+                )
+            )
 
         # Save output
         if args.output:
-            with open(args.output, 'w') as f:
+            with open(args.output, "w") as f:
                 json.dump(results, f, indent=2)
             console.print(f"\n[green]{icon('check')} Results saved to {args.output}[/green]")
 
@@ -4504,23 +4830,26 @@ def run_ad_recon(args, console):
 
 def run_ad_scan(args, console):
     """Run AD vulnerability scanning."""
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich import box
     import asyncio
-    import json
     import getpass
+    import json
+
+    from rich import box
+    from rich.panel import Panel
+    from rich.progress import Progress, SpinnerColumn, TextColumn
+    from rich.table import Table
 
     console.print()
-    console.print(Panel(
-        f"[bold cyan]AD Vulnerability Scan[/bold cyan]\n"
-        f"Target: [yellow]{args.domain}[/yellow]\n"
-        f"DC: [yellow]{args.dc}[/yellow]\n"
-        f"Scan Types: [yellow]{', '.join(args.type)}[/yellow]",
-        title=f"{icon('scan')} AD Security Scan",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]AD Vulnerability Scan[/bold cyan]\n"
+            f"Target: [yellow]{args.domain}[/yellow]\n"
+            f"DC: [yellow]{args.dc}[/yellow]\n"
+            f"Scan Types: [yellow]{', '.join(args.type)}[/yellow]",
+            title=f"{icon('scan')} AD Security Scan",
+            border_style="cyan",
+        )
+    )
 
     # Prompt for password if not provided
     password = args.password
@@ -4539,13 +4868,21 @@ def run_ad_scan(args, console):
                 console=console,
             ) as progress:
 
-                scan_types = args.type if "all" not in args.type else ["privesc", "adcs", "delegation", "winpwn"]
+                scan_types = (
+                    args.type
+                    if "all" not in args.type
+                    else ["privesc", "adcs", "delegation", "winpwn"]
+                )
 
                 for scan_type in scan_types:
                     task = progress.add_task(f"Scanning for {scan_type} issues...", total=None)
 
                     if scan_type == "privesc":
-                        from aipt_v2.scanners.ad_privesc_scanner import ADPrivescScanner, ADPrivescConfig
+                        from aipt_v2.scanners.ad_privesc_scanner import (
+                            ADPrivescConfig,
+                            ADPrivescScanner,
+                        )
+
                         config = ADPrivescConfig(
                             domain=args.domain,
                             dc_ip=args.dc,
@@ -4556,15 +4893,22 @@ def run_ad_scan(args, console):
                         scanner = ADPrivescScanner(config)
                         result = await scanner.scan()
                         for account in result.privileged_accounts[:20]:
-                            findings.append({
-                                "type": "Privileged Account",
-                                "severity": "high" if "admin" in account.sam_account_name.lower() else "medium",
-                                "name": account.sam_account_name,
-                                "details": f"Groups: {', '.join(account.group_memberships[:3])}"
-                            })
+                            findings.append(
+                                {
+                                    "type": "Privileged Account",
+                                    "severity": (
+                                        "high"
+                                        if "admin" in account.sam_account_name.lower()
+                                        else "medium"
+                                    ),
+                                    "name": account.sam_account_name,
+                                    "details": f"Groups: {', '.join(account.group_memberships[:3])}",
+                                }
+                            )
 
                     elif scan_type == "adcs":
-                        from aipt_v2.scanners.ad_adcs_scanner import ADCSScanner, ADCSConfig
+                        from aipt_v2.scanners.ad_adcs_scanner import ADCSConfig, ADCSScanner
+
                         config = ADCSConfig(
                             domain=args.domain,
                             dc_ip=args.dc,
@@ -4575,15 +4919,21 @@ def run_ad_scan(args, console):
                         scanner = ADCSScanner(config)
                         result = await scanner.scan()
                         for vuln in result.vulnerabilities:
-                            findings.append({
-                                "type": f"ADCS {vuln.esc_type.value}",
-                                "severity": "critical",
-                                "name": vuln.template_name,
-                                "details": vuln.description
-                            })
+                            findings.append(
+                                {
+                                    "type": f"ADCS {vuln.esc_type.value}",
+                                    "severity": "critical",
+                                    "name": vuln.template_name,
+                                    "details": vuln.description,
+                                }
+                            )
 
                     elif scan_type == "delegation":
-                        from aipt_v2.exploitation.ad_delegation import ADDelegationAttacks, ADDelegationConfig
+                        from aipt_v2.exploitation.ad_delegation import (
+                            ADDelegationAttacks,
+                            ADDelegationConfig,
+                        )
+
                         config = ADDelegationConfig(
                             domain=args.domain,
                             dc_ip=args.dc,
@@ -4594,44 +4944,53 @@ def run_ad_scan(args, console):
                         attacks = ADDelegationAttacks(config)
                         result = await attacks.enumerate_delegation()
                         for target in result.delegation_targets:
-                            findings.append({
-                                "type": f"Delegation ({target.delegation_type.value})",
-                                "severity": "high",
-                                "name": target.sam_account_name,
-                                "details": f"Target: {target.target_spn or 'Any'}"
-                            })
+                            findings.append(
+                                {
+                                    "type": f"Delegation ({target.delegation_type.value})",
+                                    "severity": "high",
+                                    "name": target.sam_account_name,
+                                    "details": f"Target: {target.target_spn or 'Any'}",
+                                }
+                            )
 
                     elif scan_type == "winpwn":
                         # WinPwn comprehensive Windows/AD assessment
-                        from aipt_v2.scanners.winpwn_scanner import WinPwnScanner, WinPwnScanConfig
+                        from aipt_v2.scanners.winpwn_scanner import WinPwnScanConfig, WinPwnScanner
+
                         config = WinPwnScanConfig(
                             domain=args.domain,
                             dc_ip=args.dc,
                             username=args.username,
                             password=password,
                             ntlm_hash=args.hash,
-                            script_path=getattr(args, 'winpwn_script', ''),
+                            script_path=getattr(args, "winpwn_script", ""),
                             modules=["localrecon", "domainrecon", "privesc", "kerberoasting"],
                             run_domain_recon=True,
                             run_kerberoasting=True,
-                            run_credential_extraction=getattr(args, 'extract_creds', False),
+                            run_credential_extraction=getattr(args, "extract_creds", False),
                         )
                         scanner = WinPwnScanner(config)
                         result = await scanner.scan()
                         for finding in result.findings:
-                            findings.append({
-                                "type": f"WinPwn ({finding.template})",
-                                "severity": finding.severity.value,
-                                "name": finding.title[:40],
-                                "details": finding.description[:60] if finding.description else ""
-                            })
+                            findings.append(
+                                {
+                                    "type": f"WinPwn ({finding.template})",
+                                    "severity": finding.severity.value,
+                                    "name": finding.title[:40],
+                                    "details": (
+                                        finding.description[:60] if finding.description else ""
+                                    ),
+                                }
+                            )
                         if result.credentials_found > 0:
-                            findings.append({
-                                "type": "Credentials",
-                                "severity": "critical",
-                                "name": f"{result.credentials_found} credentials extracted",
-                                "details": "See detailed output for credential data"
-                            })
+                            findings.append(
+                                {
+                                    "type": "Credentials",
+                                    "severity": "critical",
+                                    "name": f"{result.credentials_found} credentials extracted",
+                                    "details": "See detailed output for credential data",
+                                }
+                            )
 
                     progress.update(task, completed=True)
 
@@ -4646,14 +5005,19 @@ def run_ad_scan(args, console):
             table.add_column("Name", style="white")
             table.add_column("Details", style="dim")
 
-            severity_colors = {"critical": "red", "high": "yellow", "medium": "blue", "low": "green"}
+            severity_colors = {
+                "critical": "red",
+                "high": "yellow",
+                "medium": "blue",
+                "low": "green",
+            }
             for f in findings:
                 color = severity_colors.get(f["severity"], "white")
                 table.add_row(
                     f["type"],
                     f"[{color}]{f['severity'].upper()}[/{color}]",
                     f["name"][:30],
-                    f["details"][:40] + "..." if len(f["details"]) > 40 else f["details"]
+                    f["details"][:40] + "..." if len(f["details"]) > 40 else f["details"],
                 )
 
             console.print(table)
@@ -4663,7 +5027,7 @@ def run_ad_scan(args, console):
 
         # Save output
         if args.output:
-            with open(args.output, 'w') as f:
+            with open(args.output, "w") as f:
                 json.dump({"domain": args.domain, "findings": findings}, f, indent=2)
             console.print(f"\n[green]{icon('check')} Results saved to {args.output}[/green]")
 
@@ -4680,27 +5044,27 @@ def run_ad_scan(args, console):
 
 def run_ad_attack(args, console):
     """Execute AD attack chains."""
+    import getpass
+
+    from rich import box
     from rich.panel import Panel
     from rich.table import Table
-    from rich.progress import Progress, SpinnerColumn, TextColumn
-    from rich import box
-    import asyncio
-    import json
-    import getpass
 
     # Warning banner
     console.print()
-    console.print(Panel(
-        "[bold red]WARNING: ACTIVE EXPLOITATION[/bold red]\n\n"
-        "You are about to execute Active Directory attacks.\n"
-        "Ensure you have [bold]explicit written authorization[/bold] for:\n\n"
-        f"  • Domain: [yellow]{args.domain}[/yellow]\n"
-        f"  • DC: [yellow]{args.dc}[/yellow]\n"
-        f"  • Attack: [yellow]{args.chain}[/yellow]\n\n"
-        "[dim]Unauthorized access is illegal and unethical.[/dim]",
-        title=f"{icon('warning')} Authorization Required",
-        border_style="red",
-    ))
+    console.print(
+        Panel(
+            "[bold red]WARNING: ACTIVE EXPLOITATION[/bold red]\n\n"
+            "You are about to execute Active Directory attacks.\n"
+            "Ensure you have [bold]explicit written authorization[/bold] for:\n\n"
+            f"  • Domain: [yellow]{args.domain}[/yellow]\n"
+            f"  • DC: [yellow]{args.dc}[/yellow]\n"
+            f"  • Attack: [yellow]{args.chain}[/yellow]\n\n"
+            "[dim]Unauthorized access is illegal and unethical.[/dim]",
+            title=f"{icon('warning')} Authorization Required",
+            border_style="red",
+        )
+    )
 
     if not args.dry_run:
         confirm = input("\nType 'AUTHORIZED' to continue: ")
@@ -4714,19 +5078,21 @@ def run_ad_attack(args, console):
         password = getpass.getpass(f"Password for {args.username}: ")
 
     try:
-        from aipt_v2.exploitation.ad_chain_templates import get_ad_chain, AD_ATTACK_CHAINS
         from aipt_v2.evasion.ad_evasion import create_stealth_wrapper
+        from aipt_v2.exploitation.ad_chain_templates import AD_ATTACK_CHAINS, get_ad_chain
 
         console.print()
-        console.print(Panel(
-            f"[bold cyan]AD Attack Execution[/bold cyan]\n"
-            f"Target: [yellow]{args.domain}[/yellow]\n"
-            f"Chain: [yellow]{args.chain}[/yellow]\n"
-            f"Stealth: [yellow]{args.stealth}[/yellow]\n"
-            f"Dry Run: [yellow]{args.dry_run}[/yellow]",
-            title=f"{icon('exploit')} Attack Chain",
-            border_style="red" if not args.dry_run else "yellow",
-        ))
+        console.print(
+            Panel(
+                f"[bold cyan]AD Attack Execution[/bold cyan]\n"
+                f"Target: [yellow]{args.domain}[/yellow]\n"
+                f"Chain: [yellow]{args.chain}[/yellow]\n"
+                f"Stealth: [yellow]{args.stealth}[/yellow]\n"
+                f"Dry Run: [yellow]{args.dry_run}[/yellow]",
+                title=f"{icon('exploit')} Attack Chain",
+                border_style="red" if not args.dry_run else "yellow",
+            )
+        )
 
         # Get attack chain
         if args.chain == "auto":
@@ -4757,7 +5123,7 @@ def run_ad_attack(args, console):
                 str(i),
                 step.name,
                 step.tool,
-                step.description[:50] + "..." if len(step.description) > 50 else step.description
+                step.description[:50] + "..." if len(step.description) > 50 else step.description,
             )
 
         console.print(table)
@@ -4783,21 +5149,24 @@ def run_ad_attack(args, console):
 
 def run_ad_tools(args, console):
     """Check available AD security tools."""
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich import box
     import asyncio
 
+    from rich import box
+    from rich.panel import Panel
+    from rich.table import Table
+
     console.print()
-    console.print(Panel(
-        "[bold cyan]AD Security Tools Status[/bold cyan]\n"
-        "Checking availability of Active Directory testing tools...",
-        title=f"{icon('tool')} Tool Check",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            "[bold cyan]AD Security Tools Status[/bold cyan]\n"
+            "Checking availability of Active Directory testing tools...",
+            title=f"{icon('tool')} Tool Check",
+            border_style="cyan",
+        )
+    )
 
     try:
-        from aipt_v2.execution.tool_registry import get_registry, ToolCapability
+        from aipt_v2.execution.tool_registry import ToolCapability, get_registry
 
         async def check_tools():
             registry = get_registry()
@@ -4807,7 +5176,7 @@ def run_ad_tools(args, console):
         registry = asyncio.run(check_tools())
 
         # Get AD tools
-        ad_capabilities = [c for c in ToolCapability if c.value.startswith('ad_')]
+        ad_capabilities = [c for c in ToolCapability if c.value.startswith("ad_")]
 
         table = Table(title="AD Tools", box=box.ROUNDED)
         table.add_column("Tool", style="cyan")
@@ -4820,7 +5189,7 @@ def run_ad_tools(args, console):
 
         for name, config in registry.tools.items():
             # Check if tool has any AD capability
-            ad_caps = [c for c in config.capabilities if c.value.startswith('ad_')]
+            ad_caps = [c for c in config.capabilities if c.value.startswith("ad_")]
             if not ad_caps:
                 continue
 
@@ -4835,13 +5204,19 @@ def run_ad_tools(args, console):
                 status_text = "[red]✗ Missing[/red]"
 
             caps_text = ", ".join(c.value.replace("ad_", "") for c in ad_caps)
-            install_text = config.install_cmd[:40] + "..." if config.install_cmd and len(config.install_cmd) > 40 else (config.install_cmd or "")
+            install_text = (
+                config.install_cmd[:40] + "..."
+                if config.install_cmd and len(config.install_cmd) > 40
+                else (config.install_cmd or "")
+            )
 
             table.add_row(name, status_text, caps_text, install_text)
 
         console.print()
         console.print(table)
-        console.print(f"\n[bold]Summary:[/bold] {available_count}/{ad_tool_count} AD tools available")
+        console.print(
+            f"\n[bold]Summary:[/bold] {available_count}/{ad_tool_count} AD tools available"
+        )
 
         if available_count < ad_tool_count:
             console.print("\n[dim]Install missing tools with: aiptx tools install --ad[/dim]")
@@ -4860,14 +5235,15 @@ def run_ad_tools(args, console):
 
 def run_mcp_command(args):
     """Handle MCP (Model Context Protocol) server management."""
+    import asyncio
+
+    from rich import box
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    from rich import box
-    import asyncio
 
     console = Console()
-    mcp_cmd = getattr(args, 'mcp_command', None)
+    mcp_cmd = getattr(args, "mcp_command", None)
 
     if mcp_cmd == "list":
         try:
@@ -4882,13 +5258,15 @@ def run_mcp_command(args):
 
             console.print()
             if not servers:
-                console.print(Panel(
-                    "No MCP servers configured.\n\n"
-                    "Add a server with:\n"
-                    "  [green]aiptx mcp add <name> --command <cmd>[/green]",
-                    title=f"{icon('info')} MCP Servers",
-                    border_style="yellow",
-                ))
+                console.print(
+                    Panel(
+                        "No MCP servers configured.\n\n"
+                        "Add a server with:\n"
+                        "  [green]aiptx mcp add <name> --command <cmd>[/green]",
+                        title=f"{icon('info')} MCP Servers",
+                        border_style="yellow",
+                    )
+                )
             else:
                 table = Table(title="Configured MCP Servers", box=box.ROUNDED)
                 table.add_column("Name", style="cyan")
@@ -4896,7 +5274,9 @@ def run_mcp_command(args):
                 table.add_column("Enabled", width=10)
 
                 for name, config in servers.items():
-                    enabled = "[green]Yes[/green]" if config.get("enabled", True) else "[red]No[/red]"
+                    enabled = (
+                        "[green]Yes[/green]" if config.get("enabled", True) else "[red]No[/red]"
+                    )
                     table.add_row(name, config.get("command", ""), enabled)
 
                 console.print(table)
@@ -4912,7 +5292,7 @@ def run_mcp_command(args):
 
             # Parse environment variables
             env = {}
-            for e in (args.env or []):
+            for e in args.env or []:
                 if "=" in e:
                     k, v = e.split("=", 1)
                     env[k] = v
@@ -4969,10 +5349,7 @@ def run_mcp_command(args):
                 table.add_column("Description", style="dim")
 
                 for tool in tools:
-                    table.add_row(
-                        tool.get("name", ""),
-                        tool.get("description", "")[:60] + "..."
-                    )
+                    table.add_row(tool.get("name", ""), tool.get("description", "")[:60] + "...")
 
                 console.print(table)
                 console.print(f"\n[green]Connected! {len(tools)} tools available[/green]")
@@ -4985,21 +5362,23 @@ def run_mcp_command(args):
     else:
         # Show MCP help
         console.print()
-        console.print(Panel(
-            "[bold cyan]MCP Server Management (v5.1)[/bold cyan]\n\n"
-            "[bold]Available Commands:[/bold]\n\n"
-            "  [green]aiptx mcp list[/green]                  List configured servers\n"
-            "  [green]aiptx mcp add[/green] <name> -c <cmd>   Add a new server\n"
-            "  [green]aiptx mcp remove[/green] <name>         Remove a server\n"
-            "  [green]aiptx mcp connect[/green]               Connect and list tools\n\n"
-            "[bold]Example:[/bold]\n"
-            "  [dim]# Add a local tool server[/dim]\n"
-            "  aiptx mcp add my-tools -c python -a server.py\n\n"
-            "[dim]MCP allows extending AIPTX with external tools via JSON-RPC[/dim]",
-            title="MCP Servers",
-            border_style="cyan",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]MCP Server Management (v5.1)[/bold cyan]\n\n"
+                "[bold]Available Commands:[/bold]\n\n"
+                "  [green]aiptx mcp list[/green]                  List configured servers\n"
+                "  [green]aiptx mcp add[/green] <name> -c <cmd>   Add a new server\n"
+                "  [green]aiptx mcp remove[/green] <name>         Remove a server\n"
+                "  [green]aiptx mcp connect[/green]               Connect and list tools\n\n"
+                "[bold]Example:[/bold]\n"
+                "  [dim]# Add a local tool server[/dim]\n"
+                "  aiptx mcp add my-tools -c python -a server.py\n\n"
+                "[dim]MCP allows extending AIPTX with external tools via JSON-RPC[/dim]",
+                title="MCP Servers",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
         return 0
 
 
@@ -5010,26 +5389,27 @@ def run_mcp_command(args):
 
 def run_notes_command(args):
     """Handle quick notes management."""
-    from rich.console import Console
-    from rich.panel import Panel
-    from rich.table import Table
-    from rich import box
     import asyncio
 
+    from rich.console import Console
+    from rich.panel import Panel
+
     console = Console()
-    notes_cmd = getattr(args, 'notes_command', None)
+    notes_cmd = getattr(args, "notes_command", None)
 
     if notes_cmd == "create":
         try:
             from aipt_v2.tools.notes import notes_create
 
-            result = asyncio.run(notes_create(
-                key=args.key,
-                value=args.value,
-                category=args.category,
-                severity=args.severity,
-                evidence=args.evidence or "",
-            ))
+            result = asyncio.run(
+                notes_create(
+                    key=args.key,
+                    value=args.value,
+                    category=args.category,
+                    severity=args.severity,
+                    evidence=args.evidence or "",
+                )
+            )
 
             console.print(f"[green]{result}[/green]")
             return 0
@@ -5042,10 +5422,12 @@ def run_notes_command(args):
         try:
             from aipt_v2.tools.notes import notes_list
 
-            result = asyncio.run(notes_list(
-                category=args.category,
-                severity=args.severity,
-            ))
+            result = asyncio.run(
+                notes_list(
+                    category=args.category,
+                    severity=args.severity,
+                )
+            )
 
             console.print(result)
             return 0
@@ -5117,26 +5499,28 @@ def run_notes_command(args):
     else:
         # Show notes help
         console.print()
-        console.print(Panel(
-            "[bold cyan]Quick Notes Management (v5.1)[/bold cyan]\n\n"
-            "[bold]Available Commands:[/bold]\n\n"
-            "  [green]aiptx notes create[/green] <key> <value>  Create a note\n"
-            "  [green]aiptx notes list[/green]                  List all notes\n"
-            "  [green]aiptx notes search[/green] <query>        Search notes\n"
-            "  [green]aiptx notes export[/green]                Export notes\n"
-            "  [green]aiptx notes delete[/green] <key>          Delete a note\n"
-            "  [green]aiptx notes clear[/green]                 Clear all notes\n\n"
-            "[bold]Examples:[/bold]\n"
-            "  [dim]# Record a credential finding[/dim]\n"
-            "  aiptx notes create admin_creds 'admin:Password123' -c credential -s high\n\n"
-            "  [dim]# List all vulnerabilities[/dim]\n"
-            "  aiptx notes list -c vulnerability\n\n"
-            "  [dim]# Export findings as markdown[/dim]\n"
-            "  aiptx notes export -f markdown -o findings.md",
-            title="Quick Notes",
-            border_style="cyan",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]Quick Notes Management (v5.1)[/bold cyan]\n\n"
+                "[bold]Available Commands:[/bold]\n\n"
+                "  [green]aiptx notes create[/green] <key> <value>  Create a note\n"
+                "  [green]aiptx notes list[/green]                  List all notes\n"
+                "  [green]aiptx notes search[/green] <query>        Search notes\n"
+                "  [green]aiptx notes export[/green]                Export notes\n"
+                "  [green]aiptx notes delete[/green] <key>          Delete a note\n"
+                "  [green]aiptx notes clear[/green]                 Clear all notes\n\n"
+                "[bold]Examples:[/bold]\n"
+                "  [dim]# Record a credential finding[/dim]\n"
+                "  aiptx notes create admin_creds 'admin:Password123' -c credential -s high\n\n"
+                "  [dim]# List all vulnerabilities[/dim]\n"
+                "  aiptx notes list -c vulnerability\n\n"
+                "  [dim]# Export findings as markdown[/dim]\n"
+                "  aiptx notes export -f markdown -o findings.md",
+                title="Quick Notes",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
         return 0
 
 
@@ -5147,13 +5531,13 @@ def run_notes_command(args):
 
 def run_playbook_command(args):
     """Handle playbook management."""
+    from rich import box
     from rich.console import Console
     from rich.panel import Panel
     from rich.table import Table
-    from rich import box
 
     console = Console()
-    playbook_cmd = getattr(args, 'playbook_command', None)
+    playbook_cmd = getattr(args, "playbook_command", None)
 
     if playbook_cmd == "list":
         try:
@@ -5187,14 +5571,16 @@ def run_playbook_command(args):
                 return 1
 
             console.print()
-            console.print(Panel(
-                f"[bold cyan]{playbook.description}[/bold cyan]\n"
-                f"Mode: [yellow]{playbook.mode.value}[/yellow]\n"
-                f"Target Type: [yellow]{playbook.target_type}[/yellow]\n"
-                f"Estimated Duration: [yellow]{playbook.estimated_duration // 60} minutes[/yellow]",
-                title=f"Playbook: {playbook.name}",
-                border_style="cyan",
-            ))
+            console.print(
+                Panel(
+                    f"[bold cyan]{playbook.description}[/bold cyan]\n"
+                    f"Mode: [yellow]{playbook.mode.value}[/yellow]\n"
+                    f"Target Type: [yellow]{playbook.target_type}[/yellow]\n"
+                    f"Estimated Duration: [yellow]{playbook.estimated_duration // 60} minutes[/yellow]",
+                    title=f"Playbook: {playbook.name}",
+                    border_style="cyan",
+                )
+            )
 
             # Show phases
             console.print("\n[bold]Phases:[/bold]")
@@ -5216,26 +5602,28 @@ def run_playbook_command(args):
     else:
         # Show playbook help
         console.print()
-        console.print(Panel(
-            "[bold cyan]Attack Playbook Management (v5.1)[/bold cyan]\n\n"
-            "[bold]Available Commands:[/bold]\n\n"
-            "  [green]aiptx playbook list[/green]          List available playbooks\n"
-            "  [green]aiptx playbook show[/green] <name>   Show playbook details\n\n"
-            "[bold]Using Playbooks:[/bold]\n"
-            "  [dim]# Run a scan with web playbook[/dim]\n"
-            "  aiptx scan http://target.com --playbook web\n\n"
-            "  [dim]# Run AD assessment with quick playbook[/dim]\n"
-            "  aiptx scan dc.corp.local --playbook ad_quick\n\n"
-            "[bold]Available Playbooks:[/bold]\n"
-            "  web      - Web Application Black-Box Testing\n"
-            "  api      - REST/GraphQL API Security Testing\n"
-            "  graphql  - GraphQL-Specific Testing\n"
-            "  ad       - Active Directory Penetration Testing\n"
-            "  ad_quick - Quick AD Assessment",
-            title="Attack Playbooks",
-            border_style="cyan",
-            padding=(1, 2),
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]Attack Playbook Management (v5.1)[/bold cyan]\n\n"
+                "[bold]Available Commands:[/bold]\n\n"
+                "  [green]aiptx playbook list[/green]          List available playbooks\n"
+                "  [green]aiptx playbook show[/green] <name>   Show playbook details\n\n"
+                "[bold]Using Playbooks:[/bold]\n"
+                "  [dim]# Run a scan with web playbook[/dim]\n"
+                "  aiptx scan http://target.com --playbook web\n\n"
+                "  [dim]# Run AD assessment with quick playbook[/dim]\n"
+                "  aiptx scan dc.corp.local --playbook ad_quick\n\n"
+                "[bold]Available Playbooks:[/bold]\n"
+                "  web      - Web Application Black-Box Testing\n"
+                "  api      - REST/GraphQL API Security Testing\n"
+                "  graphql  - GraphQL-Specific Testing\n"
+                "  ad       - Active Directory Penetration Testing\n"
+                "  ad_quick - Quick AD Assessment",
+                title="Attack Playbooks",
+                border_style="cyan",
+                padding=(1, 2),
+            )
+        )
         return 0
 
 
@@ -5245,5 +5633,6 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         # Handle Ctrl+C gracefully without traceback
         from rich.console import Console
+
         Console().print("\n[yellow]Operation cancelled.[/yellow]")
         sys.exit(130)

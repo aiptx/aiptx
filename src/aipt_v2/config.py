@@ -8,9 +8,9 @@ Also loads from ~/.aiptx/.env file created by the setup wizard.
 """
 
 import os
-from typing import List, Optional
 from functools import lru_cache
 from pathlib import Path
+from typing import List, Optional
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
@@ -110,9 +110,9 @@ class LLMSettings(BaseModel):
             return v
         # Only check generic/explicit API base URLs, NOT provider-specific ones
         for key in [
-            "AIPT_LLM__API_BASE",           # Generic AIPT config (explicit)
-            "LLM_API_BASE",                 # LiteLLM generic
-            "LITELLM_BASE_URL",             # LiteLLM explicit
+            "AIPT_LLM__API_BASE",  # Generic AIPT config (explicit)
+            "LLM_API_BASE",  # LiteLLM generic
+            "LITELLM_BASE_URL",  # LiteLLM explicit
         ]:
             if os.getenv(key):
                 return os.getenv(key)
@@ -167,7 +167,9 @@ class ScannerSettings(BaseModel):
             # host (contain a dot, a :port, or are localhost); reject obvious
             # garbage so an invalid URL is surfaced rather than silently coerced.
             host_part = v.split("/", 1)[0]
-            looks_like_host = ("." in host_part) or (":" in host_part) or host_part.lower() == "localhost"
+            looks_like_host = (
+                ("." in host_part) or (":" in host_part) or host_part.lower() == "localhost"
+            )
             if not looks_like_host:
                 raise ValueError(f"Invalid scanner URL: {v}")
             v = f"http://{v}"
@@ -218,7 +220,7 @@ class VPSSettings(BaseModel):
     # The directory should be created with restricted permissions (700) on the VPS
     results_dir: str = Field(
         default="/var/tmp/aipt_results",
-        description="Remote results directory (should be created with mode 700)"
+        description="Remote results directory (should be created with mode 700)",
     )
     timeout: int = Field(default=300, ge=30, le=3600, description="Command timeout in seconds")
 
@@ -238,8 +240,7 @@ class APISettings(BaseModel):
     host: str = Field(default="127.0.0.1", description="API host (use 0.0.0.0 for network access)")
     port: int = Field(default=8000, ge=1, le=65535, description="API port")
     cors_origins: List[str] = Field(
-        default=["http://localhost:3000"],
-        description="Allowed CORS origins"
+        default=["http://localhost:3000"], description="Allowed CORS origins"
     )
     rate_limit: str = Field(default="100/minute", description="Rate limit per client")
     enable_docs: bool = Field(default=True, description="Enable Swagger/OpenAPI docs")
@@ -267,7 +268,7 @@ class OfflineSettings(BaseModel):
     enabled: bool = Field(default=False, description="Enable offline mode")
     data_path: Path = Field(
         default_factory=lambda: Path.home() / ".aiptx" / "data",
-        description="Path to offline data storage"
+        description="Path to offline data storage",
     )
     wordlist_path: Optional[Path] = Field(default=None, description="Path to wordlists")
     template_path: Optional[Path] = Field(default=None, description="Path to nuclei templates")
@@ -287,52 +288,33 @@ class AICheckpointSettings(BaseModel):
 
     enabled: bool = Field(default=True, description="Enable AI checkpoints")
     ollama_base_url: str = Field(
-        default="http://localhost:11434",
-        description="Ollama API base URL"
+        default="http://localhost:11434", description="Ollama API base URL"
     )
 
     # Model configuration per checkpoint type
-    post_recon_model: str = Field(
-        default="mistral:7b",
-        description="Model for post-recon analysis"
-    )
+    post_recon_model: str = Field(default="mistral:7b", description="Model for post-recon analysis")
     post_scan_model: str = Field(
-        default="deepseek-coder:6.7b",
-        description="Model for post-scan vulnerability analysis"
+        default="deepseek-coder:6.7b", description="Model for post-scan vulnerability analysis"
     )
     post_exploit_model: str = Field(
-        default="mistral:7b",
-        description="Model for post-exploit strategy decisions"
+        default="mistral:7b", description="Model for post-exploit strategy decisions"
     )
 
     # Context management
     max_context_tokens: int = Field(
-        default=8192,
-        ge=1024,
-        le=131072,
-        description="Maximum tokens for LLM context"
+        default=8192, ge=1024, le=131072, description="Maximum tokens for LLM context"
     )
     response_timeout: int = Field(
-        default=300,
-        ge=30,
-        le=3600,
-        description="Timeout for LLM response in seconds"
+        default=300, ge=30, le=3600, description="Timeout for LLM response in seconds"
     )
 
     # Streaming and UI
-    enable_streaming: bool = Field(
-        default=True,
-        description="Stream tokens for progress feedback"
-    )
-    show_reasoning: bool = Field(
-        default=True,
-        description="Show LLM reasoning in output"
-    )
+    enable_streaming: bool = Field(default=True, description="Stream tokens for progress feedback")
+    show_reasoning: bool = Field(default=True, description="Show LLM reasoning in output")
 
     # Fallback behavior
     fallback_to_rules: bool = Field(
-        default=True,
-        description="Use rule-based analysis if LLM unavailable"
+        default=True, description="Use rule-based analysis if LLM unavailable"
     )
 
     @field_validator("ollama_base_url", mode="before")
@@ -340,7 +322,9 @@ class AICheckpointSettings(BaseModel):
     def get_ollama_url_from_env(cls, v):
         if v:
             return v
-        return os.getenv("OLLAMA_API_BASE") or os.getenv("AIPT_CHECKPOINT__OLLAMA_URL", "http://localhost:11434")
+        return os.getenv("OLLAMA_API_BASE") or os.getenv(
+            "AIPT_CHECKPOINT__OLLAMA_URL", "http://localhost:11434"
+        )
 
 
 class AIPTConfig(BaseSettings):
@@ -395,10 +379,10 @@ def get_config() -> AIPTConfig:
     llm_provider = os.getenv("AIPT_LLM__PROVIDER") or os.getenv("AIPT_LLM_PROVIDER", "anthropic")
     llm_api_base = (
         os.getenv("AIPT_LLM__OLLAMA_BASE_URL")  # Ollama from setup wizard
-        or os.getenv("AIPT_LLM__API_BASE")       # Generic AIPT config
-        or os.getenv("LLM_API_BASE")             # LiteLLM generic
-        or os.getenv("OPENAI_API_BASE")          # OpenAI-compatible
-        or os.getenv("OLLAMA_API_BASE")          # Ollama specific
+        or os.getenv("AIPT_LLM__API_BASE")  # Generic AIPT config
+        or os.getenv("LLM_API_BASE")  # LiteLLM generic
+        or os.getenv("OPENAI_API_BASE")  # OpenAI-compatible
+        or os.getenv("OLLAMA_API_BASE")  # Ollama specific
     )
 
     # Auto-set Ollama base URL if provider is ollama and no base URL configured
@@ -408,30 +392,44 @@ def get_config() -> AIPTConfig:
     config = AIPTConfig(
         llm=LLMSettings(
             provider=llm_provider,
-            model=os.getenv("AIPT_LLM__MODEL") or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
-            api_key=os.getenv("ANTHROPIC_API_KEY") or os.getenv("OPENAI_API_KEY") or os.getenv("DEEPSEEK_API_KEY") or os.getenv("LLM_API_KEY"),
+            model=os.getenv("AIPT_LLM__MODEL")
+            or os.getenv("AIPT_LLM_MODEL", "claude-sonnet-4-20250514"),
+            api_key=os.getenv("ANTHROPIC_API_KEY")
+            or os.getenv("OPENAI_API_KEY")
+            or os.getenv("DEEPSEEK_API_KEY")
+            or os.getenv("LLM_API_KEY"),
             api_base=llm_api_base,
             timeout=int(os.getenv("AIPT_LLM__TIMEOUT") or os.getenv("AIPT_LLM_TIMEOUT", "120")),
         ),
         scanners=ScannerSettings(
             acunetix_url=os.getenv("AIPT_SCANNERS__ACUNETIX_URL") or os.getenv("ACUNETIX_URL"),
-            acunetix_api_key=os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY") or os.getenv("ACUNETIX_API_KEY"),
+            acunetix_api_key=os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY")
+            or os.getenv("ACUNETIX_API_KEY"),
             burp_url=os.getenv("AIPT_SCANNERS__BURP_URL") or os.getenv("BURP_URL"),
             burp_api_key=os.getenv("AIPT_SCANNERS__BURP_API_KEY") or os.getenv("BURP_API_KEY"),
             nessus_url=os.getenv("AIPT_SCANNERS__NESSUS_URL") or os.getenv("NESSUS_URL"),
-            nessus_access_key=os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY") or os.getenv("NESSUS_ACCESS_KEY"),
-            nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY"),
+            nessus_access_key=os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY")
+            or os.getenv("NESSUS_ACCESS_KEY"),
+            nessus_secret_key=os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY")
+            or os.getenv("NESSUS_SECRET_KEY"),
             zap_url=os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL"),
             zap_api_key=os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY"),
-            verify_tls=(os.getenv("AIPT_SCANNERS__VERIFY_TLS") or os.getenv("SCANNERS_VERIFY_TLS") or "true").lower()
+            verify_tls=(
+                os.getenv("AIPT_SCANNERS__VERIFY_TLS") or os.getenv("SCANNERS_VERIFY_TLS") or "true"
+            ).lower()
             not in ("0", "false", "no"),
         ),
         intelligence=IntelligenceSettings(
-            zoomeye_api_key=os.getenv("AIPT_INTELLIGENCE__ZOOMEYE_API_KEY") or os.getenv("ZOOMEYE_API_KEY"),
-            shodan_api_key=os.getenv("AIPT_INTELLIGENCE__SHODAN_API_KEY") or os.getenv("SHODAN_API_KEY"),
-            censys_api_id=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_ID") or os.getenv("CENSYS_API_ID"),
-            censys_api_secret=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_SECRET") or os.getenv("CENSYS_API_SECRET"),
-            virustotal_api_key=os.getenv("AIPT_INTELLIGENCE__VIRUSTOTAL_API_KEY") or os.getenv("VIRUSTOTAL_API_KEY"),
+            zoomeye_api_key=os.getenv("AIPT_INTELLIGENCE__ZOOMEYE_API_KEY")
+            or os.getenv("ZOOMEYE_API_KEY"),
+            shodan_api_key=os.getenv("AIPT_INTELLIGENCE__SHODAN_API_KEY")
+            or os.getenv("SHODAN_API_KEY"),
+            censys_api_id=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_ID")
+            or os.getenv("CENSYS_API_ID"),
+            censys_api_secret=os.getenv("AIPT_INTELLIGENCE__CENSYS_API_SECRET")
+            or os.getenv("CENSYS_API_SECRET"),
+            virustotal_api_key=os.getenv("AIPT_INTELLIGENCE__VIRUSTOTAL_API_KEY")
+            or os.getenv("VIRUSTOTAL_API_KEY"),
         ),
         vps=VPSSettings(
             host=os.getenv("AIPT_VPS__HOST") or os.getenv("VPS_HOST"),
@@ -451,20 +449,25 @@ def get_config() -> AIPTConfig:
         ),
         offline=OfflineSettings(
             enabled=os.getenv("AIPT_OFFLINE__ENABLED", "false").lower() == "true",
-            data_path=Path(os.getenv("AIPT_OFFLINE__DATA_PATH", str(Path.home() / ".aiptx" / "data"))),
-            auto_update_when_online=os.getenv("AIPT_OFFLINE__AUTO_UPDATE", "true").lower() == "true",
+            data_path=Path(
+                os.getenv("AIPT_OFFLINE__DATA_PATH", str(Path.home() / ".aiptx" / "data"))
+            ),
+            auto_update_when_online=os.getenv("AIPT_OFFLINE__AUTO_UPDATE", "true").lower()
+            == "true",
             update_interval_days=int(os.getenv("AIPT_OFFLINE__UPDATE_INTERVAL", "7")),
         ),
         ai_checkpoints=AICheckpointSettings(
             enabled=os.getenv("AIPT_CHECKPOINT__ENABLED", "true").lower() == "true",
-            ollama_base_url=os.getenv("AIPT_CHECKPOINT__OLLAMA_URL") or os.getenv("OLLAMA_API_BASE", "http://localhost:11434"),
+            ollama_base_url=os.getenv("AIPT_CHECKPOINT__OLLAMA_URL")
+            or os.getenv("OLLAMA_API_BASE", "http://localhost:11434"),
             post_recon_model=os.getenv("AIPT_CHECKPOINT__POST_RECON_MODEL", "mistral:7b"),
             post_scan_model=os.getenv("AIPT_CHECKPOINT__POST_SCAN_MODEL", "deepseek-coder:6.7b"),
             post_exploit_model=os.getenv("AIPT_CHECKPOINT__POST_EXPLOIT_MODEL", "mistral:7b"),
             max_context_tokens=int(os.getenv("AIPT_CHECKPOINT__MAX_CONTEXT", "8192")),
             response_timeout=int(os.getenv("AIPT_CHECKPOINT__TIMEOUT", "300")),
             enable_streaming=os.getenv("AIPT_CHECKPOINT__STREAMING", "true").lower() == "true",
-            fallback_to_rules=os.getenv("AIPT_CHECKPOINT__FALLBACK_RULES", "true").lower() == "true",
+            fallback_to_rules=os.getenv("AIPT_CHECKPOINT__FALLBACK_RULES", "true").lower()
+            == "true",
         ),
         sandbox_mode=os.getenv("AIPT_SANDBOX_MODE", "false").lower() == "true",
     )

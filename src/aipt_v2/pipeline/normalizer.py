@@ -14,26 +14,26 @@ Key features:
 - Category assignment for verification routing
 - Proper tool failure tracking (FAILED status, not misleading "0")
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
 from typing import Any, Optional, Protocol
-from urllib.parse import urlparse
 
 from aipt_v2.models.finding_v2 import (
-    FindingV2,
     FindingCategory,
-    VerificationStatusV2,
+    FindingV2,
     ScannerType,
     SeverityV2,
-    normalize_url,
+    VerificationStatusV2,
     categorize_vuln_type,
     determine_scanner_type,
+    normalize_url,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +41,7 @@ logger = logging.getLogger(__name__)
 
 class ToolStatus(Enum):
     """Status of tool execution"""
+
     COMPLETED = "completed"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -51,6 +52,7 @@ class ToolStatus(Enum):
 @dataclass
 class ToolStats:
     """Statistics for a single tool"""
+
     tool_name: str
     status: ToolStatus
     finding_count: int = 0
@@ -62,6 +64,7 @@ class ToolStats:
 @dataclass
 class NormalizerResult:
     """Result of normalization process"""
+
     scan_id: str
     target: str
     normalized_at: datetime
@@ -87,7 +90,7 @@ class NormalizerResult:
                     "scanner_type": stats.scanner_type.value,
                 }
                 for name, stats in self.tool_stats.items()
-            }
+            },
         }
 
 
@@ -109,7 +112,7 @@ class GenericNormalizer:
 
         # Determine category
         vuln_type = raw_finding.get("vuln_type") or raw_finding.get("type") or "other"
-        if hasattr(vuln_type, 'value'):
+        if hasattr(vuln_type, "value"):
             vuln_type = vuln_type.value
         category = categorize_vuln_type(str(vuln_type))
 
@@ -122,7 +125,10 @@ class GenericNormalizer:
         scanner_type = determine_scanner_type(source)
 
         return FindingV2(
-            title=raw_finding.get("title") or raw_finding.get("value") or raw_finding.get("name") or "Unknown Finding",
+            title=raw_finding.get("title")
+            or raw_finding.get("value")
+            or raw_finding.get("name")
+            or "Unknown Finding",
             severity=severity,
             category=category,
             vuln_type=str(vuln_type),
@@ -137,8 +143,12 @@ class GenericNormalizer:
             verification_status=VerificationStatusV2.NEEDS_REVIEW,  # Default!
             source_tool=source,
             source_scanner_type=scanner_type,
-            source_raw_id=raw_finding.get("source_id") or raw_finding.get("vuln_id") or raw_finding.get("id"),
-            discovered_at=self._parse_timestamp(raw_finding.get("discovered_at") or raw_finding.get("timestamp")),
+            source_raw_id=raw_finding.get("source_id")
+            or raw_finding.get("vuln_id")
+            or raw_finding.get("id"),
+            discovered_at=self._parse_timestamp(
+                raw_finding.get("discovered_at") or raw_finding.get("timestamp")
+            ),
             cvss_score=raw_finding.get("cvss_score"),
             cwe_id=raw_finding.get("cwe_id") or raw_finding.get("cwe"),
             cve_ids=raw_finding.get("cve_ids") or raw_finding.get("cve") or [],
@@ -154,7 +164,7 @@ class GenericNormalizer:
             return SeverityV2.INFO
 
         # Handle enum
-        if hasattr(sev, 'value'):
+        if hasattr(sev, "value"):
             sev = sev.value
 
         # Handle string
@@ -429,12 +439,12 @@ class FindingsNormalizer:
         findings: list[FindingV2] = []
 
         # Get findings from phase result
-        if hasattr(phase_result, 'findings'):
+        if hasattr(phase_result, "findings"):
             raw_findings = phase_result.findings
-        elif hasattr(phase_result, 'get_all_findings'):
+        elif hasattr(phase_result, "get_all_findings"):
             raw_findings = phase_result.get_all_findings(deduplicate=False)
         elif isinstance(phase_result, dict):
-            raw_findings = phase_result.get('findings', [])
+            raw_findings = phase_result.get("findings", [])
         else:
             raw_findings = []
 
@@ -460,14 +470,14 @@ class FindingsNormalizer:
                 continue
 
         # Check for tool errors in phase result
-        if hasattr(phase_result, 'errors') and phase_result.errors:
+        if hasattr(phase_result, "errors") and phase_result.errors:
             for error in phase_result.errors:
-                tool_name = error.get('tool') or 'unknown'
+                tool_name = error.get("tool") or "unknown"
                 self.tool_stats[tool_name] = ToolStats(
                     tool_name=tool_name,
                     status=ToolStatus.FAILED,
                     finding_count=0,
-                    error=str(error.get('error') or error.get('message') or 'Unknown error'),
+                    error=str(error.get("error") or error.get("message") or "Unknown error"),
                 )
 
         return findings
@@ -479,13 +489,13 @@ class FindingsNormalizer:
             return raw
 
         # Handle legacy Finding
-        if hasattr(raw, 'title') and hasattr(raw, 'severity') and hasattr(raw, 'vuln_type'):
+        if hasattr(raw, "title") and hasattr(raw, "severity") and hasattr(raw, "vuln_type"):
             return FindingV2.from_legacy(raw)
 
         # Handle dict
         if isinstance(raw, dict):
             # Get tool name to select normalizer
-            tool_name = (raw.get('source') or raw.get('tool') or 'unknown').lower()
+            tool_name = (raw.get("source") or raw.get("tool") or "unknown").lower()
 
             # Find appropriate normalizer
             normalizer = TOOL_NORMALIZERS.get(tool_name, self.generic_normalizer)
@@ -583,7 +593,9 @@ class FindingsNormalizer:
         with open(findings_raw_path, "w") as f:
             json.dump(result.to_dict(), f, indent=2, default=str)
 
-        logger.info(f"Normalized {len(all_findings)} findings from JSON files to {findings_raw_path}")
+        logger.info(
+            f"Normalized {len(all_findings)} findings from JSON files to {findings_raw_path}"
+        )
 
         return result
 

@@ -19,15 +19,16 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional, Set
 
-from .tool_registry import ToolRegistry, ToolConfig, ToolPhase, ToolCapability, get_registry
-from .local_tool_executor import LocalToolExecutor, ExecutionBatch, ToolExecution, ProgressCallback
-from .result_collector import ResultCollector, NormalizedFinding, AttackPath, FindingSeverity
+from .local_tool_executor import LocalToolExecutor, ProgressCallback
+from .result_collector import AttackPath, FindingSeverity, NormalizedFinding, ResultCollector
+from .tool_registry import ToolCapability, ToolPhase, ToolRegistry, get_registry
 
 logger = logging.getLogger(__name__)
 
 
 class PipelineState(str, Enum):
     """State of the pipeline execution."""
+
     IDLE = "idle"
     RUNNING = "running"
     PAUSED = "paused"
@@ -39,6 +40,7 @@ class PipelineState(str, Enum):
 @dataclass
 class PhaseConfig:
     """Configuration for a single phase."""
+
     phase: ToolPhase
     enabled: bool = True
     tools: Optional[List[str]] = None  # Specific tools to run (None = all available)
@@ -51,11 +53,14 @@ class PhaseConfig:
 @dataclass
 class PipelineConfig:
     """Configuration for the complete pipeline."""
-    phases: List[PhaseConfig] = field(default_factory=lambda: [
-        PhaseConfig(phase=ToolPhase.RECON),
-        PhaseConfig(phase=ToolPhase.SCAN),
-        PhaseConfig(phase=ToolPhase.EXPLOIT, enabled=False),  # Disabled by default
-    ])
+
+    phases: List[PhaseConfig] = field(
+        default_factory=lambda: [
+            PhaseConfig(phase=ToolPhase.RECON),
+            PhaseConfig(phase=ToolPhase.SCAN),
+            PhaseConfig(phase=ToolPhase.EXPLOIT, enabled=False),  # Disabled by default
+        ]
+    )
     max_parallel_tools: int = 5
     ai_checkpoints_enabled: bool = True
     ollama_model: str = "mistral:7b"
@@ -67,6 +72,7 @@ class PipelineConfig:
 @dataclass
 class PhaseReport:
     """Report from a completed phase."""
+
     phase: ToolPhase
     state: str
     tools_run: int
@@ -82,6 +88,7 @@ class PhaseReport:
 @dataclass
 class PipelineReport:
     """Final report from the complete pipeline."""
+
     target: str
     state: PipelineState
     start_time: datetime
@@ -111,6 +118,7 @@ class AICheckpointClient:
 
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.get(f"{self.base_url}/api/version", timeout=5) as resp:
                     self._available = resp.status == 200
@@ -149,6 +157,7 @@ class AICheckpointClient:
 
         try:
             import aiohttp
+
             async with aiohttp.ClientSession() as session:
                 async with session.post(
                     f"{self.base_url}/api/generate",
@@ -246,9 +255,7 @@ Be concise and professional. Format as key:value pairs."""
                 value = parts[1].strip()
 
                 if key in ["PRIORITY_TARGETS", "RECOMMENDED_SCANS", "CRITICAL_VULNS"]:
-                    result["priority_targets"].extend(
-                        [v.strip() for v in value.split(",")]
-                    )
+                    result["priority_targets"].extend([v.strip() for v in value.split(",")])
                 elif key in ["ATTACK_CHAINS", "EXPLOITATION_ORDER", "PIVOT_OPTIONS"]:
                     result["recommendations"].append(value)
 
@@ -389,8 +396,7 @@ class PhaseRunner:
         phase_config = config
         if not phase_config:
             phase_config = next(
-                (p for p in self.config.phases if p.phase == phase),
-                PhaseConfig(phase=phase)
+                (p for p in self.config.phases if p.phase == phase), PhaseConfig(phase=phase)
             )
 
         logger.info(f"Starting phase: {phase.value}")
@@ -483,7 +489,9 @@ class PhaseRunner:
             target=self.target,
         )
 
-        logger.info(f"AI checkpoint for {phase.value}: {len(result.get('recommendations', []))} recommendations")
+        logger.info(
+            f"AI checkpoint for {phase.value}: {len(result.get('recommendations', []))} recommendations"
+        )
 
         return result
 
@@ -609,6 +617,7 @@ class PhaseRunner:
 # ============================================================================
 # Convenience Functions
 # ============================================================================
+
 
 async def run_quick_scan(target: str) -> PipelineReport:
     """

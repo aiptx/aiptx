@@ -14,19 +14,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urljoin
 
-from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
-    AgentCapability,
-    AgentConfig,
-)
 from aipt_v2.agents.shared.finding_repository import (
+    Evidence,
     Finding,
     FindingSeverity,
     VulnerabilityType,
-    Evidence,
+)
+from aipt_v2.agents.specialized.base_specialized import (
+    AgentCapability,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -207,18 +206,21 @@ class BusinessLogicAgent(SpecializedAgent):
             elif any(word in action.lower() for word in ["register", "signup"]):
                 workflow_type = "registration"
 
-            workflows.append({
-                "url": urljoin(self.target, action),
-                "method": method,
-                "type": workflow_type,
-                "params": self._extract_form_params(html, action),
-            })
+            workflows.append(
+                {
+                    "url": urljoin(self.target, action),
+                    "method": method,
+                    "type": workflow_type,
+                    "params": self._extract_form_params(html, action),
+                }
+            )
 
         return workflows
 
     def _extract_form_params(self, html: str, form_action: str) -> list[dict]:
         """Extract parameters from a form."""
         import re
+
         params = []
 
         input_pattern = r'<input[^>]*name=["\']([^"\']*)["\'][^>]*'
@@ -259,11 +261,14 @@ class BusinessLogicAgent(SpecializedAgent):
             self.check_cancelled()
 
             # Only test relevant endpoints
-            if not any(word in workflow["url"].lower()
-                       for word in BL_TEST_PATTERNS["race_condition"]["endpoints"]):
+            if not any(
+                word in workflow["url"].lower()
+                for word in BL_TEST_PATTERNS["race_condition"]["endpoints"]
+            ):
                 continue
 
             try:
+
                 async def make_request(session: aiohttp.ClientSession):
                     if workflow["method"] == "POST":
                         async with session.post(workflow["url"], timeout=10) as resp:
@@ -278,8 +283,9 @@ class BusinessLogicAgent(SpecializedAgent):
                     responses = await asyncio.gather(*tasks, return_exceptions=True)
 
                     # Analyze responses for race condition indicators
-                    success_count = sum(1 for r in responses
-                                        if isinstance(r, tuple) and r[0] in [200, 201])
+                    success_count = sum(
+                        1 for r in responses if isinstance(r, tuple) and r[0] in [200, 201]
+                    )
 
                     # If more than expected succeeded, might be race condition
                     if success_count > 1:
@@ -321,15 +327,19 @@ class BusinessLogicAgent(SpecializedAgent):
             self.check_cancelled()
 
             # Only test relevant endpoints
-            if not any(word in workflow["url"].lower()
-                       for word in BL_TEST_PATTERNS["price_manipulation"]["endpoints"]):
+            if not any(
+                word in workflow["url"].lower()
+                for word in BL_TEST_PATTERNS["price_manipulation"]["endpoints"]
+            ):
                 continue
 
             async with aiohttp.ClientSession() as session:
                 for param in workflow.get("params", []):
                     # Only test likely numeric parameters
-                    if not any(word in param["name"].lower()
-                               for word in BL_TEST_PATTERNS["price_manipulation"]["params"]):
+                    if not any(
+                        word in param["name"].lower()
+                        for word in BL_TEST_PATTERNS["price_manipulation"]["params"]
+                    ):
                         continue
 
                     for test_value, description in manipulation_tests:
@@ -338,9 +348,7 @@ class BusinessLogicAgent(SpecializedAgent):
 
                             if workflow["method"] == "POST":
                                 async with session.post(
-                                    workflow["url"],
-                                    json=test_data,
-                                    timeout=10
+                                    workflow["url"], json=test_data, timeout=10
                                 ) as resp:
                                     if resp.status == 200:
                                         body = await resp.text()
@@ -382,8 +390,10 @@ class BusinessLogicAgent(SpecializedAgent):
                             body = await resp.text()
 
                             # Check if we got a success page without completing steps
-                            if any(word in body.lower() for word in
-                                   ["order", "confirmed", "complete", "success", "thank"]):
+                            if any(
+                                word in body.lower()
+                                for word in ["order", "confirmed", "complete", "success", "thank"]
+                            ):
                                 finding = Finding(
                                     vuln_type=VulnerabilityType.BUSINESS_LOGIC,
                                     title=f"Workflow bypass: Direct access to {pattern}",
@@ -412,8 +422,10 @@ class BusinessLogicAgent(SpecializedAgent):
 
                 for param in workflow.get("params", []):
                     # Only test ID-like parameters
-                    if not any(word in param["name"].lower()
-                               for word in BL_TEST_PATTERNS["access_control"]["params"]):
+                    if not any(
+                        word in param["name"].lower()
+                        for word in BL_TEST_PATTERNS["access_control"]["params"]
+                    ):
                         continue
 
                     baseline_response = None
@@ -424,9 +436,7 @@ class BusinessLogicAgent(SpecializedAgent):
                             test_url = workflow["url"]
 
                             async with session.get(
-                                test_url,
-                                params=test_params,
-                                timeout=10
+                                test_url, params=test_params, timeout=10
                             ) as resp:
                                 body = await resp.text()
 
@@ -435,9 +445,14 @@ class BusinessLogicAgent(SpecializedAgent):
                                     continue
 
                                 # Check if we got different user data
-                                if (resp.status == 200 and body != baseline_response and
-                                        any(word in body.lower() for word in
-                                            ["email", "name", "address", "phone", "profile"])):
+                                if (
+                                    resp.status == 200
+                                    and body != baseline_response
+                                    and any(
+                                        word in body.lower()
+                                        for word in ["email", "name", "address", "phone", "profile"]
+                                    )
+                                ):
                                     finding = Finding(
                                         vuln_type=VulnerabilityType.IDOR,
                                         title=f"IDOR in {param['name']}",
@@ -483,6 +498,7 @@ Format as JSON: {{"tests": [{{"name": "...", "description": "...", "payload": {{
 
                     # Parse and execute generated tests
                     import json
+
                     test_data = json.loads(response)
 
                     for test in test_data.get("tests", []):
@@ -502,9 +518,7 @@ Format as JSON: {{"tests": [{{"name": "...", "description": "...", "payload": {{
             async with aiohttp.ClientSession() as session:
                 if workflow["method"] == "POST":
                     async with session.post(
-                        workflow["url"],
-                        json=test.get("payload", {}),
-                        timeout=10
+                        workflow["url"], json=test.get("payload", {}), timeout=10
                     ) as resp:
                         if resp.status == 200:
                             body = await resp.text()

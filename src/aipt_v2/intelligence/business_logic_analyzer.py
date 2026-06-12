@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class BusinessLogicFlaw:
     """A discovered business logic vulnerability."""
+
     name: str
     category: str
     description: str
@@ -221,13 +222,15 @@ class BusinessLogicAnalyzer:
             if cat_name in BL_CATEGORIES:
                 category = BL_CATEGORIES[cat_name]
                 for flaw in category["flaws"]:
-                    test_cases.append({
-                        "category": cat_name,
-                        "name": flaw["name"],
-                        "description": flaw["description"],
-                        "test": flaw["test"],
-                        "commands": self._get_test_commands(cat_name, flaw["name"]),
-                    })
+                    test_cases.append(
+                        {
+                            "category": cat_name,
+                            "name": flaw["name"],
+                            "description": flaw["description"],
+                            "test": flaw["test"],
+                            "commands": self._get_test_commands(cat_name, flaw["name"]),
+                        }
+                    )
 
         return test_cases
 
@@ -300,30 +303,34 @@ class BusinessLogicAnalyzer:
 
         # Check for process bypass
         if len(workflow_steps) > 2:
-            findings.append(BusinessLogicFlaw(
-                name="Potential Process Bypass",
-                category="workflow",
-                description=f"Multi-step workflow ({len(workflow_steps)} steps) may allow step skipping",
-                impact="Bypass required validation or approval steps",
-                exploitation="Access later steps directly without completing earlier ones",
-                test_cases=[
-                    {"step": i + 1, "test": f"Try accessing step {i + 1} directly"}
-                    for i in range(1, len(workflow_steps))
-                ],
-                severity="medium",
-                confidence=0.6,
-            ))
+            findings.append(
+                BusinessLogicFlaw(
+                    name="Potential Process Bypass",
+                    category="workflow",
+                    description=f"Multi-step workflow ({len(workflow_steps)} steps) may allow step skipping",
+                    impact="Bypass required validation or approval steps",
+                    exploitation="Access later steps directly without completing earlier ones",
+                    test_cases=[
+                        {"step": i + 1, "test": f"Try accessing step {i + 1} directly"}
+                        for i in range(1, len(workflow_steps))
+                    ],
+                    severity="medium",
+                    confidence=0.6,
+                )
+            )
 
         # Check for state manipulation
-        findings.append(BusinessLogicFlaw(
-            name="State Manipulation",
-            category="workflow",
-            description="Workflow state parameters may be tamperable",
-            impact="Modify workflow outcome or skip validation",
-            exploitation="Modify state/status parameters in requests",
-            severity="medium",
-            confidence=0.5,
-        ))
+        findings.append(
+            BusinessLogicFlaw(
+                name="State Manipulation",
+                category="workflow",
+                description="Workflow state parameters may be tamperable",
+                impact="Modify workflow outcome or skip validation",
+                exploitation="Modify state/status parameters in requests",
+                severity="medium",
+                confidence=0.5,
+            )
+        )
 
         self._findings.extend(findings)
         return findings
@@ -348,59 +355,65 @@ class BusinessLogicAnalyzer:
         findings = []
 
         if has_cart:
-            findings.extend([
-                BusinessLogicFlaw(
-                    name="Cart Tampering",
-                    category="payment_cart",
-                    description="Shopping cart may be vulnerable to manipulation",
-                    impact="Add items at wrong prices, modify quantities",
-                    exploitation="Intercept and modify cart requests",
-                    severity="high",
-                    confidence=0.7,
-                ),
-                BusinessLogicFlaw(
-                    name="Negative Quantity",
-                    category="payment_cart",
-                    description="Negative quantities may not be validated",
-                    impact="Negative total leading to refund/credit",
-                    exploitation="Set item quantity to negative values",
-                    severity="high",
-                    confidence=0.6,
-                ),
-            ])
+            findings.extend(
+                [
+                    BusinessLogicFlaw(
+                        name="Cart Tampering",
+                        category="payment_cart",
+                        description="Shopping cart may be vulnerable to manipulation",
+                        impact="Add items at wrong prices, modify quantities",
+                        exploitation="Intercept and modify cart requests",
+                        severity="high",
+                        confidence=0.7,
+                    ),
+                    BusinessLogicFlaw(
+                        name="Negative Quantity",
+                        category="payment_cart",
+                        description="Negative quantities may not be validated",
+                        impact="Negative total leading to refund/credit",
+                        exploitation="Set item quantity to negative values",
+                        severity="high",
+                        confidence=0.6,
+                    ),
+                ]
+            )
 
         if has_discounts:
-            findings.append(BusinessLogicFlaw(
-                name="Discount Code Abuse",
-                category="payment_cart",
-                description="Discount codes may be reusable or stackable",
-                impact="Apply discounts multiple times or combine",
-                exploitation="Reuse single-use codes, apply multiple codes",
-                severity="medium",
-                confidence=0.6,
-            ))
+            findings.append(
+                BusinessLogicFlaw(
+                    name="Discount Code Abuse",
+                    category="payment_cart",
+                    description="Discount codes may be reusable or stackable",
+                    impact="Apply discounts multiple times or combine",
+                    exploitation="Reuse single-use codes, apply multiple codes",
+                    severity="medium",
+                    confidence=0.6,
+                )
+            )
 
         if has_payments:
-            findings.extend([
-                BusinessLogicFlaw(
-                    name="Price Manipulation",
-                    category="payment_cart",
-                    description="Prices may be modifiable in requests",
-                    impact="Purchase items at arbitrary prices",
-                    exploitation="Intercept and modify price parameters",
-                    severity="critical",
-                    confidence=0.5,
-                ),
-                BusinessLogicFlaw(
-                    name="Currency Confusion",
-                    category="payment_cart",
-                    description="Currency handling may have flaws",
-                    impact="Pay in weaker currency at same numeric value",
-                    exploitation="Modify currency parameters",
-                    severity="high",
-                    confidence=0.4,
-                ),
-            ])
+            findings.extend(
+                [
+                    BusinessLogicFlaw(
+                        name="Price Manipulation",
+                        category="payment_cart",
+                        description="Prices may be modifiable in requests",
+                        impact="Purchase items at arbitrary prices",
+                        exploitation="Intercept and modify price parameters",
+                        severity="critical",
+                        confidence=0.5,
+                    ),
+                    BusinessLogicFlaw(
+                        name="Currency Confusion",
+                        category="payment_cart",
+                        description="Currency handling may have flaws",
+                        impact="Pay in weaker currency at same numeric value",
+                        exploitation="Modify currency parameters",
+                        severity="high",
+                        confidence=0.4,
+                    ),
+                ]
+            )
 
         self._findings.extend(findings)
         return findings
@@ -425,59 +438,65 @@ class BusinessLogicAnalyzer:
         findings = []
 
         if has_password_reset:
-            findings.extend([
-                BusinessLogicFlaw(
-                    name="Password Reset Poisoning",
-                    category="authentication",
-                    description="Host header may influence reset link",
-                    impact="Hijack password reset of any user",
-                    exploitation="Inject attacker domain in Host header",
-                    severity="critical",
-                    confidence=0.6,
-                ),
-                BusinessLogicFlaw(
-                    name="Token Reuse",
-                    category="authentication",
-                    description="Reset tokens may not be invalidated",
-                    impact="Reuse tokens for repeated access",
-                    exploitation="Save and reuse reset tokens",
-                    severity="medium",
-                    confidence=0.5,
-                ),
-            ])
+            findings.extend(
+                [
+                    BusinessLogicFlaw(
+                        name="Password Reset Poisoning",
+                        category="authentication",
+                        description="Host header may influence reset link",
+                        impact="Hijack password reset of any user",
+                        exploitation="Inject attacker domain in Host header",
+                        severity="critical",
+                        confidence=0.6,
+                    ),
+                    BusinessLogicFlaw(
+                        name="Token Reuse",
+                        category="authentication",
+                        description="Reset tokens may not be invalidated",
+                        impact="Reuse tokens for repeated access",
+                        exploitation="Save and reuse reset tokens",
+                        severity="medium",
+                        confidence=0.5,
+                    ),
+                ]
+            )
 
         if has_2fa:
-            findings.extend([
-                BusinessLogicFlaw(
-                    name="2FA Bypass",
-                    category="authentication",
-                    description="Two-factor authentication may be bypassable",
-                    impact="Access accounts without 2FA verification",
-                    exploitation="Direct navigation, parameter manipulation",
-                    severity="critical",
-                    confidence=0.5,
-                ),
-                BusinessLogicFlaw(
-                    name="2FA Brute Force",
-                    category="authentication",
-                    description="2FA codes may not have attempt limits",
-                    impact="Brute force 2FA codes",
-                    exploitation="Automated code guessing",
-                    severity="high",
-                    confidence=0.5,
-                ),
-            ])
+            findings.extend(
+                [
+                    BusinessLogicFlaw(
+                        name="2FA Bypass",
+                        category="authentication",
+                        description="Two-factor authentication may be bypassable",
+                        impact="Access accounts without 2FA verification",
+                        exploitation="Direct navigation, parameter manipulation",
+                        severity="critical",
+                        confidence=0.5,
+                    ),
+                    BusinessLogicFlaw(
+                        name="2FA Brute Force",
+                        category="authentication",
+                        description="2FA codes may not have attempt limits",
+                        impact="Brute force 2FA codes",
+                        exploitation="Automated code guessing",
+                        severity="high",
+                        confidence=0.5,
+                    ),
+                ]
+            )
 
         if has_social_login:
-            findings.append(BusinessLogicFlaw(
-                name="OAuth Misconfiguration",
-                category="authentication",
-                description="OAuth implementation may have flaws",
-                impact="Account takeover via OAuth abuse",
-                exploitation="State parameter manipulation, redirect URI issues",
-                severity="high",
-                confidence=0.4,
-            ))
+            findings.append(
+                BusinessLogicFlaw(
+                    name="OAuth Misconfiguration",
+                    category="authentication",
+                    description="OAuth implementation may have flaws",
+                    impact="Account takeover via OAuth abuse",
+                    exploitation="State parameter manipulation, redirect URI issues",
+                    severity="high",
+                    confidence=0.4,
+                )
+            )
 
         self._findings.extend(findings)
         return findings

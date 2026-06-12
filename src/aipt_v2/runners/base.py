@@ -9,6 +9,7 @@ Key concepts:
 - RunnerResult: Standardized result container with output and findings
 - BaseRunner: Abstract interface all runners must implement
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -30,21 +31,23 @@ class RunnerStatus(Enum):
     This replaces ad-hoc status tracking with a consistent enum.
     FAILED tools are properly tracked, not shown as "0 findings".
     """
-    PENDING = "pending"              # Not yet started
-    RUNNING = "running"              # Currently executing
-    COMPLETED = "completed"          # Finished successfully
-    FAILED = "failed"                # Execution failed (error)
-    TIMEOUT = "timeout"              # Exceeded time limit
-    UNAVAILABLE = "unavailable"      # Tool not installed/reachable
-    SKIPPED = "skipped"              # Intentionally skipped
+
+    PENDING = "pending"  # Not yet started
+    RUNNING = "running"  # Currently executing
+    COMPLETED = "completed"  # Finished successfully
+    FAILED = "failed"  # Execution failed (error)
+    TIMEOUT = "timeout"  # Exceeded time limit
+    UNAVAILABLE = "unavailable"  # Tool not installed/reachable
+    SKIPPED = "skipped"  # Intentionally skipped
 
 
 @dataclass
 class RunnerConfig:
     """Configuration for runner execution"""
+
     # Timeouts
-    default_timeout: int = 300       # 5 minutes default
-    max_timeout: int = 3600          # 1 hour max
+    default_timeout: int = 300  # 5 minutes default
+    max_timeout: int = 3600  # 1 hour max
 
     # Output handling
     capture_stdout: bool = True
@@ -72,9 +75,10 @@ class RunnerResult:
     All runners return this format, enabling consistent handling
     regardless of execution context (local, VPS, API).
     """
+
     # Identification
     tool: str
-    runner_type: str                  # "local", "vps", "api_enterprise"
+    runner_type: str  # "local", "vps", "api_enterprise"
 
     # Execution status
     status: RunnerStatus

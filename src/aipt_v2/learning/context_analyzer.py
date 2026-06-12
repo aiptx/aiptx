@@ -11,7 +11,7 @@ import hashlib
 import logging
 import re
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TargetContext:
     """Analyzed context of a target."""
+
     target_url: str
     technology_stack: list[str] = field(default_factory=list)
     web_server: str | None = None
@@ -88,7 +89,6 @@ TECH_PATTERNS = {
         "litespeed": [r"litespeed"],
         "tomcat": [r"tomcat", r"coyote"],
     },
-
     # Backend languages
     "backend": {
         "php": [
@@ -125,7 +125,6 @@ TECH_PATTERNS = {
             r"\.ashx",
         ],
     },
-
     # Frameworks
     "framework": {
         "django": [r"csrfmiddlewaretoken", r"django"],
@@ -138,7 +137,6 @@ TECH_PATTERNS = {
         "react": [r"react", r"__react"],
         "vue": [r"vue", r"data-v-"],
     },
-
     # Databases (from errors/patterns)
     "database": {
         "mysql": [
@@ -170,7 +168,6 @@ TECH_PATTERNS = {
             r"bson",
         ],
     },
-
     # CMS
     "cms": {
         "wordpress": [
@@ -195,7 +192,6 @@ TECH_PATTERNS = {
             r"cdn\.shopify",
         ],
     },
-
     # WAF patterns
     "waf": {
         "cloudflare": [
@@ -224,7 +220,6 @@ TECH_PATTERNS = {
             r"x-sucuri",
         ],
     },
-
     # Cloud providers
     "cloud": {
         "aws": [
@@ -335,8 +330,12 @@ class ContextAnalyzer:
 
         # Store interesting headers
         interesting_headers = [
-            "server", "x-powered-by", "x-aspnet-version",
-            "x-generator", "x-drupal-cache", "x-varnish",
+            "server",
+            "x-powered-by",
+            "x-aspnet-version",
+            "x-generator",
+            "x-drupal-cache",
+            "x-varnish",
         ]
         for header in interesting_headers:
             if header in all_headers:
@@ -344,8 +343,11 @@ class ContextAnalyzer:
 
         # Store interesting cookies
         interesting_cookies = [
-            "phpsessid", "jsessionid", "asp.net_sessionid",
-            "laravel_session", "wordpress_logged_in",
+            "phpsessid",
+            "jsessionid",
+            "asp.net_sessionid",
+            "laravel_session",
+            "wordpress_logged_in",
         ]
         for cookie in all_cookies:
             cookie_lower = cookie.lower()
@@ -384,7 +386,9 @@ class ContextAnalyzer:
 
         # Get best match (most pattern matches)
         best_tech = max(matches, key=matches.get)
-        confidence = min(1.0, matches[best_tech] / len(self._compiled_patterns[category][best_tech]))
+        confidence = min(
+            1.0, matches[best_tech] / len(self._compiled_patterns[category][best_tech])
+        )
         context.confidence_scores[f"{category}_{best_tech}"] = confidence
 
         return best_tech
@@ -412,26 +416,34 @@ class ContextAnalyzer:
         if context.database:
             db = context.database.lower()
             if db in ("mysql", "mariadb"):
-                recommendations["sqli"].extend([
-                    "version_comments",
-                    "hex_encode_strings",
-                    "space_to_comment",
-                ])
+                recommendations["sqli"].extend(
+                    [
+                        "version_comments",
+                        "hex_encode_strings",
+                        "space_to_comment",
+                    ]
+                )
             elif db in ("mssql", "sqlserver"):
-                recommendations["sqli"].extend([
-                    "concat_strings",
-                    "unicode_encode",
-                ])
+                recommendations["sqli"].extend(
+                    [
+                        "concat_strings",
+                        "unicode_encode",
+                    ]
+                )
             elif db in ("postgres", "postgresql"):
-                recommendations["sqli"].extend([
-                    "double_quotes",
-                    "dollar_quotes",
-                ])
+                recommendations["sqli"].extend(
+                    [
+                        "double_quotes",
+                        "dollar_quotes",
+                    ]
+                )
             elif db == "oracle":
-                recommendations["sqli"].extend([
-                    "concat_pipes",
-                    "chr_function",
-                ])
+                recommendations["sqli"].extend(
+                    [
+                        "concat_pipes",
+                        "chr_function",
+                    ]
+                )
 
         # WAF-specific recommendations
         if context.waf:
@@ -443,15 +455,19 @@ class ContextAnalyzer:
         if context.backend_language:
             lang = context.backend_language.lower()
             if lang == "php":
-                recommendations["xss"].extend([
-                    "php_wrapper_xss",
-                    "svg_onload",
-                ])
+                recommendations["xss"].extend(
+                    [
+                        "php_wrapper_xss",
+                        "svg_onload",
+                    ]
+                )
             elif lang in ("nodejs", "javascript"):
-                recommendations["xss"].extend([
-                    "template_injection",
-                    "prototype_pollution",
-                ])
+                recommendations["xss"].extend(
+                    [
+                        "template_injection",
+                        "prototype_pollution",
+                    ]
+                )
 
         # CMS-specific recommendations
         if context.cms:

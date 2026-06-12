@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -111,11 +111,7 @@ class FfufScanner(BaseScanner):
         return None
 
     async def scan(
-        self,
-        target: str,
-        wordlist: Optional[str] = None,
-        fuzz_keyword: str = "FUZZ",
-        **kwargs
+        self, target: str, wordlist: Optional[str] = None, fuzz_keyword: str = "FUZZ", **kwargs
     ) -> ScanResult:
         """
         Run ffuf scan.
@@ -156,8 +152,7 @@ class FfufScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")

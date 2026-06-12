@@ -8,9 +8,9 @@ Generates professional pentest reports in multiple formats:
 - SARIF (for GitHub Security tab integration)
 """
 
-from .generator import ReportGenerator, ReportConfig
+from .generator import ReportConfig, ReportGenerator
 from .html_report import generate_html_report, generate_html_report_v2
-from .sarif import SARIFGenerator, SARIFConfig, generate_sarif
+from .sarif import SARIFConfig, SARIFGenerator, generate_sarif
 
 __all__ = [
     "ReportGenerator",

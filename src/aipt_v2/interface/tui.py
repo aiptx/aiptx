@@ -13,7 +13,6 @@ from importlib.metadata import PackageNotFoundError
 from importlib.metadata import version as pkg_version
 from typing import TYPE_CHECKING, Any, ClassVar, cast
 
-
 if TYPE_CHECKING:
     from textual.timer import Timer
 
@@ -696,7 +695,9 @@ class AIPTxTUIApp(App):  # type: ignore[misc]
 
     def _get_agent_verb(self, agent_id: str) -> str:
         if agent_id not in self._agent_verbs:
-            self._agent_verbs[agent_id] = random.choice(self._action_verbs)  # nosec B311 # noqa: S311
+            self._agent_verbs[agent_id] = random.choice(
+                self._action_verbs
+            )  # nosec B311 # noqa: S311
         return self._agent_verbs[agent_id]
 
     def _start_agent_verb_timer(self, agent_id: str) -> None:
@@ -712,7 +713,9 @@ class AIPTxTUIApp(App):  # type: ignore[misc]
 
     def _change_agent_action_verb(self, agent_id: str) -> None:
         if agent_id not in self._agent_verbs:
-            self._agent_verbs[agent_id] = random.choice(self._action_verbs)  # nosec B311 # noqa: S311
+            self._agent_verbs[agent_id] = random.choice(
+                self._action_verbs
+            )  # nosec B311 # noqa: S311
             return
 
         current_verb = self._agent_verbs[agent_id]

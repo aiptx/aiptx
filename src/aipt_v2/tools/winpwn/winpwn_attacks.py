@@ -20,24 +20,22 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
-from aipt_v2.tools.winpwn.winpwn_config import (
-    WinPwnConfig,
-    WinPwnModule,
-    WinPwnExecutionMode,
-    get_winpwn_config,
-)
 from aipt_v2.tools.winpwn.powershell_executor import (
     PowerShellExecutor,
-    PowerShellResult,
-    WinRMExecutor,
+)
+from aipt_v2.tools.winpwn.winpwn_config import (
+    WinPwnConfig,
+    WinPwnExecutionMode,
+    WinPwnModule,
+    get_winpwn_config,
 )
 from aipt_v2.tools.winpwn.winpwn_parsers import (
-    WinPwnParser,
-    WinPwnFinding,
     ExtractedCredential,
     FindingSeverity,
+    WinPwnFinding,
+    WinPwnParser,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,6 +44,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ModuleResult:
     """Result from running a WinPwn module."""
+
     module: WinPwnModule
     success: bool
     execution_time: float
@@ -63,6 +62,7 @@ class ModuleResult:
 @dataclass
 class WinPwnResult:
     """Aggregated result from WinPwn attack run."""
+
     status: str
     started_at: str
     finished_at: str
@@ -87,7 +87,7 @@ class WinPwnResult:
             "total_findings": len(self.all_findings),
             "findings_by_severity": severity_counts,
             "credentials_extracted": len(self.all_credentials),
-            "errors": len(self.errors)
+            "errors": len(self.errors),
         }
 
 
@@ -112,7 +112,7 @@ class WinPwnAttacks:
             powershell_path=self.config.powershell_path,
             use_pwsh_core=self.config.pwsh_core,
             execution_policy=self.config.execution_policy,
-            working_dir=self.config.output_dir
+            working_dir=self.config.output_dir,
         )
         self.parser = WinPwnParser()
         self._loaded = False
@@ -132,10 +132,7 @@ class WinPwnAttacks:
             if self.config.bypass_amsi:
                 load_cmd = self._get_amsi_bypass() + "\n" + load_cmd
 
-            result = await self.executor.execute_command(
-                load_cmd,
-                timeout=30
-            )
+            result = await self.executor.execute_command(load_cmd, timeout=30)
 
             if result.success or "WinPwn" in result.stdout:
                 self._loaded = True
@@ -163,11 +160,7 @@ try {
 } catch {}
 """
 
-    def _build_module_command(
-        self,
-        module: WinPwnModule,
-        parameters: Dict[str, Any] = None
-    ) -> str:
+    def _build_module_command(self, module: WinPwnModule, parameters: Dict[str, Any] = None) -> str:
         """Build PowerShell command for module execution."""
         func_name = self.config.get_module_command(module)
         cmd = func_name
@@ -178,7 +171,7 @@ try {
 
         # Add output directory
         if self.config.output_dir:
-            cmd += f" -consoleoutput"
+            cmd += " -consoleoutput"
 
         # Add any custom parameters
         if parameters:
@@ -192,9 +185,7 @@ try {
         return cmd
 
     async def run_module(
-        self,
-        module: WinPwnModule,
-        parameters: Dict[str, Any] = None
+        self, module: WinPwnModule, parameters: Dict[str, Any] = None
     ) -> ModuleResult:
         """
         Run a specific WinPwn module.
@@ -219,26 +210,19 @@ try {
             else:
                 script = f"{load_cmd}\n{func_cmd}"
 
-            result = await self.executor.execute_command(
-                script,
-                timeout=self.config.module_timeout
-            )
+            result = await self.executor.execute_command(script, timeout=self.config.module_timeout)
         else:
             # Remote execution
             await self._ensure_loaded()
             func_cmd = self._build_module_command(module, parameters)
             result = await self.executor.execute_command(
-                func_cmd,
-                timeout=self.config.module_timeout
+                func_cmd, timeout=self.config.module_timeout
             )
 
         execution_time = asyncio.get_event_loop().time() - start_time
 
         # Parse output
-        findings, credentials = self.parser.parse_all(
-            result.output,
-            module=module.value
-        )
+        findings, credentials = self.parser.parse_all(result.output, module=module.value)
 
         # Store results
         self.findings.extend(findings)
@@ -251,7 +235,7 @@ try {
             raw_output=result.output,
             findings=findings,
             credentials=credentials,
-            errors=[result.stderr] if result.stderr and not result.success else []
+            errors=[result.stderr] if result.stderr and not result.success else [],
         )
 
         self.module_results.append(module_result)
@@ -313,10 +297,7 @@ try {
         """
         return await self.run_module(WinPwnModule.PRIVESC)
 
-    async def run_credential_extraction(
-        self,
-        method: str = "kittielocal"
-    ) -> ModuleResult:
+    async def run_credential_extraction(self, method: str = "kittielocal") -> ModuleResult:
         """
         Run credential extraction module.
 
@@ -363,10 +344,7 @@ try {
         """
         return await self.run_module(WinPwnModule.BLOODHOUND)
 
-    async def run_all_modules(
-        self,
-        modules: List[WinPwnModule] = None
-    ) -> WinPwnResult:
+    async def run_all_modules(self, modules: List[WinPwnModule] = None) -> WinPwnResult:
         """
         Run multiple WinPwn modules.
 
@@ -414,9 +392,9 @@ try {
                 "config": {
                     "execution_mode": self.config.execution_mode.value,
                     "bypass_amsi": self.config.bypass_amsi,
-                    "noninteractive": self.config.noninteractive
+                    "noninteractive": self.config.noninteractive,
                 }
-            }
+            },
         )
 
     async def run_full_assessment(self) -> WinPwnResult:
@@ -432,20 +410,20 @@ try {
         modules = [
             # Phase 1: Reconnaissance
             WinPwnModule.LOCAL_RECON,
-
             # Phase 2: Privilege escalation check
             WinPwnModule.PRIVESC,
-
             # Phase 3: Credential extraction (if admin)
             WinPwnModule.KITTIE_LOCAL,
         ]
 
         # Add domain modules if domain credentials available
         if self.config.credentials.has_credentials() and self.config.domain:
-            modules.extend([
-                WinPwnModule.DOMAIN_RECON,
-                WinPwnModule.KERBEROASTING,
-            ])
+            modules.extend(
+                [
+                    WinPwnModule.DOMAIN_RECON,
+                    WinPwnModule.KERBEROASTING,
+                ]
+            )
 
         return await self.run_all_modules(modules)
 
@@ -456,12 +434,7 @@ try {
         Returns:
             Formatted findings report
         """
-        lines = [
-            "=" * 60,
-            "WinPwn Assessment Report",
-            "=" * 60,
-            ""
-        ]
+        lines = ["=" * 60, "WinPwn Assessment Report", "=" * 60, ""]
 
         # Group findings by severity
         by_severity = {}
@@ -485,7 +458,9 @@ try {
             lines.append("\nExtracted Credentials:")
             lines.append("-" * 40)
             for cred in self.credentials:
-                cred_str = f"  {cred.domain}\\{cred.username}" if cred.domain else f"  {cred.username}"
+                cred_str = (
+                    f"  {cred.domain}\\{cred.username}" if cred.domain else f"  {cred.username}"
+                )
                 if cred.password:
                     cred_str += " (plaintext)"
                 elif cred.ntlm_hash:
@@ -502,9 +477,7 @@ try {
 
 # Convenience functions
 async def run_winpwn_assessment(
-    script_path: str,
-    modules: List[str] = None,
-    **kwargs
+    script_path: str, modules: List[str] = None, **kwargs
 ) -> WinPwnResult:
     """
     Run WinPwn assessment with specified modules.
@@ -517,15 +490,11 @@ async def run_winpwn_assessment(
     Returns:
         WinPwnResult with findings
     """
-    config = get_winpwn_config(
-        script_path=script_path,
-        **kwargs
-    )
+    config = get_winpwn_config(script_path=script_path, **kwargs)
 
     if modules:
         config.enabled_modules = [
-            WinPwnModule(m) for m in modules
-            if m in [e.value for e in WinPwnModule]
+            WinPwnModule(m) for m in modules if m in [e.value for e in WinPwnModule]
         ]
 
     attacks = WinPwnAttacks(config)

@@ -20,35 +20,36 @@ Security:
 import os
 import re
 import secrets
-from pathlib import Path
-from typing import Optional, List
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
+from typing import List, Optional
 from urllib.parse import urlparse
 
-from fastapi import FastAPI, HTTPException, BackgroundTasks, Request, Depends
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import Response
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, Field, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 # JWT imports with fallback
 try:
     import jwt
+
     JWT_AVAILABLE = True
 except ImportError:
     JWT_AVAILABLE = False
 
 # Import AIPT v2 components
 from aipt_v2.database.repository import Repository
-from aipt_v2.intelligence import ToolRAG, CVEIntelligence
-from aipt_v2.tools.tool_processing import process_tool_invocations
+from aipt_v2.intelligence import CVEIntelligence, ToolRAG
 from aipt_v2.utils.logging import logger
-from .health import health_router, record_scan, record_tool_invocation
+
+from .health import health_router
 
 # Rate limiter instance
 limiter = Limiter(key_func=get_remote_address)
@@ -61,9 +62,12 @@ CVE_PATTERN = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
 
 # ============== Pydantic Models ==============
 
+
 class ProjectCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=255, description="Project name")
-    target: str = Field(..., min_length=1, max_length=MAX_TARGET_LENGTH, description="Target URL or domain")
+    target: str = Field(
+        ..., min_length=1, max_length=MAX_TARGET_LENGTH, description="Target URL or domain"
+    )
     description: Optional[str] = Field(None, max_length=2000, description="Project description")
     scope: Optional[List[str]] = Field(None, max_length=100, description="In-scope domains/IPs")
 
@@ -149,7 +153,9 @@ class FindingResponse(BaseModel):
 
 
 class ScanRequest(BaseModel):
-    target: str = Field(..., min_length=1, max_length=MAX_TARGET_LENGTH, description="Target URL or domain")
+    target: str = Field(
+        ..., min_length=1, max_length=MAX_TARGET_LENGTH, description="Target URL or domain"
+    )
     tools: Optional[List[str]] = Field(None, max_length=20, description="Tools to run")
     phase: str = Field(default="recon", description="Scan phase")
 
@@ -165,12 +171,28 @@ class ScanRequest(BaseModel):
         if v.startswith(("http://", "https://")):
             parsed = urlparse(v)
             if parsed.scheme not in ALLOWED_SCAN_PROTOCOLS:
-                raise ValueError(f"Protocol must be http or https")
+                raise ValueError("Protocol must be http or https")
             if not parsed.netloc:
                 raise ValueError("Invalid URL: missing hostname")
         else:
             # Check for command injection characters
-            dangerous_chars = [";", "&", "|", "$", "`", "\n", "\r", "'", '"', "(", ")", "{", "}", "<", ">"]
+            dangerous_chars = [
+                ";",
+                "&",
+                "|",
+                "$",
+                "`",
+                "\n",
+                "\r",
+                "'",
+                '"',
+                "(",
+                ")",
+                "{",
+                "}",
+                "<",
+                ">",
+            ]
             if any(c in v for c in dangerous_chars):
                 raise ValueError("Target contains invalid characters")
         return v
@@ -238,13 +260,16 @@ class CVEResponse(BaseModel):
 
 # ============== Authentication Models ==============
 
+
 class TokenRequest(BaseModel):
     """Request model for token generation."""
+
     api_key: str = Field(..., min_length=32, max_length=128, description="API key")
 
 
 class TokenResponse(BaseModel):
     """Response model for token generation."""
+
     access_token: str
     token_type: str = "bearer"
     expires_in: int
@@ -252,6 +277,7 @@ class TokenResponse(BaseModel):
 
 class UserInfo(BaseModel):
     """User information extracted from JWT."""
+
     sub: str  # Subject (user identifier)
     exp: datetime
     iat: datetime
@@ -322,7 +348,7 @@ class JWTAuth:
         if not JWT_AVAILABLE:
             raise HTTPException(
                 status_code=503,
-                detail="JWT support not available. Install PyJWT: pip install PyJWT"
+                detail="JWT support not available. Install PyJWT: pip install PyJWT",
             )
 
         now = datetime.now(timezone.utc)
@@ -358,7 +384,7 @@ class JWTAuth:
                 token,
                 self.secret_key,
                 algorithms=[self.algorithm],
-                options={"require": ["exp", "iat", "sub"]}
+                options={"require": ["exp", "iat", "sub"]},
             )
             return UserInfo(
                 sub=payload["sub"],
@@ -378,6 +404,7 @@ jwt_auth: Optional[JWTAuth] = None
 
 
 # ============== Security Headers Middleware ==============
+
 
 class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """
@@ -419,6 +446,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
 # ============== WAF Middleware ==============
 
+
 class WAFMiddleware(BaseHTTPMiddleware):
     """
     Simple Web Application Firewall middleware.
@@ -452,10 +480,7 @@ class WAFMiddleware(BaseHTTPMiddleware):
     @property
     def patterns(self):
         if self._patterns is None:
-            self._patterns = [
-                re.compile(p, re.IGNORECASE)
-                for p in self.SUSPICIOUS_PATTERNS
-            ]
+            self._patterns = [re.compile(p, re.IGNORECASE) for p in self.SUSPICIOUS_PATTERNS]
         return self._patterns
 
     def _is_suspicious(self, value: str) -> bool:
@@ -481,8 +506,7 @@ class WAFMiddleware(BaseHTTPMiddleware):
                     client=request.client.host if request.client else "unknown",
                 )
                 return JSONResponse(
-                    status_code=403,
-                    content={"detail": "Request blocked by security policy"}
+                    status_code=403, content={"detail": "Request blocked by security policy"}
                 )
 
         # Check path
@@ -493,15 +517,14 @@ class WAFMiddleware(BaseHTTPMiddleware):
                 client=request.client.host if request.client else "unknown",
             )
             return JSONResponse(
-                status_code=403,
-                content={"detail": "Request blocked by security policy"}
+                status_code=403, content={"detail": "Request blocked by security policy"}
             )
 
         return await call_next(request)
 
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme)
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
 ) -> Optional[UserInfo]:
     """
     Dependency to get current authenticated user.
@@ -515,9 +538,7 @@ async def get_current_user(
     return jwt_auth.verify_token(credentials.credentials)
 
 
-async def require_auth(
-    user: Optional[UserInfo] = Depends(get_current_user)
-) -> UserInfo:
+async def require_auth(user: Optional[UserInfo] = Depends(get_current_user)) -> UserInfo:
     """
     Dependency to require authentication.
 
@@ -636,20 +657,15 @@ def create_app(
         3. Use returned token in Authorization header: Bearer <token>
         """
         if not jwt_auth.validate_api_key(token_request.api_key):
-            raise HTTPException(
-                status_code=401,
-                detail="Invalid API key"
-            )
+            raise HTTPException(status_code=401, detail="Invalid API key")
 
         # Create token with API key hash as subject (don't expose full key)
         import hashlib
+
         subject = hashlib.sha256(token_request.api_key.encode()).hexdigest()[:16]
         token, expires_in = jwt_auth.create_token(subject)
 
-        return TokenResponse(
-            access_token=token,
-            expires_in=expires_in
-        )
+        return TokenResponse(access_token=token, expires_in=expires_in)
 
     @app.get("/auth/me", tags=["Authentication"])
     async def get_current_user_info(user: UserInfo = Depends(require_auth)):
@@ -729,6 +745,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="Project not found")
 
         from aipt_v2.database.models import PhaseType
+
         db_session = repo.create_session(
             project_id=project_id,
             name=session.name,
@@ -784,6 +801,7 @@ def create_app(
         """Run a quick scan on target (rate limited: 10/minute)"""
         import asyncio
         import shutil
+
         from aipt_v2.tools.parser import OutputParser
 
         findings = []
@@ -798,7 +816,9 @@ def create_app(
                 # not inspect the path/query, so shell interpolation here was
                 # injectable (e.g. https://example.com/$(id)).
                 proc = await asyncio.create_subprocess_exec(
-                    "nmap", "-F", scan_request.target,
+                    "nmap",
+                    "-F",
+                    scan_request.target,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE,
                 )
@@ -808,12 +828,17 @@ def create_app(
                 if proc.returncode == 0:
                     parser = OutputParser()
                     parsed = parser.parse(output, "nmap")
-                    findings.extend([{
-                        "type": f.type,
-                        "value": f.value,
-                        "description": f.description,
-                        "severity": f.severity,
-                    } for f in parsed])
+                    findings.extend(
+                        [
+                            {
+                                "type": f.type,
+                                "value": f.value,
+                                "description": f.description,
+                                "severity": f.severity,
+                            }
+                            for f in parsed
+                        ]
+                    )
             except asyncio.TimeoutError:
                 logger.warning("Tool execution timed out", tool="nmap", target=scan_request.target)
             except Exception as e:
@@ -827,7 +852,9 @@ def create_app(
 
     @app.post("/scan/tool")
     @limiter.limit("5/minute")  # Stricter limit for tool execution
-    async def run_tool(request: Request, tool_name: str, target: str, options: Optional[str] = None):
+    async def run_tool(
+        request: Request, tool_name: str, target: str, options: Optional[str] = None
+    ):
         """Run a specific tool (rate limited: 5/minute)"""
         import asyncio
         import time
@@ -839,7 +866,9 @@ def create_app(
         # Validate target - check for command injection
         dangerous_chars = [";", "&", "|", "$", "`", "\n", "\r", "'", '"']
         if any(c in target for c in dangerous_chars):
-            raise HTTPException(status_code=400, detail="Invalid target: contains dangerous characters")
+            raise HTTPException(
+                status_code=400, detail="Invalid target: contains dangerous characters"
+            )
 
         import shlex
 
@@ -970,6 +999,7 @@ app = create_app()
 
 if __name__ == "__main__":
     import uvicorn
+
     # Security: Default to localhost to prevent accidental network exposure
     # Use --host 0.0.0.0 explicitly for production behind reverse proxy
     uvicorn.run(app, host="127.0.0.1", port=8000)

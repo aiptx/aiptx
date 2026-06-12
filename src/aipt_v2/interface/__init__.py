@@ -8,12 +8,12 @@ Provides:
 """
 
 from aipt_v2.interface.cli_commands import (
-    create_parser,
     cli_main,
+    create_parser,
     run_scan_command,
-    run_verify_command,
-    run_tools_command,
     run_setup_command,
+    run_tools_command,
+    run_verify_command,
 )
 
 __all__ = [

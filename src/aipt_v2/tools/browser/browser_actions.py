@@ -6,7 +6,6 @@ from aipt_v2.tools.registry import register_tool
 
 from .tab_manager import BrowserTabManager, get_browser_tab_manager
 
-
 BrowserAction = Literal[
     "launch",
     "goto",

@@ -23,15 +23,13 @@ Usage:
 import asyncio
 import json
 import re
-import random
-import string
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Any, Dict, List, Optional
+from urllib.parse import urlencode, urljoin
 
 from aipt_v2.core.event_loop_manager import current_time
-from typing import List, Dict, Any, Optional, Union
-from urllib.parse import urljoin, urlencode
 
 try:
     import aiohttp
@@ -47,6 +45,7 @@ except ImportError:
 @dataclass
 class OpenAPIConfig:
     """OpenAPI fuzzer configuration."""
+
     base_url: str
     spec_path: Optional[str] = None
     spec_url: Optional[str] = None
@@ -78,6 +77,7 @@ class OpenAPIConfig:
 @dataclass
 class OpenAPIFinding:
     """OpenAPI security finding."""
+
     vulnerability: str
     severity: str
     endpoint: str
@@ -99,6 +99,7 @@ class OpenAPIFinding:
 @dataclass
 class OpenAPIEndpoint:
     """Parsed OpenAPI endpoint."""
+
     path: str
     method: str
     operation_id: str
@@ -113,6 +114,7 @@ class OpenAPIEndpoint:
 @dataclass
 class OpenAPIFuzzResult:
     """Result of OpenAPI fuzzing."""
+
     base_url: str
     status: str
     started_at: str
@@ -134,7 +136,7 @@ class OpenAPIFuzzer:
     """
 
     # Fuzzing payloads by type
-    SQLI_PAYLOADS = ["'", "\"", "' OR '1'='1", "1; DROP TABLE users--", "admin'--"]
+    SQLI_PAYLOADS = ["'", '"', "' OR '1'='1", "1; DROP TABLE users--", "admin'--"]
     XSS_PAYLOADS = ["<script>alert(1)</script>", "javascript:alert(1)", "<img onerror=alert(1)>"]
     PATH_TRAVERSAL = ["../../../etc/passwd", "..\\..\\..\\windows\\system32\\config\\sam"]
     COMMAND_INJECTION = ["; ls -la", "| cat /etc/passwd", "`whoami`", "$(id)"]
@@ -154,9 +156,7 @@ class OpenAPIFuzzer:
         """
         self.base_url = base_url.rstrip("/")
         self.config = config or OpenAPIConfig(
-            base_url=base_url,
-            spec_path=kwargs.get("spec_path"),
-            spec_url=kwargs.get("spec_url")
+            base_url=base_url, spec_path=kwargs.get("spec_path"), spec_url=kwargs.get("spec_url")
         )
         self.spec: Dict = {}
         self.endpoints: List[OpenAPIEndpoint] = []
@@ -168,7 +168,7 @@ class OpenAPIFuzzer:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "AIPTX-OpenAPI-Fuzzer/1.0"
+            "User-Agent": "AIPTX-OpenAPI-Fuzzer/1.0",
         }
         headers.update(self.config.headers)
 
@@ -197,7 +197,9 @@ class OpenAPIFuzzer:
                     if yaml:
                         spec_data = yaml.safe_load(content)
                     else:
-                        raise ImportError("PyYAML required for YAML specs. Install with: pip install pyyaml")
+                        raise ImportError(
+                            "PyYAML required for YAML specs. Install with: pip install pyyaml"
+                        )
                 else:
                     spec_data = json.loads(content)
 
@@ -207,9 +209,7 @@ class OpenAPIFuzzer:
                 try:
                     async with aiohttp.ClientSession() as session:
                         async with session.get(
-                            self.config.spec_url,
-                            headers=self._get_headers(),
-                            ssl=False
+                            self.config.spec_url, headers=self._get_headers(), ssl=False
                         ) as response:
                             text = await response.text()
                             if "yaml" in self.config.spec_url or "yml" in self.config.spec_url:
@@ -223,9 +223,13 @@ class OpenAPIFuzzer:
         # Try common spec locations
         if not spec_data:
             common_paths = [
-                "/openapi.json", "/swagger.json", "/api-docs",
-                "/openapi.yaml", "/swagger.yaml",
-                "/v2/api-docs", "/v3/api-docs"
+                "/openapi.json",
+                "/swagger.json",
+                "/api-docs",
+                "/openapi.yaml",
+                "/swagger.yaml",
+                "/v2/api-docs",
+                "/v3/api-docs",
             ]
 
             if aiohttp:
@@ -264,7 +268,15 @@ class OpenAPIFuzzer:
 
         for path, methods in paths.items():
             for method, operation in methods.items():
-                if method.upper() not in ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"]:
+                if method.upper() not in [
+                    "GET",
+                    "POST",
+                    "PUT",
+                    "DELETE",
+                    "PATCH",
+                    "OPTIONS",
+                    "HEAD",
+                ]:
                     continue
 
                 # Parse parameters
@@ -274,15 +286,21 @@ class OpenAPIFuzzer:
                     # Handle $ref
                     if "$ref" in param:
                         ref_path = param["$ref"].split("/")[-1]
-                        param = self.spec.get("components", {}).get("parameters", {}).get(ref_path, param)
+                        param = (
+                            self.spec.get("components", {})
+                            .get("parameters", {})
+                            .get(ref_path, param)
+                        )
 
-                    parameters.append({
-                        "name": param.get("name", ""),
-                        "in": param.get("in", "query"),
-                        "required": param.get("required", False),
-                        "schema": param.get("schema", {}),
-                        "type": param.get("schema", {}).get("type", "string")
-                    })
+                    parameters.append(
+                        {
+                            "name": param.get("name", ""),
+                            "in": param.get("in", "query"),
+                            "required": param.get("required", False),
+                            "schema": param.get("schema", {}),
+                            "type": param.get("schema", {}).get("type", "string"),
+                        }
+                    )
 
                 # Parse request body
                 request_body = None
@@ -291,10 +309,7 @@ class OpenAPIFuzzer:
                     content = rb.get("content", {})
                     if "application/json" in content:
                         schema = content["application/json"].get("schema", {})
-                        request_body = {
-                            "required": rb.get("required", False),
-                            "schema": schema
-                        }
+                        request_body = {"required": rb.get("required", False), "schema": schema}
 
                 endpoint = OpenAPIEndpoint(
                     path=path,
@@ -305,7 +320,7 @@ class OpenAPIFuzzer:
                     request_body=request_body,
                     responses=operation.get("responses", {}),
                     security=operation.get("security", []),
-                    tags=operation.get("tags", [])
+                    tags=operation.get("tags", []),
                 )
 
                 self.endpoints.append(endpoint)
@@ -316,7 +331,7 @@ class OpenAPIFuzzer:
         path: str,
         params: Optional[Dict] = None,
         body: Optional[Dict] = None,
-        headers: Optional[Dict] = None
+        headers: Optional[Dict] = None,
     ) -> Dict[str, Any]:
         """Send HTTP request and return response."""
         if aiohttp is None:
@@ -341,7 +356,7 @@ class OpenAPIFuzzer:
                     json=body if body else None,
                     headers=req_headers,
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                    ssl=False
+                    ssl=False,
                 ) as response:
                     text = await response.text()
                     try:
@@ -353,7 +368,7 @@ class OpenAPIFuzzer:
                         "status": response.status,
                         "headers": dict(response.headers),
                         "data": data,
-                        "url": str(response.url)
+                        "url": str(response.url),
                     }
         except Exception as e:
             return {"error": str(e)}
@@ -372,19 +387,21 @@ class OpenAPIFuzzer:
                 response = await self._send_request(endpoint.method, test_path)
 
                 if self._check_sqli_response(response):
-                    findings.append(OpenAPIFinding(
-                        vulnerability="SQL Injection in Path Parameter",
-                        severity="critical",
-                        endpoint=endpoint.path,
-                        method=endpoint.method,
-                        parameter=param,
-                        payload=payload,
-                        description=f"Path parameter '{param}' appears vulnerable to SQL injection",
-                        evidence=f"Response indicates SQL error or unexpected behavior",
-                        response_code=response.get("status", 0),
-                        remediation="Use parameterized queries and input validation",
-                        cwe="CWE-89"
-                    ))
+                    findings.append(
+                        OpenAPIFinding(
+                            vulnerability="SQL Injection in Path Parameter",
+                            severity="critical",
+                            endpoint=endpoint.path,
+                            method=endpoint.method,
+                            parameter=param,
+                            payload=payload,
+                            description=f"Path parameter '{param}' appears vulnerable to SQL injection",
+                            evidence="Response indicates SQL error or unexpected behavior",
+                            response_code=response.get("status", 0),
+                            remediation="Use parameterized queries and input validation",
+                            cwe="CWE-89",
+                        )
+                    )
                     break
 
         # Fuzz query parameters
@@ -394,41 +411,43 @@ class OpenAPIFuzzer:
                     for payload in self.SQLI_PAYLOADS + self.XSS_PAYLOADS:
                         path_with_id = self._replace_path_params(endpoint.path)
                         response = await self._send_request(
-                            endpoint.method,
-                            path_with_id,
-                            params={param["name"]: payload}
+                            endpoint.method, path_with_id, params={param["name"]: payload}
                         )
 
                         if self._check_sqli_response(response):
-                            findings.append(OpenAPIFinding(
-                                vulnerability="SQL Injection in Query Parameter",
-                                severity="critical",
-                                endpoint=endpoint.path,
-                                method=endpoint.method,
-                                parameter=param["name"],
-                                payload=payload,
-                                description=f"Query parameter '{param['name']}' vulnerable to injection",
-                                evidence="Response indicates injection vulnerability",
-                                response_code=response.get("status", 0),
-                                remediation="Validate and sanitize all input",
-                                cwe="CWE-89"
-                            ))
+                            findings.append(
+                                OpenAPIFinding(
+                                    vulnerability="SQL Injection in Query Parameter",
+                                    severity="critical",
+                                    endpoint=endpoint.path,
+                                    method=endpoint.method,
+                                    parameter=param["name"],
+                                    payload=payload,
+                                    description=f"Query parameter '{param['name']}' vulnerable to injection",
+                                    evidence="Response indicates injection vulnerability",
+                                    response_code=response.get("status", 0),
+                                    remediation="Validate and sanitize all input",
+                                    cwe="CWE-89",
+                                )
+                            )
                             break
 
                         if self._check_xss_response(response, payload):
-                            findings.append(OpenAPIFinding(
-                                vulnerability="Reflected XSS in Query Parameter",
-                                severity="high",
-                                endpoint=endpoint.path,
-                                method=endpoint.method,
-                                parameter=param["name"],
-                                payload=payload,
-                                description=f"Query parameter '{param['name']}' reflects XSS payload",
-                                evidence="XSS payload reflected in response",
-                                response_code=response.get("status", 0),
-                                remediation="Encode output and validate input",
-                                cwe="CWE-79"
-                            ))
+                            findings.append(
+                                OpenAPIFinding(
+                                    vulnerability="Reflected XSS in Query Parameter",
+                                    severity="high",
+                                    endpoint=endpoint.path,
+                                    method=endpoint.method,
+                                    parameter=param["name"],
+                                    payload=payload,
+                                    description=f"Query parameter '{param['name']}' reflects XSS payload",
+                                    evidence="XSS payload reflected in response",
+                                    response_code=response.get("status", 0),
+                                    remediation="Encode output and validate input",
+                                    cwe="CWE-79",
+                                )
+                            )
                             break
 
         # Fuzz request body
@@ -448,9 +467,18 @@ class OpenAPIFuzzer:
 
         data_str = json.dumps(response.get("data", {})).lower()
         sql_indicators = [
-            "sql syntax", "mysql", "postgresql", "sqlite", "oracle",
-            "syntax error", "unclosed quotation", "unterminated",
-            "ORA-", "PG::", "SQLSTATE", "SQL Server"
+            "sql syntax",
+            "mysql",
+            "postgresql",
+            "sqlite",
+            "oracle",
+            "syntax error",
+            "unclosed quotation",
+            "unterminated",
+            "ORA-",
+            "PG::",
+            "SQLSTATE",
+            "SQL Server",
         ]
         return any(ind.lower() in data_str for ind in sql_indicators)
 
@@ -483,19 +511,21 @@ class OpenAPIFuzzer:
                     response = await self._send_request(endpoint.method, path, body=body)
 
                     if self._check_sqli_response(response):
-                        findings.append(OpenAPIFinding(
-                            vulnerability="SQL Injection in Request Body",
-                            severity="critical",
-                            endpoint=endpoint.path,
-                            method=endpoint.method,
-                            parameter=prop_name,
-                            payload=payload,
-                            description=f"Body parameter '{prop_name}' vulnerable to SQL injection",
-                            evidence="SQL error detected in response",
-                            response_code=response.get("status", 0),
-                            remediation="Use parameterized queries",
-                            cwe="CWE-89"
-                        ))
+                        findings.append(
+                            OpenAPIFinding(
+                                vulnerability="SQL Injection in Request Body",
+                                severity="critical",
+                                endpoint=endpoint.path,
+                                method=endpoint.method,
+                                parameter=prop_name,
+                                payload=payload,
+                                description=f"Body parameter '{prop_name}' vulnerable to SQL injection",
+                                evidence="SQL error detected in response",
+                                response_code=response.get("status", 0),
+                                remediation="Use parameterized queries",
+                                cwe="CWE-89",
+                            )
+                        )
                         break
 
         return findings
@@ -514,18 +544,20 @@ class OpenAPIFuzzer:
                     if response.get("status") == 200 and "error" not in response:
                         data = response.get("data", {})
                         if data and data != {"raw": ""}:
-                            findings.append(OpenAPIFinding(
-                                vulnerability="Potential BOLA/IDOR",
-                                severity="high",
-                                endpoint=endpoint.path,
-                                method=endpoint.method,
-                                payload=test_id,
-                                description=f"Endpoint may be vulnerable to BOLA with ID: {test_id}",
-                                evidence=f"Received 200 OK for ID: {test_id}",
-                                response_code=200,
-                                remediation="Implement proper authorization checks for all resources",
-                                cwe="CWE-639"
-                            ))
+                            findings.append(
+                                OpenAPIFinding(
+                                    vulnerability="Potential BOLA/IDOR",
+                                    severity="high",
+                                    endpoint=endpoint.path,
+                                    method=endpoint.method,
+                                    payload=test_id,
+                                    description=f"Endpoint may be vulnerable to BOLA with ID: {test_id}",
+                                    evidence=f"Received 200 OK for ID: {test_id}",
+                                    response_code=200,
+                                    remediation="Implement proper authorization checks for all resources",
+                                    cwe="CWE-639",
+                                )
+                            )
                             break
 
         return findings
@@ -548,17 +580,19 @@ class OpenAPIFuzzer:
                 response = await self._send_request(endpoint.method, path)
 
                 if response.get("status") == 200:
-                    findings.append(OpenAPIFinding(
-                        vulnerability="Authentication Bypass",
-                        severity="critical",
-                        endpoint=endpoint.path,
-                        method=endpoint.method,
-                        description="Endpoint accessible without authentication",
-                        evidence=f"Received 200 OK without auth token",
-                        response_code=200,
-                        remediation="Enforce authentication on all protected endpoints",
-                        cwe="CWE-306"
-                    ))
+                    findings.append(
+                        OpenAPIFinding(
+                            vulnerability="Authentication Bypass",
+                            severity="critical",
+                            endpoint=endpoint.path,
+                            method=endpoint.method,
+                            description="Endpoint accessible without authentication",
+                            evidence="Received 200 OK without auth token",
+                            response_code=200,
+                            remediation="Enforce authentication on all protected endpoints",
+                            cwe="CWE-306",
+                        )
+                    )
 
         # Restore auth
         self.config.auth_token = orig_token
@@ -588,17 +622,19 @@ class OpenAPIFuzzer:
                 return findings  # Rate limiting detected
 
         if success_count >= 18:
-            findings.append(OpenAPIFinding(
-                vulnerability="Missing Rate Limiting",
-                severity="medium",
-                endpoint=endpoint.path,
-                method="GET",
-                description="API lacks rate limiting protection",
-                evidence=f"{success_count}/20 rapid requests succeeded",
-                response_code=200,
-                remediation="Implement rate limiting to prevent abuse",
-                cwe="CWE-770"
-            ))
+            findings.append(
+                OpenAPIFinding(
+                    vulnerability="Missing Rate Limiting",
+                    severity="medium",
+                    endpoint=endpoint.path,
+                    method="GET",
+                    description="API lacks rate limiting protection",
+                    evidence=f"{success_count}/20 rapid requests succeeded",
+                    response_code=200,
+                    remediation="Implement rate limiting to prevent abuse",
+                    cwe="CWE-770",
+                )
+            )
 
         return findings
 
@@ -620,7 +656,7 @@ class OpenAPIFuzzer:
                 "admin": True,
                 "permissions": ["admin"],
                 "is_superuser": True,
-                "privilege": "admin"
+                "privilege": "admin",
             }
 
             path = self._replace_path_params(endpoint.path)
@@ -632,18 +668,20 @@ class OpenAPIFuzzer:
                 if response.get("status") in [200, 201]:
                     data = response.get("data", {})
                     if isinstance(data, dict) and field_name in str(data):
-                        findings.append(OpenAPIFinding(
-                            vulnerability="Potential Mass Assignment",
-                            severity="high",
-                            endpoint=endpoint.path,
-                            method=endpoint.method,
-                            parameter=field_name,
-                            description=f"API accepts undocumented field: {field_name}",
-                            evidence=f"Field '{field_name}' was accepted in request",
-                            response_code=response.get("status", 0),
-                            remediation="Implement allowlist for acceptable fields",
-                            cwe="CWE-915"
-                        ))
+                        findings.append(
+                            OpenAPIFinding(
+                                vulnerability="Potential Mass Assignment",
+                                severity="high",
+                                endpoint=endpoint.path,
+                                method=endpoint.method,
+                                parameter=field_name,
+                                description=f"API accepts undocumented field: {field_name}",
+                                evidence=f"Field '{field_name}' was accepted in request",
+                                response_code=response.get("status", 0),
+                                remediation="Implement allowlist for acceptable fields",
+                                cwe="CWE-915",
+                            )
+                        )
 
         return findings
 
@@ -671,7 +709,7 @@ class OpenAPIFuzzer:
                     requests_made=0,
                     findings=[],
                     spec_info={},
-                    metadata={"error": "Could not load OpenAPI specification"}
+                    metadata={"error": "Could not load OpenAPI specification"},
                 )
 
         findings = []
@@ -703,7 +741,7 @@ class OpenAPIFuzzer:
             "version": self.spec.get("info", {}).get("version", ""),
             "openapi_version": self.spec.get("openapi", self.spec.get("swagger", "")),
             "endpoints_count": len(self.endpoints),
-            "servers": self.spec.get("servers", [])
+            "servers": self.spec.get("servers", []),
         }
 
         return OpenAPIFuzzResult(
@@ -721,9 +759,9 @@ class OpenAPIFuzzer:
                     "fuzz_parameters": self.config.fuzz_parameters,
                     "fuzz_bodies": self.config.fuzz_bodies,
                     "test_bola": self.config.test_bola,
-                    "test_auth_bypass": self.config.test_auth_bypass
+                    "test_auth_bypass": self.config.test_auth_bypass,
                 }
-            }
+            },
         )
 
 
@@ -733,7 +771,7 @@ async def fuzz_openapi(
     spec_path: Optional[str] = None,
     spec_url: Optional[str] = None,
     auth_token: Optional[str] = None,
-    full_scan: bool = True
+    full_scan: bool = True,
 ) -> OpenAPIFuzzResult:
     """
     Quick OpenAPI fuzzing scan.
@@ -756,7 +794,7 @@ async def fuzz_openapi(
         test_bola=full_scan,
         test_mass_assignment=full_scan,
         test_rate_limit=full_scan,
-        test_auth_bypass=full_scan
+        test_auth_bypass=full_scan,
     )
 
     fuzzer = OpenAPIFuzzer(base_url, config)

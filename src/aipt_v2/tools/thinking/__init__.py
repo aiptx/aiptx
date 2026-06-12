@@ -29,10 +29,10 @@ Usage:
 """
 
 from .thinking_actions import (
-    think,
+    ThinkingResult,
     analyze_options,
     plan_attack,
-    ThinkingResult,
+    think,
 )
 
 __all__ = [

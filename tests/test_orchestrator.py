@@ -5,15 +5,15 @@ Unit Tests for AIPT v2 Orchestrator Module
 Tests for orchestrator.py - Full penetration testing pipeline.
 """
 
-import pytest
 import asyncio
 import json
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from pathlib import Path
-from datetime import datetime
+from unittest.mock import AsyncMock, patch
 
+import pytest
 
 # ============== Dataclass Tests ==============
+
 
 class TestFindingDataclass:
     """Tests for Finding dataclass."""
@@ -68,11 +68,7 @@ class TestFindingDataclass:
             phase="exploit",
             tool="acunetix",
             target="https://example.com/api",
-            metadata={
-                "cvss": 8.5,
-                "cwe": "CWE-89",
-                "vuln_id": "vuln-123"
-            }
+            metadata={"cvss": 8.5, "cwe": "CWE-89", "vuln_id": "vuln-123"},
         )
 
         assert finding.metadata["cvss"] == 8.5
@@ -84,7 +80,7 @@ class TestPhaseResultDataclass:
 
     def test_phase_result_creation(self):
         """Test phase result creation."""
-        from aipt_v2.orchestrator import PhaseResult, Phase
+        from aipt_v2.orchestrator import Phase, PhaseResult
 
         result = PhaseResult(
             phase=Phase.RECON,
@@ -103,7 +99,7 @@ class TestPhaseResultDataclass:
 
     def test_phase_result_defaults(self):
         """Test phase result default values."""
-        from aipt_v2.orchestrator import PhaseResult, Phase
+        from aipt_v2.orchestrator import Phase, PhaseResult
 
         result = PhaseResult(
             phase=Phase.SCAN,
@@ -180,6 +176,7 @@ class TestOrchestratorConfigDataclass:
 
 # ============== Enums Tests ==============
 
+
 class TestEnums:
     """Tests for Phase and Severity enums."""
 
@@ -205,6 +202,7 @@ class TestEnums:
 
 # ============== Orchestrator Class Tests ==============
 
+
 class TestOrchestratorInitialization:
     """Tests for Orchestrator initialization."""
 
@@ -215,14 +213,10 @@ class TestOrchestratorInitialization:
 
     def test_basic_initialization(self, temp_output_dir):
         """Test basic orchestrator initialization."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(temp_output_dir)
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(temp_output_dir))
             orch = Orchestrator("example.com", config)
 
             assert orch.domain == "example.com"
@@ -233,27 +227,21 @@ class TestOrchestratorInitialization:
 
     def test_target_normalization_https(self, temp_output_dir):
         """Test target normalization adds https."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(temp_output_dir)
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(temp_output_dir))
             orch = Orchestrator("example.com", config)
 
             assert orch.target == "https://example.com"
 
     def test_target_normalization_preserves_http(self, temp_output_dir):
         """Test target normalization preserves http."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
-                target="http://example.com",
-                output_dir=str(temp_output_dir)
+                target="http://example.com", output_dir=str(temp_output_dir)
             )
             orch = Orchestrator("http://example.com", config)
 
@@ -261,13 +249,11 @@ class TestOrchestratorInitialization:
 
     def test_domain_extraction(self, temp_output_dir):
         """Test domain extraction from URL."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
-                target="https://api.example.com:8443/path",
-                output_dir=str(temp_output_dir)
+                target="https://api.example.com:8443/path", output_dir=str(temp_output_dir)
             )
             orch = Orchestrator("https://api.example.com:8443/path", config)
 
@@ -275,28 +261,20 @@ class TestOrchestratorInitialization:
 
     def test_output_directory_created(self, temp_output_dir):
         """Test output directory is created."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(temp_output_dir)
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(temp_output_dir))
             orch = Orchestrator("example.com", config)
 
             assert orch.output_dir.exists()
 
     def test_callbacks_default_to_none(self, temp_output_dir):
         """Test callbacks are None by default."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(temp_output_dir)
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(temp_output_dir))
             orch = Orchestrator("example.com", config)
 
             assert orch.on_phase_start is None
@@ -356,14 +334,10 @@ class TestOrchestratorHelperMethods:
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator instance for testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(tmp_path / "results")
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(tmp_path / "results"))
             return Orchestrator("example.com", config)
 
     def test_parse_nuclei_severity_critical(self, orchestrator):
@@ -422,14 +396,10 @@ class TestOrchestratorCommandExecution:
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator instance."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
-            config = OrchestratorConfig(
-                target="example.com",
-                output_dir=str(tmp_path / "results")
-            )
+            config = OrchestratorConfig(target="example.com", output_dir=str(tmp_path / "results"))
             return Orchestrator("example.com", config)
 
     @pytest.mark.asyncio
@@ -439,8 +409,10 @@ class TestOrchestratorCommandExecution:
         mock_proc.communicate.return_value = (b"output", b"")
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"output", b"")):
+        with (
+            patch("asyncio.create_subprocess_shell", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"output", b"")),
+        ):
             ret, output = await orchestrator._run_command("echo test")
 
             assert ret == 0
@@ -467,14 +439,14 @@ class TestOrchestratorCommandExecution:
 
 # ============== Phase Execution Tests ==============
 
+
 class TestReconPhase:
     """Tests for reconnaissance phase."""
 
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator for recon testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
@@ -491,7 +463,9 @@ class TestReconPhase:
         mock_proc.communicate.return_value = (b"sub1.example.com\nsub2.example.com", b"")
         mock_proc.returncode = 0
 
-        with patch.object(orchestrator, "_run_command", return_value=(0, "sub1.example.com\nsub2.example.com")):
+        with patch.object(
+            orchestrator, "_run_command", return_value=(0, "sub1.example.com\nsub2.example.com")
+        ):
             result = await orchestrator.run_recon()
 
             assert result.status == "completed"
@@ -510,6 +484,7 @@ class TestReconPhase:
             await orchestrator.run_recon()
 
         from aipt_v2.orchestrator import Phase
+
         assert Phase.RECON in phase_started
         assert len(phase_completed) == 1
 
@@ -520,8 +495,7 @@ class TestScanPhase:
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator for scan testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
@@ -536,7 +510,11 @@ class TestScanPhase:
     @pytest.mark.asyncio
     async def test_scan_runs_nuclei(self, orchestrator):
         """Test scan runs nuclei."""
-        with patch.object(orchestrator, "_run_command", return_value=(0, "[template-id] [high] https://example.com")):
+        with patch.object(
+            orchestrator,
+            "_run_command",
+            return_value=(0, "[template-id] [high] https://example.com"),
+        ):
             result = await orchestrator.run_scan()
 
             assert result.status == "completed"
@@ -559,8 +537,7 @@ class TestExploitPhase:
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator for exploit testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
@@ -619,9 +596,8 @@ class TestReportPhase:
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator for report testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
-            from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig, Finding
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
+            from aipt_v2.orchestrator import Finding, Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
                 target="example.com",
@@ -639,7 +615,7 @@ class TestReportPhase:
                     severity="high",
                     phase="scan",
                     tool="nuclei",
-                    target="https://example.com"
+                    target="https://example.com",
                 ),
                 Finding(
                     type="open_port",
@@ -648,7 +624,7 @@ class TestReportPhase:
                     severity="info",
                     phase="recon",
                     tool="nmap",
-                    target="example.com"
+                    target="example.com",
                 ),
             ]
             return orch
@@ -703,14 +679,14 @@ class TestReportPhase:
 
 # ============== Full Pipeline Tests ==============
 
+
 class TestFullPipeline:
     """Tests for full orchestration pipeline."""
 
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator for pipeline testing."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
@@ -775,14 +751,14 @@ class TestFullPipeline:
 
 # ============== Callback Tests ==============
 
+
 class TestOrchestratorCallbacks:
     """Tests for orchestrator callbacks."""
 
     @pytest.fixture
     def orchestrator(self, tmp_path):
         """Create orchestrator with callbacks."""
-        with patch("aipt_v2.orchestrator.get_acunetix"), \
-             patch("aipt_v2.orchestrator.get_burp"):
+        with patch("aipt_v2.orchestrator.get_acunetix"), patch("aipt_v2.orchestrator.get_burp"):
             from aipt_v2.orchestrator import Orchestrator, OrchestratorConfig
 
             config = OrchestratorConfig(
@@ -805,6 +781,7 @@ class TestOrchestratorCallbacks:
         await orchestrator.run()
 
         from aipt_v2.orchestrator import Phase
+
         assert Phase.RECON in phases_started
         assert Phase.REPORT in phases_started
 
@@ -817,6 +794,7 @@ class TestOrchestratorCallbacks:
         await orchestrator.run()
 
         from aipt_v2.orchestrator import Phase
+
         assert Phase.RECON in phases_completed
         assert Phase.REPORT in phases_completed
 
@@ -835,6 +813,7 @@ class TestOrchestratorCallbacks:
 
 
 # ============== Security Input Validation Tests ==============
+
 
 class TestValidateDomain:
     """Tests for validate_domain function - Security Critical."""
@@ -994,6 +973,7 @@ class TestSanitizeForShell:
 
 
 # ============== Input Validation Edge Cases ==============
+
 
 class TestInputValidationEdgeCases:
     """Additional edge case tests for input validation."""

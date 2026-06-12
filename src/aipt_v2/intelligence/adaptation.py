@@ -9,21 +9,21 @@ Adapts scanning strategy in real-time based on target responses:
 
 This provides intelligent, adaptive scanning that responds to defenses.
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
-import time
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Callable, Optional
 from enum import Enum
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class DefenseType(Enum):
     """Types of defenses that can be detected."""
+
     WAF = "waf"
     RATE_LIMIT = "rate_limit"
     IP_BLOCK = "ip_block"
@@ -35,6 +35,7 @@ class DefenseType(Enum):
 
 class AdaptationAction(Enum):
     """Actions that can be taken in response to defenses."""
+
     SLOW_DOWN = "slow_down"
     CHANGE_PAYLOAD = "change_payload"
     USE_PROXY = "use_proxy"
@@ -47,6 +48,7 @@ class AdaptationAction(Enum):
 @dataclass
 class DefenseDetection:
     """Detection of a defensive measure."""
+
     defense_type: DefenseType
     confidence: float  # 0.0 to 1.0
     evidence: str
@@ -57,6 +59,7 @@ class DefenseDetection:
 @dataclass
 class AdaptationStrategy:
     """Strategy for adapting to detected defenses."""
+
     action: AdaptationAction
     parameters: dict[str, Any]
     reason: str
@@ -66,6 +69,7 @@ class AdaptationStrategy:
 @dataclass
 class RequestResult:
     """Result of a request for adaptation analysis."""
+
     url: str
     status_code: int
     response_time_ms: int
@@ -78,6 +82,7 @@ class RequestResult:
 @dataclass
 class AdaptationState:
     """Current state of the adaptation engine."""
+
     request_count: int = 0
     blocked_count: int = 0
     success_count: int = 0
@@ -185,13 +190,11 @@ class RealTimeAdapter:
             "status_406": result.status_code == 406,
             "status_429": result.status_code == 429,
             "status_503": result.status_code == 503,
-
             # Headers
             "cloudflare": any("cloudflare" in v.lower() for v in result.headers.values()),
             "akamai": any("akamai" in v.lower() for v in result.headers.values()),
             "aws_waf": "x-amzn-requestid" in result.headers,
             "mod_security": "mod_security" in str(result.headers).lower(),
-
             # Response patterns
             "blocked_keyword": result.blocked,
         }
@@ -355,9 +358,11 @@ class RealTimeAdapter:
             )
 
         # No defenses - check if we can speed up
-        if (self.state.is_rate_limited and
-            self.state.blocked_count == 0 and
-            len(self._recent_responses) >= 10):
+        if (
+            self.state.is_rate_limited
+            and self.state.blocked_count == 0
+            and len(self._recent_responses) >= 10
+        ):
 
             # No blocks in recent requests, try reducing delay
             new_delay = max(self.base_delay_ms, self.state.current_delay_ms // 2)

@@ -23,18 +23,20 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 
 class PSLoadMode(Enum):
     """How to load PowerShell scripts."""
-    LOCAL_FILE = "local"        # Load from local .ps1 file
-    REMOTE_IEX = "remote_iex"   # IEX download from URL
-    EMBEDDED = "embedded"       # Embedded script content (cached)
+
+    LOCAL_FILE = "local"  # Load from local .ps1 file
+    REMOTE_IEX = "remote_iex"  # IEX download from URL
+    EMBEDDED = "embedded"  # Embedded script content (cached)
 
 
 class PSCategory(Enum):
     """PowerShell script categories."""
+
     GATHER = "Gather"
     SHELLS = "Shells"
     UTILITY = "Utility"
@@ -55,15 +57,17 @@ class PSCategory(Enum):
 
 class RequiredPrivilege(Enum):
     """Required privilege level for script execution."""
-    NONE = "none"       # No special privileges
-    USER = "user"       # Standard user context
-    ADMIN = "admin"     # Local administrator
-    SYSTEM = "system"   # SYSTEM privileges
+
+    NONE = "none"  # No special privileges
+    USER = "user"  # Standard user context
+    ADMIN = "admin"  # Local administrator
+    SYSTEM = "system"  # SYSTEM privileges
 
 
 @dataclass
 class PSCredentials:
     """Credentials for PowerShell remote operations."""
+
     username: str = ""
     password: str = ""
     domain: str = ""
@@ -82,10 +86,7 @@ class PSCredentials:
 
     def has_credentials(self) -> bool:
         """Check if valid credentials exist."""
-        return bool(
-            (self.username and self.password) or
-            (self.username and self.ntlm_hash)
-        )
+        return bool((self.username and self.password) or (self.username and self.ntlm_hash))
 
     def get_formatted_user(self) -> str:
         """Get formatted username with domain."""
@@ -99,19 +100,19 @@ class PSArsenalConfig:
     """PowerShell Arsenal execution configuration."""
 
     # Script location
-    scripts_path: str = ""              # Path to local scripts
-    base_url: str = ""                  # GitHub raw URL for remote loading
+    scripts_path: str = ""  # Path to local scripts
+    base_url: str = ""  # GitHub raw URL for remote loading
 
     # Execution mode
     load_mode: PSLoadMode = PSLoadMode.LOCAL_FILE
 
     # Target information
-    target_host: str = ""               # Target machine IP/hostname
+    target_host: str = ""  # Target machine IP/hostname
 
     # Remote execution (WinRM)
-    use_winrm: bool = False             # Execute on remote via WinRM
-    winrm_port: int = 5985              # WinRM port (5985 HTTP, 5986 HTTPS)
-    winrm_ssl: bool = False             # Use SSL for WinRM
+    use_winrm: bool = False  # Execute on remote via WinRM
+    winrm_port: int = 5985  # WinRM port (5985 HTTP, 5986 HTTPS)
+    winrm_ssl: bool = False  # Use SSL for WinRM
 
     # Credentials
     credentials: PSCredentials = field(default_factory=PSCredentials)
@@ -121,14 +122,14 @@ class PSArsenalConfig:
     enabled_categories: List[PSCategory] = field(default_factory=list)
 
     # Security options
-    bypass_amsi: bool = True            # Attempt AMSI bypass
-    bypass_etw: bool = True             # Attempt ETW bypass
+    bypass_amsi: bool = True  # Attempt AMSI bypass
+    bypass_etw: bool = True  # Attempt ETW bypass
     amsi_technique: str = "reflection"  # AMSI bypass technique
 
     # Execution options
-    timeout: int = 300                  # Default timeout in seconds
-    script_timeout: int = 120           # Per-script timeout
-    noninteractive: bool = True         # Run non-interactively
+    timeout: int = 300  # Default timeout in seconds
+    script_timeout: int = 120  # Per-script timeout
+    noninteractive: bool = True  # Run non-interactively
 
     # Output settings
     output_dir: str = "./ps_arsenal_results"
@@ -136,8 +137,8 @@ class PSArsenalConfig:
     verbose: bool = False
 
     # Exfiltration options (for scripts that support it)
-    exfil_option: str = ""              # pastebin, gmail, webserver, dns
-    exfil_url: str = ""                 # Exfiltration endpoint
+    exfil_option: str = ""  # pastebin, gmail, webserver, dns
+    exfil_url: str = ""  # Exfiltration endpoint
 
     def __post_init__(self):
         """Initialize from environment."""
@@ -145,8 +146,7 @@ class PSArsenalConfig:
             self.scripts_path = os.getenv("PS_SCRIPTS_PATH", "/tmp/ps_arsenal")
         if not self.base_url:
             self.base_url = os.getenv(
-                "PS_BASE_URL",
-                "https://raw.githubusercontent.com/samratashok/nishang/master"
+                "PS_BASE_URL", "https://raw.githubusercontent.com/samratashok/nishang/master"
             )
 
         # Ensure output directory exists
@@ -202,14 +202,17 @@ class PSArsenalConfig:
 @dataclass
 class PSScanConfig:
     """Configuration for PSArsenalScanner integration."""
+
     scripts_path: str = ""
     base_url: str = "https://raw.githubusercontent.com/samratashok/nishang/master"
     load_mode: PSLoadMode = PSLoadMode.LOCAL_FILE
     bypass_amsi: bool = True
-    scripts_to_run: List[str] = field(default_factory=lambda: [
-        "Get-Information",
-        "Check-VM",
-    ])
+    scripts_to_run: List[str] = field(
+        default_factory=lambda: [
+            "Get-Information",
+            "Check-VM",
+        ]
+    )
     timeout: int = 300
     output_dir: str = "./ps_arsenal_results"
 
@@ -224,7 +227,7 @@ def get_ps_config(
     username: Optional[str] = None,
     password: Optional[str] = None,
     domain: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> PSArsenalConfig:
     """
     Create PSArsenalConfig from parameters and environment.
@@ -244,7 +247,7 @@ def get_ps_config(
         username=username or os.getenv("PS_USERNAME", ""),
         password=password or os.getenv("PS_PASSWORD", ""),
         domain=domain or os.getenv("PS_DOMAIN", ""),
-        ntlm_hash=kwargs.get("ntlm_hash", os.getenv("AD_NTLM_HASH", ""))
+        ntlm_hash=kwargs.get("ntlm_hash", os.getenv("AD_NTLM_HASH", "")),
     )
 
     # Determine load mode
@@ -255,7 +258,9 @@ def get_ps_config(
 
     return PSArsenalConfig(
         scripts_path=scripts_path or os.getenv("PS_SCRIPTS_PATH", "/tmp/ps_arsenal"),
-        base_url=kwargs.get("base_url", "https://raw.githubusercontent.com/samratashok/nishang/master"),
+        base_url=kwargs.get(
+            "base_url", "https://raw.githubusercontent.com/samratashok/nishang/master"
+        ),
         load_mode=load_mode,
         target_host=target_host or "",
         use_winrm=kwargs.get("use_winrm", False),
@@ -269,7 +274,7 @@ def get_ps_config(
         timeout=kwargs.get("timeout", 300),
         script_timeout=kwargs.get("script_timeout", 120),
         output_dir=kwargs.get("output_dir", "./ps_arsenal_results"),
-        verbose=kwargs.get("verbose", False)
+        verbose=kwargs.get("verbose", False),
     )
 
 
@@ -283,11 +288,7 @@ def validate_ps_config(config: PSArsenalConfig) -> Dict[str, Any]:
     Returns:
         Dict with validation results
     """
-    results = {
-        "valid": False,
-        "errors": [],
-        "warnings": []
-    }
+    results = {"valid": False, "errors": [], "warnings": []}
 
     # Check script availability for local mode
     if config.load_mode == PSLoadMode.LOCAL_FILE:
@@ -308,9 +309,7 @@ def validate_ps_config(config: PSArsenalConfig) -> Dict[str, Any]:
     # Check admin requirements
     admin_scripts = [s for s in config.enabled_scripts if config.requires_admin(s)]
     if admin_scripts:
-        results["warnings"].append(
-            f"Scripts requiring admin: {', '.join(admin_scripts)}"
-        )
+        results["warnings"].append(f"Scripts requiring admin: {', '.join(admin_scripts)}")
 
     # Check exfiltration config
     if config.exfil_option and config.exfil_option != "dns":

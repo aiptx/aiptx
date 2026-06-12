@@ -3,13 +3,13 @@ AIPT Technology Detection
 
 Web technology fingerprinting and stack detection.
 """
+
 from __future__ import annotations
 
 import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 import httpx
 
@@ -19,6 +19,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Technology:
     """Detected technology"""
+
     name: str
     category: str  # frontend, backend, framework, cms, server, etc.
     version: str = ""
@@ -37,6 +38,7 @@ class Technology:
 @dataclass
 class TechStack:
     """Complete technology stack"""
+
     url: str
     technologies: list[Technology] = field(default_factory=list)
     headers: dict[str, str] = field(default_factory=dict)
@@ -113,7 +115,6 @@ class TechDetector:
             (r"vue\.js|v-cloak|v-bind", "Vue.js", "frontend"),
             (r"svelte", "Svelte", "frontend"),
             (r"ember", "Ember.js", "frontend"),
-
             # CMS
             (r"wp-content|wp-includes", "WordPress", "cms"),
             (r"drupal\.js|drupal\.settings", "Drupal", "cms"),
@@ -121,7 +122,6 @@ class TechDetector:
             (r"shopify", "Shopify", "ecommerce"),
             (r"magento", "Magento", "ecommerce"),
             (r"woocommerce", "WooCommerce", "ecommerce"),
-
             # JavaScript libraries
             (r"jquery[\.-]?\d|jquery\.min\.js", "jQuery", "javascript"),
             (r"bootstrap[\.-]?\d|bootstrap\.min", "Bootstrap", "css"),
@@ -129,21 +129,18 @@ class TechDetector:
             (r"lodash", "Lodash", "javascript"),
             (r"moment\.js|moment\.min", "Moment.js", "javascript"),
             (r"axios", "Axios", "javascript"),
-
             # Analytics
             (r"google-analytics|gtag|ga\.js", "Google Analytics", "analytics"),
             (r"googletagmanager", "Google Tag Manager", "analytics"),
             (r"facebook.*pixel|fbq\(", "Facebook Pixel", "analytics"),
             (r"hotjar", "Hotjar", "analytics"),
             (r"segment\.io|analytics\.js", "Segment", "analytics"),
-
             # Security
             (r"recaptcha", "reCAPTCHA", "security"),
             (r"hcaptcha", "hCaptcha", "security"),
             (r"cloudflare", "Cloudflare", "cdn"),
             (r"akamai", "Akamai", "cdn"),
             (r"fastly", "Fastly", "cdn"),
-
             # Other
             (r"webpack", "Webpack", "build"),
             (r"vite", "Vite", "build"),
@@ -236,25 +233,29 @@ class TechDetector:
                         if version_match:
                             version = version_match.group(1)
 
-                        stack.technologies.append(Technology(
-                            name=name,
-                            category=category,
-                            version=version,
-                            confidence=100,
-                            evidence=f"Header: {header}: {value}",
-                        ))
+                        stack.technologies.append(
+                            Technology(
+                                name=name,
+                                category=category,
+                                version=version,
+                                confidence=100,
+                                evidence=f"Header: {header}: {value}",
+                            )
+                        )
 
     def _detect_from_cookies(self, cookies: httpx.Cookies, stack: TechStack) -> None:
         """Detect technologies from cookies"""
         for cookie_name in cookies.keys():
             for pattern, (name, category) in self.FINGERPRINTS["cookies"].items():
                 if pattern.lower() in cookie_name.lower():
-                    stack.technologies.append(Technology(
-                        name=name,
-                        category=category,
-                        confidence=90,
-                        evidence=f"Cookie: {cookie_name}",
-                    ))
+                    stack.technologies.append(
+                        Technology(
+                            name=name,
+                            category=category,
+                            confidence=90,
+                            evidence=f"Cookie: {cookie_name}",
+                        )
+                    )
 
     def _detect_from_html(self, html: str, stack: TechStack) -> None:
         """Detect technologies from HTML content"""
@@ -262,12 +263,14 @@ class TechDetector:
 
         for pattern, name, category in self.FINGERPRINTS["html"]:
             if re.search(pattern, html_lower):
-                stack.technologies.append(Technology(
-                    name=name,
-                    category=category,
-                    confidence=80,
-                    evidence=f"HTML pattern: {pattern}",
-                ))
+                stack.technologies.append(
+                    Technology(
+                        name=name,
+                        category=category,
+                        confidence=80,
+                        evidence=f"HTML pattern: {pattern}",
+                    )
+                )
 
         # Check meta generator
         generator_match = re.search(
@@ -277,13 +280,15 @@ class TechDetector:
         )
         if generator_match:
             generator = generator_match.group(1)
-            stack.technologies.append(Technology(
-                name=generator.split()[0],
-                category="cms",
-                version=generator.split()[1] if len(generator.split()) > 1 else "",
-                confidence=100,
-                evidence=f"Meta generator: {generator}",
-            ))
+            stack.technologies.append(
+                Technology(
+                    name=generator.split()[0],
+                    category="cms",
+                    version=generator.split()[1] if len(generator.split()) > 1 else "",
+                    confidence=100,
+                    evidence=f"Meta generator: {generator}",
+                )
+            )
 
     def _extract_versions(self, html: str, stack: TechStack) -> None:
         """Try to extract version numbers"""

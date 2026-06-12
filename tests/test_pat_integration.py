@@ -10,55 +10,50 @@ Tests cover:
 - Executor rate limiting
 - Full scanner integration
 """
-import asyncio
+
 import json
+from unittest.mock import AsyncMock, MagicMock
+
 import pytest
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Optional
-from unittest.mock import AsyncMock, MagicMock, patch
+
+from aipt_v2.scanners.pat.analyzer import (
+    BaselineData,
+    ResponseAnalyzer,
+)
 
 # Import PAT components
 from aipt_v2.scanners.pat.config import (
-    PATScanConfig,
-    VulnerabilityType,
-    InjectionPoint,
-    PayloadTechnique,
+    AnalyzerConfig,
+    AuthorizationError,
     DetectionMethod,
     ExecutorConfig,
-    AnalyzerConfig,
+    InjectionPoint,
+    PATScanConfig,
     PayloadConfig,
-    AuthorizationError,
-    ScopeViolation,
-)
-from aipt_v2.scanners.pat.payload_parser import ParsedPayload, PayloadParser
-from aipt_v2.scanners.pat.payload_database import PayloadDatabase
-from aipt_v2.scanners.pat.request_generator import RequestGenerator, InjectionRequest
-from aipt_v2.scanners.pat.executor import (
-    ParallelExecutor,
-    ExecutionResult,
-    RateLimiter,
-    WAFDetector,
-    ScopeEnforcer,
-)
-from aipt_v2.scanners.pat.analyzer import (
-    ResponseAnalyzer,
-    AnalysisResult,
-    BaselineData,
+    PayloadTechnique,
+    VulnerabilityType,
 )
 from aipt_v2.scanners.pat.detection_patterns import (
+    SQL_ERROR_PATTERNS,
+    compile_patterns,
     get_detection_patterns,
     match_any_pattern,
-    compile_patterns,
-    SQL_ERROR_PATTERNS,
-    XSS_DANGEROUS_TAGS,
+)
+from aipt_v2.scanners.pat.executor import (
+    ExecutionResult,
+    RateLimiter,
+    ScopeEnforcer,
+    WAFDetector,
 )
 from aipt_v2.scanners.pat.pat_scanner import PATScanner, PATScanResult
-
+from aipt_v2.scanners.pat.payload_database import PayloadDatabase
+from aipt_v2.scanners.pat.payload_parser import ParsedPayload
+from aipt_v2.scanners.pat.request_generator import InjectionRequest, RequestGenerator
 
 # =============================================================================
 # Test Fixtures
 # =============================================================================
+
 
 @pytest.fixture
 def sample_payload():
@@ -125,6 +120,7 @@ def error_response():
 # Configuration Tests
 # =============================================================================
 
+
 class TestPATConfiguration:
     """Tests for PAT configuration."""
 
@@ -174,6 +170,7 @@ class TestPATConfiguration:
 # Payload Parser Tests
 # =============================================================================
 
+
 class TestPayloadParser:
     """Tests for payload parsing."""
 
@@ -203,6 +200,7 @@ class TestPayloadParser:
     def test_dangerous_payload_detection(self):
         """Test detection of dangerous payloads."""
         from aipt_v2.scanners.pat.payload_parser import DANGEROUS_INDICATORS
+
         dangerous_payload = "'; DROP TABLE users;--"
         is_dangerous = any(ind.upper() in dangerous_payload.upper() for ind in DANGEROUS_INDICATORS)
         assert is_dangerous
@@ -212,18 +210,21 @@ class TestPayloadParser:
 # Request Generator Tests
 # =============================================================================
 
+
 class TestRequestGenerator:
     """Tests for HTTP request generation."""
 
     def test_url_param_injection(self, sample_payload, scan_config):
         """Test URL parameter injection."""
         generator = RequestGenerator(scan_config)
-        requests = list(generator.generate_requests(
-            target_url="http://test.local/api?id=1&name=test",
-            payloads=[sample_payload],
-            parameters=["id"],
-            injection_points=[InjectionPoint.URL_PARAM],
-        ))
+        requests = list(
+            generator.generate_requests(
+                target_url="http://test.local/api?id=1&name=test",
+                payloads=[sample_payload],
+                parameters=["id"],
+                injection_points=[InjectionPoint.URL_PARAM],
+            )
+        )
 
         assert len(requests) >= 1
         request = requests[0]
@@ -236,14 +237,16 @@ class TestRequestGenerator:
     def test_post_json_injection(self, sample_payload, scan_config):
         """Test POST JSON body injection."""
         generator = RequestGenerator(scan_config)
-        requests = list(generator.generate_requests(
-            target_url="http://test.local/api",
-            payloads=[sample_payload],
-            parameters=["username"],
-            injection_points=[InjectionPoint.POST_JSON],
-            method="POST",
-            body='{"username": "test"}',
-        ))
+        requests = list(
+            generator.generate_requests(
+                target_url="http://test.local/api",
+                payloads=[sample_payload],
+                parameters=["username"],
+                injection_points=[InjectionPoint.POST_JSON],
+                method="POST",
+                body='{"username": "test"}',
+            )
+        )
 
         assert len(requests) >= 1
         request = requests[0]
@@ -254,12 +257,14 @@ class TestRequestGenerator:
     def test_header_injection(self, sample_payload, scan_config):
         """Test header injection."""
         generator = RequestGenerator(scan_config)
-        requests = list(generator.generate_requests(
-            target_url="http://test.local/api",
-            payloads=[sample_payload],
-            parameters=["X-Custom-Header"],
-            injection_points=[InjectionPoint.HEADER],
-        ))
+        requests = list(
+            generator.generate_requests(
+                target_url="http://test.local/api",
+                payloads=[sample_payload],
+                parameters=["X-Custom-Header"],
+                injection_points=[InjectionPoint.HEADER],
+            )
+        )
 
         assert len(requests) >= 1
         request = requests[0]
@@ -300,6 +305,7 @@ class TestRequestGenerator:
 # =============================================================================
 # Detection Pattern Tests
 # =============================================================================
+
 
 class TestDetectionPatterns:
     """Tests for vulnerability detection patterns."""
@@ -346,6 +352,7 @@ class TestDetectionPatterns:
 # =============================================================================
 # Response Analyzer Tests
 # =============================================================================
+
 
 class TestResponseAnalyzer:
     """Tests for response analysis."""
@@ -449,6 +456,7 @@ class TestResponseAnalyzer:
 # Executor Tests
 # =============================================================================
 
+
 class TestExecutor:
     """Tests for parallel execution."""
 
@@ -511,6 +519,7 @@ class TestExecutor:
 # Scanner Integration Tests
 # =============================================================================
 
+
 class TestPATScanner:
     """Tests for main PAT scanner."""
 
@@ -546,8 +555,8 @@ class TestPATScanner:
 
     def test_severity_mapping(self):
         """Test vulnerability to severity mapping."""
-        from aipt_v2.scanners.pat.pat_scanner import VULN_SEVERITY_MAP
         from aipt_v2.scanners.base import ScanSeverity
+        from aipt_v2.scanners.pat.pat_scanner import VULN_SEVERITY_MAP
 
         assert VULN_SEVERITY_MAP[VulnerabilityType.SQL_INJECTION] == ScanSeverity.CRITICAL
         assert VULN_SEVERITY_MAP[VulnerabilityType.XSS] == ScanSeverity.MEDIUM
@@ -572,6 +581,7 @@ class TestPATScanner:
 # =============================================================================
 # Integration Tests (Mock HTTP)
 # =============================================================================
+
 
 class TestPATScannerIntegration:
     """Integration tests with mocked HTTP."""
@@ -607,13 +617,15 @@ class TestPATScannerIntegration:
                     elapsed_ms=50.0,
                 )
 
-        mock_exec.execute_batch = AsyncMock(return_value=[
-            ExecutionResult(
-                request=InjectionRequest(url=scan_config.target_url),
-                response=mock_response,
-                success=True,
-            )
-        ])
+        mock_exec.execute_batch = AsyncMock(
+            return_value=[
+                ExecutionResult(
+                    request=InjectionRequest(url=scan_config.target_url),
+                    response=mock_response,
+                    success=True,
+                )
+            ]
+        )
         mock_exec.execute_stream = mock_stream
 
         scanner._executor = mock_exec
@@ -630,6 +642,7 @@ class TestPATScannerIntegration:
 # =============================================================================
 # Payload Database Tests
 # =============================================================================
+
 
 class TestPayloadDatabase:
     """Tests for payload database."""
@@ -675,18 +688,17 @@ class TestPayloadDatabase:
 # Module Import Tests
 # =============================================================================
 
+
 class TestModuleImports:
     """Test module imports work correctly."""
 
     def test_main_module_import(self):
         """Test importing from main module."""
         from aipt_v2.scanners.pat import (
-            PATScanner,
             PATScanConfig,
-            VulnerabilityType,
-            InjectionPoint,
-            scan_url,
+            PATScanner,
         )
+
         assert PATScanner is not None
         assert PATScanConfig is not None
 
@@ -694,10 +706,9 @@ class TestModuleImports:
         """Test importing from scanners module."""
         from aipt_v2.scanners import (
             PATScanner,
-            PATScanConfig,
-            VulnerabilityType,
             pat_scan_url,
         )
+
         assert PATScanner is not None
         assert pat_scan_url is not None
 

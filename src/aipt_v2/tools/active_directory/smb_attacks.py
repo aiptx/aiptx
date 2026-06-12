@@ -21,7 +21,7 @@ import asyncio
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
@@ -30,6 +30,7 @@ from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 @dataclass
 class SMBFinding:
     """SMB security finding."""
+
     category: str  # share, signing, auth, misc
     severity: str
     title: str
@@ -47,6 +48,7 @@ class SMBFinding:
 @dataclass
 class SMBShare:
     """SMB share information."""
+
     name: str
     share_type: str
     remark: str
@@ -58,6 +60,7 @@ class SMBShare:
 @dataclass
 class SMBResult:
     """Result of SMB enumeration."""
+
     target: str
     status: str
     started_at: str
@@ -80,9 +83,20 @@ class SMBAttacks:
 
     # Sensitive share names
     SENSITIVE_SHARES = [
-        "ADMIN$", "C$", "IPC$", "SYSVOL", "NETLOGON",
-        "backup", "Backup", "IT", "Admin", "HR", "Finance",
-        "Confidential", "Private", "Secure"
+        "ADMIN$",
+        "C$",
+        "IPC$",
+        "SYSVOL",
+        "NETLOGON",
+        "backup",
+        "Backup",
+        "IT",
+        "Admin",
+        "HR",
+        "Finance",
+        "Confidential",
+        "Private",
+        "Secure",
     ]
 
     def __init__(self, config: Optional[ADConfig] = None):
@@ -102,14 +116,11 @@ class SMBAttacks:
         """Run command and return output."""
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=self.config.timeout
+                process.communicate(), timeout=self.config.timeout
             )
 
             return stdout.decode() + stderr.decode()
@@ -134,36 +145,38 @@ class SMBAttacks:
         target = target or self.config.dc_ip
 
         # Use nmap for signing check
-        output = await self._run_command([
-            "nmap", "-p", "445",
-            "--script", "smb2-security-mode",
-            target
-        ])
+        output = await self._run_command(
+            ["nmap", "-p", "445", "--script", "smb2-security-mode", target]
+        )
 
         if "Message signing enabled but not required" in output:
             self.signing_required = False
-            self.findings.append(SMBFinding(
-                category="signing",
-                severity="high",
-                title="SMB Signing Not Required",
-                description="SMB signing is enabled but not required",
-                target=target,
-                evidence="Message signing enabled but not required",
-                remediation="Enable mandatory SMB signing via GPO"
-            ))
+            self.findings.append(
+                SMBFinding(
+                    category="signing",
+                    severity="high",
+                    title="SMB Signing Not Required",
+                    description="SMB signing is enabled but not required",
+                    target=target,
+                    evidence="Message signing enabled but not required",
+                    remediation="Enable mandatory SMB signing via GPO",
+                )
+            )
         elif "Message signing enabled and required" in output:
             self.signing_required = True
         elif "not required" in output.lower():
             self.signing_required = False
-            self.findings.append(SMBFinding(
-                category="signing",
-                severity="high",
-                title="SMB Signing Not Required",
-                description="SMB signing is not enforced",
-                target=target,
-                evidence=output[:200],
-                remediation="Enable mandatory SMB signing"
-            ))
+            self.findings.append(
+                SMBFinding(
+                    category="signing",
+                    severity="high",
+                    title="SMB Signing Not Required",
+                    description="SMB signing is not enforced",
+                    target=target,
+                    evidence=output[:200],
+                    remediation="Enable mandatory SMB signing",
+                )
+            )
 
         return self.signing_required
 
@@ -205,21 +218,23 @@ class SMBAttacks:
                     share_type=share_type,
                     remark=remark,
                     readable=False,
-                    writable=False
+                    writable=False,
                 )
                 shares.append(share)
 
                 # Check for sensitive shares
                 if any(sens.lower() in share_name.lower() for sens in self.SENSITIVE_SHARES):
-                    self.findings.append(SMBFinding(
-                        category="share",
-                        severity="medium",
-                        title=f"Sensitive Share: {share_name}",
-                        description=f"Potentially sensitive share discovered: {share_name}",
-                        target=target,
-                        evidence=f"Share: {share_name} ({share_type})",
-                        remediation="Review share permissions and access"
-                    ))
+                    self.findings.append(
+                        SMBFinding(
+                            category="share",
+                            severity="medium",
+                            title=f"Sensitive Share: {share_name}",
+                            description=f"Potentially sensitive share discovered: {share_name}",
+                            target=target,
+                            evidence=f"Share: {share_name} ({share_type})",
+                            remediation="Review share permissions and access",
+                        )
+                    )
 
         # Try to access each share
         for share in shares:
@@ -228,26 +243,30 @@ class SMBAttacks:
             share.writable = access.get("writable", False)
 
             if share.readable and share.name not in ["IPC$"]:
-                self.findings.append(SMBFinding(
-                    category="share",
-                    severity="low" if share.name in ["SYSVOL", "NETLOGON"] else "medium",
-                    title=f"Readable Share: {share.name}",
-                    description=f"Share {share.name} is readable",
-                    target=target,
-                    evidence="Share access confirmed",
-                    remediation="Review if read access is necessary"
-                ))
+                self.findings.append(
+                    SMBFinding(
+                        category="share",
+                        severity="low" if share.name in ["SYSVOL", "NETLOGON"] else "medium",
+                        title=f"Readable Share: {share.name}",
+                        description=f"Share {share.name} is readable",
+                        target=target,
+                        evidence="Share access confirmed",
+                        remediation="Review if read access is necessary",
+                    )
+                )
 
             if share.writable:
-                self.findings.append(SMBFinding(
-                    category="share",
-                    severity="high",
-                    title=f"Writable Share: {share.name}",
-                    description=f"Share {share.name} is writable",
-                    target=target,
-                    evidence="Write access confirmed",
-                    remediation="Restrict write access to authorized users only"
-                ))
+                self.findings.append(
+                    SMBFinding(
+                        category="share",
+                        severity="high",
+                        title=f"Writable Share: {share.name}",
+                        description=f"Share {share.name} is writable",
+                        target=target,
+                        evidence="Write access confirmed",
+                        remediation="Restrict write access to authorized users only",
+                    )
+                )
 
         self.shares = shares
         return shares
@@ -259,12 +278,7 @@ class SMBAttacks:
         # Build connection command
         if self.config.credentials.has_credentials():
             user = self.config.credentials.get_auth_string()
-            cmd = [
-                "smbclient",
-                f"//{target}/{share}",
-                "-U", user,
-                "-c", "dir"
-            ]
+            cmd = ["smbclient", f"//{target}/{share}", "-U", user, "-c", "dir"]
             if self.config.credentials.password:
                 cmd.insert(4, "-p")
                 cmd.insert(5, self.config.credentials.password)
@@ -296,11 +310,9 @@ class SMBAttacks:
         os_info = {}
 
         # Use nmap for OS detection
-        output = await self._run_command([
-            "nmap", "-p", "445",
-            "--script", "smb-os-discovery",
-            target
-        ])
+        output = await self._run_command(
+            ["nmap", "-p", "445", "--script", "smb-os-discovery", target]
+        )
 
         # Parse OS info
         os_match = re.search(r"OS:\s*(.+?)$", output, re.MULTILINE)
@@ -337,10 +349,7 @@ class SMBAttacks:
         if self.config.credentials.has_credentials():
             user = self.config.credentials.get_auth_string()
             password = self.config.credentials.get_password_or_hash()
-            cmd = [
-                "rpcclient", "-U", f"{user}%{password}",
-                target, "-c", "enumdomusers"
-            ]
+            cmd = ["rpcclient", "-U", f"{user}%{password}", target, "-c", "enumdomusers"]
 
         output = await self._run_command(cmd)
 
@@ -352,10 +361,7 @@ class SMBAttacks:
         return users
 
     async def password_spray(
-        self,
-        users: List[str],
-        password: str,
-        target: str = None
+        self, users: List[str], password: str, target: str = None
     ) -> List[Dict]:
         """
         Perform password spray attack.
@@ -376,27 +382,28 @@ class SMBAttacks:
             cmd = [
                 "smbclient",
                 f"//{target}/IPC$",
-                "-U", f"{self.config.domain}\\{user}%{password}",
-                "-c", "exit"
+                "-U",
+                f"{self.config.domain}\\{user}%{password}",
+                "-c",
+                "exit",
             ]
 
             output = await self._run_command(cmd)
 
             if "NT_STATUS_LOGON_FAILURE" not in output and "Error" not in output:
-                valid_creds.append({
-                    "username": user,
-                    "password": password
-                })
+                valid_creds.append({"username": user, "password": password})
 
-                self.findings.append(SMBFinding(
-                    category="auth",
-                    severity="critical",
-                    title=f"Valid Credentials: {user}",
-                    description=f"Password spray found valid credentials for {user}",
-                    target=target,
-                    evidence=f"User: {user}, Password: {password[:3]}***",
-                    remediation="Enforce strong password policies"
-                ))
+                self.findings.append(
+                    SMBFinding(
+                        category="auth",
+                        severity="critical",
+                        title=f"Valid Credentials: {user}",
+                        description=f"Password spray found valid credentials for {user}",
+                        target=target,
+                        evidence=f"User: {user}, Password: {password[:3]}***",
+                        remediation="Enforce strong password policies",
+                    )
+                )
 
             # Add delay to avoid lockout
             await asyncio.sleep(0.5)
@@ -421,15 +428,17 @@ class SMBAttacks:
         null_session = "NT_STATUS_ACCESS_DENIED" not in output
 
         if null_session:
-            self.findings.append(SMBFinding(
-                category="auth",
-                severity="high",
-                title="Null Session Allowed",
-                description="Anonymous/null session authentication is allowed",
-                target=target,
-                evidence="IPC$ accessible without credentials",
-                remediation="Disable null session access via registry or GPO"
-            ))
+            self.findings.append(
+                SMBFinding(
+                    category="auth",
+                    severity="high",
+                    title="Null Session Allowed",
+                    description="Anonymous/null session authentication is allowed",
+                    target=target,
+                    evidence="IPC$ accessible without credentials",
+                    remediation="Disable null session access via registry or GPO",
+                )
+            )
 
         return null_session
 
@@ -467,20 +476,13 @@ class SMBAttacks:
             os_info=self.os_info,
             signing_required=self.signing_required,
             findings=self.findings,
-            metadata={
-                "share_count": len(self.shares),
-                "finding_count": len(self.findings)
-            }
+            metadata={"share_count": len(self.shares), "finding_count": len(self.findings)},
         )
 
 
 # Convenience function
 async def enumerate_smb(
-    target: str,
-    domain: str = None,
-    username: str = None,
-    password: str = None,
-    **kwargs
+    target: str, domain: str = None, username: str = None, password: str = None, **kwargs
 ) -> SMBResult:
     """
     Quick SMB enumeration.
@@ -499,7 +501,7 @@ async def enumerate_smb(
         dc_ip=target,
         username=username or "",
         password=password or "",
-        **kwargs
+        **kwargs,
     )
 
     smb = SMBAttacks(config)

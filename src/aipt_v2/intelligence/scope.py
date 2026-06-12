@@ -11,6 +11,7 @@ Features:
 - Out-of-scope detection and alerting
 - Audit logging for compliance
 """
+
 from __future__ import annotations
 
 import ipaddress
@@ -22,12 +23,12 @@ from enum import Enum
 from typing import Any
 from urllib.parse import urlparse
 
-
 logger = logging.getLogger(__name__)
 
 
 class ScopeDecision(Enum):
     """Decision about whether a target is in scope"""
+
     IN_SCOPE = "in_scope"
     OUT_OF_SCOPE = "out_of_scope"
     EXCLUDED = "excluded"
@@ -38,6 +39,7 @@ class ScopeDecision(Enum):
 @dataclass
 class ScopeViolation:
     """Record of an attempted scope violation"""
+
     timestamp: datetime
     url: str
     reason: str
@@ -59,6 +61,7 @@ class ScopeViolation:
 @dataclass
 class ScopeConfig:
     """Configuration defining authorized scope"""
+
     # Included targets (allowlist)
     included_domains: list[str] = field(default_factory=list)
     included_ips: list[str] = field(default_factory=list)  # CIDR notation supported
@@ -161,9 +164,7 @@ class ScopeEnforcer:
         self._request_timestamps: list[datetime] = []
 
         # Compile regex patterns for performance
-        self._excluded_path_patterns = [
-            re.compile(p) for p in config.excluded_paths
-        ]
+        self._excluded_path_patterns = [re.compile(p) for p in config.excluded_paths]
 
         # Parse IP networks
         self._included_networks: list[ipaddress.IPv4Network | ipaddress.IPv6Network] = []
@@ -213,9 +214,7 @@ class ScopeEnforcer:
             self._violations.append(violation)
 
             if self.config.alert_on_violation:
-                logger.warning(
-                    f"SCOPE VIOLATION: {tool} attempted to access {url} - {reason}"
-                )
+                logger.warning(f"SCOPE VIOLATION: {tool} attempted to access {url} - {reason}")
 
             return not self.config.block_out_of_scope
 
@@ -237,7 +236,7 @@ class ScopeEnforcer:
             # Check excluded paths
             for pattern in self._excluded_path_patterns:
                 if pattern.search(path):
-                    return ScopeDecision.EXCLUDED, f"Matches excluded path pattern"
+                    return ScopeDecision.EXCLUDED, "Matches excluded path pattern"
 
             # Check excluded domains
             for domain in self.config.excluded_domains:
@@ -302,8 +301,7 @@ class ScopeEnforcer:
         # Clean old timestamps
         one_minute_ago = now.timestamp() - 60
         self._request_timestamps = [
-            ts for ts in self._request_timestamps
-            if ts.timestamp() > one_minute_ago
+            ts for ts in self._request_timestamps if ts.timestamp() > one_minute_ago
         ]
 
         # Check per-minute limit
@@ -376,9 +374,7 @@ class ScopeEnforcer:
         # Check for common sensitive paths not excluded
         sensitive_paths = ["/admin", "/backup", "/production", "/prod"]
         for path in sensitive_paths:
-            excluded = any(
-                path in ep for ep in self.config.excluded_paths
-            )
+            excluded = any(path in ep for ep in self.config.excluded_paths)
             if not excluded:
                 issues.append(f"INFO: Consider excluding {path} if not in scope")
 
@@ -418,8 +414,12 @@ class ScopeEnforcer:
                 lines.append(f"  ✗ {keyword}")
 
         lines.append("")
-        lines.append(f"Rate Limit: {self.config.max_requests_per_second}/sec, {self.config.max_requests_per_minute}/min")
-        lines.append(f"Block Out-of-Scope: {'Yes' if self.config.block_out_of_scope else 'No (log only)'}")
+        lines.append(
+            f"Rate Limit: {self.config.max_requests_per_second}/sec, {self.config.max_requests_per_minute}/min"
+        )
+        lines.append(
+            f"Block Out-of-Scope: {'Yes' if self.config.block_out_of_scope else 'No (log only)'}"
+        )
         lines.append("=" * 60)
 
         return "\n".join(lines)

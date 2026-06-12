@@ -19,17 +19,15 @@ Usage:
 import asyncio
 import os
 import shutil
-import sys
 from pathlib import Path
-from typing import Optional, Tuple, Dict, List, Coroutine, TypeVar, Any
+from typing import Any, Coroutine, Dict, List, Optional, Tuple, TypeVar
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.prompt import Prompt, Confirm
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.prompt import Confirm, Prompt
 from rich.table import Table
-from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from rich import box
 
 T = TypeVar("T")
 
@@ -38,7 +36,8 @@ T = TypeVar("T")
 def _get_offline_module():
     """Get offline module components."""
     try:
-        from aipt_v2.offline import OfflineDataManager, WordlistManager, OfflineReadinessChecker
+        from aipt_v2.offline import OfflineDataManager, OfflineReadinessChecker, WordlistManager
+
         return OfflineDataManager, WordlistManager, OfflineReadinessChecker
     except ImportError:
         return None, None, None
@@ -70,6 +69,7 @@ def _run_async_safe(coro: Coroutine[Any, Any, T]) -> T:
         # Try to use EventLoopManager if available
         try:
             from aipt_v2.core.event_loop_manager import EventLoopManager
+
             return EventLoopManager.run(coro)
         except ImportError:
             pass
@@ -86,6 +86,7 @@ def _run_async_safe(coro: Coroutine[Any, Any, T]) -> T:
     # Option 1: Try nest_asyncio if available (allows nested event loops)
     try:
         import nest_asyncio
+
         nest_asyncio.apply()
         # After applying nest_asyncio, we can run nested loops
         return running_loop.run_until_complete(coro)
@@ -123,11 +124,13 @@ def _run_async_safe(coro: Coroutine[Any, Any, T]) -> T:
 
     return result
 
+
 # Enable readline for arrow key support in input prompts
 try:
     import readline
+
     # Configure readline for better input handling
-    readline.parse_and_bind('set editing-mode emacs')
+    readline.parse_and_bind("set editing-mode emacs")
 except ImportError:
     # readline not available on Windows by default
     pass
@@ -172,17 +175,20 @@ def input_with_default(prompt: str, default: str = "", password: bool = False) -
 # Lazy imports to avoid circular dependencies
 def _get_system_detector():
     from aipt_v2.system_detector import SystemDetector, SystemInfo
+
     return SystemDetector, SystemInfo
 
 
 def _get_tool_installer():
-    from aipt_v2.local_tool_installer import LocalToolInstaller, TOOLS, ToolCategory
+    from aipt_v2.local_tool_installer import TOOLS, LocalToolInstaller, ToolCategory
+
     return LocalToolInstaller, TOOLS, ToolCategory
 
 
 # ============================================================================
 # Configuration File Management
 # ============================================================================
+
 
 def get_config_path() -> Path:
     """Get the path to the .env config file."""
@@ -235,13 +241,21 @@ def save_config(config: dict, path: Optional[Path] = None) -> Path:
     # Group settings
     sections = {
         "LLM": [
-            "ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY",
-            "AIPT_LLM__PROVIDER", "AIPT_LLM__MODEL", "AIPT_LLM__OLLAMA_BASE_URL"
+            "ANTHROPIC_API_KEY",
+            "OPENAI_API_KEY",
+            "DEEPSEEK_API_KEY",
+            "LLM_API_KEY",
+            "AIPT_LLM__PROVIDER",
+            "AIPT_LLM__MODEL",
+            "AIPT_LLM__OLLAMA_BASE_URL",
         ],
         "Acunetix": ["AIPT_SCANNERS__ACUNETIX_URL", "AIPT_SCANNERS__ACUNETIX_API_KEY"],
         "Burp Suite": ["AIPT_SCANNERS__BURP_URL", "AIPT_SCANNERS__BURP_API_KEY"],
-        "Nessus": ["AIPT_SCANNERS__NESSUS_URL", "AIPT_SCANNERS__NESSUS_ACCESS_KEY",
-                   "AIPT_SCANNERS__NESSUS_SECRET_KEY"],
+        "Nessus": [
+            "AIPT_SCANNERS__NESSUS_URL",
+            "AIPT_SCANNERS__NESSUS_ACCESS_KEY",
+            "AIPT_SCANNERS__NESSUS_SECRET_KEY",
+        ],
         "OWASP ZAP": ["AIPT_SCANNERS__ZAP_URL", "AIPT_SCANNERS__ZAP_API_KEY"],
         "VPS": ["AIPT_VPS__HOST", "AIPT_VPS__USER", "AIPT_VPS__KEY_PATH", "AIPT_VPS__PORT"],
     }
@@ -283,6 +297,7 @@ def is_configured() -> bool:
 # Interactive Setup Wizard
 # ============================================================================
 
+
 def print_welcome():
     """Print welcome banner."""
     banner = """
@@ -311,12 +326,14 @@ async def detect_system() -> Optional[object]:
     Returns:
         SystemInfo object or None if detection fails
     """
-    console.print(Panel(
-        "[bold]System Detection[/bold]\n\n"
-        "Detecting your system configuration to optimize installation...",
-        title="🔍 Auto-Detection",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]System Detection[/bold]\n\n"
+            "Detecting your system configuration to optimize installation...",
+            title="🔍 Auto-Detection",
+            border_style="cyan",
+        )
+    )
 
     try:
         SystemDetector, SystemInfo = _get_system_detector()
@@ -331,8 +348,11 @@ async def detect_system() -> Optional[object]:
         table.add_column("Value", style="green")
 
         table.add_row("Operating System", system_info.os_name)
-        table.add_row("Version", f"{system_info.os_version}" +
-                     (f" ({system_info.os_codename})" if system_info.os_codename else ""))
+        table.add_row(
+            "Version",
+            f"{system_info.os_version}"
+            + (f" ({system_info.os_codename})" if system_info.os_codename else ""),
+        )
         table.add_row("Architecture", system_info.architecture.value)
         table.add_row("Package Manager", system_info.package_manager.value)
 
@@ -372,11 +392,9 @@ def check_ollama_installed() -> Tuple[bool, str]:
     if ollama_path:
         try:
             import subprocess
+
             result = subprocess.run(
-                ["ollama", "--version"],
-                capture_output=True,
-                text=True,
-                timeout=5
+                ["ollama", "--version"], capture_output=True, text=True, timeout=5
             )
             version = result.stdout.strip() or result.stderr.strip()
             return True, version
@@ -389,6 +407,7 @@ async def check_ollama_running() -> bool:
     """Check if Ollama server is running."""
     try:
         import asyncio
+
         proc = await asyncio.create_subprocess_shell(
             "curl -s http://localhost:11434/api/version",
             stdout=asyncio.subprocess.PIPE,
@@ -426,13 +445,15 @@ def setup_llm() -> dict:
     """Configure LLM provider and API key."""
     config = {}
 
-    console.print(Panel(
-        "[bold]Step 2: LLM Configuration[/bold]\n\n"
-        "AIPTX uses AI to guide penetration testing.\n"
-        "Choose a cloud provider or run locally with Ollama.",
-        title="🤖 AI Provider",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]Step 2: LLM Configuration[/bold]\n\n"
+            "AIPTX uses AI to guide penetration testing.\n"
+            "Choose a cloud provider or run locally with Ollama.",
+            title="🤖 AI Provider",
+            border_style="cyan",
+        )
+    )
 
     # Check Ollama status
     ollama_installed, ollama_version = check_ollama_installed()
@@ -444,17 +465,17 @@ def setup_llm() -> dict:
     console.print("  [3] DeepSeek - [dim]Cost-effective option[/dim]")
 
     if ollama_installed:
-        console.print(f"  [4] Ollama (Local) - [green]✓ Installed ({ollama_version})[/green] - [bold]FREE, runs offline[/bold]")
+        console.print(
+            f"  [4] Ollama (Local) - [green]✓ Installed ({ollama_version})[/green] - [bold]FREE, runs offline[/bold]"
+        )
     else:
-        console.print("  [4] Ollama (Local) - [yellow]○ Not installed[/yellow] - [dim]Will install[/dim]")
+        console.print(
+            "  [4] Ollama (Local) - [yellow]○ Not installed[/yellow] - [dim]Will install[/dim]"
+        )
 
     console.print("  [5] Other (custom)")
 
-    choice = Prompt.ask(
-        "\nEnter choice",
-        choices=["1", "2", "3", "4", "5"],
-        default="1"
-    )
+    choice = Prompt.ask("\nEnter choice", choices=["1", "2", "3", "4", "5"], default="1")
 
     providers = {
         "1": ("anthropic", "claude-3-7-sonnet-20250219", "ANTHROPIC_API_KEY"),
@@ -495,7 +516,9 @@ def setup_llm() -> dict:
     if api_key and key_name:
         config[key_name] = api_key
         # Show masked confirmation
-        masked = api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        masked = (
+            api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        )
         console.print(f"  [green]✓[/green] Key saved: {masked}")
 
     return config
@@ -514,11 +537,7 @@ def _select_cloud_provider() -> dict:
     console.print("  [3] DeepSeek - [dim]Cost-effective option[/dim]")
     console.print("  [4] Other (custom)")
 
-    choice = Prompt.ask(
-        "\nEnter choice",
-        choices=["1", "2", "3", "4"],
-        default="1"
-    )
+    choice = Prompt.ask("\nEnter choice", choices=["1", "2", "3", "4"], default="1")
 
     providers = {
         "1": ("anthropic", "claude-3-7-sonnet-20250219", "ANTHROPIC_API_KEY"),
@@ -553,7 +572,9 @@ def _select_cloud_provider() -> dict:
     if api_key and key_name:
         config[key_name] = api_key
         # Show masked confirmation
-        masked = api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        masked = (
+            api_key[:8] + "*" * (len(api_key) - 12) + api_key[-4:] if len(api_key) > 16 else "***"
+        )
         console.print(f"  [green]✓[/green] Key saved: {masked}")
 
     return config
@@ -588,7 +609,9 @@ def _setup_ollama(ollama_installed: bool) -> dict:
         console.print("\n[yellow]Ollama executable not found in PATH.[/yellow]")
         console.print("[dim]This can happen if you need to restart your terminal.[/dim]")
 
-        if Confirm.ask("Continue with Ollama setup anyway? (Select 'No' for cloud provider)", default=True):
+        if Confirm.ask(
+            "Continue with Ollama setup anyway? (Select 'No' for cloud provider)", default=True
+        ):
             # User wants to proceed - they may have installed it but PATH isn't updated
             ollama_path = "ollama"  # Try using just the command name
         else:
@@ -603,6 +626,7 @@ def _setup_ollama(ollama_installed: bool) -> dict:
 
         if Confirm.ask("\nWould you like to start Ollama now?", default=True):
             import subprocess
+
             try:
                 subprocess.Popen(
                     [ollama_path, "serve"],
@@ -611,10 +635,13 @@ def _setup_ollama(ollama_installed: bool) -> dict:
                 )
                 console.print("[green]✓ Ollama server started[/green]")
                 import time
+
                 time.sleep(2)  # Wait for server to start
             except FileNotFoundError:
                 console.print("[red]Failed to start Ollama: executable not found.[/red]")
-                console.print("[dim]Please ensure Ollama is properly installed and in your PATH.[/dim]")
+                console.print(
+                    "[dim]Please ensure Ollama is properly installed and in your PATH.[/dim]"
+                )
             except OSError as e:
                 console.print(f"[red]Failed to start Ollama: {e}[/red]")
                 console.print("[dim]You can start it manually with: ollama serve[/dim]")
@@ -647,10 +674,7 @@ def _setup_ollama(ollama_installed: bool) -> dict:
 
     # Let user choose
     max_choice = offset + len(recommended_models) - 1
-    model_choice = Prompt.ask(
-        f"\nEnter choice (1-{max_choice}) or model name",
-        default="1"
-    )
+    model_choice = Prompt.ask(f"\nEnter choice (1-{max_choice}) or model name", default="1")
 
     try:
         idx = int(model_choice)
@@ -667,35 +691,41 @@ def _setup_ollama(ollama_installed: bool) -> dict:
         console.print("[dim]This may take a few minutes...[/dim]")
 
         import subprocess
+
         ollama_cmd = shutil.which("ollama") or "ollama"
         try:
-            subprocess.run(
-                [ollama_cmd, "pull", selected_model],
-                check=True
-            )
+            subprocess.run([ollama_cmd, "pull", selected_model], check=True)
             console.print(f"[green]✓ Model {selected_model} downloaded[/green]")
         except subprocess.CalledProcessError:
             console.print(f"[red]Failed to download {selected_model}[/red]")
-            console.print(f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
+            console.print(
+                f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]"
+            )
         except FileNotFoundError:
             console.print("[red]Ollama executable not found.[/red]")
-            console.print(f"[yellow]After installing Ollama, download the model with: ollama pull {selected_model}[/yellow]")
+            console.print(
+                f"[yellow]After installing Ollama, download the model with: ollama pull {selected_model}[/yellow]"
+            )
         except OSError as e:
             console.print(f"[red]Failed to run Ollama: {e}[/red]")
-            console.print(f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]")
+            console.print(
+                f"[yellow]You can download it later with: ollama pull {selected_model}[/yellow]"
+            )
 
     config["AIPT_LLM__PROVIDER"] = "ollama"
     config["AIPT_LLM__MODEL"] = selected_model
     config["AIPT_LLM__OLLAMA_BASE_URL"] = "http://localhost:11434"
 
-    console.print(Panel(
-        f"[green]✓ Ollama configured![/green]\n\n"
-        f"Model: [bold]{selected_model}[/bold]\n"
-        f"Server: http://localhost:11434\n\n"
-        f"[dim]Benefits: Free, runs offline, no API limits[/dim]",
-        title="🦙 Local LLM Ready",
-        border_style="green"
-    ))
+    console.print(
+        Panel(
+            f"[green]✓ Ollama configured![/green]\n\n"
+            f"Model: [bold]{selected_model}[/bold]\n"
+            f"Server: http://localhost:11434\n\n"
+            f"[dim]Benefits: Free, runs offline, no API limits[/dim]",
+            title="🦙 Local LLM Ready",
+            border_style="green",
+        )
+    )
 
     return config
 
@@ -726,17 +756,13 @@ def _install_ollama() -> bool:
                 subprocess.run(
                     ["curl", "-fsSL", "https://ollama.ai/install.sh"],
                     stdout=subprocess.PIPE,
-                    check=True
+                    check=True,
                 )
             console.print("[green]✓ Ollama installed successfully[/green]")
             return True
 
         elif system == "linux":
-            subprocess.run(
-                "curl -fsSL https://ollama.ai/install.sh | sh",
-                shell=True,
-                check=True
-            )
+            subprocess.run("curl -fsSL https://ollama.ai/install.sh | sh", shell=True, check=True)
             console.print("[green]✓ Ollama installed successfully[/green]")
             return True
 
@@ -756,7 +782,9 @@ def _install_ollama() -> bool:
                 try:
                     webbrowser.open("https://ollama.ai/download/windows")
                 except Exception:
-                    console.print("[yellow]Could not open browser. Please visit: https://ollama.ai/download/windows[/yellow]")
+                    console.print(
+                        "[yellow]Could not open browser. Please visit: https://ollama.ai/download/windows[/yellow]"
+                    )
 
                 console.print("\n[bold]Instructions:[/bold]")
                 console.print("  1. Download and run the Ollama installer")
@@ -772,7 +800,9 @@ def _install_ollama() -> bool:
                     return True
                 else:
                     console.print("[yellow]Ollama not detected in PATH.[/yellow]")
-                    console.print("[dim]You may need to restart your terminal or add Ollama to PATH.[/dim]")
+                    console.print(
+                        "[dim]You may need to restart your terminal or add Ollama to PATH.[/dim]"
+                    )
 
                     if Confirm.ask("Continue with Ollama setup anyway?", default=True):
                         return True
@@ -795,10 +825,10 @@ def normalize_url(url: str) -> str:
         return url
     url = url.strip()
     # Add https:// if no protocol specified (prefer https for security scanners)
-    if not url.startswith(('http://', 'https://')):
+    if not url.startswith(("http://", "https://")):
         url = f"https://{url}"
     # Remove trailing slashes
-    url = url.rstrip('/')
+    url = url.rstrip("/")
     return url
 
 
@@ -806,13 +836,15 @@ def setup_scanners() -> dict:
     """Configure enterprise scanners (optional)."""
     config = {}
 
-    console.print(Panel(
-        "[bold]Step 2: Enterprise Scanners (Optional)[/bold]\n\n"
-        "AIPTX integrates with enterprise DAST scanners for\n"
-        "comprehensive vulnerability assessment.",
-        title="🔍 Scanners",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]Step 2: Enterprise Scanners (Optional)[/bold]\n\n"
+            "AIPTX integrates with enterprise DAST scanners for\n"
+            "comprehensive vulnerability assessment.",
+            title="🔍 Scanners",
+            border_style="cyan",
+        )
+    )
 
     if not Confirm.ask("\nDo you want to configure enterprise scanners?", default=False):
         console.print("[dim]Skipping scanner configuration...[/dim]\n")
@@ -865,9 +897,9 @@ def setup_scanners() -> dict:
         if url:
             # ZAP typically uses http, not https
             normalized = url.strip()
-            if not normalized.startswith(('http://', 'https://')):
+            if not normalized.startswith(("http://", "https://")):
                 normalized = f"http://{normalized}"
-            normalized = normalized.rstrip('/')
+            normalized = normalized.rstrip("/")
             config["AIPT_SCANNERS__ZAP_URL"] = normalized
         if api_key:
             config["AIPT_SCANNERS__ZAP_API_KEY"] = api_key
@@ -879,13 +911,15 @@ def setup_vps() -> dict:
     """Configure VPS for remote execution (optional)."""
     config = {}
 
-    console.print(Panel(
-        "[bold]Step 3: VPS Configuration (Optional)[/bold]\n\n"
-        "Run security tools on a remote VPS to avoid\n"
-        "network restrictions and maintain anonymity.",
-        title="🖥️  VPS",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]Step 3: VPS Configuration (Optional)[/bold]\n\n"
+            "Run security tools on a remote VPS to avoid\n"
+            "network restrictions and maintain anonymity.",
+            title="🖥️  VPS",
+            border_style="cyan",
+        )
+    )
 
     if not Confirm.ask("\nDo you want to configure a VPS for remote execution?", default=False):
         console.print("[dim]Skipping VPS configuration...[/dim]\n")
@@ -925,13 +959,15 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
     Returns:
         Dict mapping tool names to installation status
     """
-    console.print(Panel(
-        "[bold]Step 4: Security Tools Installation[/bold]\n\n"
-        "AIPTX uses various security tools for penetration testing.\n"
-        "These tools will be installed on your local system.",
-        title="🔧 Security Tools",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]Step 4: Security Tools Installation[/bold]\n\n"
+            "AIPTX uses various security tools for penetration testing.\n"
+            "These tools will be installed on your local system.",
+            title="🔧 Security Tools",
+            border_style="cyan",
+        )
+    )
 
     try:
         LocalToolInstaller, TOOLS, ToolCategory = _get_tool_installer()
@@ -951,7 +987,9 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
 
     # Choose installation scope
     console.print("\n[bold]Installation options:[/bold]")
-    console.print("  [1] Core tools only - [green]Recommended[/green] - Quick install of essential tools")
+    console.print(
+        "  [1] Core tools only - [green]Recommended[/green] - Quick install of essential tools"
+    )
     console.print("  [2] Full installation - Install all available security tools")
     console.print("  [3] Custom selection - Choose categories to install")
     console.print("  [4] Skip - Don't install any tools now")
@@ -959,7 +997,9 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
     choice = Prompt.ask("\nEnter choice", choices=["1", "2", "3", "4"], default="1")
 
     if choice == "4":
-        console.print("[dim]Skipping tool installation. You can install later with: aiptx tools install[/dim]")
+        console.print(
+            "[dim]Skipping tool installation. You can install later with: aiptx tools install[/dim]"
+        )
         return {}
 
     installer = LocalToolInstaller(system_info)
@@ -992,10 +1032,7 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
         console.print("  [4] Network - Fast port scanning, network analysis")
         console.print("  [5] API - API security testing tools")
 
-        cat_choice = Prompt.ask(
-            "\nEnter categories (comma-separated, e.g., 1,2,3)",
-            default="1,2"
-        )
+        cat_choice = Prompt.ask("\nEnter categories (comma-separated, e.g., 1,2,3)", default="1,2")
 
         category_map = {
             "1": "recon",
@@ -1006,9 +1043,7 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
         }
 
         categories = [
-            category_map[c.strip()]
-            for c in cat_choice.split(",")
-            if c.strip() in category_map
+            category_map[c.strip()] for c in cat_choice.split(",") if c.strip() in category_map
         ]
 
         if categories:
@@ -1023,14 +1058,16 @@ async def setup_security_tools(system_info=None) -> Dict[str, bool]:
         already = sum(1 for r in results.values() if r.already_installed)
         failed = sum(1 for r in results.values() if not r.success)
 
-        console.print(Panel(
-            f"[bold]Installation Complete[/bold]\n\n"
-            f"[green]✓ Installed:[/green] {installed}\n"
-            f"[dim]○ Already installed:[/dim] {already}\n"
-            f"[red]✗ Failed:[/red] {failed}",
-            title="📊 Tool Installation Summary",
-            border_style="green" if failed == 0 else "yellow"
-        ))
+        console.print(
+            Panel(
+                f"[bold]Installation Complete[/bold]\n\n"
+                f"[green]✓ Installed:[/green] {installed}\n"
+                f"[dim]○ Already installed:[/dim] {already}\n"
+                f"[red]✗ Failed:[/red] {failed}",
+                title="📊 Tool Installation Summary",
+                border_style="green" if failed == 0 else "yellow",
+            )
+        )
 
     return {name: result.success for name, result in results.items()} if results else {}
 
@@ -1051,14 +1088,16 @@ async def setup_offline_mode(config: dict) -> dict:
     Returns:
         Updated config dict with offline settings
     """
-    console.print(Panel(
-        "[bold]Step 5: Offline Mode Setup (Optional)[/bold]\n\n"
-        "Configure AIPTX for fully offline operation.\n"
-        "Downloads wordlists, templates, and vulnerability databases.\n\n"
-        "[dim]Total size: ~700MB - 2GB depending on selections[/dim]",
-        title="📦 Offline Mode",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            "[bold]Step 5: Offline Mode Setup (Optional)[/bold]\n\n"
+            "Configure AIPTX for fully offline operation.\n"
+            "Downloads wordlists, templates, and vulnerability databases.\n\n"
+            "[dim]Total size: ~700MB - 2GB depending on selections[/dim]",
+            title="📦 Offline Mode",
+            border_style="cyan",
+        )
+    )
 
     OfflineDataManager, WordlistManager, OfflineReadinessChecker = _get_offline_module()
 
@@ -1067,7 +1106,9 @@ async def setup_offline_mode(config: dict) -> dict:
         return config
 
     if not Confirm.ask("\nWould you like to set up offline mode?", default=False):
-        console.print("[dim]Skipping offline setup. You can run it later with: aiptx setup --offline[/dim]")
+        console.print(
+            "[dim]Skipping offline setup. You can run it later with: aiptx setup --offline[/dim]"
+        )
         return config
 
     # Initialize managers
@@ -1076,7 +1117,9 @@ async def setup_offline_mode(config: dict) -> dict:
     wordlist_manager = WordlistManager(data_path / "wordlists")
 
     console.print("\n[bold]Select data to download:[/bold]")
-    console.print("  [1] Essential - [green]Recommended[/green] - Core wordlists + nuclei templates (~400MB)")
+    console.print(
+        "  [1] Essential - [green]Recommended[/green] - Core wordlists + nuclei templates (~400MB)"
+    )
     console.print("  [2] Standard - Essential + CVE database + extended wordlists (~1GB)")
     console.print("  [3] Complete - All available offline data (~2GB)")
     console.print("  [4] Custom - Choose specific data sources")
@@ -1089,13 +1132,21 @@ async def setup_offline_mode(config: dict) -> dict:
         # Essential
         download_tasks = [
             ("nuclei_templates", "Nuclei Templates", _download_nuclei_templates),
-            ("common_wordlists", "Common Wordlists", lambda dm, wm: _download_wordlists(wm, "essential")),
+            (
+                "common_wordlists",
+                "Common Wordlists",
+                lambda dm, wm: _download_wordlists(wm, "essential"),
+            ),
         ]
     elif choice == "2":
         # Standard
         download_tasks = [
             ("nuclei_templates", "Nuclei Templates", _download_nuclei_templates),
-            ("common_wordlists", "Common Wordlists", lambda dm, wm: _download_wordlists(wm, "standard")),
+            (
+                "common_wordlists",
+                "Common Wordlists",
+                lambda dm, wm: _download_wordlists(wm, "standard"),
+            ),
             ("cve_database", "CVE Database", _download_cve_database),
         ]
     elif choice == "3":
@@ -1112,8 +1163,16 @@ async def setup_offline_mode(config: dict) -> dict:
 
         download_options = [
             ("nuclei_templates", "Nuclei Templates (~150MB)", _download_nuclei_templates),
-            ("common_wordlists", "Common Wordlists (~50MB)", lambda dm, wm: _download_wordlists(wm, "essential")),
-            ("seclists", "SecLists Full (~800MB)", lambda dm, wm: _download_wordlists(wm, "complete")),
+            (
+                "common_wordlists",
+                "Common Wordlists (~50MB)",
+                lambda dm, wm: _download_wordlists(wm, "essential"),
+            ),
+            (
+                "seclists",
+                "SecLists Full (~800MB)",
+                lambda dm, wm: _download_wordlists(wm, "complete"),
+            ),
             ("cve_database", "CVE Database (~300MB)", _download_cve_database),
             ("exploit_db", "ExploitDB (~800MB)", _download_exploitdb),
         ]
@@ -1121,10 +1180,7 @@ async def setup_offline_mode(config: dict) -> dict:
         for i, (key, desc, _) in enumerate(download_options, 1):
             console.print(f"  [{i}] {desc}")
 
-        selections = Prompt.ask(
-            "\nEnter selections (comma-separated, e.g., 1,2,3)",
-            default="1,2"
-        )
+        selections = Prompt.ask("\nEnter selections (comma-separated, e.g., 1,2,3)", default="1,2")
 
         for sel in selections.split(","):
             try:
@@ -1181,7 +1237,9 @@ async def setup_offline_mode(config: dict) -> dict:
         total_count = len(readiness)
 
         if ready_count == total_count:
-            console.print(f"[green]✓ All {total_count} components ready for offline operation[/green]")
+            console.print(
+                f"[green]✓ All {total_count} components ready for offline operation[/green]"
+            )
             config["AIPT_OFFLINE__ENABLED"] = "true"
         else:
             console.print(f"[yellow]⚠ {ready_count}/{total_count} components ready[/yellow]")
@@ -1199,14 +1257,16 @@ async def setup_offline_mode(config: dict) -> dict:
     successful = sum(1 for v in results.values() if v)
     total = len(results)
 
-    console.print(Panel(
-        f"[bold]Offline Setup Complete[/bold]\n\n"
-        f"[green]✓ Downloaded:[/green] {successful}/{total} data sources\n"
-        f"[dim]Data path:[/dim] {data_path}\n\n"
-        f"[dim]Run 'aiptx verify --offline' to check status[/dim]",
-        title="📦 Offline Mode",
-        border_style="green" if successful == total else "yellow"
-    ))
+    console.print(
+        Panel(
+            f"[bold]Offline Setup Complete[/bold]\n\n"
+            f"[green]✓ Downloaded:[/green] {successful}/{total} data sources\n"
+            f"[dim]Data path:[/dim] {data_path}\n\n"
+            f"[dim]Run 'aiptx verify --offline' to check status[/dim]",
+            title="📦 Offline Mode",
+            border_style="green" if successful == total else "yellow",
+        )
+    )
 
     return config
 
@@ -1219,7 +1279,8 @@ async def _download_nuclei_templates(data_manager, wordlist_manager) -> bool:
 
         # Use nuclei to download templates
         proc = await asyncio.create_subprocess_exec(
-            "nuclei", "-update-templates",
+            "nuclei",
+            "-update-templates",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
@@ -1231,7 +1292,10 @@ async def _download_nuclei_templates(data_manager, wordlist_manager) -> bool:
             template_path = data_manager.data_path / "nuclei-templates"
             if not template_path.exists():
                 proc = await asyncio.create_subprocess_exec(
-                    "git", "clone", "--depth", "1",
+                    "git",
+                    "clone",
+                    "--depth",
+                    "1",
                     "https://github.com/projectdiscovery/nuclei-templates.git",
                     str(template_path),
                     stdout=asyncio.subprocess.PIPE,
@@ -1268,7 +1332,8 @@ async def _download_cve_database(data_manager, wordlist_manager) -> bool:
         # Try to use cvemap if available
         if shutil.which("cvemap"):
             proc = await asyncio.create_subprocess_exec(
-                "cvemap", "-update",
+                "cvemap",
+                "-update",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -1289,7 +1354,8 @@ async def _download_exploitdb(data_manager, wordlist_manager) -> bool:
         if shutil.which("searchsploit"):
             # Update existing installation
             proc = await asyncio.create_subprocess_exec(
-                "searchsploit", "-u",
+                "searchsploit",
+                "-u",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -1299,7 +1365,10 @@ async def _download_exploitdb(data_manager, wordlist_manager) -> bool:
         # Clone ExploitDB
         if not exploitdb_path.exists():
             proc = await asyncio.create_subprocess_exec(
-                "git", "clone", "--depth", "1",
+                "git",
+                "clone",
+                "--depth",
+                "1",
                 "https://gitlab.com/exploit-database/exploitdb.git",
                 str(exploitdb_path),
                 stdout=asyncio.subprocess.PIPE,
@@ -1313,13 +1382,13 @@ async def _download_exploitdb(data_manager, wordlist_manager) -> bool:
         return False
 
 
-def show_summary(config: dict, tools_installed: Dict[str, bool] = None, offline_enabled: bool = False):
+def show_summary(
+    config: dict, tools_installed: Dict[str, bool] = None, offline_enabled: bool = False
+):
     """Show configuration summary."""
-    console.print(Panel(
-        "[bold]Configuration Summary[/bold]",
-        title="📋 Summary",
-        border_style="green"
-    ))
+    console.print(
+        Panel("[bold]Configuration Summary[/bold]", title="📋 Summary", border_style="green")
+    )
 
     table = Table(box=box.ROUNDED)
     table.add_column("Setting", style="cyan")
@@ -1328,7 +1397,10 @@ def show_summary(config: dict, tools_installed: Dict[str, bool] = None, offline_
     # LLM
     provider = config.get("AIPT_LLM__PROVIDER", "Not set")
     model = config.get("AIPT_LLM__MODEL", "Not set")
-    has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
+    has_key = any(
+        k in config
+        for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"]
+    )
     is_ollama = provider == "ollama"
 
     table.add_row("LLM Provider", provider)
@@ -1340,14 +1412,31 @@ def show_summary(config: dict, tools_installed: Dict[str, bool] = None, offline_
 
     # Scanners
     table.add_row("─" * 20, "─" * 20)
-    table.add_row("Acunetix", "✓ Configured" if config.get("AIPT_SCANNERS__ACUNETIX_URL") else "○ Not configured")
-    table.add_row("Burp Suite", "✓ Configured" if config.get("AIPT_SCANNERS__BURP_URL") else "○ Not configured")
-    table.add_row("Nessus", "✓ Configured" if config.get("AIPT_SCANNERS__NESSUS_URL") else "○ Not configured")
-    table.add_row("OWASP ZAP", "✓ Configured" if config.get("AIPT_SCANNERS__ZAP_URL") else "○ Not configured")
+    table.add_row(
+        "Acunetix",
+        "✓ Configured" if config.get("AIPT_SCANNERS__ACUNETIX_URL") else "○ Not configured",
+    )
+    table.add_row(
+        "Burp Suite",
+        "✓ Configured" if config.get("AIPT_SCANNERS__BURP_URL") else "○ Not configured",
+    )
+    table.add_row(
+        "Nessus", "✓ Configured" if config.get("AIPT_SCANNERS__NESSUS_URL") else "○ Not configured"
+    )
+    table.add_row(
+        "OWASP ZAP", "✓ Configured" if config.get("AIPT_SCANNERS__ZAP_URL") else "○ Not configured"
+    )
 
     # VPS
     table.add_row("─" * 20, "─" * 20)
-    table.add_row("VPS", "✓ " + config.get("AIPT_VPS__HOST", "") if config.get("AIPT_VPS__HOST") else "○ Not configured")
+    table.add_row(
+        "VPS",
+        (
+            "✓ " + config.get("AIPT_VPS__HOST", "")
+            if config.get("AIPT_VPS__HOST")
+            else "○ Not configured"
+        ),
+    )
 
     # Tools
     if tools_installed:
@@ -1426,7 +1515,10 @@ async def _run_setup_wizard_async(force: bool = False) -> bool:
 
         # Check if we got an API key or using Ollama
         is_ollama = config.get("AIPT_LLM__PROVIDER") == "ollama"
-        has_key = any(k in config for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"])
+        has_key = any(
+            k in config
+            for k in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"]
+        )
 
         if not has_key and not is_ollama:
             console.print("\n[bold red]Error:[/bold red] An LLM API key is required to use AIPTX.")
@@ -1448,7 +1540,9 @@ async def _run_setup_wizard_async(force: bool = False) -> bool:
         offline_enabled = False
         if is_ollama:
             # Suggest offline mode for Ollama users
-            console.print("[dim]Since you're using Ollama (local LLM), offline mode is recommended.[/dim]")
+            console.print(
+                "[dim]Since you're using Ollama (local LLM), offline mode is recommended.[/dim]"
+            )
             config = await setup_offline_mode(config)
             offline_enabled = config.get("AIPT_OFFLINE__ENABLED", "false") == "true"
         else:
@@ -1473,22 +1567,27 @@ async def _run_setup_wizard_async(force: bool = False) -> bool:
             # Build dynamic completion message
             next_steps = []
             if is_ollama:
-                next_steps.append("  [bold]ollama serve[/bold]             - Start Ollama (if not running)")
-            next_steps.extend([
-                "  [bold]aiptx scan example.com[/bold]     - Run a security scan",
-                "  [bold]aiptx status[/bold]              - Check configuration",
-                "  [bold]aiptx tools install[/bold]       - Install more security tools",
-                "  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
-            ])
+                next_steps.append(
+                    "  [bold]ollama serve[/bold]             - Start Ollama (if not running)"
+                )
+            next_steps.extend(
+                [
+                    "  [bold]aiptx scan example.com[/bold]     - Run a security scan",
+                    "  [bold]aiptx status[/bold]              - Check configuration",
+                    "  [bold]aiptx tools install[/bold]       - Install more security tools",
+                    "  [bold]aiptx setup[/bold]               - Reconfigure AIPTX",
+                ]
+            )
 
-            console.print(Panel(
-                f"[bold green]✓ Configuration saved![/bold green]\n\n"
-                f"Config file: [cyan]{config_path}[/cyan]\n\n"
-                f"[bold]Next steps:[/bold]\n" +
-                "\n".join(next_steps),
-                title="🎉 Setup Complete",
-                border_style="green"
-            ))
+            console.print(
+                Panel(
+                    f"[bold green]✓ Configuration saved![/bold green]\n\n"
+                    f"Config file: [cyan]{config_path}[/cyan]\n\n"
+                    f"[bold]Next steps:[/bold]\n" + "\n".join(next_steps),
+                    title="🎉 Setup Complete",
+                    border_style="green",
+                )
+            )
 
             # Load the config into environment for immediate use
             for key, value in config.items():
@@ -1513,13 +1612,15 @@ def prompt_first_run_setup() -> bool:
         True if setup completed and user can proceed
     """
     try:
-        console.print(Panel(
-            "[bold yellow]⚠ AIPTX is not configured![/bold yellow]\n\n"
-            "This appears to be your first time running AIPTX.\n"
-            "You need to configure at least an LLM API key to proceed.",
-            title="First Run Setup Required",
-            border_style="yellow"
-        ))
+        console.print(
+            Panel(
+                "[bold yellow]⚠ AIPTX is not configured![/bold yellow]\n\n"
+                "This appears to be your first time running AIPTX.\n"
+                "You need to configure at least an LLM API key to proceed.",
+                title="First Run Setup Required",
+                border_style="yellow",
+            )
+        )
 
         if Confirm.ask("\nWould you like to run the setup wizard now?", default=True):
             return run_setup_wizard(force=True)
@@ -1536,6 +1637,7 @@ def prompt_first_run_setup() -> bool:
 # ============================================================================
 # CLI Entry Points
 # ============================================================================
+
 
 def main():
     """Standalone setup wizard entry point."""

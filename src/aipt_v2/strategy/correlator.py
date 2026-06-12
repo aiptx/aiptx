@@ -13,34 +13,36 @@ import logging
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
 
-from aipt_v2.sast.analyzer import SASTFinding
 from aipt_v2.agents.shared.finding_repository import Finding, FindingSeverity
+from aipt_v2.sast.analyzer import SASTFinding
 
 logger = logging.getLogger(__name__)
 
 
 class CorrelationType(str, Enum):
     """Types of correlation between findings."""
-    EXACT = "exact"              # Same vulnerability confirmed by both
-    RELATED = "related"          # Related vulnerabilities
-    SAST_ONLY = "sast_only"      # Only found in source
-    DAST_ONLY = "dast_only"      # Only found at runtime
+
+    EXACT = "exact"  # Same vulnerability confirmed by both
+    RELATED = "related"  # Related vulnerabilities
+    SAST_ONLY = "sast_only"  # Only found in source
+    DAST_ONLY = "dast_only"  # Only found at runtime
     COMPLEMENTARY = "complementary"  # Different aspects of same issue
 
 
 class ConfidenceLevel(str, Enum):
     """Confidence level after correlation."""
-    CONFIRMED = "confirmed"      # Both SAST and DAST agree
-    HIGH = "high"               # Strong indicators from one source
-    MEDIUM = "medium"           # Some indicators
-    LOW = "low"                 # Weak indicators
+
+    CONFIRMED = "confirmed"  # Both SAST and DAST agree
+    HIGH = "high"  # Strong indicators from one source
+    MEDIUM = "medium"  # Some indicators
+    LOW = "low"  # Weak indicators
 
 
 @dataclass
 class CorrelatedFinding:
     """A finding with correlation information."""
+
     primary_finding: Finding | SASTFinding
     correlated_findings: list[Finding | SASTFinding] = field(default_factory=list)
     correlation_type: CorrelationType = CorrelationType.SAST_ONLY

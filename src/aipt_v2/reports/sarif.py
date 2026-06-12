@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from aipt_v2.agents.shared.finding_repository import (
     Finding,
@@ -30,7 +30,9 @@ logger = logging.getLogger(__name__)
 
 # SARIF version
 SARIF_VERSION = "2.1.0"
-SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+SARIF_SCHEMA = (
+    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+)
 
 # Tool information
 TOOL_NAME = "AIPTX"
@@ -69,6 +71,7 @@ CWE_MAPPINGS = {
 @dataclass
 class SARIFConfig:
     """Configuration for SARIF generation."""
+
     include_poc: bool = True
     include_evidence: bool = True
     include_fixes: bool = True
@@ -126,18 +129,13 @@ class SARIFGenerator:
             FindingSeverity.CRITICAL,
         ]
         min_index = severity_order.index(self.config.min_severity)
-        filtered_findings = [
-            f for f in findings
-            if severity_order.index(f.severity) >= min_index
-        ]
+        filtered_findings = [f for f in findings if severity_order.index(f.severity) >= min_index]
 
         # Build SARIF structure
         sarif = {
             "$schema": SARIF_SCHEMA,
             "version": SARIF_VERSION,
-            "runs": [
-                self._build_run(filtered_findings, target, scan_metadata)
-            ],
+            "runs": [self._build_run(filtered_findings, target, scan_metadata)],
         }
 
         return sarif
@@ -175,12 +173,10 @@ class SARIFGenerator:
                 "downloadUri": TOOL_DOWNLOAD_URI,
                 "rules": rules,
                 "organization": "AIPTX",
-                "shortDescription": {
-                    "text": "AI-Powered Penetration Testing Framework"
-                },
+                "shortDescription": {"text": "AI-Powered Penetration Testing Framework"},
                 "fullDescription": {
                     "text": "AIPTX is an AI-native security testing framework with "
-                           "multi-agent collaboration, PoC validation, and SAST+DAST capabilities."
+                    "multi-agent collaboration, PoC validation, and SAST+DAST capabilities."
                 },
             }
         }
@@ -197,19 +193,13 @@ class SARIFGenerator:
             rules_dict[rule_id] = {
                 "id": rule_id,
                 "name": finding.vuln_type.value.replace("_", " ").title(),
-                "shortDescription": {
-                    "text": self._get_short_description(finding.vuln_type)
-                },
-                "fullDescription": {
-                    "text": self._get_full_description(finding.vuln_type)
-                },
+                "shortDescription": {"text": self._get_short_description(finding.vuln_type)},
+                "fullDescription": {"text": self._get_full_description(finding.vuln_type)},
                 "help": {
                     "text": self._get_help_text(finding.vuln_type),
                     "markdown": self._get_help_markdown(finding.vuln_type),
                 },
-                "defaultConfiguration": {
-                    "level": self._severity_to_level(finding.severity)
-                },
+                "defaultConfiguration": {"level": self._severity_to_level(finding.severity)},
                 "properties": {
                     "tags": self._get_rule_tags(finding.vuln_type),
                     "security-severity": self._severity_to_score(finding.severity),
@@ -226,9 +216,9 @@ class SARIFGenerator:
                             "guid": f"https://cwe.mitre.org/data/definitions/{cwe.split('-')[1]}.html",
                             "toolComponent": {
                                 "name": "CWE",
-                            }
+                            },
                         },
-                        "kinds": ["superset"]
+                        "kinds": ["superset"],
                     }
                 ]
 
@@ -246,9 +236,7 @@ class SARIFGenerator:
         }
 
         # Add fingerprints for deduplication
-        result["fingerprints"] = {
-            "aiptx/v1": finding.get_fingerprint()
-        }
+        result["fingerprints"] = {"aiptx/v1": finding.get_fingerprint()}
 
         # Add partial fingerprints
         result["partialFingerprints"] = {
@@ -305,11 +293,13 @@ class SARIFGenerator:
                 }
             ]
             if finding.parameter:
-                location["logicalLocations"].append({
-                    "fullyQualifiedName": f"{finding.url}?{finding.parameter}",
-                    "kind": "parameter",
-                    "name": finding.parameter,
-                })
+                location["logicalLocations"].append(
+                    {
+                        "fullyQualifiedName": f"{finding.url}?{finding.parameter}",
+                        "kind": "parameter",
+                        "name": finding.parameter,
+                    }
+                )
 
         # Message with details
         if finding.endpoint or finding.parameter:
@@ -362,28 +352,32 @@ class SARIFGenerator:
 
         # Source (user input)
         if finding.parameter:
-            thread_flows.append({
-                "locations": [
-                    {
-                        "location": {
-                            "message": {
-                                "text": f"User input via parameter: {finding.parameter}"
+            thread_flows.append(
+                {
+                    "locations": [
+                        {
+                            "location": {
+                                "message": {
+                                    "text": f"User input via parameter: {finding.parameter}"
+                                },
                             },
-                        },
-                        "kinds": ["source"],
-                    }
-                ]
-            })
+                            "kinds": ["source"],
+                        }
+                    ]
+                }
+            )
 
         # Sink (vulnerable code)
-        thread_flows.append({
-            "locations": [
-                {
-                    "location": self._build_location(finding),
-                    "kinds": ["sink"],
-                }
-            ]
-        })
+        thread_flows.append(
+            {
+                "locations": [
+                    {
+                        "location": self._build_location(finding),
+                        "kinds": ["sink"],
+                    }
+                ]
+            }
+        )
 
         return {"threadFlows": thread_flows}
 
@@ -455,8 +449,11 @@ class SARIFGenerator:
         """Get tags for vulnerability type."""
         tags = ["security", "vulnerability"]
 
-        if vuln_type in [VulnerabilityType.SQLI, VulnerabilityType.XSS,
-                         VulnerabilityType.COMMAND_INJECTION]:
+        if vuln_type in [
+            VulnerabilityType.SQLI,
+            VulnerabilityType.XSS,
+            VulnerabilityType.COMMAND_INJECTION,
+        ]:
             tags.append("injection")
         if vuln_type in [VulnerabilityType.AUTH_BYPASS, VulnerabilityType.IDOR]:
             tags.append("authentication")
@@ -482,10 +479,8 @@ class SARIFGenerator:
             return None
 
         return {
-            "description": {
-                "text": suggestion
-            },
-            "changes": []  # Would need more context for actual code changes
+            "description": {"text": suggestion},
+            "changes": [],  # Would need more context for actual code changes
         }
 
     def _severity_to_level(self, severity: FindingSeverity) -> str:
@@ -529,7 +524,9 @@ class SARIFGenerator:
         ext = Path(file_path).suffix.lower()
         return ext_mapping.get(ext, "unknown")
 
-    def to_file(self, path: str, sarif: Optional[dict] = None, findings: Optional[list[Finding]] = None) -> None:
+    def to_file(
+        self, path: str, sarif: Optional[dict] = None, findings: Optional[list[Finding]] = None
+    ) -> None:
         """
         Write SARIF report to file.
 

@@ -18,15 +18,15 @@ Usage:
 """
 
 import re
-import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 
 class FindingSeverity(Enum):
     """Finding severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -36,6 +36,7 @@ class FindingSeverity(Enum):
 
 class FindingCategory(Enum):
     """Finding category types."""
+
     CREDENTIAL = "credential"
     PRIVILEGE = "privilege"
     MISCONFIGURATION = "misconfiguration"
@@ -47,6 +48,7 @@ class FindingCategory(Enum):
 @dataclass
 class WinPwnFinding:
     """Structured finding from WinPwn output."""
+
     title: str
     category: FindingCategory
     severity: FindingSeverity
@@ -74,13 +76,14 @@ class WinPwnFinding:
             "remediation": self.remediation,
             "references": self.references,
             "metadata": self.metadata,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
 
 @dataclass
 class ExtractedCredential:
     """Extracted credential from output."""
+
     username: str
     domain: str = ""
     password: str = ""
@@ -102,7 +105,7 @@ class ExtractedCredential:
             "sha1_hash": self.sha1_hash,
             "source": self.source,
             "credential_type": self.credential_type,
-            "metadata": self.metadata
+            "metadata": self.metadata,
         }
 
 
@@ -124,92 +127,44 @@ class WinPwnParser:
         self.patterns = {
             # Username from various formats
             "username": re.compile(
-                r"(?:User(?:name)?|SAMAccountName|Account)\s*[:=]\s*([^\s\n\r]+)",
-                re.IGNORECASE
+                r"(?:User(?:name)?|SAMAccountName|Account)\s*[:=]\s*([^\s\n\r]+)", re.IGNORECASE
             ),
-
             # Domain patterns
-            "domain": re.compile(
-                r"(?:Domain|Realm)\s*[:=]\s*([^\s\n\r]+)",
-                re.IGNORECASE
-            ),
-
+            "domain": re.compile(r"(?:Domain|Realm)\s*[:=]\s*([^\s\n\r]+)", re.IGNORECASE),
             # Password plaintext
-            "password": re.compile(
-                r"(?:Password|Cleartext)\s*[:=]\s*(.+?)(?:\n|$)",
-                re.IGNORECASE
-            ),
-
+            "password": re.compile(r"(?:Password|Cleartext)\s*[:=]\s*(.+?)(?:\n|$)", re.IGNORECASE),
             # NTLM hash
-            "ntlm": re.compile(
-                r"(?:NTLM|NT)\s*[:=]\s*([a-fA-F0-9]{32})",
-                re.IGNORECASE
-            ),
-
+            "ntlm": re.compile(r"(?:NTLM|NT)\s*[:=]\s*([a-fA-F0-9]{32})", re.IGNORECASE),
             # LM hash
-            "lm": re.compile(
-                r"LM\s*[:=]\s*([a-fA-F0-9]{32})",
-                re.IGNORECASE
-            ),
-
+            "lm": re.compile(r"LM\s*[:=]\s*([a-fA-F0-9]{32})", re.IGNORECASE),
             # SHA1 hash
-            "sha1": re.compile(
-                r"SHA1\s*[:=]\s*([a-fA-F0-9]{40})",
-                re.IGNORECASE
-            ),
-
+            "sha1": re.compile(r"SHA1\s*[:=]\s*([a-fA-F0-9]{40})", re.IGNORECASE),
             # Kerberos tickets
-            "krb5tgs": re.compile(
-                r"\$krb5tgs\$[^\s]+",
-                re.MULTILINE
-            ),
-
-            "krb5asrep": re.compile(
-                r"\$krb5asrep\$[^\s]+",
-                re.MULTILINE
-            ),
-
+            "krb5tgs": re.compile(r"\$krb5tgs\$[^\s]+", re.MULTILINE),
+            "krb5asrep": re.compile(r"\$krb5asrep\$[^\s]+", re.MULTILINE),
             # WiFi passwords
-            "wifi_key": re.compile(
-                r"Key Content\s*[:=]\s*(.+?)(?:\n|$)",
-                re.IGNORECASE
-            ),
-
+            "wifi_key": re.compile(r"Key Content\s*[:=]\s*(.+?)(?:\n|$)", re.IGNORECASE),
             # Browser credentials
             "browser_cred": re.compile(
                 r"URL:\s*(.+?)\s*Username:\s*(.+?)\s*Password:\s*(.+?)(?:\n|$)",
-                re.IGNORECASE | re.DOTALL
+                re.IGNORECASE | re.DOTALL,
             ),
-
             # Service account
             "service_account": re.compile(
-                r"ServicePrincipalName.*?:\s*(.+?)(?:\n|$)",
-                re.IGNORECASE
+                r"ServicePrincipalName.*?:\s*(.+?)(?:\n|$)", re.IGNORECASE
             ),
-
             # Privilege patterns
-            "privilege_enabled": re.compile(
-                r"(Se\w+Privilege)\s+.*?Enabled",
-                re.IGNORECASE
-            ),
-
+            "privilege_enabled": re.compile(r"(Se\w+Privilege)\s+.*?Enabled", re.IGNORECASE),
             # Autologon credentials
-            "autologon": re.compile(
-                r"DefaultPassword\s+REG_SZ\s+(.+?)(?:\n|$)",
-                re.IGNORECASE
-            ),
-
+            "autologon": re.compile(r"DefaultPassword\s+REG_SZ\s+(.+?)(?:\n|$)", re.IGNORECASE),
             # Stored credentials
             "cmdkey": re.compile(
-                r"Target:\s*(.+?)\s+Type:\s*(.+?)(?:\s+User:\s*(.+?))?(?:\n|$)",
-                re.IGNORECASE
+                r"Target:\s*(.+?)\s+Type:\s*(.+?)(?:\s+User:\s*(.+?))?(?:\n|$)", re.IGNORECASE
             ),
-
             # SAM dump format
             "sam_entry": re.compile(
                 r"([^:]+):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::",
             ),
-
             # Secretsdump format
             "secretsdump": re.compile(
                 r"(\S+?)\\(\S+?):(\d+):([a-fA-F0-9]{32}):([a-fA-F0-9]{32}):::",
@@ -232,11 +187,7 @@ class WinPwnParser:
         blocks = re.split(r"\n\s*\*\s*(?:Username|User)\s*:", output, flags=re.IGNORECASE)
 
         for block in blocks[1:]:  # Skip first empty block
-            cred = ExtractedCredential(
-                username="",
-                source="mimikatz",
-                credential_type="hash"
-            )
+            cred = ExtractedCredential(username="", source="mimikatz", credential_type="hash")
 
             # Extract username (first line of block)
             username_match = re.match(r"\s*([^\n\r]+)", block)
@@ -298,7 +249,7 @@ class WinPwnParser:
                 ntlm_hash=match.group(4).lower(),
                 source="sam_dump",
                 credential_type="hash",
-                metadata={"rid": match.group(2)}
+                metadata={"rid": match.group(2)},
             )
             credentials.append(cred)
 
@@ -311,7 +262,7 @@ class WinPwnParser:
                 ntlm_hash=match.group(5).lower(),
                 source="secretsdump",
                 credential_type="hash",
-                metadata={"rid": match.group(3)}
+                metadata={"rid": match.group(3)},
             )
             credentials.append(cred)
 
@@ -337,22 +288,24 @@ class WinPwnParser:
             user_match = re.search(r"\$krb5tgs\$\d+\$\*([^$]+)\$", ticket)
             username = user_match.group(1) if user_match else "unknown"
 
-            findings.append(WinPwnFinding(
-                title=f"Kerberoastable Account: {username}",
-                category=FindingCategory.CREDENTIAL,
-                severity=FindingSeverity.HIGH,
-                description=f"Extracted TGS ticket for service account {username}. "
-                           "This hash can be cracked offline to reveal the service account password.",
-                source_module="kerberoasting",
-                raw_data=ticket[:200] + "..." if len(ticket) > 200 else ticket,
-                remediation="Use strong passwords (25+ chars) for service accounts. "
-                           "Consider using Group Managed Service Accounts (gMSA).",
-                references=[
-                    "https://attack.mitre.org/techniques/T1558/003/",
-                    "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting"
-                ],
-                metadata={"username": username, "ticket_type": "TGS"}
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title=f"Kerberoastable Account: {username}",
+                    category=FindingCategory.CREDENTIAL,
+                    severity=FindingSeverity.HIGH,
+                    description=f"Extracted TGS ticket for service account {username}. "
+                    "This hash can be cracked offline to reveal the service account password.",
+                    source_module="kerberoasting",
+                    raw_data=ticket[:200] + "..." if len(ticket) > 200 else ticket,
+                    remediation="Use strong passwords (25+ chars) for service accounts. "
+                    "Consider using Group Managed Service Accounts (gMSA).",
+                    references=[
+                        "https://attack.mitre.org/techniques/T1558/003/",
+                        "https://www.ired.team/offensive-security-experiments/active-directory-kerberos-abuse/t1208-kerberoasting",
+                    ],
+                    metadata={"username": username, "ticket_type": "TGS"},
+                )
+            )
 
         # AS-REP tickets
         for match in self.patterns["krb5asrep"].finditer(output):
@@ -362,20 +315,22 @@ class WinPwnParser:
             user_match = re.search(r"\$krb5asrep\$\d+\$([^@]+)@", ticket)
             username = user_match.group(1) if user_match else "unknown"
 
-            findings.append(WinPwnFinding(
-                title=f"AS-REP Roastable Account: {username}",
-                category=FindingCategory.CREDENTIAL,
-                severity=FindingSeverity.HIGH,
-                description=f"Account {username} does not require Kerberos pre-authentication. "
-                           "AS-REP hash can be cracked offline.",
-                source_module="asreproast",
-                raw_data=ticket[:200] + "..." if len(ticket) > 200 else ticket,
-                remediation="Enable Kerberos pre-authentication for this account.",
-                references=[
-                    "https://attack.mitre.org/techniques/T1558/004/",
-                ],
-                metadata={"username": username, "ticket_type": "AS-REP"}
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title=f"AS-REP Roastable Account: {username}",
+                    category=FindingCategory.CREDENTIAL,
+                    severity=FindingSeverity.HIGH,
+                    description=f"Account {username} does not require Kerberos pre-authentication. "
+                    "AS-REP hash can be cracked offline.",
+                    source_module="asreproast",
+                    raw_data=ticket[:200] + "..." if len(ticket) > 200 else ticket,
+                    remediation="Enable Kerberos pre-authentication for this account.",
+                    references=[
+                        "https://attack.mitre.org/techniques/T1558/004/",
+                    ],
+                    metadata={"username": username, "ticket_type": "AS-REP"},
+                )
+            )
 
         return findings
 
@@ -396,52 +351,54 @@ class WinPwnParser:
             "SeImpersonatePrivilege": {
                 "severity": FindingSeverity.HIGH,
                 "desc": "Can impersonate tokens - Potato attacks possible",
-                "exploits": ["JuicyPotato", "PrintSpoofer", "GodPotato"]
+                "exploits": ["JuicyPotato", "PrintSpoofer", "GodPotato"],
             },
             "SeAssignPrimaryTokenPrivilege": {
                 "severity": FindingSeverity.HIGH,
                 "desc": "Can assign primary tokens - Token manipulation possible",
-                "exploits": ["Token manipulation", "Potato attacks"]
+                "exploits": ["Token manipulation", "Potato attacks"],
             },
             "SeBackupPrivilege": {
                 "severity": FindingSeverity.HIGH,
                 "desc": "Can backup any file - Read SAM/SYSTEM hives",
-                "exploits": ["SAM extraction", "Shadow copy extraction"]
+                "exploits": ["SAM extraction", "Shadow copy extraction"],
             },
             "SeRestorePrivilege": {
                 "severity": FindingSeverity.HIGH,
                 "desc": "Can write to any location",
-                "exploits": ["DLL hijacking", "Service binary replacement"]
+                "exploits": ["DLL hijacking", "Service binary replacement"],
             },
             "SeDebugPrivilege": {
                 "severity": FindingSeverity.CRITICAL,
                 "desc": "Full debug access - Can dump LSASS",
-                "exploits": ["LSASS dump", "Process injection"]
+                "exploits": ["LSASS dump", "Process injection"],
             },
             "SeTakeOwnershipPrivilege": {
                 "severity": FindingSeverity.MEDIUM,
                 "desc": "Can take ownership of any object",
-                "exploits": ["File ownership takeover"]
+                "exploits": ["File ownership takeover"],
             },
             "SeLoadDriverPrivilege": {
                 "severity": FindingSeverity.CRITICAL,
                 "desc": "Can load kernel drivers",
-                "exploits": ["Capcom.sys", "Malicious driver loading"]
+                "exploits": ["Capcom.sys", "Malicious driver loading"],
             },
         }
 
         for priv, info in dangerous_privs.items():
             if priv in output and "Enabled" in output:
-                findings.append(WinPwnFinding(
-                    title=f"Dangerous Privilege: {priv}",
-                    category=FindingCategory.PRIVILEGE,
-                    severity=info["severity"],
-                    description=info["desc"],
-                    source_module="privcheck",
-                    remediation=f"Review if this privilege is required. "
-                               f"Potential exploits: {', '.join(info['exploits'])}",
-                    metadata={"privilege": priv, "exploits": info["exploits"]}
-                ))
+                findings.append(
+                    WinPwnFinding(
+                        title=f"Dangerous Privilege: {priv}",
+                        category=FindingCategory.PRIVILEGE,
+                        severity=info["severity"],
+                        description=info["desc"],
+                        source_module="privcheck",
+                        remediation=f"Review if this privilege is required. "
+                        f"Potential exploits: {', '.join(info['exploits'])}",
+                        metadata={"privilege": priv, "exploits": info["exploits"]},
+                    )
+                )
 
         return findings
 
@@ -459,49 +416,57 @@ class WinPwnParser:
 
         # Check for unquoted service paths
         if "Unquoted" in output or ("C:\\" in output and " " in output and '"' not in output):
-            findings.append(WinPwnFinding(
-                title="Unquoted Service Path Found",
-                category=FindingCategory.MISCONFIGURATION,
-                severity=FindingSeverity.MEDIUM,
-                description="Service with unquoted path containing spaces detected. "
-                           "Can be exploited for privilege escalation via binary planting.",
-                source_module="localrecon",
-                remediation="Quote service binary paths or remove spaces from path."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="Unquoted Service Path Found",
+                    category=FindingCategory.MISCONFIGURATION,
+                    severity=FindingSeverity.MEDIUM,
+                    description="Service with unquoted path containing spaces detected. "
+                    "Can be exploited for privilege escalation via binary planting.",
+                    source_module="localrecon",
+                    remediation="Quote service binary paths or remove spaces from path.",
+                )
+            )
 
         # Check for AlwaysInstallElevated
         if "AlwaysInstallElevated" in output and ("0x1" in output or "1" in output):
-            findings.append(WinPwnFinding(
-                title="AlwaysInstallElevated Enabled",
-                category=FindingCategory.MISCONFIGURATION,
-                severity=FindingSeverity.HIGH,
-                description="AlwaysInstallElevated is enabled. "
-                           "MSI packages can be installed with SYSTEM privileges.",
-                source_module="localrecon",
-                remediation="Disable AlwaysInstallElevated in both HKLM and HKCU."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="AlwaysInstallElevated Enabled",
+                    category=FindingCategory.MISCONFIGURATION,
+                    severity=FindingSeverity.HIGH,
+                    description="AlwaysInstallElevated is enabled. "
+                    "MSI packages can be installed with SYSTEM privileges.",
+                    source_module="localrecon",
+                    remediation="Disable AlwaysInstallElevated in both HKLM and HKCU.",
+                )
+            )
 
         # Check for stored credentials
         if "cmdkey" in output.lower() or "Target:" in output:
-            findings.append(WinPwnFinding(
-                title="Stored Credentials Found",
-                category=FindingCategory.CREDENTIAL,
-                severity=FindingSeverity.MEDIUM,
-                description="Windows Credential Manager contains stored credentials.",
-                source_module="localrecon",
-                remediation="Review stored credentials and remove unnecessary entries."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="Stored Credentials Found",
+                    category=FindingCategory.CREDENTIAL,
+                    severity=FindingSeverity.MEDIUM,
+                    description="Windows Credential Manager contains stored credentials.",
+                    source_module="localrecon",
+                    remediation="Review stored credentials and remove unnecessary entries.",
+                )
+            )
 
         # Check for autologon
         if "DefaultPassword" in output:
-            findings.append(WinPwnFinding(
-                title="Autologon Credentials Found",
-                category=FindingCategory.CREDENTIAL,
-                severity=FindingSeverity.HIGH,
-                description="Autologon is configured with password stored in registry.",
-                source_module="localrecon",
-                remediation="Disable autologon or use LSA-protected autologon."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="Autologon Credentials Found",
+                    category=FindingCategory.CREDENTIAL,
+                    severity=FindingSeverity.HIGH,
+                    description="Autologon is configured with password stored in registry.",
+                    source_module="localrecon",
+                    remediation="Disable autologon or use LSA-protected autologon.",
+                )
+            )
 
         return findings
 
@@ -519,57 +484,67 @@ class WinPwnParser:
 
         # Check for unconstrained delegation
         if "Unconstrained" in output and "Delegation" in output:
-            findings.append(WinPwnFinding(
-                title="Unconstrained Delegation Found",
-                category=FindingCategory.MISCONFIGURATION,
-                severity=FindingSeverity.CRITICAL,
-                description="Computer with unconstrained delegation can capture TGTs "
-                           "from any user authenticating to it.",
-                source_module="domainrecon",
-                remediation="Use constrained delegation or remove delegation entirely.",
-                references=["https://attack.mitre.org/techniques/T1558/"]
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="Unconstrained Delegation Found",
+                    category=FindingCategory.MISCONFIGURATION,
+                    severity=FindingSeverity.CRITICAL,
+                    description="Computer with unconstrained delegation can capture TGTs "
+                    "from any user authenticating to it.",
+                    source_module="domainrecon",
+                    remediation="Use constrained delegation or remove delegation entirely.",
+                    references=["https://attack.mitre.org/techniques/T1558/"],
+                )
+            )
 
         # Check for RBCD targets
         if "Resource-Based" in output or "msDS-AllowedToActOnBehalfOfOtherIdentity" in output:
-            findings.append(WinPwnFinding(
-                title="Resource-Based Constrained Delegation",
-                category=FindingCategory.MISCONFIGURATION,
-                severity=FindingSeverity.HIGH,
-                description="RBCD configuration found. May be abusable for privilege escalation.",
-                source_module="domainrecon",
-                remediation="Review RBCD configurations and remove unnecessary entries."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="Resource-Based Constrained Delegation",
+                    category=FindingCategory.MISCONFIGURATION,
+                    severity=FindingSeverity.HIGH,
+                    description="RBCD configuration found. May be abusable for privilege escalation.",
+                    source_module="domainrecon",
+                    remediation="Review RBCD configurations and remove unnecessary entries.",
+                )
+            )
 
         # Check for ADCS vulnerabilities
         if "ESC" in output or "Certificate" in output:
             # Look for specific ESC numbers
             esc_matches = re.findall(r"ESC\d+", output)
             for esc in set(esc_matches):
-                findings.append(WinPwnFinding(
-                    title=f"ADCS Vulnerability: {esc}",
-                    category=FindingCategory.VULNERABILITY,
-                    severity=FindingSeverity.HIGH,
-                    description=f"Active Directory Certificate Services vulnerability {esc} detected.",
-                    source_module="domainrecon",
-                    remediation="Review and remediate ADCS template configurations.",
-                    references=["https://posts.specterops.io/certified-pre-owned-d95910965cd2"]
-                ))
+                findings.append(
+                    WinPwnFinding(
+                        title=f"ADCS Vulnerability: {esc}",
+                        category=FindingCategory.VULNERABILITY,
+                        severity=FindingSeverity.HIGH,
+                        description=f"Active Directory Certificate Services vulnerability {esc} detected.",
+                        source_module="domainrecon",
+                        remediation="Review and remediate ADCS template configurations.",
+                        references=["https://posts.specterops.io/certified-pre-owned-d95910965cd2"],
+                    )
+                )
 
         # Check for GPP passwords
         if "cpassword" in output.lower() or "Groups.xml" in output:
-            findings.append(WinPwnFinding(
-                title="GPP Password Found",
-                category=FindingCategory.CREDENTIAL,
-                severity=FindingSeverity.HIGH,
-                description="Group Policy Preferences password found. Can be trivially decrypted.",
-                source_module="domainrecon",
-                remediation="Remove GPP XML files containing passwords from SYSVOL."
-            ))
+            findings.append(
+                WinPwnFinding(
+                    title="GPP Password Found",
+                    category=FindingCategory.CREDENTIAL,
+                    severity=FindingSeverity.HIGH,
+                    description="Group Policy Preferences password found. Can be trivially decrypted.",
+                    source_module="domainrecon",
+                    remediation="Remove GPP XML files containing passwords from SYSVOL.",
+                )
+            )
 
         return findings
 
-    def parse_all(self, output: str, module: str = "unknown") -> Tuple[List[WinPwnFinding], List[ExtractedCredential]]:
+    def parse_all(
+        self, output: str, module: str = "unknown"
+    ) -> Tuple[List[WinPwnFinding], List[ExtractedCredential]]:
         """
         Parse output and extract all findings and credentials.
 

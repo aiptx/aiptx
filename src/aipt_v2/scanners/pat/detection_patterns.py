@@ -4,26 +4,28 @@ PAT Detection Patterns
 Comprehensive regex patterns and detection logic for each vulnerability type.
 These patterns are used by the ResponseAnalyzer to identify successful exploitation.
 """
+
 from __future__ import annotations
 
 import re
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Optional
 
-from .config import VulnerabilityType, DetectionMethod
+from .config import DetectionMethod, VulnerabilityType
 
 
 @dataclass
 class DetectionPattern:
     """Detection pattern for vulnerability identification."""
+
     vuln_type: VulnerabilityType
     method: DetectionMethod
     patterns: list[str] = field(default_factory=list)  # Regex patterns
     keywords: list[str] = field(default_factory=list)  # Simple keyword matches
-    time_threshold_ms: float = 5000.0                   # For time-based
-    content_diff_threshold: float = 0.3                 # For content diff
+    time_threshold_ms: float = 5000.0  # For time-based
+    content_diff_threshold: float = 0.3  # For content diff
     description: str = ""
-    confidence_weight: float = 1.0                      # Weight for confidence calc
+    confidence_weight: float = 1.0  # Weight for confidence calc
 
 
 # =============================================================================
@@ -40,7 +42,6 @@ SQL_ERROR_PATTERNS = [
     r"Syntax error.*MySQL",
     r"MySQL Query fail",
     r"You have an error in your SQL syntax",
-
     # PostgreSQL
     r"PostgreSQL.*ERROR",
     r"Warning.*\Wpg_",
@@ -50,7 +51,6 @@ SQL_ERROR_PATTERNS = [
     r"PG::SyntaxError",
     r"org\.postgresql\.util\.PSQLException",
     r"ERROR:\s+syntax error at or near",
-
     # Microsoft SQL Server
     r"Microsoft.*ODBC.*SQL Server",
     r"OLE DB.*SQL Server",
@@ -63,7 +63,6 @@ SQL_ERROR_PATTERNS = [
     r"Microsoft OLE DB Provider for SQL Server",
     r"Incorrect syntax near",
     r"SQL Server.*Driver",
-
     # Oracle
     r"ORA-\d{5}",
     r"Oracle.*Driver",
@@ -72,7 +71,6 @@ SQL_ERROR_PATTERNS = [
     r"oracle\.jdbc",
     r"quoted string not properly terminated",
     r"SQL command not properly ended",
-
     # SQLite
     r"SQLite.*error",
     r"Warning.*sqlite_",
@@ -81,7 +79,6 @@ SQL_ERROR_PATTERNS = [
     r"SQLITE_ERROR",
     r"\[SQLITE_ERROR\]",
     r"unrecognized token",
-
     # Generic
     r"SQL error",
     r"SQL syntax error",
@@ -94,10 +91,10 @@ SQL_ERROR_PATTERNS = [
 ]
 
 SQL_UNION_INDICATORS = [
-    r"\d+\s*,\s*\d+\s*,\s*\d+",           # Column number output
-    r"NULL,NULL,NULL",                     # NULL column injection
-    r"information_schema",                 # Schema enumeration
-    r"table_name.*column_name",            # Table enum result
+    r"\d+\s*,\s*\d+\s*,\s*\d+",  # Column number output
+    r"NULL,NULL,NULL",  # NULL column injection
+    r"information_schema",  # Schema enumeration
+    r"table_name.*column_name",  # Table enum result
 ]
 
 SQL_BOOLEAN_KEYWORDS = [
@@ -117,21 +114,16 @@ XSS_REFLECTION_CONTEXTS = [
     # Script tag contexts
     r"<script[^>]*>[^<]*{payload}",
     r"</script>.*{payload}.*<script",
-
     # Event handlers
     r"on\w+\s*=\s*['\"][^'\"]*{payload}",
     r"on\w+\s*=\s*{payload}",
-
     # JavaScript contexts
     r"javascript:[^'\"]*{payload}",
     r"href\s*=\s*['\"]javascript:[^'\"]*{payload}",
-
     # Data URL
     r"data:text/html[^'\"]*{payload}",
-
     # Style contexts
     r"style\s*=\s*['\"][^'\"]*expression\([^)]*{payload}",
-
     # Attribute injection
     r"<\w+[^>]*\s+\w+\s*=\s*['\"][^'\"]*{payload}",
 ]
@@ -150,16 +142,47 @@ XSS_DANGEROUS_TAGS = [
 ]
 
 XSS_EVENT_HANDLERS = [
-    "onload", "onerror", "onclick", "onmouseover", "onfocus",
-    "onblur", "onchange", "onsubmit", "onkeydown", "onkeyup",
-    "onkeypress", "ondblclick", "onmousedown", "onmouseup",
-    "onmousemove", "onmouseout", "onmouseenter", "onmouseleave",
-    "oncontextmenu", "ondrag", "ondragend", "ondragenter",
-    "ondragleave", "ondragover", "ondragstart", "ondrop",
-    "oninput", "oninvalid", "onreset", "onsearch", "onselect",
-    "onwheel", "oncopy", "oncut", "onpaste", "onscroll",
-    "ontoggle", "onanimationend", "onanimationiteration",
-    "onanimationstart", "ontransitionend",
+    "onload",
+    "onerror",
+    "onclick",
+    "onmouseover",
+    "onfocus",
+    "onblur",
+    "onchange",
+    "onsubmit",
+    "onkeydown",
+    "onkeyup",
+    "onkeypress",
+    "ondblclick",
+    "onmousedown",
+    "onmouseup",
+    "onmousemove",
+    "onmouseout",
+    "onmouseenter",
+    "onmouseleave",
+    "oncontextmenu",
+    "ondrag",
+    "ondragend",
+    "ondragenter",
+    "ondragleave",
+    "ondragover",
+    "ondragstart",
+    "ondrop",
+    "oninput",
+    "oninvalid",
+    "onreset",
+    "onsearch",
+    "onselect",
+    "onwheel",
+    "oncopy",
+    "oncut",
+    "onpaste",
+    "onscroll",
+    "ontoggle",
+    "onanimationend",
+    "onanimationiteration",
+    "onanimationstart",
+    "ontransitionend",
 ]
 
 
@@ -169,14 +192,13 @@ XSS_EVENT_HANDLERS = [
 
 COMMAND_INJECTION_OUTPUT_PATTERNS = [
     # Linux/Unix identifiers
-    r"root:.*:0:0:",                       # /etc/passwd
+    r"root:.*:0:0:",  # /etc/passwd
     r"daemon:.*:\d+:\d+:",
-    r"uid=\d+.*gid=\d+",                   # id command output
-    r"Linux\s+\S+\s+\d+\.\d+",             # uname output
+    r"uid=\d+.*gid=\d+",  # id command output
+    r"Linux\s+\S+\s+\d+\.\d+",  # uname output
     r"/bin/(ba)?sh",
     r"GNU/Linux",
-    r"total\s+\d+\s+drwx",                 # ls -la output
-
+    r"total\s+\d+\s+drwx",  # ls -la output
     # Windows identifiers
     r"Windows\s+(NT|2000|XP|Vista|7|8|10|11|Server)",
     r"\\Windows\\system32",
@@ -186,7 +208,6 @@ COMMAND_INJECTION_OUTPUT_PATTERNS = [
     r"\[COMPUTERNAME\]",
     r"Administrator",
     r"DOMAIN\\",
-
     # Common command outputs
     r"PING\s+\S+\s+\(\d+\.\d+\.\d+\.\d+\)",  # ping output
     r"\d+\s+bytes\s+from\s+\d+\.\d+\.\d+\.\d+",
@@ -218,15 +239,13 @@ SSRF_INTERNAL_INDICATORS = [
     r"^192\.168\.\d+\.\d+",
     r"localhost",
     r"0\.0\.0\.0",
-
     # Cloud metadata
-    r"169\.254\.169\.254",                 # AWS/GCP metadata
+    r"169\.254\.169\.254",  # AWS/GCP metadata
     r"ami-id",
     r"instance-id",
     r"availability-zone",
     r"iam/security-credentials",
     r"computeMetadata/v1",
-
     # Internal services
     r"Redis",
     r"Elasticsearch",
@@ -237,8 +256,8 @@ SSRF_INTERNAL_INDICATORS = [
 ]
 
 SSRF_FILE_PROTOCOL_INDICATORS = [
-    r"root:.*:0:0:",                       # file:///etc/passwd
-    r"\\Windows\\win\.ini",                # file:///c:/windows/win.ini
+    r"root:.*:0:0:",  # file:///etc/passwd
+    r"\\Windows\\win\.ini",  # file:///c:/windows/win.ini
     r"\[fonts\]",
     r"\[extensions\]",
 ]
@@ -249,13 +268,13 @@ SSRF_FILE_PROTOCOL_INDICATORS = [
 # =============================================================================
 
 XXE_FILE_DISCLOSURE_PATTERNS = [
-    r"root:.*:0:0:",                       # /etc/passwd
+    r"root:.*:0:0:",  # /etc/passwd
     r"daemon:.*:\d+:\d+:",
-    r"\[boot loader\]",                    # boot.ini
+    r"\[boot loader\]",  # boot.ini
     r"\[operating systems\]",
-    r"\[fonts\]",                          # win.ini
+    r"\[fonts\]",  # win.ini
     r"\[extensions\]",
-    r"<!DOCTYPE",                          # DTD reflection
+    r"<!DOCTYPE",  # DTD reflection
     r"<!ENTITY",
 ]
 
@@ -283,7 +302,6 @@ LFI_FILE_CONTENT_PATTERNS = [
     r"daemon:.*:1:1:",
     r"bin:.*:2:2:",
     r"nobody:.*:65534:65534:",
-
     # Windows files
     r"\[boot loader\]",
     r"\[operating systems\]",
@@ -291,11 +309,9 @@ LFI_FILE_CONTENT_PATTERNS = [
     r"\[extensions\]",
     r"\[mci extensions\]",
     r"for 16-bit app support",
-
     # PHP wrappers
     r"<\?php",
     r"<\?=",
-
     # Common config files
     r"DB_PASSWORD",
     r"DATABASE_URL",
@@ -330,12 +346,10 @@ NOSQL_ERROR_PATTERNS = [
     r"\$ne",
     r"BSONObj",
     r"objectid",
-
     # CouchDB
     r"CouchDB",
     r"bad_request",
     r"invalid_json",
-
     # Cassandra
     r"CassandraException",
     r"InvalidQueryException",
@@ -356,23 +370,19 @@ NOSQL_BYPASS_KEYWORDS = [
 
 SSTI_REFLECTION_PATTERNS = [
     # Math expressions
-    r"\b49\b",              # {{7*7}} -> 49
-    r"\b7777777\b",         # {{7*'7'}} -> 7777777
-    r"\b823543\b",          # {{7*7*'7'}} -> 823543
-
+    r"\b49\b",  # {{7*7}} -> 49
+    r"\b7777777\b",  # {{7*'7'}} -> 7777777
+    r"\b823543\b",  # {{7*7*'7'}} -> 823543
     # Jinja2/Flask
     r"<class.*subprocess\.Popen",
     r"<class.*os\.system",
     r"config\s*=\s*{",
-
     # Twig
     r"Twig_Error",
     r"Twig\\Error",
-
     # Freemarker
     r"freemarker\.template",
     r"FreeMarker template error",
-
     # Velocity
     r"VelocityException",
     r"org\.apache\.velocity",
@@ -384,7 +394,7 @@ SSTI_REFLECTION_PATTERNS = [
 # =============================================================================
 
 CRLF_INDICATORS = [
-    r"Set-Cookie:.*injected",              # Injected header
+    r"Set-Cookie:.*injected",  # Injected header
     r"X-Injected-Header:",
     r"Location:.*javascript:",
     r"Content-Type:.*text/html",
@@ -414,13 +424,11 @@ RFI_ERROR_PATTERNS = [
     r"allow_url_include.*=.*Off",
     r"include\(\).*failed opening.*http",
     r"require\(\).*failed opening.*http",
-
     # Remote file access indicators
     r"URL file-access",
     r"allow_url_fopen",
     r"getaddrinfo failed",
     r"failed to open stream.*No such file",
-
     # Error messages indicating remote access attempt
     r"HTTP request failed",
     r"file_get_contents.*failed to open stream",
@@ -448,7 +456,6 @@ DESERIALIZATION_ERROR_PATTERNS = [
     r"__wakeup\(\)",
     r"__destruct\(\)",
     r"allowed_classes",
-
     # Java
     r"java\.io\.ObjectInputStream",
     r"java\.lang\.ClassNotFoundException",
@@ -460,7 +467,6 @@ DESERIALIZATION_ERROR_PATTERNS = [
     r"CommonsCollections",
     r"InvokerTransformer",
     r"ChainedTransformer",
-
     # Python
     r"pickle\.loads",
     r"pickle\.load",
@@ -469,7 +475,6 @@ DESERIALIZATION_ERROR_PATTERNS = [
     r"PyYAML",
     r"yaml\.load\(",
     r"yaml\.unsafe_load",
-
     # .NET
     r"BinaryFormatter",
     r"ObjectStateFormatter",
@@ -477,7 +482,6 @@ DESERIALIZATION_ERROR_PATTERNS = [
     r"NetDataContractSerializer",
     r"TypeConfuseDelegate",
     r"System\.Runtime\.Serialization",
-
     # Node.js
     r"node-serialize",
     r"serialize.*function",
@@ -485,9 +489,9 @@ DESERIALIZATION_ERROR_PATTERNS = [
 ]
 
 DESERIALIZATION_RCE_INDICATORS = [
-    r"uid=\d+.*gid=\d+",           # Command execution output
-    r"root:.*:0:0:",               # /etc/passwd content
-    r"COMPUTERNAME=",              # Windows env
+    r"uid=\d+.*gid=\d+",  # Command execution output
+    r"root:.*:0:0:",  # /etc/passwd content
+    r"COMPUTERNAME=",  # Windows env
 ]
 
 
@@ -501,13 +505,11 @@ JWT_ERROR_PATTERNS = [
     r"signature verification failed",
     r"JWT signature does not match",
     r"token signature is invalid",
-
     # Algorithm errors
     r"algorithm.*none.*not allowed",
     r"algorithm.*not supported",
     r"invalid algorithm",
     r"unsupported.*algorithm",
-
     # Token structure errors
     r"jwt.*expired",
     r"token.*expired",
@@ -515,7 +517,6 @@ JWT_ERROR_PATTERNS = [
     r"malformed.*jwt",
     r"jwt.*malformed",
     r"Token is not valid",
-
     # Key errors
     r"kid.*not found",
     r"kid.*injection",
@@ -523,7 +524,6 @@ JWT_ERROR_PATTERNS = [
     r"invalid.*key",
     r"JWK.*error",
     r"jku.*error",
-
     # JWT specific
     r"io\.jsonwebtoken",
     r"com\.auth0\.jwt",
@@ -532,9 +532,9 @@ JWT_ERROR_PATTERNS = [
 ]
 
 JWT_BYPASS_INDICATORS = [
-    r"alg\s*:\s*['\"]?none",       # Algorithm none attack
-    r"kid\s*:\s*['\"]?\.\./",      # KID path traversal
-    r"jku\s*:\s*['\"]?http",       # JKU injection
+    r"alg\s*:\s*['\"]?none",  # Algorithm none attack
+    r"kid\s*:\s*['\"]?\.\./",  # KID path traversal
+    r"jku\s*:\s*['\"]?http",  # JKU injection
 ]
 
 
@@ -551,7 +551,6 @@ GRAPHQL_ERROR_PATTERNS = [
     r"Syntax error.*GraphQL",
     r"Expected.*got",
     r"Parse error on",
-
     # Introspection indicators
     r"__schema",
     r"__type",
@@ -560,16 +559,13 @@ GRAPHQL_ERROR_PATTERNS = [
     r"mutationType",
     r"subscriptionType",
     r"introspectionQuery",
-
     # Mutation errors
     r"Mutation.*not found",
     r"Cannot perform mutation",
-
     # Type errors
     r"Expected type",
     r"Variable.*type mismatch",
     r"is not a valid.*type",
-
     # Common GraphQL frameworks
     r"apollo-server",
     r"graphql-yoga",
@@ -596,13 +592,11 @@ WEBSOCKET_ERROR_PATTERNS = [
     r"WebSocket connection.*closed",
     r"upgrade.*websocket.*failed",
     r"WebSocket handshake.*failed",
-
     # Protocol errors
     r"Invalid WebSocket frame",
     r"WebSocket.*protocol error",
     r"Sec-WebSocket-Accept",
     r"Sec-WebSocket-Key",
-
     # Common implementations
     r"socket\.io",
     r"ws://",
@@ -611,9 +605,9 @@ WEBSOCKET_ERROR_PATTERNS = [
 ]
 
 WEBSOCKET_INJECTION_INDICATORS = [
-    r"<script>.*</script>",        # XSS via WebSocket
+    r"<script>.*</script>",  # XSS via WebSocket
     r"javascript:",
-    r"'.*OR.*'.*=.*'",             # SQLi via WebSocket
+    r"'.*OR.*'.*=.*'",  # SQLi via WebSocket
 ]
 
 
@@ -629,13 +623,11 @@ FILE_UPLOAD_SUCCESS_INDICATORS = [
     r"file.*saved",
     r"stored.*uploads",
     r"uploaded to",
-
     # Path disclosure
     r"/uploads/[^/]+\.\w+",
     r"/media/[^/]+\.\w+",
     r"/files/[^/]+\.\w+",
     r"/assets/[^/]+\.\w+",
-
     # Dangerous file extensions in response
     r"\.(php|jsp|asp|aspx|exe|sh|py|pl|rb|cgi)(\"|'|$|\s)",
 ]
@@ -646,12 +638,10 @@ FILE_UPLOAD_EXECUTION_INDICATORS = [
     r"phpinfo\(\)",
     r"PHP Version",
     r"System.*Linux",
-
     # JSP execution
     r"<%@",
     r"<jsp:",
     r"java\.lang",
-
     # ASP execution
     r"<%\s",
     r"Response\.Write",
@@ -1282,6 +1272,7 @@ DEPENDENCY_CONFUSION_INDICATORS = [
 # Pattern Registry
 # =============================================================================
 
+
 def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPattern]:
     """Get detection patterns for a vulnerability type."""
     patterns_map = {
@@ -1317,7 +1308,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.XSS: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.XSS,
@@ -1334,7 +1324,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.COMMAND_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.COMMAND_INJECTION,
@@ -1352,7 +1341,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.SSRF: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SSRF,
@@ -1369,7 +1357,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.XXE: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.XXE,
@@ -1386,7 +1373,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.LFI: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.LFI,
@@ -1403,7 +1389,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.6,
             ),
         ],
-
         VulnerabilityType.NOSQL_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.NOSQL_INJECTION,
@@ -1420,7 +1405,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.SSTI: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SSTI,
@@ -1430,7 +1414,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.CRLF_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CRLF_INJECTION,
@@ -1440,7 +1423,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.OPEN_REDIRECT: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.OPEN_REDIRECT,
@@ -1450,7 +1432,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.RFI: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.RFI,
@@ -1467,7 +1448,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.INSECURE_DESERIALIZATION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.INSECURE_DESERIALIZATION,
@@ -1484,7 +1464,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.JWT_ATTACKS: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.JWT_ATTACKS,
@@ -1501,7 +1480,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.GRAPHQL: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.GRAPHQL,
@@ -1518,7 +1496,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.WEBSOCKET: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.WEBSOCKET,
@@ -1535,7 +1512,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.FILE_UPLOAD: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.FILE_UPLOAD,
@@ -1559,7 +1535,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.5,
             ),
         ],
-
         VulnerabilityType.LDAP_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.LDAP_INJECTION,
@@ -1576,7 +1551,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.XPATH_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.XPATH_INJECTION,
@@ -1586,7 +1560,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Authentication & Access Control
         # ═══════════════════════════════════════════════════════════════════════
@@ -1606,7 +1579,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.IDOR: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.IDOR,
@@ -1623,7 +1595,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.6,
             ),
         ],
-
         VulnerabilityType.OAUTH_MISCONFIG: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.OAUTH_MISCONFIG,
@@ -1640,7 +1611,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.SAML_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SAML_INJECTION,
@@ -1657,7 +1627,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.ACCOUNT_TAKEOVER: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.ACCOUNT_TAKEOVER,
@@ -1667,7 +1636,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Protocol/Request Attacks
         # ═══════════════════════════════════════════════════════════════════════
@@ -1695,7 +1663,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.HPP: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.HPP,
@@ -1705,7 +1672,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.DNS_REBINDING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.DNS_REBINDING,
@@ -1715,7 +1681,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.CORS_MISCONFIG: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CORS_MISCONFIG,
@@ -1732,7 +1697,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.5,
             ),
         ],
-
         VulnerabilityType.TABNABBING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.TABNABBING,
@@ -1742,7 +1706,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.CACHE_POISONING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CACHE_POISONING,
@@ -1759,7 +1722,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Client-Side Attacks
         # ═══════════════════════════════════════════════════════════════════════
@@ -1772,7 +1734,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.CLICKJACKING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CLICKJACKING,
@@ -1782,7 +1743,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.PROTOTYPE_POLLUTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.PROTOTYPE_POLLUTION,
@@ -1799,7 +1759,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.CLIENT_PATH_TRAVERSAL: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CLIENT_PATH_TRAVERSAL,
@@ -1809,7 +1768,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - File & Data Attacks
         # ═══════════════════════════════════════════════════════════════════════
@@ -1829,7 +1787,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.5,
             ),
         ],
-
         VulnerabilityType.ZIP_SLIP: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.ZIP_SLIP,
@@ -1846,7 +1803,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.ORM_LEAK: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.ORM_LEAK,
@@ -1856,7 +1812,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.API_KEY_LEAK: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.API_KEY_LEAK,
@@ -1866,7 +1821,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.GIT_EXPOSURE: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.GIT_EXPOSURE,
@@ -1876,7 +1830,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.SECRETS_EXPOSURE: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SECRETS_EXPOSURE,
@@ -1886,7 +1839,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Business Logic & Timing
         # ═══════════════════════════════════════════════════════════════════════
@@ -1906,7 +1858,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.MASS_ASSIGNMENT: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.MASS_ASSIGNMENT,
@@ -1916,7 +1867,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.TYPE_JUGGLING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.TYPE_JUGGLING,
@@ -1933,7 +1883,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.BUSINESS_LOGIC: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.BUSINESS_LOGIC,
@@ -1943,7 +1892,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.INSECURE_RANDOM: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.INSECURE_RANDOM,
@@ -1953,7 +1901,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Injection Variants
         # ═══════════════════════════════════════════════════════════════════════
@@ -1973,7 +1920,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         VulnerabilityType.SSI_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SSI_INJECTION,
@@ -1990,7 +1936,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.XSLT_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.XSLT_INJECTION,
@@ -2007,7 +1952,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.PROMPT_INJECTION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.PROMPT_INJECTION,
@@ -2024,7 +1968,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.6,
             ),
         ],
-
         VulnerabilityType.REGEX_DOS: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.REGEX_DOS,
@@ -2035,7 +1978,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.JAVA_RMI: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.JAVA_RMI,
@@ -2052,7 +1994,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Misconfiguration & Exposure
         # ═══════════════════════════════════════════════════════════════════════
@@ -2065,7 +2006,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.ADMIN_INTERFACE: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.ADMIN_INTERFACE,
@@ -2075,7 +2015,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.VIRTUAL_HOST: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.VIRTUAL_HOST,
@@ -2085,7 +2024,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.REVERSE_PROXY: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.REVERSE_PROXY,
@@ -2095,7 +2033,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.GWT_VULN: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.GWT_VULN,
@@ -2105,7 +2042,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.7,
             ),
         ],
-
         VulnerabilityType.DEPENDENCY_CONFUSION: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.DEPENDENCY_CONFUSION,
@@ -2115,7 +2051,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.CVE_EXPLOITS: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.CVE_EXPLOITS,
@@ -2125,7 +2060,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.95,
             ),
         ],
-
         # ═══════════════════════════════════════════════════════════════════════
         # NEW - Additional Edge Cases
         # ═══════════════════════════════════════════════════════════════════════
@@ -2138,7 +2072,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.85,
             ),
         ],
-
         VulnerabilityType.HEADLESS_BROWSER: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.HEADLESS_BROWSER,
@@ -2148,7 +2081,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.8,
             ),
         ],
-
         VulnerabilityType.ENCODING_BYPASS: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.ENCODING_BYPASS,
@@ -2158,7 +2090,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.75,
             ),
         ],
-
         VulnerabilityType.HOST_HEADER: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.HOST_HEADER,
@@ -2175,7 +2106,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.9,
             ),
         ],
-
         VulnerabilityType.HTTP_VERB_TAMPERING: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.HTTP_VERB_TAMPERING,
@@ -2185,7 +2115,6 @@ def get_detection_patterns(vuln_type: VulnerabilityType) -> list[DetectionPatter
                 confidence_weight=0.6,
             ),
         ],
-
         VulnerabilityType.SUBDOMAIN_TAKEOVER: [
             DetectionPattern(
                 vuln_type=VulnerabilityType.SUBDOMAIN_TAKEOVER,

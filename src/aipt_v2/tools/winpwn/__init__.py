@@ -49,16 +49,6 @@ Quick Usage:
     )
 """
 
-# Configuration
-from aipt_v2.tools.winpwn.winpwn_config import (
-    WinPwnConfig,
-    WinPwnCredentials,
-    WinPwnModule,
-    WinPwnExecutionMode,
-    get_winpwn_config,
-    validate_winpwn_config,
-)
-
 # PowerShell Execution
 from aipt_v2.tools.winpwn.powershell_executor import (
     PowerShellExecutor,
@@ -66,31 +56,39 @@ from aipt_v2.tools.winpwn.powershell_executor import (
     WinRMExecutor,
 )
 
-# Output Parsing
-from aipt_v2.tools.winpwn.winpwn_parsers import (
-    WinPwnParser,
-    WinPwnFinding,
-    ExtractedCredential,
-    FindingSeverity,
-    FindingCategory,
-)
-
 # Attack Orchestration
 from aipt_v2.tools.winpwn.winpwn_attacks import (
+    ModuleResult,
     WinPwnAttacks,
     WinPwnResult,
-    ModuleResult,
-    run_winpwn_assessment,
     quick_local_recon,
+    run_winpwn_assessment,
 )
 
+# Configuration
+from aipt_v2.tools.winpwn.winpwn_config import (
+    WinPwnConfig,
+    WinPwnCredentials,
+    WinPwnExecutionMode,
+    WinPwnModule,
+    get_winpwn_config,
+    validate_winpwn_config,
+)
+
+# Output Parsing
+from aipt_v2.tools.winpwn.winpwn_parsers import (
+    ExtractedCredential,
+    FindingCategory,
+    FindingSeverity,
+    WinPwnFinding,
+    WinPwnParser,
+)
 
 # Available WinPwn modules for reference
 AVAILABLE_MODULES = {
     # Reconnaissance
     "localrecon": "Local system reconnaissance",
     "domainrecon": "Domain enumeration",
-
     # Credentials
     "kittielocal": "Local credential extraction",
     "lsassdump": "LSASS memory dump",
@@ -98,23 +96,19 @@ AVAILABLE_MODULES = {
     "sessiongopher": "Session credential extraction",
     "wificreds": "WiFi password extraction",
     "browserpwn": "Browser credential extraction",
-
     # Privilege Escalation
     "privesc": "Privilege escalation checks",
     "kernelexploits": "Kernel exploit checks",
     "uacbypass": "UAC bypass techniques",
     "tokenmanipulation": "Token manipulation",
-
     # Domain Attacks
     "kerberoasting": "Kerberoasting attack",
     "sharphound": "BloodHound data collection",
     "inveigh": "LLMNR/NBT-NS poisoning",
     "domainpassspray": "Domain password spraying",
-
     # Lateral Movement
     "latmov": "Lateral movement techniques",
     "shareenum": "Share enumeration",
-
     # Full Automation
     "winpwn": "Full WinPwn automation",
 }
@@ -138,26 +132,22 @@ __all__ = [
     "WinPwnExecutionMode",
     "get_winpwn_config",
     "validate_winpwn_config",
-
     # Execution
     "PowerShellExecutor",
     "PowerShellResult",
     "WinRMExecutor",
-
     # Parsing
     "WinPwnParser",
     "WinPwnFinding",
     "ExtractedCredential",
     "FindingSeverity",
     "FindingCategory",
-
     # Attacks
     "WinPwnAttacks",
     "WinPwnResult",
     "ModuleResult",
     "run_winpwn_assessment",
     "quick_local_recon",
-
     # Utilities
     "get_available_modules",
     "get_module_info",

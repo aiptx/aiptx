@@ -23,26 +23,22 @@ Usage:
 
 import asyncio
 import os
+import platform
 import shlex
 import shutil
 import signal
 import subprocess
 import sys
-import platform
 import threading
 from datetime import datetime
 from pathlib import Path
-from queue import Queue, Empty
+from queue import Empty, Queue
 from typing import Dict, List, Optional, Tuple
 
-from rich.console import Console
-from rich.panel import Panel
-from rich.table import Table
-from rich.syntax import Syntax
-from rich.live import Live
-from rich.text import Text
 from rich import box
-
+from rich.console import Console
+from rich.table import Table
+from rich.text import Text
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"
@@ -51,12 +47,11 @@ IS_WINDOWS = platform.system() == "Windows"
 if not IS_WINDOWS:
     import pty
     import select
-    import termios
-    import tty
 
 # Try to import readline (available on Unix, may need pyreadline3 on Windows)
 try:
     import readline
+
     HAS_READLINE = True
 except ImportError:
     HAS_READLINE = False
@@ -64,6 +59,7 @@ except ImportError:
     if IS_WINDOWS:
         try:
             import pyreadline3 as readline
+
             HAS_READLINE = True
         except ImportError:
             pass
@@ -82,8 +78,19 @@ class ToolCompleter:
     def __init__(self, tools: List[str]):
         self.tools = sorted(tools)
         self.commands = [
-            "help", "tools", "exit", "quit", "clear", "history",
-            "env", "cd", "pwd", "run", "scan", "export", "log"
+            "help",
+            "tools",
+            "exit",
+            "quit",
+            "clear",
+            "history",
+            "env",
+            "cd",
+            "pwd",
+            "run",
+            "scan",
+            "export",
+            "log",
         ]
         self.all_completions = self.commands + self.tools
         self.matches = []
@@ -92,10 +99,7 @@ class ToolCompleter:
         """Readline completion function."""
         if state == 0:
             if text:
-                self.matches = [
-                    s for s in self.all_completions
-                    if s.startswith(text)
-                ]
+                self.matches = [s for s in self.all_completions if s.startswith(text)]
             else:
                 self.matches = self.all_completions[:]
 
@@ -142,10 +146,8 @@ class InteractiveShell:
         """Load available tools from the installer."""
         try:
             from aipt_v2.local_tool_installer import TOOLS
-            self._tools = {
-                name: tool.description
-                for name, tool in TOOLS.items()
-            }
+
+            self._tools = {name: tool.description for name, tool in TOOLS.items()}
         except ImportError:
             self._tools = {}
 
@@ -190,12 +192,10 @@ class InteractiveShell:
 
     def print_banner(self):
         """Print welcome banner with hacker aesthetic."""
-        from rich.align import Align
-        from rich.panel import Panel
-        from rich.text import Text
-        import socket
         import os
-        from datetime import datetime
+        import socket
+
+        from rich.align import Align
 
         # Hacker colors
         NEON_GREEN = "#00ff41"
@@ -234,18 +234,24 @@ class InteractiveShell:
         console.print()
         console.print(Align.center(sys_info))
         console.print()
-        console.print(f"[dim {DARK_GREEN}]" + "─" * term_width + f"[/]")
-        console.print(Align.center(f"[dim]Type [bold {NEON_GREEN}]help[/] for commands • [bold {NEON_GREEN}]tools[/] to list available arsenal[/dim]"))
+        console.print(f"[dim {DARK_GREEN}]" + "─" * term_width + "[/]")
+        console.print(
+            Align.center(
+                f"[dim]Type [bold {NEON_GREEN}]help[/] for commands • [bold {NEON_GREEN}]tools[/] to list available arsenal[/dim]"
+            )
+        )
 
         if IS_WINDOWS:
-            console.print(Align.center(f"[dim {BLOOD_RED}][!] Windows detected - some features limited[/]"))
+            console.print(
+                Align.center(f"[dim {BLOOD_RED}][!] Windows detected - some features limited[/]")
+            )
 
         console.print()
 
     def print_help(self):
         """Print help information with hacker aesthetic."""
-        from rich.table import Table
         from rich import box
+        from rich.table import Table
 
         NEON_GREEN = "#00ff41"
         DARK_GREEN = "#008f11"
@@ -287,15 +293,15 @@ class InteractiveShell:
         console.print(f"[dim {GHOST_WHITE}]  Execute tools directly by name:[/]")
         console.print(f"    [{NEON_GREEN}]nmap -sV -sC target.com[/]")
         console.print(f"    [{NEON_GREEN}]nuclei -u https://target.com -t cves/[/]")
-        console.print(f"    [{NEON_GREEN}]sqlmap -u \"http://target.com?id=1\" --batch[/]")
+        console.print(f'    [{NEON_GREEN}]sqlmap -u "http://target.com?id=1" --batch[/]')
         console.print()
 
         # Hotkeys
         console.print(f"[bold {CYBER_BLUE}]⌨ HOTKEYS[/]")
-        console.print(f"  [dim]TAB[/]    → Auto-completion")
-        console.print(f"  [dim]↑/↓[/]    → Navigate history")
-        console.print(f"  [dim]Ctrl+C[/] → Kill current process")
-        console.print(f"  [dim]Ctrl+D[/] → Exit shell")
+        console.print("  [dim]TAB[/]    → Auto-completion")
+        console.print("  [dim]↑/↓[/]    → Navigate history")
+        console.print("  [dim]Ctrl+C[/] → Kill current process")
+        console.print("  [dim]Ctrl+D[/] → Exit shell")
         console.print()
 
     def list_tools(self, category: Optional[str] = None):
@@ -332,7 +338,11 @@ class InteractiveShell:
                 is_installed = shutil.which(name) is not None
                 status = f"[bold {NEON_GREEN}]●[/]" if is_installed else f"[dim {BLOOD_RED}]○[/]"
 
-                desc = tool.description[:45] + "..." if len(tool.description) > 45 else tool.description
+                desc = (
+                    tool.description[:45] + "..."
+                    if len(tool.description) > 45
+                    else tool.description
+                )
 
                 table.add_row(name, tool.category.value, status, desc)
 
@@ -436,7 +446,9 @@ class InteractiveShell:
 
             # Check if it's a known tool that's not installed
             if program in self._tools:
-                console.print(f"[dim]This tool is not installed. Run: aiptx tools install -t {program}[/dim]")
+                console.print(
+                    f"[dim]This tool is not installed. Run: aiptx tools install -t {program}[/dim]"
+                )
             return 127
 
         console.print()
@@ -520,7 +532,7 @@ class InteractiveShell:
                     subprocess.run(
                         ["taskkill", "/F", "/T", "/PID", str(process.pid)],
                         capture_output=True,
-                        timeout=5
+                        timeout=5,
                     )
                 except Exception:
                     process.kill()
@@ -700,7 +712,7 @@ class InteractiveShell:
                 cwd = str(self.working_dir)
                 home = str(Path.home())
                 if cwd.startswith(home):
-                    cwd = "~" + cwd[len(home):]
+                    cwd = "~" + cwd[len(home) :]
 
                 prompt = f"\n[bold green]aiptx[/bold green]:[bold blue]{cwd}[/bold blue]$ "
                 console.print(prompt, end="")
@@ -765,21 +777,17 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="AIPTX Interactive Shell")
-    parser.add_argument(
-        "--log", "-l",
-        help="Log session to file"
-    )
-    parser.add_argument(
-        "--dir", "-d",
-        help="Working directory"
-    )
+    parser.add_argument("--log", "-l", help="Log session to file")
+    parser.add_argument("--dir", "-d", help="Working directory")
 
     args = parser.parse_args()
 
-    asyncio.run(start_interactive_shell(
-        log_file=args.log,
-        working_dir=args.dir,
-    ))
+    asyncio.run(
+        start_interactive_shell(
+            log_file=args.log,
+            working_dir=args.dir,
+        )
+    )
 
 
 if __name__ == "__main__":

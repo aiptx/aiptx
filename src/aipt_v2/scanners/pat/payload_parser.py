@@ -4,6 +4,7 @@ PAT Payload Parser
 Parses PayloadsAllTheThings markdown files to extract payloads.
 Handles code blocks, inline code, and tables.
 """
+
 from __future__ import annotations
 
 import logging
@@ -13,7 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Iterator, Optional
 
-from .config import VulnerabilityType, PayloadTechnique, PayloadConfig
+from .config import PayloadConfig, PayloadTechnique, VulnerabilityType
 
 logger = logging.getLogger(__name__)
 
@@ -21,15 +22,16 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ParsedPayload:
     """A parsed payload from PayloadsAllTheThings."""
-    content: str                                # The actual payload string
-    category: VulnerabilityType                 # SQL injection, XSS, etc.
-    subcategory: str = ""                       # mysql, postgresql, reflected, etc.
+
+    content: str  # The actual payload string
+    category: VulnerabilityType  # SQL injection, XSS, etc.
+    subcategory: str = ""  # mysql, postgresql, reflected, etc.
     technique: PayloadTechnique = PayloadTechnique.DIRECT
-    description: str = ""                       # What it does
-    language: str = ""                          # sql, javascript, xml, etc.
-    source_file: str = ""                       # Original markdown file
-    requires_encoding: bool = False             # URL encode before use
-    is_dangerous: bool = False                  # Destructive payload
+    description: str = ""  # What it does
+    language: str = ""  # sql, javascript, xml, etc.
+    source_file: str = ""  # Original markdown file
+    requires_encoding: bool = False  # URL encode before use
+    is_dangerous: bool = False  # Destructive payload
     tags: list[str] = field(default_factory=list)
 
     def __hash__(self) -> int:
@@ -80,7 +82,6 @@ DIRECTORY_MAPPING = {
     "Web Sockets": VulnerabilityType.WEBSOCKET,
     "Upload Insecure Files": VulnerabilityType.FILE_UPLOAD,
     "File Upload": VulnerabilityType.FILE_UPLOAD,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Authentication & Access Control
     # ═══════════════════════════════════════════════════════════════════════════
@@ -95,7 +96,6 @@ DIRECTORY_MAPPING = {
     "Account Takeover": VulnerabilityType.ACCOUNT_TAKEOVER,
     "2FA Bypass": VulnerabilityType.ACCOUNT_TAKEOVER,
     "Password Reset": VulnerabilityType.ACCOUNT_TAKEOVER,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Protocol/Request Attacks
     # ═══════════════════════════════════════════════════════════════════════════
@@ -111,7 +111,6 @@ DIRECTORY_MAPPING = {
     "Web Cache Deception": VulnerabilityType.CACHE_POISONING,
     "Web Cache Poisoning": VulnerabilityType.CACHE_POISONING,
     "Cache Poisoning": VulnerabilityType.CACHE_POISONING,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Client-Side Attacks
     # ═══════════════════════════════════════════════════════════════════════════
@@ -120,7 +119,6 @@ DIRECTORY_MAPPING = {
     "UI Redressing": VulnerabilityType.CLICKJACKING,
     "Prototype Pollution": VulnerabilityType.PROTOTYPE_POLLUTION,
     "Client Side Path Traversal": VulnerabilityType.CLIENT_PATH_TRAVERSAL,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - File & Data Attacks
     # ═══════════════════════════════════════════════════════════════════════════
@@ -134,7 +132,6 @@ DIRECTORY_MAPPING = {
     "Insecure Source Code Management": VulnerabilityType.GIT_EXPOSURE,
     ".git": VulnerabilityType.GIT_EXPOSURE,
     "Secrets in Files": VulnerabilityType.SECRETS_EXPOSURE,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Business Logic & Timing
     # ═══════════════════════════════════════════════════════════════════════════
@@ -145,7 +142,6 @@ DIRECTORY_MAPPING = {
     "Business Logic Errors": VulnerabilityType.BUSINESS_LOGIC,
     "Business Logic": VulnerabilityType.BUSINESS_LOGIC,
     "Insecure Randomness": VulnerabilityType.INSECURE_RANDOM,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Injection Variants
     # ═══════════════════════════════════════════════════════════════════════════
@@ -158,7 +154,6 @@ DIRECTORY_MAPPING = {
     "Regular Expression": VulnerabilityType.REGEX_DOS,
     "ReDoS": VulnerabilityType.REGEX_DOS,
     "Java RMI": VulnerabilityType.JAVA_RMI,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Misconfiguration & Exposure
     # ═══════════════════════════════════════════════════════════════════════════
@@ -172,7 +167,6 @@ DIRECTORY_MAPPING = {
     "GWT": VulnerabilityType.GWT_VULN,
     "Dependency Confusion": VulnerabilityType.DEPENDENCY_CONFUSION,
     "CVE Exploits": VulnerabilityType.CVE_EXPLOITS,
-
     # ═══════════════════════════════════════════════════════════════════════════
     # NEW - Additional Edge Cases
     # ═══════════════════════════════════════════════════════════════════════════
@@ -204,7 +198,6 @@ SUBCATEGORY_PATTERNS = {
         "stored": ["stored", "Stored", "persistent"],
         "dom": ["DOM", "dom-based", "DOM-based"],
     },
-
     # ═══════════════════════════════════════════════════════════════════════════
     # New subcategories for extended vuln types
     # ═══════════════════════════════════════════════════════════════════════════
@@ -272,7 +265,15 @@ TECHNIQUE_KEYWORDS = {
     PayloadTechnique.ERROR_BASED: ["error", "Error-based", "error-based"],
     PayloadTechnique.UNION_BASED: ["UNION", "union", "Union-based"],
     PayloadTechnique.BOOLEAN_BASED: ["boolean", "Boolean", "blind boolean", "boolean-based"],
-    PayloadTechnique.TIME_BASED: ["time", "Time-based", "sleep", "SLEEP", "WAITFOR", "benchmark", "time-based"],
+    PayloadTechnique.TIME_BASED: [
+        "time",
+        "Time-based",
+        "sleep",
+        "SLEEP",
+        "WAITFOR",
+        "benchmark",
+        "time-based",
+    ],
     PayloadTechnique.STACKED_QUERIES: ["stacked", "Stacked", "multiple queries"],
     PayloadTechnique.OUT_OF_BAND: ["OOB", "out-of-band", "DNS", "HTTP callback"],
     PayloadTechnique.FILTER_BYPASS: ["bypass", "Bypass", "filter", "WAF", "waf"],
@@ -504,15 +505,17 @@ class PayloadParser:
                 technique = self._detect_technique(line, content)
                 is_dangerous = self._is_dangerous_payload(line)
 
-                payloads.append(ParsedPayload(
-                    content=line,
-                    category=vuln_type,
-                    subcategory=subcategory,
-                    technique=technique,
-                    language=language,
-                    source_file=source_file,
-                    is_dangerous=is_dangerous,
-                ))
+                payloads.append(
+                    ParsedPayload(
+                        content=line,
+                        category=vuln_type,
+                        subcategory=subcategory,
+                        technique=technique,
+                        language=language,
+                        source_file=source_file,
+                        is_dangerous=is_dangerous,
+                    )
+                )
 
         return payloads
 
@@ -540,14 +543,16 @@ class PayloadParser:
             technique = self._detect_technique(code, content)
             is_dangerous = self._is_dangerous_payload(code)
 
-            payloads.append(ParsedPayload(
-                content=code,
-                category=vuln_type,
-                subcategory=subcategory,
-                technique=technique,
-                source_file=source_file,
-                is_dangerous=is_dangerous,
-            ))
+            payloads.append(
+                ParsedPayload(
+                    content=code,
+                    category=vuln_type,
+                    subcategory=subcategory,
+                    technique=technique,
+                    source_file=source_file,
+                    is_dangerous=is_dangerous,
+                )
+            )
 
         return payloads
 
@@ -581,15 +586,17 @@ class PayloadParser:
                 technique = self._detect_technique(payload_content, content)
                 is_dangerous = self._is_dangerous_payload(payload_content)
 
-                payloads.append(ParsedPayload(
-                    content=payload_content,
-                    category=vuln_type,
-                    subcategory=subcategory,
-                    technique=technique,
-                    description=col2,
-                    source_file=source_file,
-                    is_dangerous=is_dangerous,
-                ))
+                payloads.append(
+                    ParsedPayload(
+                        content=payload_content,
+                        category=vuln_type,
+                        subcategory=subcategory,
+                        technique=technique,
+                        description=col2,
+                        source_file=source_file,
+                        is_dangerous=is_dangerous,
+                    )
+                )
 
         return payloads
 
@@ -641,11 +648,31 @@ class PayloadParser:
         # Existing vuln type heuristics
         # ═══════════════════════════════════════════════════════════════════════
         if vuln_type == VulnerabilityType.SQL_INJECTION:
-            sql_keywords = ["SELECT", "UNION", "OR", "AND", "'", '"', "--", "#", "SLEEP", "BENCHMARK"]
+            sql_keywords = [
+                "SELECT",
+                "UNION",
+                "OR",
+                "AND",
+                "'",
+                '"',
+                "--",
+                "#",
+                "SLEEP",
+                "BENCHMARK",
+            ]
             return any(kw in text.upper() for kw in sql_keywords)
 
         elif vuln_type == VulnerabilityType.XSS:
-            xss_indicators = ["<", ">", "script", "onerror", "onload", "javascript:", "alert", "eval"]
+            xss_indicators = [
+                "<",
+                ">",
+                "script",
+                "onerror",
+                "onload",
+                "javascript:",
+                "alert",
+                "eval",
+            ]
             return any(ind in text.lower() for ind in xss_indicators)
 
         elif vuln_type == VulnerabilityType.COMMAND_INJECTION:
@@ -653,7 +680,15 @@ class PayloadParser:
             return any(ind in text for ind in cmd_indicators)
 
         elif vuln_type == VulnerabilityType.SSRF:
-            ssrf_indicators = ["http://", "https://", "file://", "gopher://", "dict://", "@", "localhost"]
+            ssrf_indicators = [
+                "http://",
+                "https://",
+                "file://",
+                "gopher://",
+                "dict://",
+                "@",
+                "localhost",
+            ]
             return any(ind in text.lower() for ind in ssrf_indicators)
 
         elif vuln_type == VulnerabilityType.XXE:
@@ -680,15 +715,37 @@ class PayloadParser:
             return any(ind in text.lower() for ind in csrf_indicators)
 
         elif vuln_type == VulnerabilityType.IDOR:
-            idor_indicators = ["id=", "user_id", "account_id", "order_id", "doc_id", "/users/", "/api/"]
+            idor_indicators = [
+                "id=",
+                "user_id",
+                "account_id",
+                "order_id",
+                "doc_id",
+                "/users/",
+                "/api/",
+            ]
             return any(ind in text.lower() for ind in idor_indicators)
 
         elif vuln_type == VulnerabilityType.OAUTH_MISCONFIG:
-            oauth_indicators = ["redirect_uri", "state=", "code=", "access_token", "client_id", "response_type"]
+            oauth_indicators = [
+                "redirect_uri",
+                "state=",
+                "code=",
+                "access_token",
+                "client_id",
+                "response_type",
+            ]
             return any(ind in text.lower() for ind in oauth_indicators)
 
         elif vuln_type == VulnerabilityType.SAML_INJECTION:
-            saml_indicators = ["<saml", "SAMLResponse", "Assertion", "Issuer", "NameID", "Signature"]
+            saml_indicators = [
+                "<saml",
+                "SAMLResponse",
+                "Assertion",
+                "Issuer",
+                "NameID",
+                "Signature",
+            ]
             return any(ind in text for ind in saml_indicators)
 
         elif vuln_type == VulnerabilityType.ACCOUNT_TAKEOVER:
@@ -699,7 +756,13 @@ class PayloadParser:
         # NEW - Protocol/Request Attacks
         # ═══════════════════════════════════════════════════════════════════════
         elif vuln_type == VulnerabilityType.HTTP_SMUGGLING:
-            smuggle_indicators = ["Transfer-Encoding", "Content-Length", "chunked", "\r\n", "0\r\n\r\n"]
+            smuggle_indicators = [
+                "Transfer-Encoding",
+                "Content-Length",
+                "chunked",
+                "\r\n",
+                "0\r\n\r\n",
+            ]
             return any(ind in text for ind in smuggle_indicators)
 
         elif vuln_type == VulnerabilityType.HPP:
@@ -711,11 +774,24 @@ class PayloadParser:
             return any(ind in text.lower() for ind in dns_indicators)
 
         elif vuln_type == VulnerabilityType.CORS_MISCONFIG:
-            cors_indicators = ["Origin", "Access-Control", "null", "*.example.com", "withCredentials"]
+            cors_indicators = [
+                "Origin",
+                "Access-Control",
+                "null",
+                "*.example.com",
+                "withCredentials",
+            ]
             return any(ind in text for ind in cors_indicators)
 
         elif vuln_type == VulnerabilityType.TABNABBING:
-            tabnab_indicators = ["target=", "_blank", "opener", "noopener", "noreferrer", "window.opener"]
+            tabnab_indicators = [
+                "target=",
+                "_blank",
+                "opener",
+                "noopener",
+                "noreferrer",
+                "window.opener",
+            ]
             return any(ind in text.lower() for ind in tabnab_indicators)
 
         elif vuln_type == VulnerabilityType.CACHE_POISONING:
@@ -815,7 +891,13 @@ class PayloadParser:
             return any(ind in text for ind in regex_indicators)
 
         elif vuln_type == VulnerabilityType.JAVA_RMI:
-            rmi_indicators = ["rmi://", "ObjectInputStream", "readObject", "ysoserial", "Transformer"]
+            rmi_indicators = [
+                "rmi://",
+                "ObjectInputStream",
+                "readObject",
+                "ysoserial",
+                "Transformer",
+            ]
             return any(ind in text for ind in rmi_indicators)
 
         # ═══════════════════════════════════════════════════════════════════════
@@ -907,7 +989,7 @@ class PayloadParser:
 
             # Apply limit
             if len(payloads) > self.config.max_payloads_per_type:
-                payloads = payloads[:self.config.max_payloads_per_type]
+                payloads = payloads[: self.config.max_payloads_per_type]
 
             results[vuln_type] = payloads
             logger.info(f"Parsed {len(payloads)} payloads for {vuln_type.value}")

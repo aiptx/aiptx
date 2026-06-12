@@ -15,18 +15,18 @@ from typing import Optional
 
 from aipt_v2.sast.parsers.base import (
     BaseParser,
-    ParsedFile,
     CodeLocation,
-    ParsedFunction,
-    ParsedClass,
-    ParsedVariable,
-    ParsedImport,
     DataFlow,
+    ParsedClass,
+    ParsedFile,
+    ParsedFunction,
+    ParsedImport,
+    ParsedVariable,
 )
-from aipt_v2.sast.parsers.python_parser import PythonParser
-from aipt_v2.sast.parsers.javascript_parser import JavaScriptParser
-from aipt_v2.sast.parsers.java_parser import JavaParser
 from aipt_v2.sast.parsers.go_parser import GoParser
+from aipt_v2.sast.parsers.java_parser import JavaParser
+from aipt_v2.sast.parsers.javascript_parser import JavaScriptParser
+from aipt_v2.sast.parsers.python_parser import PythonParser
 
 __all__ = [
     # Base

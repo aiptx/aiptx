@@ -9,12 +9,11 @@ import asyncio
 import json
 import logging
 import os
-import subprocess
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
+from typing import Any, Callable, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.cloud.cloud_config import CloudConfig, get_cloud_config
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 
 class CloudSeverity(Enum):
     """Cloud finding severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -33,6 +33,7 @@ class CloudSeverity(Enum):
 
 class CloudProvider(Enum):
     """Supported cloud providers."""
+
     AWS = "aws"
     AZURE = "azure"
     GCP = "gcp"
@@ -41,6 +42,7 @@ class CloudProvider(Enum):
 @dataclass
 class CloudFinding:
     """A security finding from cloud scanning."""
+
     provider: str
     service: str
     resource_id: str
@@ -73,15 +75,16 @@ class CloudFinding:
                 "region": self.region,
                 "account_id": self.account_id,
                 "compliance": self.compliance,
-                "resource_id": self.resource_id
+                "resource_id": self.resource_id,
             },
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
 
 @dataclass
 class CloudScanResult:
     """Result of a cloud security scan."""
+
     provider: str
     status: str  # completed, failed, partial
     started_at: str
@@ -150,16 +153,18 @@ class CloudScanner:
                 self.findings.extend(result.findings)
             except Exception as e:
                 self._log(f"Error scanning {provider}: {str(e)}", "error")
-                results.append(CloudScanResult(
-                    provider=provider,
-                    status="failed",
-                    started_at=datetime.now(timezone.utc).isoformat(),
-                    finished_at=datetime.now(timezone.utc).isoformat(),
-                    duration=0,
-                    findings=[],
-                    summary={},
-                    errors=[str(e)]
-                ))
+                results.append(
+                    CloudScanResult(
+                        provider=provider,
+                        status="failed",
+                        started_at=datetime.now(timezone.utc).isoformat(),
+                        finished_at=datetime.now(timezone.utc).isoformat(),
+                        duration=0,
+                        findings=[],
+                        summary={},
+                        errors=[str(e)],
+                    )
+                )
 
         return results
 
@@ -202,7 +207,7 @@ class CloudScanner:
             duration=duration,
             findings=findings,
             summary=summary,
-            errors=errors
+            errors=errors,
         )
 
     async def _scan_aws(self) -> tuple:
@@ -283,15 +288,9 @@ class CloudScanner:
         self._log(f"Running ScoutSuite for {provider}...")
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
         )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=self.config.timeout
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self.config.timeout)
 
         if process.returncode == 0:
             # Parse ScoutSuite results
@@ -313,15 +312,9 @@ class CloudScanner:
         self._log("Running Prowler for AWS...")
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
         )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=self.config.timeout
-        )
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=self.config.timeout)
 
         if process.returncode == 0 and output_file.exists():
             findings = self._parse_prowler_results(output_file)
@@ -341,8 +334,7 @@ class CloudScanner:
 
             # Create session
             session = boto3.Session(
-                profile_name=self.config.aws.profile,
-                region_name=self.config.aws.region
+                profile_name=self.config.aws.profile, region_name=self.config.aws.region
             )
 
             # Check S3 public buckets
@@ -367,30 +359,32 @@ class CloudScanner:
     async def _check_s3_public_access(self, session) -> List[CloudFinding]:
         """Check for public S3 buckets."""
         findings = []
-        s3 = session.client('s3')
+        s3 = session.client("s3")
 
         try:
-            buckets = s3.list_buckets().get('Buckets', [])
+            buckets = s3.list_buckets().get("Buckets", [])
             for bucket in buckets:
-                bucket_name = bucket['Name']
+                bucket_name = bucket["Name"]
                 try:
                     # Check bucket ACL
                     acl = s3.get_bucket_acl(Bucket=bucket_name)
-                    for grant in acl.get('Grants', []):
-                        grantee = grant.get('Grantee', {})
-                        if grantee.get('URI', '').endswith('AllUsers'):
-                            findings.append(CloudFinding(
-                                provider="aws",
-                                service="s3",
-                                resource_id=bucket_name,
-                                resource_name=bucket_name,
-                                title="Public S3 Bucket",
-                                description=f"S3 bucket {bucket_name} is publicly accessible",
-                                severity="critical",
-                                recommendation="Remove public access from the bucket ACL",
-                                compliance=["CIS 2.1.1", "PCI 2.1"],
-                                metadata={"acl_grant": str(grant)}
-                            ))
+                    for grant in acl.get("Grants", []):
+                        grantee = grant.get("Grantee", {})
+                        if grantee.get("URI", "").endswith("AllUsers"):
+                            findings.append(
+                                CloudFinding(
+                                    provider="aws",
+                                    service="s3",
+                                    resource_id=bucket_name,
+                                    resource_name=bucket_name,
+                                    title="Public S3 Bucket",
+                                    description=f"S3 bucket {bucket_name} is publicly accessible",
+                                    severity="critical",
+                                    recommendation="Remove public access from the bucket ACL",
+                                    compliance=["CIS 2.1.1", "PCI 2.1"],
+                                    metadata={"acl_grant": str(grant)},
+                                )
+                            )
                 except Exception:
                     continue
         except Exception as e:
@@ -401,32 +395,34 @@ class CloudScanner:
     async def _check_security_groups(self, session) -> List[CloudFinding]:
         """Check for overly permissive security groups."""
         findings = []
-        ec2 = session.client('ec2')
+        ec2 = session.client("ec2")
 
         try:
-            sgs = ec2.describe_security_groups().get('SecurityGroups', [])
+            sgs = ec2.describe_security_groups().get("SecurityGroups", [])
             for sg in sgs:
-                sg_id = sg['GroupId']
-                sg_name = sg['GroupName']
+                sg_id = sg["GroupId"]
+                sg_name = sg["GroupName"]
 
-                for rule in sg.get('IpPermissions', []):
-                    for ip_range in rule.get('IpRanges', []):
-                        cidr = ip_range.get('CidrIp', '')
-                        if cidr == '0.0.0.0/0':
-                            port = rule.get('FromPort', 'All')
-                            if port in [22, 3389, 'All']:
-                                findings.append(CloudFinding(
-                                    provider="aws",
-                                    service="ec2",
-                                    resource_id=sg_id,
-                                    resource_name=sg_name,
-                                    title="Security Group Open to Internet",
-                                    description=f"Security group {sg_name} allows inbound traffic from 0.0.0.0/0 on port {port}",
-                                    severity="high" if port in [22, 3389] else "medium",
-                                    recommendation="Restrict inbound access to specific IP ranges",
-                                    compliance=["CIS 4.1", "CIS 4.2"],
-                                    metadata={"port": port, "cidr": cidr}
-                                ))
+                for rule in sg.get("IpPermissions", []):
+                    for ip_range in rule.get("IpRanges", []):
+                        cidr = ip_range.get("CidrIp", "")
+                        if cidr == "0.0.0.0/0":
+                            port = rule.get("FromPort", "All")
+                            if port in [22, 3389, "All"]:
+                                findings.append(
+                                    CloudFinding(
+                                        provider="aws",
+                                        service="ec2",
+                                        resource_id=sg_id,
+                                        resource_name=sg_name,
+                                        title="Security Group Open to Internet",
+                                        description=f"Security group {sg_name} allows inbound traffic from 0.0.0.0/0 on port {port}",
+                                        severity="high" if port in [22, 3389] else "medium",
+                                        recommendation="Restrict inbound access to specific IP ranges",
+                                        compliance=["CIS 4.1", "CIS 4.2"],
+                                        metadata={"port": port, "cidr": cidr},
+                                    )
+                                )
         except Exception as e:
             self._log(f"Security groups check error: {e}", "warning")
 
@@ -435,45 +431,49 @@ class CloudScanner:
     async def _check_iam_issues(self, session) -> List[CloudFinding]:
         """Check for IAM security issues."""
         findings = []
-        iam = session.client('iam')
+        iam = session.client("iam")
 
         try:
             # Check for root account access keys
             try:
                 summary = iam.get_account_summary()
-                if summary.get('SummaryMap', {}).get('AccountAccessKeysPresent', 0) > 0:
-                    findings.append(CloudFinding(
-                        provider="aws",
-                        service="iam",
-                        resource_id="root",
-                        resource_name="Root Account",
-                        title="Root Account Has Access Keys",
-                        description="The root account has active access keys which is a security risk",
-                        severity="critical",
-                        recommendation="Delete root account access keys and use IAM users instead",
-                        compliance=["CIS 1.4"]
-                    ))
+                if summary.get("SummaryMap", {}).get("AccountAccessKeysPresent", 0) > 0:
+                    findings.append(
+                        CloudFinding(
+                            provider="aws",
+                            service="iam",
+                            resource_id="root",
+                            resource_name="Root Account",
+                            title="Root Account Has Access Keys",
+                            description="The root account has active access keys which is a security risk",
+                            severity="critical",
+                            recommendation="Delete root account access keys and use IAM users instead",
+                            compliance=["CIS 1.4"],
+                        )
+                    )
             except Exception:
                 pass
 
             # Check for users without MFA
-            users = iam.list_users().get('Users', [])
+            users = iam.list_users().get("Users", [])
             for user in users:
-                username = user['UserName']
+                username = user["UserName"]
                 try:
                     mfa = iam.list_mfa_devices(UserName=username)
-                    if not mfa.get('MFADevices', []):
-                        findings.append(CloudFinding(
-                            provider="aws",
-                            service="iam",
-                            resource_id=username,
-                            resource_name=username,
-                            title="IAM User Without MFA",
-                            description=f"IAM user {username} does not have MFA enabled",
-                            severity="medium",
-                            recommendation="Enable MFA for all IAM users",
-                            compliance=["CIS 1.2"]
-                        ))
+                    if not mfa.get("MFADevices", []):
+                        findings.append(
+                            CloudFinding(
+                                provider="aws",
+                                service="iam",
+                                resource_id=username,
+                                resource_name=username,
+                                title="IAM User Without MFA",
+                                description=f"IAM user {username} does not have MFA enabled",
+                                severity="medium",
+                                recommendation="Enable MFA for all IAM users",
+                                compliance=["CIS 1.2"],
+                            )
+                        )
                 except Exception:
                     continue
 
@@ -493,25 +493,29 @@ class CloudScanner:
                 content = content.replace("scoutsuite_results =", "").strip()
 
             data = json.loads(content)
-            services = data.get('services', {})
+            services = data.get("services", {})
 
             for service_name, service_data in services.items():
-                service_findings = service_data.get('findings', {})
+                service_findings = service_data.get("findings", {})
                 for finding_id, finding_data in service_findings.items():
-                    if finding_data.get('flagged_items', 0) > 0:
-                        severity = self._map_scoutsuite_severity(finding_data.get('level', 'warning'))
-                        for item in finding_data.get('items', []):
-                            findings.append(CloudFinding(
-                                provider=provider,
-                                service=service_name,
-                                resource_id=item,
-                                resource_name=item,
-                                title=finding_data.get('description', finding_id),
-                                description=finding_data.get('rationale', ''),
-                                severity=severity,
-                                recommendation=finding_data.get('remediation', ''),
-                                compliance=finding_data.get('compliance', [])
-                            ))
+                    if finding_data.get("flagged_items", 0) > 0:
+                        severity = self._map_scoutsuite_severity(
+                            finding_data.get("level", "warning")
+                        )
+                        for item in finding_data.get("items", []):
+                            findings.append(
+                                CloudFinding(
+                                    provider=provider,
+                                    service=service_name,
+                                    resource_id=item,
+                                    resource_name=item,
+                                    title=finding_data.get("description", finding_id),
+                                    description=finding_data.get("rationale", ""),
+                                    severity=severity,
+                                    recommendation=finding_data.get("remediation", ""),
+                                    compliance=finding_data.get("compliance", []),
+                                )
+                            )
         except Exception as e:
             self._log(f"Error parsing ScoutSuite results: {e}", "warning")
 
@@ -526,20 +530,24 @@ class CloudScanner:
                 for line in f:
                     if line.strip():
                         check = json.loads(line)
-                        if check.get('StatusExtended', '').upper() == 'FAIL':
-                            findings.append(CloudFinding(
-                                provider="aws",
-                                service=check.get('ServiceName', 'unknown'),
-                                resource_id=check.get('ResourceId', ''),
-                                resource_name=check.get('ResourceName', ''),
-                                title=check.get('CheckTitle', ''),
-                                description=check.get('StatusExtended', ''),
-                                severity=check.get('Severity', 'medium').lower(),
-                                recommendation=check.get('Remediation', {}).get('Recommendation', {}).get('Text', ''),
-                                region=check.get('Region', ''),
-                                account_id=check.get('AccountId', ''),
-                                compliance=check.get('Compliance', [])
-                            ))
+                        if check.get("StatusExtended", "").upper() == "FAIL":
+                            findings.append(
+                                CloudFinding(
+                                    provider="aws",
+                                    service=check.get("ServiceName", "unknown"),
+                                    resource_id=check.get("ResourceId", ""),
+                                    resource_name=check.get("ResourceName", ""),
+                                    title=check.get("CheckTitle", ""),
+                                    description=check.get("StatusExtended", ""),
+                                    severity=check.get("Severity", "medium").lower(),
+                                    recommendation=check.get("Remediation", {})
+                                    .get("Recommendation", {})
+                                    .get("Text", ""),
+                                    region=check.get("Region", ""),
+                                    account_id=check.get("AccountId", ""),
+                                    compliance=check.get("Compliance", []),
+                                )
+                            )
         except Exception as e:
             self._log(f"Error parsing Prowler results: {e}", "warning")
 
@@ -547,11 +555,7 @@ class CloudScanner:
 
     def _map_scoutsuite_severity(self, level: str) -> str:
         """Map ScoutSuite severity to standard levels."""
-        mapping = {
-            "danger": "critical",
-            "warning": "high",
-            "info": "medium"
-        }
+        mapping = {"danger": "critical", "warning": "high", "info": "medium"}
         return mapping.get(level.lower(), "medium")
 
     def get_findings_by_severity(self, severity: str) -> List[CloudFinding]:
@@ -568,7 +572,7 @@ class CloudScanner:
             "total_findings": len(self.findings),
             "by_severity": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
             "by_provider": {},
-            "by_service": {}
+            "by_service": {},
         }
 
         for finding in self.findings:
@@ -598,7 +602,7 @@ def get_cloud_scanner(
     aws_profile: Optional[str] = None,
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> CloudScanner:
     """
     Get a configured cloud scanner instance.
@@ -617,15 +621,12 @@ def get_cloud_scanner(
         aws_profile=aws_profile,
         azure_subscription=azure_subscription,
         gcp_project=gcp_project,
-        **kwargs
+        **kwargs,
     )
     return CloudScanner(config)
 
 
-async def scan_cloud(
-    providers: Optional[List[str]] = None,
-    **kwargs
-) -> List[CloudScanResult]:
+async def scan_cloud(providers: Optional[List[str]] = None, **kwargs) -> List[CloudScanResult]:
     """
     Run cloud security scan.
 

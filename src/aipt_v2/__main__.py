@@ -17,6 +17,7 @@ import sys
 def main():
     """Entry point for module execution."""
     from cli import main as cli_main
+
     sys.exit(cli_main())
 
 

@@ -4,13 +4,13 @@ AIPT Active Directory Discovery
 Domain footprinting and reconnaissance without credentials.
 Identifies domain controllers, forest structure, and attack surface.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import re
 import socket
-import struct
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -21,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ADServiceType(Enum):
     """AD service types discoverable via DNS"""
+
     LDAP = "_ldap._tcp"
     LDAPS = "_ldap._tcp.dc._msdcs"
     KERBEROS = "_kerberos._tcp"
@@ -34,6 +35,7 @@ class ADServiceType(Enum):
 @dataclass
 class DomainController:
     """Discovered Domain Controller"""
+
     hostname: str
     ip: str = ""
     domain: str = ""
@@ -66,6 +68,7 @@ class DomainController:
 @dataclass
 class DomainTrust:
     """Domain trust relationship"""
+
     source_domain: str
     target_domain: str
     trust_type: str = ""  # parent-child, tree-root, external, forest
@@ -87,6 +90,7 @@ class DomainTrust:
 @dataclass
 class ForestInfo:
     """Active Directory Forest information"""
+
     forest_name: str
     root_domain: str
     domains: list[str] = field(default_factory=list)
@@ -108,6 +112,7 @@ class ForestInfo:
 @dataclass
 class ADDiscoveryConfig:
     """AD Discovery configuration"""
+
     # DNS enumeration
     enumerate_srv: bool = True
     enumerate_trusts: bool = True
@@ -134,6 +139,7 @@ class ADDiscoveryConfig:
 @dataclass
 class ADDiscoveryResult:
     """AD Discovery results"""
+
     target_domain: str
     domain_controllers: list[DomainController] = field(default_factory=list)
     trusts: list[DomainTrust] = field(default_factory=list)
@@ -340,8 +346,7 @@ class ADDiscovery:
             for port, service in self.AD_PORTS.items():
                 try:
                     reader, writer = await asyncio.wait_for(
-                        asyncio.open_connection(dc.ip, port),
-                        timeout=self.config.port_timeout
+                        asyncio.open_connection(dc.ip, port), timeout=self.config.port_timeout
                     )
                     writer.close()
                     await writer.wait_closed()
@@ -366,12 +371,14 @@ class ADDiscovery:
         try:
             # Try to import ldap3
             try:
-                from ldap3 import Server, Connection, ALL, ANONYMOUS
+                from ldap3 import ALL, ANONYMOUS, Connection, Server
             except ImportError:
                 logger.warning("ldap3 not installed, skipping anonymous LDAP check")
                 return
 
-            server = Server(dc.ip, port=dc.ldap_port, get_info=ALL, connect_timeout=self.config.ldap_timeout)
+            server = Server(
+                dc.ip, port=dc.ldap_port, get_info=ALL, connect_timeout=self.config.ldap_timeout
+            )
             conn = Connection(server, authentication=ANONYMOUS)
 
             if conn.bind():
@@ -390,16 +397,20 @@ class ADDiscovery:
                     if hasattr(server.info, "other"):
                         other = server.info.other
                         if "forestFunctionality" in other:
-                            level = self._functional_level_to_string(other["forestFunctionality"][0])
+                            level = self._functional_level_to_string(
+                                other["forestFunctionality"][0]
+                            )
                             if not result.forest_info:
                                 result.forest_info = ForestInfo(
                                     forest_name=result.target_domain,
-                                    root_domain=result.target_domain
+                                    root_domain=result.target_domain,
                                 )
                             result.forest_info.forest_functional_level = level
 
                         if "domainFunctionality" in other:
-                            level = self._functional_level_to_string(other["domainFunctionality"][0])
+                            level = self._functional_level_to_string(
+                                other["domainFunctionality"][0]
+                            )
                             if result.forest_info:
                                 result.forest_info.domain_functional_level = level
 
@@ -421,13 +432,17 @@ class ADDiscovery:
         try:
             # Use smbclient or impacket to check null session
             proc = await asyncio.create_subprocess_exec(
-                "smbclient", "-L", f"//{dc.ip}", "-N", "-I", dc.ip,
+                "smbclient",
+                "-L",
+                f"//{dc.ip}",
+                "-N",
+                "-I",
+                dc.ip,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=self.config.port_timeout * 2
+                proc.communicate(), timeout=self.config.port_timeout * 2
             )
 
             # Check if we got share listing (indicates null session worked)
@@ -454,15 +469,18 @@ class ADDiscovery:
             try:
                 # Use nmap smb2-security-mode script
                 proc = await asyncio.create_subprocess_exec(
-                    "nmap", "-p", "445", "--script", "smb2-security-mode",
-                    dc.ip, "-oN", "-",
+                    "nmap",
+                    "-p",
+                    "445",
+                    "--script",
+                    "smb2-security-mode",
+                    dc.ip,
+                    "-oN",
+                    "-",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
-                stdout, _ = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=30
-                )
+                stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
 
                 output = stdout.decode()
 
@@ -505,11 +523,13 @@ class ADDiscovery:
                         trust_domain = parts[1]
                         if trust_domain != domain and trust_domain not in seen_domains:
                             seen_domains.add(trust_domain)
-                            result.trusts.append(DomainTrust(
-                                source_domain=domain,
-                                target_domain=trust_domain,
-                                trust_type="forest",
-                            ))
+                            result.trusts.append(
+                                DomainTrust(
+                                    source_domain=domain,
+                                    target_domain=trust_domain,
+                                    trust_type="forest",
+                                )
+                            )
 
         except Exception as e:
             logger.debug(f"Trust enumeration via DNS failed: {e}")
@@ -528,12 +548,7 @@ class ADDiscovery:
         try:
             answers = resolver.resolve(name, "SRV")
             for rdata in answers:
-                records.append((
-                    rdata.priority,
-                    rdata.weight,
-                    rdata.port,
-                    str(rdata.target)
-                ))
+                records.append((rdata.priority, rdata.weight, rdata.port, str(rdata.target)))
         except Exception:
             pass
 
@@ -587,8 +602,7 @@ class ADDiscovery:
         """
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(target_ip, 445),
-                timeout=self.config.port_timeout
+                asyncio.open_connection(target_ip, 445), timeout=self.config.port_timeout
             )
 
             # Send SMB negotiate request
@@ -597,10 +611,7 @@ class ADDiscovery:
             await writer.drain()
 
             # Read response
-            response = await asyncio.wait_for(
-                reader.read(4096),
-                timeout=self.config.port_timeout
-            )
+            response = await asyncio.wait_for(reader.read(4096), timeout=self.config.port_timeout)
 
             writer.close()
             await writer.wait_closed()
@@ -625,8 +636,7 @@ class ADDiscovery:
         """
         try:
             reader, writer = await asyncio.wait_for(
-                asyncio.open_connection(target_ip, port),
-                timeout=self.config.port_timeout
+                asyncio.open_connection(target_ip, port), timeout=self.config.port_timeout
             )
 
             # For SMB, we need to initiate NTLM auth to get challenge
@@ -647,15 +657,18 @@ class ADDiscovery:
         """Use nmap ntlm-info script to extract domain information"""
         try:
             proc = await asyncio.create_subprocess_exec(
-                "nmap", "-p", str(port), "--script", "smb-os-discovery,ntlm-info",
-                target_ip, "-oN", "-",
+                "nmap",
+                "-p",
+                str(port),
+                "--script",
+                "smb-os-discovery,ntlm-info",
+                target_ip,
+                "-oN",
+                "-",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
-            stdout, _ = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=30
-            )
+            stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
 
             output = stdout.decode()
             info = {}
@@ -741,7 +754,9 @@ class ADDiscovery:
 
 
 # Convenience functions
-async def discover_domain(domain: str, config: Optional[ADDiscoveryConfig] = None) -> ADDiscoveryResult:
+async def discover_domain(
+    domain: str, config: Optional[ADDiscoveryConfig] = None
+) -> ADDiscoveryResult:
     """
     Discover Active Directory domain information.
 

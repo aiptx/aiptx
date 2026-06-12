@@ -6,9 +6,7 @@ Manages wordlist downloads, organization, and access for offline operation.
 Supports SecLists, Assetnote, FuzzDB, and custom wordlists.
 """
 
-import asyncio
 import logging
-import shutil
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
@@ -152,9 +150,7 @@ class WordlistManager:
             (self.base_path / category).mkdir(exist_ok=True)
 
     async def download_source(
-        self,
-        source_name: str,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        self, source_name: str, progress_callback: Optional[Callable[[str, float], None]] = None
     ) -> bool:
         """
         Download wordlists from a source.
@@ -183,7 +179,7 @@ class WordlistManager:
         self,
         source_name: str,
         source: dict,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> bool:
         """Download and extract a zip-based wordlist source."""
         url = source["url"]
@@ -209,7 +205,7 @@ class WordlistManager:
 
                             if progress_callback and total_size > 0:
                                 percent = (downloaded / total_size) * 50
-                                progress_callback(f"Downloading...", percent)
+                                progress_callback("Downloading...", percent)
 
             if progress_callback:
                 progress_callback("Extracting...", 50.0)
@@ -223,7 +219,7 @@ class WordlistManager:
                     zip_ref.extract(member, extract_path)
                     if progress_callback and i % 100 == 0:
                         percent = 50 + (i / total_files) * 50
-                        progress_callback(f"Extracting...", percent)
+                        progress_callback("Extracting...", percent)
 
             # Clean up
             zip_path.unlink()
@@ -244,7 +240,7 @@ class WordlistManager:
         self,
         source_name: str,
         source: dict,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> bool:
         """Download individual wordlist files."""
         base_url = source["base_url"]
@@ -310,7 +306,10 @@ class WordlistManager:
         # Try in SecLists structure
         seclists_mappings = {
             "directories": ["SecLists-master/Discovery/Web-Content"],
-            "passwords": ["SecLists-master/Passwords", "SecLists-master/Passwords/Common-Credentials"],
+            "passwords": [
+                "SecLists-master/Passwords",
+                "SecLists-master/Passwords/Common-Credentials",
+            ],
             "usernames": ["SecLists-master/Usernames", "SecLists-master/Usernames/Names"],
             "dns": ["SecLists-master/Discovery/DNS"],
             "fuzzing": ["SecLists-master/Fuzzing"],
@@ -413,13 +412,15 @@ class WordlistManager:
                     if category and cat != category:
                         continue
 
-                    results.append(WordlistInfo(
-                        name=file_path.name,
-                        path=file_path,
-                        line_count=line_count,
-                        size_bytes=size,
-                        category=cat,
-                    ))
+                    results.append(
+                        WordlistInfo(
+                            name=file_path.name,
+                            path=file_path,
+                            line_count=line_count,
+                            size_bytes=size,
+                            category=cat,
+                        )
+                    )
                 except Exception as e:
                     logger.debug(f"Error processing {file_path}: {e}")
 
@@ -504,8 +505,5 @@ class WordlistManager:
             "total_files": total_files,
             "total_size_mb": round(total_size / (1024 * 1024), 2),
             "categories": categories,
-            "sources_downloaded": [
-                s for s in WORDLIST_SOURCES
-                if (self.base_path / s).exists()
-            ],
+            "sources_downloaded": [s for s in WORDLIST_SOURCES if (self.base_path / s).exists()],
         }

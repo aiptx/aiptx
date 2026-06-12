@@ -23,46 +23,46 @@ Usage:
     verified_findings = await engine.verify_all(deduped_findings)
 """
 
-from .normalizer import (
-    FindingsNormalizer,
-    ToolNormalizer,
-    NormalizerResult,
-    ToolStatus,
-)
 from .deduplicator import (
-    Deduplicator,
     CrossTargetDeduplicator,
     DeduplicationStats,
+    Deduplicator,
     generate_fingerprint,
-)
-from .verification_engine import (
-    VerificationEngine,
-    VerificationPolicy,
-    VerificationResult,
-    VerificationConfidence,
-    TLSVerificationPolicy,
-    ExposureVerificationPolicy,
-    CVEVersionVerificationPolicy,
-    SSTIVerificationPolicy,
-    HostHeaderVerificationPolicy,
-    SSRFVerificationPolicy,
-    SQLiVerificationPolicy,
-    XSSVerificationPolicy,
-    DefaultVerificationPolicy,
-    VERIFICATION_POLICIES,
-)
-from .persistence import (
-    PipelinePersistence,
-    CanonicalFindings,
-    CanonicalSummary,
-    ToolStatusEntry,
-    save_findings_raw,
-    save_canonical_findings,
-    load_canonical_findings,
 )
 from .integration import (
     PipelineIntegration,
     run_pipeline_standalone,
+)
+from .normalizer import (
+    FindingsNormalizer,
+    NormalizerResult,
+    ToolNormalizer,
+    ToolStatus,
+)
+from .persistence import (
+    CanonicalFindings,
+    CanonicalSummary,
+    PipelinePersistence,
+    ToolStatusEntry,
+    load_canonical_findings,
+    save_canonical_findings,
+    save_findings_raw,
+)
+from .verification_engine import (
+    VERIFICATION_POLICIES,
+    CVEVersionVerificationPolicy,
+    DefaultVerificationPolicy,
+    ExposureVerificationPolicy,
+    HostHeaderVerificationPolicy,
+    SQLiVerificationPolicy,
+    SSRFVerificationPolicy,
+    SSTIVerificationPolicy,
+    TLSVerificationPolicy,
+    VerificationConfidence,
+    VerificationEngine,
+    VerificationPolicy,
+    VerificationResult,
+    XSSVerificationPolicy,
 )
 
 __all__ = [

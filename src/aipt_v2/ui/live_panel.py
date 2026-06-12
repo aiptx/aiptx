@@ -25,10 +25,10 @@ Usage:
 from __future__ import annotations
 
 import sys
-import time
 import threading
+import time
 from dataclasses import dataclass, field
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from .animations import Colors
 
@@ -36,6 +36,7 @@ from .animations import Colors
 @dataclass
 class FindingSummary:
     """Lightweight finding summary for the live panel."""
+
     severity: str
     title: str
     url: str = ""
@@ -213,7 +214,10 @@ class LiveFindingsPanel:
                     count_str = f"{cfg['color']}{count:>3}{Colors.RESET}"
                 else:
                     count_str = f"{Colors.DIM}{count:>3}{Colors.RESET}"
-                line = f"\u2502 {cfg['symbol']} {label:<10} {count_str}".ljust(self.width + 10) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                line = (
+                    f"\u2502 {cfg['symbol']} {label:<10} {count_str}".ljust(self.width + 10)
+                    + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                )
                 lines.append(f"{Colors.BRIGHT_CYAN}{line}")
 
             # Separator
@@ -223,10 +227,16 @@ class LiveFindingsPanel:
             elapsed_str = self._format_time(elapsed)
             remaining_str = self._format_time(remaining)
 
-            elapsed_line = f"\u2502 \u23f1\ufe0f  Elapsed:   {elapsed_str}".ljust(self.width + 8) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            elapsed_line = (
+                f"\u2502 \u23f1\ufe0f  Elapsed:   {elapsed_str}".ljust(self.width + 8)
+                + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            )
             lines.append(f"{Colors.BRIGHT_CYAN}{elapsed_line}")
 
-            remaining_line = f"\u2502 \u23f3 Remaining: {remaining_str}".ljust(self.width + 8) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            remaining_line = (
+                f"\u2502 \u23f3 Remaining: {remaining_str}".ljust(self.width + 8)
+                + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            )
             lines.append(f"{Colors.BRIGHT_CYAN}{remaining_line}")
 
             # Separator
@@ -234,26 +244,44 @@ class LiveFindingsPanel:
 
             # Current phase/tool
             phase_display = self._truncate(self.current_phase or "INIT", 16)
-            phase_line = f"\u2502 \U0001f4cd Phase: {phase_display}".ljust(self.width + 6) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            phase_line = (
+                f"\u2502 \U0001f4cd Phase: {phase_display}".ljust(self.width + 6)
+                + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            )
             lines.append(f"{Colors.BRIGHT_CYAN}{phase_line}")
 
             tool_display = self._truncate(self.current_tool or "Starting...", 16)
-            tool_line = f"\u2502 \U0001f527 Tool:  {tool_display}".ljust(self.width + 6) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            tool_line = (
+                f"\u2502 \U0001f527 Tool:  {tool_display}".ljust(self.width + 6)
+                + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+            )
             lines.append(f"{Colors.BRIGHT_CYAN}{tool_line}")
 
             # Progress (if available)
             if self.tools_total > 0:
                 progress_pct = (self.tools_completed / self.tools_total) * 100
-                progress_line = f"\u2502 \U0001f4ca Progress: {self.tools_completed}/{self.tools_total} ({progress_pct:.0f}%)".ljust(self.width + 6) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                progress_line = (
+                    f"\u2502 \U0001f4ca Progress: {self.tools_completed}/{self.tools_total} ({progress_pct:.0f}%)".ljust(
+                        self.width + 6
+                    )
+                    + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                )
                 lines.append(f"{Colors.BRIGHT_CYAN}{progress_line}")
 
             # Latest finding (if any)
             if self.latest_finding:
-                lines.append(f"{Colors.BRIGHT_CYAN}\u251c{'─' * (self.width - 2)}\u2524{Colors.RESET}")
+                lines.append(
+                    f"{Colors.BRIGHT_CYAN}\u251c{'─' * (self.width - 2)}\u2524{Colors.RESET}"
+                )
 
-                cfg = self.SEVERITY_CONFIG.get(self.latest_finding.severity, self.SEVERITY_CONFIG["info"])
+                cfg = self.SEVERITY_CONFIG.get(
+                    self.latest_finding.severity, self.SEVERITY_CONFIG["info"]
+                )
                 latest_title = self._truncate(self.latest_finding.title, self.width - 12)
-                latest_line = f"\u2502 {cfg['symbol']} {Colors.RESET}{latest_title}".ljust(self.width + 10) + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                latest_line = (
+                    f"\u2502 {cfg['symbol']} {Colors.RESET}{latest_title}".ljust(self.width + 10)
+                    + f" {Colors.BRIGHT_CYAN}\u2502{Colors.RESET}"
+                )
                 lines.append(f"{Colors.BRIGHT_CYAN}{latest_line}")
 
             # Footer
@@ -373,7 +401,7 @@ class ScanDisplay:
             combined_lines = []
             for i, panel_line in enumerate(panel_lines):
                 if i < len(output):
-                    out_line = output[i][:self.output_width].ljust(self.output_width)
+                    out_line = output[i][: self.output_width].ljust(self.output_width)
                 else:
                     out_line = " " * self.output_width
 

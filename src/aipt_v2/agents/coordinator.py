@@ -18,28 +18,25 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
-from urllib.parse import urlparse
 
-from aipt_v2.agents.shared.message_bus import (
-    MessageBus,
-    AgentMessage,
-    MessageType,
-    MessagePriority,
-    get_message_bus,
-)
+from aipt_v2.agents.shared.agent_pool import AgentPool, AgentResult
 from aipt_v2.agents.shared.finding_repository import (
-    FindingRepository,
     Finding,
+    FindingRepository,
     FindingSeverity,
     FindingStatus,
     get_finding_repository,
 )
-from aipt_v2.agents.shared.agent_pool import AgentPool, AgentResult
+from aipt_v2.agents.shared.message_bus import (
+    AgentMessage,
+    MessageBus,
+    MessageType,
+    get_message_bus,
+)
 from aipt_v2.validation import (
     PoCValidator,
-    ValidatorConfig,
-    ValidationResult,
     ValidationStatus,
+    ValidatorConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -47,18 +44,20 @@ logger = logging.getLogger(__name__)
 
 class TargetType(str, Enum):
     """Types of targets that can be scanned."""
-    WEB_APP = "web_app"         # Traditional web application
-    API = "api"                 # REST/GraphQL API
-    SPA = "spa"                 # Single-page application
-    GITHUB_REPO = "github_repo" # Source code repository
-    LOCAL_DIR = "local_dir"     # Local source directory
-    WEBSOCKET = "websocket"     # WebSocket application
-    GRAPHQL = "graphql"         # GraphQL API
+
+    WEB_APP = "web_app"  # Traditional web application
+    API = "api"  # REST/GraphQL API
+    SPA = "spa"  # Single-page application
+    GITHUB_REPO = "github_repo"  # Source code repository
+    LOCAL_DIR = "local_dir"  # Local source directory
+    WEBSOCKET = "websocket"  # WebSocket application
+    GRAPHQL = "graphql"  # GraphQL API
 
 
 @dataclass
 class TargetProfile:
     """Profile of a scan target after analysis."""
+
     url: str
     target_type: TargetType
     technologies: list[str] = field(default_factory=list)
@@ -76,6 +75,7 @@ class TargetProfile:
 @dataclass
 class ScanStrategy:
     """Scan strategy generated for a target."""
+
     agents_to_spawn: list[str]
     priority_order: list[str]
     max_concurrent: int = 5
@@ -87,6 +87,7 @@ class ScanStrategy:
 @dataclass
 class ScanResult:
     """Final scan result from the coordinator."""
+
     target: str
     started_at: datetime
     completed_at: Optional[datetime] = None
@@ -111,18 +112,12 @@ class ScanResult:
     @property
     def critical_findings(self) -> list[Finding]:
         """Get validated critical findings."""
-        return [
-            f for f in self.validated_findings
-            if f.severity == FindingSeverity.CRITICAL
-        ]
+        return [f for f in self.validated_findings if f.severity == FindingSeverity.CRITICAL]
 
     @property
     def high_findings(self) -> list[Finding]:
         """Get validated high severity findings."""
-        return [
-            f for f in self.validated_findings
-            if f.severity == FindingSeverity.HIGH
-        ]
+        return [f for f in self.validated_findings if f.severity == FindingSeverity.HIGH]
 
 
 class CoordinatorAgent:
@@ -196,7 +191,7 @@ class CoordinatorAgent:
             self._target_profile = await self.analyze_target()
 
             # Phase 2: Generate strategy
-            logger.info(f"[Coordinator] Generating scan strategy")
+            logger.info("[Coordinator] Generating scan strategy")
             self._scan_strategy = await self.generate_strategy(self._target_profile)
 
             # Phase 3: Spawn and run agents
@@ -210,9 +205,7 @@ class CoordinatorAgent:
                     f"agents complete, {status['running']} running"
                 )
 
-            agent_results = await self._agent_pool.run_all(
-                progress_callback=on_progress
-            )
+            agent_results = await self._agent_pool.run_all(progress_callback=on_progress)
             result.agent_results = agent_results
 
             # Phase 5: Collect findings
@@ -220,7 +213,7 @@ class CoordinatorAgent:
 
             # Phase 6: Validate findings (PoC)
             if self._scan_strategy.enable_poc_validation:
-                logger.info(f"[Coordinator] Validating findings with PoC")
+                logger.info("[Coordinator] Validating findings with PoC")
                 validated, false_pos, val_stats = await self._validate_findings_with_stats(
                     result.findings
                 )
@@ -270,6 +263,7 @@ class CoordinatorAgent:
 
         # Check if it's a local path
         import os
+
         if os.path.exists(self.target):
             profile.target_type = TargetType.LOCAL_DIR
             profile.source_path = self.target
@@ -391,10 +385,7 @@ class CoordinatorAgent:
             "app.js",
             "main.js",
         ]
-        return any(
-            (ind in html if isinstance(ind, str) else ind)
-            for ind in spa_indicators
-        )
+        return any((ind in html if isinstance(ind, str) else ind) for ind in spa_indicators)
 
     async def generate_strategy(self, profile: TargetProfile) -> ScanStrategy:
         """
@@ -416,14 +407,18 @@ class CoordinatorAgent:
 
         # Add SAST if we have source code
         if profile.source_path or profile.target_type in [
-            TargetType.LOCAL_DIR, TargetType.GITHUB_REPO
+            TargetType.LOCAL_DIR,
+            TargetType.GITHUB_REPO,
         ]:
             agents.append("SASTAgent")
             priority.append("SASTAgent")
 
         # Add DAST for web targets
         if profile.target_type in [
-            TargetType.WEB_APP, TargetType.API, TargetType.SPA, TargetType.GRAPHQL
+            TargetType.WEB_APP,
+            TargetType.API,
+            TargetType.SPA,
+            TargetType.GRAPHQL,
         ]:
             agents.append("DASTAgent")
 
@@ -456,10 +451,10 @@ class CoordinatorAgent:
             List of spawned agents
         """
         from aipt_v2.agents.specialized import (
+            BusinessLogicAgent,
+            DASTAgent,
             ReconAgent,
             SASTAgent,
-            DASTAgent,
-            BusinessLogicAgent,
             WebSocketAgent,
         )
         from aipt_v2.agents.specialized.base_specialized import AgentConfig
@@ -486,7 +481,7 @@ class CoordinatorAgent:
                 timeout=strategy.timeout // len(strategy.agents_to_spawn),
                 custom_config={
                     "source_path": self._target_profile.source_path,
-                }
+                },
             )
 
             agent = agent_class(
@@ -660,24 +655,28 @@ class CoordinatorAgent:
             rce_findings = [f for f in component_findings if "rce" in f.vuln_type.value]
 
             if ssrf_findings and rce_findings:
-                chains.append({
-                    "type": "ssrf_to_rce",
-                    "description": "SSRF could be chained with internal service for RCE",
-                    "findings": [ssrf_findings[0].id, rce_findings[0].id],
-                    "severity": "critical",
-                })
+                chains.append(
+                    {
+                        "type": "ssrf_to_rce",
+                        "description": "SSRF could be chained with internal service for RCE",
+                        "findings": [ssrf_findings[0].id, rce_findings[0].id],
+                        "severity": "critical",
+                    }
+                )
 
             # SQLi + Auth Bypass chain
             sqli_findings = [f for f in component_findings if "sqli" in f.vuln_type.value]
             auth_findings = [f for f in component_findings if "auth" in f.vuln_type.value]
 
             if sqli_findings and auth_findings:
-                chains.append({
-                    "type": "sqli_auth_bypass",
-                    "description": "SQL injection could bypass authentication",
-                    "findings": [sqli_findings[0].id, auth_findings[0].id],
-                    "severity": "critical",
-                })
+                chains.append(
+                    {
+                        "type": "sqli_auth_bypass",
+                        "description": "SQL injection could bypass authentication",
+                        "findings": [sqli_findings[0].id, auth_findings[0].id],
+                        "severity": "critical",
+                    }
+                )
 
         return chains
 
@@ -699,9 +698,7 @@ class CoordinatorAgent:
         }
 
         if result.completed_at and result.started_at:
-            stats["duration_seconds"] = (
-                result.completed_at - result.started_at
-            ).total_seconds()
+            stats["duration_seconds"] = (result.completed_at - result.started_at).total_seconds()
 
         # Count all findings by severity
         for finding in result.findings:
@@ -776,9 +773,7 @@ class CoordinatorAgent:
 
     async def _handle_agent_status(self, message: AgentMessage) -> None:
         """Handle agent status updates."""
-        logger.debug(
-            f"[Coordinator] Agent {message.sender_name}: {message.content.get('status')}"
-        )
+        logger.debug(f"[Coordinator] Agent {message.sender_name}: {message.content.get('status')}")
 
     async def _cleanup(self) -> None:
         """Cleanup coordinator resources."""

@@ -9,12 +9,12 @@ WARNING: This runtime provides NO isolation. Only use for trusted commands.
 """
 
 import asyncio
-import uuid
 import os
+import uuid
 from dataclasses import dataclass, field
-from typing import Optional, Dict, Tuple, List
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from aipt_v2.utils.logging import logger
 
@@ -57,10 +57,7 @@ class LocalRuntime:
         self._processes: Dict[str, asyncio.subprocess.Process] = {}
 
     async def create_sandbox(
-        self,
-        image: Optional[str] = None,
-        working_dir: Optional[str] = None,
-        **kwargs
+        self, image: Optional[str] = None, working_dir: Optional[str] = None, **kwargs
     ) -> LocalSandboxInfo:
         """
         Create a local execution context.
@@ -181,8 +178,7 @@ class LocalRuntime:
 
             try:
                 stdout_bytes, stderr_bytes = await asyncio.wait_for(
-                    proc.communicate(),
-                    timeout=timeout
+                    proc.communicate(), timeout=timeout
                 )
 
                 stdout = stdout_bytes.decode("utf-8", errors="replace")

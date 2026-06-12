@@ -4,17 +4,19 @@ AIPT PTT (Penetration Testing Tree) Tracker
 Hierarchical task tracking for pentest sessions.
 Inspired by PentestGPT's PTT concept.
 """
+
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
 import json
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
 
 
 class TaskStatus(str, Enum):
     """Task status"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -25,6 +27,7 @@ class TaskStatus(str, Enum):
 @dataclass
 class PTTNode:
     """A node in the Penetration Testing Tree"""
+
     id: str
     name: str
     description: str = ""
@@ -208,11 +211,7 @@ class PTTTracker:
         if not phase_node:
             return []
 
-        return [
-            self.nodes[child_id]
-            for child_id in phase_node.children
-            if child_id in self.nodes
-        ]
+        return [self.nodes[child_id] for child_id in phase_node.children if child_id in self.nodes]
 
     def get_pending_tasks(self, phase: Optional[str] = None) -> List[PTTNode]:
         """Get all pending tasks, optionally filtered by phase"""
@@ -282,7 +281,9 @@ class PTTTracker:
                     lines.append(f"  - {emoji} {task.name}")
                     if task.findings:
                         for finding in task.findings[:3]:  # Limit findings shown
-                            lines.append(f"      • {finding.get('type', 'info')}: {finding.get('description', 'N/A')[:50]}")
+                            lines.append(
+                                f"      • {finding.get('type', 'info')}: {finding.get('description', 'N/A')[:50]}"
+                            )
 
             if phase_node.findings:
                 lines.append(f"  Findings: {len(phase_node.findings)}")
@@ -303,9 +304,7 @@ class PTTTracker:
         """Create PTT from dictionary"""
         tracker = cls()
         tracker.root_id = data.get("root_id")
-        tracker.nodes = {
-            k: PTTNode.from_dict(v) for k, v in data.get("nodes", {}).items()
-        }
+        tracker.nodes = {k: PTTNode.from_dict(v) for k, v in data.get("nodes", {}).items()}
         return tracker
 
     def to_json(self) -> str:

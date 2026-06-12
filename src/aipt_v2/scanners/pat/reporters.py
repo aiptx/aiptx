@@ -17,23 +17,26 @@ Usage:
     pipeline.to_sarif("results.sarif")
     pipeline.to_html("report.html")
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 from .config import VulnerabilityType
-from .pat_scanner import PATScanResult, VULN_SEVERITY_MAP
+from .pat_scanner import PATScanResult
 
 logger = logging.getLogger(__name__)
 
 # SARIF version
 SARIF_VERSION = "2.1.0"
-SARIF_SCHEMA = "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+SARIF_SCHEMA = (
+    "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/master/Schemata/sarif-schema-2.1.0.json"
+)
 
 # Tool information
 PAT_TOOL_NAME = "AIPTX-PAT-Scanner"
@@ -62,14 +65,12 @@ PAT_CWE_MAPPINGS = {
     VulnerabilityType.GRAPHQL: "CWE-200",
     VulnerabilityType.WEBSOCKET: "CWE-1385",
     VulnerabilityType.FILE_UPLOAD: "CWE-434",
-
     # New - Authentication & Access
     VulnerabilityType.CSRF: "CWE-352",
     VulnerabilityType.IDOR: "CWE-639",
     VulnerabilityType.OAUTH_MISCONFIG: "CWE-287",
     VulnerabilityType.SAML_INJECTION: "CWE-290",
     VulnerabilityType.ACCOUNT_TAKEOVER: "CWE-287",
-
     # New - Protocol attacks
     VulnerabilityType.HTTP_SMUGGLING: "CWE-444",
     VulnerabilityType.HPP: "CWE-235",
@@ -77,27 +78,23 @@ PAT_CWE_MAPPINGS = {
     VulnerabilityType.CORS_MISCONFIG: "CWE-942",
     VulnerabilityType.TABNABBING: "CWE-1022",
     VulnerabilityType.CACHE_POISONING: "CWE-525",
-
     # New - Client-side
     VulnerabilityType.DOM_CLOBBERING: "CWE-79",
     VulnerabilityType.CLICKJACKING: "CWE-1021",
     VulnerabilityType.PROTOTYPE_POLLUTION: "CWE-1321",
     VulnerabilityType.CLIENT_PATH_TRAVERSAL: "CWE-22",
-
     # New - File & Data
     VulnerabilityType.CSV_INJECTION: "CWE-1236",
     VulnerabilityType.ZIP_SLIP: "CWE-22",
     VulnerabilityType.ORM_LEAK: "CWE-200",
     VulnerabilityType.SECRETS_EXPOSURE: "CWE-798",
     VulnerabilityType.API_KEY_LEAK: "CWE-798",
-
     # New - Business Logic
     VulnerabilityType.RACE_CONDITION: "CWE-362",
     VulnerabilityType.MASS_ASSIGNMENT: "CWE-915",
     VulnerabilityType.TYPE_JUGGLING: "CWE-843",
     VulnerabilityType.BUSINESS_LOGIC: "CWE-840",
     VulnerabilityType.INSECURE_RANDOM: "CWE-330",
-
     # New - Injection variants
     VulnerabilityType.LATEX_INJECTION: "CWE-94",
     VulnerabilityType.SSI_INJECTION: "CWE-97",
@@ -105,7 +102,6 @@ PAT_CWE_MAPPINGS = {
     VulnerabilityType.PROMPT_INJECTION: "CWE-77",
     VulnerabilityType.REGEX_DOS: "CWE-1333",
     VulnerabilityType.JAVA_RMI: "CWE-502",
-
     # New - Misconfig
     VulnerabilityType.GIT_EXPOSURE: "CWE-538",
     VulnerabilityType.HIDDEN_PARAMS: "CWE-472",
@@ -115,7 +111,6 @@ PAT_CWE_MAPPINGS = {
     VulnerabilityType.GWT_VULN: "CWE-502",
     VulnerabilityType.DEPENDENCY_CONFUSION: "CWE-427",
     VulnerabilityType.CVE_EXPLOITS: "CWE-1035",
-
     # New - Edge cases
     VulnerabilityType.ENV_INJECTION: "CWE-94",
     VulnerabilityType.HEADLESS_BROWSER: "CWE-94",
@@ -137,33 +132,27 @@ OWASP_TOP_10_MAPPINGS = {
     VulnerabilityType.LATEX_INJECTION: "A03:2021-Injection",
     VulnerabilityType.SSI_INJECTION: "A03:2021-Injection",
     VulnerabilityType.XSLT_INJECTION: "A03:2021-Injection",
-
     VulnerabilityType.XSS: "A03:2021-Injection",
     VulnerabilityType.DOM_CLOBBERING: "A03:2021-Injection",
     VulnerabilityType.PROTOTYPE_POLLUTION: "A03:2021-Injection",
-
     VulnerabilityType.CSRF: "A01:2021-Broken Access Control",
     VulnerabilityType.IDOR: "A01:2021-Broken Access Control",
     VulnerabilityType.PATH_TRAVERSAL: "A01:2021-Broken Access Control",
     VulnerabilityType.LFI: "A01:2021-Broken Access Control",
     VulnerabilityType.RFI: "A01:2021-Broken Access Control",
     VulnerabilityType.SSRF: "A10:2021-SSRF",
-
     VulnerabilityType.OAUTH_MISCONFIG: "A07:2021-Identification and Authentication Failures",
     VulnerabilityType.JWT_ATTACKS: "A07:2021-Identification and Authentication Failures",
     VulnerabilityType.ACCOUNT_TAKEOVER: "A07:2021-Identification and Authentication Failures",
     VulnerabilityType.SAML_INJECTION: "A07:2021-Identification and Authentication Failures",
-
     VulnerabilityType.CORS_MISCONFIG: "A05:2021-Security Misconfiguration",
     VulnerabilityType.ADMIN_INTERFACE: "A05:2021-Security Misconfiguration",
     VulnerabilityType.GIT_EXPOSURE: "A05:2021-Security Misconfiguration",
     VulnerabilityType.SECRETS_EXPOSURE: "A05:2021-Security Misconfiguration",
     VulnerabilityType.API_KEY_LEAK: "A05:2021-Security Misconfiguration",
-
     VulnerabilityType.INSECURE_DESERIALIZATION: "A08:2021-Software and Data Integrity Failures",
     VulnerabilityType.JAVA_RMI: "A08:2021-Software and Data Integrity Failures",
     VulnerabilityType.DEPENDENCY_CONFUSION: "A08:2021-Software and Data Integrity Failures",
-
     VulnerabilityType.INSECURE_RANDOM: "A02:2021-Cryptographic Failures",
 }
 
@@ -171,6 +160,7 @@ OWASP_TOP_10_MAPPINGS = {
 @dataclass
 class PATReportConfig:
     """Configuration for PAT report generation."""
+
     include_poc: bool = True
     include_evidence: bool = True
     include_requests: bool = True
@@ -258,12 +248,15 @@ class PATReportPipeline:
 
                 rules[rule_id] = {
                     "id": rule_id,
-                    "name": finding.title.split(" in ")[0] if " in " in finding.title else finding.title,
+                    "name": (
+                        finding.title.split(" in ")[0] if " in " in finding.title else finding.title
+                    ),
                     "shortDescription": {
                         "text": f"{vuln_type_str.replace('_', ' ').title()} vulnerability"
                     },
                     "fullDescription": {
-                        "text": finding.description or f"Potential {vuln_type_str} vulnerability detected by PAT scanner."
+                        "text": finding.description
+                        or f"Potential {vuln_type_str} vulnerability detected by PAT scanner."
                     },
                     "helpUri": f"https://github.com/swisskyrepo/PayloadsAllTheThings/tree/master/{vuln_type_str.replace('_', '%20').title()}",
                     "properties": {
@@ -276,15 +269,13 @@ class PATReportPipeline:
             result = {
                 "ruleId": rule_id,
                 "level": self._severity_to_sarif_level(finding.severity.value),
-                "message": {
-                    "text": finding.description or finding.title
-                },
+                "message": {"text": finding.description or finding.title},
                 "locations": [
                     {
                         "physicalLocation": {
                             "artifactLocation": {
                                 "uri": finding.url or self.result.target,
-                                "uriBaseId": "ROOTPATH"
+                                "uriBaseId": "ROOTPATH",
                             }
                         }
                     }
@@ -293,9 +284,7 @@ class PATReportPipeline:
 
             # Add evidence if available
             if finding.evidence and self.config.include_evidence:
-                result["fingerprints"] = {
-                    "evidence": finding.evidence[:500]
-                }
+                result["fingerprints"] = {"evidence": finding.evidence[:500]}
 
             # Add PoC if available
             if finding.request and self.config.include_poc:
@@ -305,14 +294,10 @@ class PATReportPipeline:
                         "threadFlows": [
                             {
                                 "locations": [
-                                    {
-                                        "location": {
-                                            "message": {"text": finding.request[:1000]}
-                                        }
-                                    }
+                                    {"location": {"message": {"text": finding.request[:1000]}}}
                                 ]
                             }
-                        ]
+                        ],
                     }
                 ]
 
@@ -336,8 +321,14 @@ class PATReportPipeline:
                     "invocations": [
                         {
                             "executionSuccessful": self.result.status == "completed",
-                            "startTimeUtc": self.result.start_time.isoformat() if self.result.start_time else None,
-                            "endTimeUtc": self.result.end_time.isoformat() if self.result.end_time else None,
+                            "startTimeUtc": (
+                                self.result.start_time.isoformat()
+                                if self.result.start_time
+                                else None
+                            ),
+                            "endTimeUtc": (
+                                self.result.end_time.isoformat() if self.result.end_time else None
+                            ),
                         }
                     ],
                 }
@@ -550,7 +541,9 @@ class PATReportPipeline:
             "scan": {
                 "target": self.result.target,
                 "status": self.result.status,
-                "start_time": self.result.start_time.isoformat() if self.result.start_time else None,
+                "start_time": (
+                    self.result.start_time.isoformat() if self.result.start_time else None
+                ),
                 "end_time": self.result.end_time.isoformat() if self.result.end_time else None,
                 "duration_seconds": self.result.duration_seconds,
                 "requests_made": self.result.requests_made,
@@ -572,9 +565,11 @@ class PATReportPipeline:
                     "response": f.response[:500] if f.response else None,
                     "template": f.template,
                     "tags": f.tags,
-                    "cwe": PAT_CWE_MAPPINGS.get(
-                        VulnerabilityType(f.template), "Unknown"
-                    ) if f.template else None,
+                    "cwe": (
+                        PAT_CWE_MAPPINGS.get(VulnerabilityType(f.template), "Unknown")
+                        if f.template
+                        else None
+                    ),
                 }
                 for f in self.result.findings
             ],
@@ -624,11 +619,13 @@ class PATReportPipeline:
 
             if owasp_cat not in owasp_groups:
                 owasp_groups[owasp_cat] = []
-            owasp_groups[owasp_cat].append({
-                "title": finding.title,
-                "severity": finding.severity.value,
-                "url": finding.url,
-            })
+            owasp_groups[owasp_cat].append(
+                {
+                    "title": finding.title,
+                    "severity": finding.severity.value,
+                    "url": finding.url,
+                }
+            )
 
         return {
             "framework": "OWASP Top 10 2021",
@@ -658,16 +655,20 @@ class PATReportPipeline:
         for finding in self.result.findings:
             try:
                 vt = VulnerabilityType(finding.template) if finding.template else None
-                pci_req = pci_mappings.get(vt, "6.5.x - Secure Coding") if vt else "6.5.x - Secure Coding"
+                pci_req = (
+                    pci_mappings.get(vt, "6.5.x - Secure Coding") if vt else "6.5.x - Secure Coding"
+                )
             except ValueError:
                 pci_req = "6.5.x - Secure Coding"
 
             if pci_req not in pci_groups:
                 pci_groups[pci_req] = []
-            pci_groups[pci_req].append({
-                "title": finding.title,
-                "severity": finding.severity.value,
-            })
+            pci_groups[pci_req].append(
+                {
+                    "title": finding.title,
+                    "severity": finding.severity.value,
+                }
+            )
 
         return {
             "framework": "PCI DSS 4.0",

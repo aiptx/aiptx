@@ -8,7 +8,7 @@ in parallel with dependency management and result collection.
 import asyncio
 import logging
 import time
-from typing import Any, Callable, Dict, List, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Optional
 
 from .models import AgentStatus, AgentWorker, CrewConfig, WorkerCallback
 
@@ -118,9 +118,7 @@ class WorkerPool:
             )
 
             # Start the worker task
-            self._tasks[worker_id] = asyncio.create_task(
-                self._run_worker(worker)
-            )
+            self._tasks[worker_id] = asyncio.create_task(self._run_worker(worker))
 
             logger.info(f"Spawned worker {worker_id}: {task[:50]}...")
             return worker_id
@@ -288,9 +286,7 @@ class WorkerPool:
         if worker_ids is None:
             worker_ids = list(self._tasks.keys())
 
-        tasks_to_wait = [
-            self._tasks[wid] for wid in worker_ids if wid in self._tasks
-        ]
+        tasks_to_wait = [self._tasks[wid] for wid in worker_ids if wid in self._tasks]
 
         if not tasks_to_wait:
             return {}
@@ -369,17 +365,11 @@ class WorkerPool:
 
     def get_active_workers(self) -> List[AgentWorker]:
         """Get currently running workers."""
-        return [
-            w for w in self._workers.values()
-            if w.status == AgentStatus.RUNNING
-        ]
+        return [w for w in self._workers.values() if w.status == AgentStatus.RUNNING]
 
     def get_pending_workers(self) -> List[AgentWorker]:
         """Get pending workers."""
-        return [
-            w for w in self._workers.values()
-            if w.status == AgentStatus.PENDING
-        ]
+        return [w for w in self._workers.values() if w.status == AgentStatus.PENDING]
 
     def add_finding(self, finding: Dict[str, Any]) -> None:
         """Add a finding to the shared findings list."""

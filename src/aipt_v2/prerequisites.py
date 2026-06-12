@@ -29,6 +29,7 @@ Usage:
 
 import asyncio
 import importlib
+import json
 import os
 import platform
 import shutil
@@ -36,23 +37,20 @@ import sys
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
-import json
+from typing import Any, Dict, List, Optional, Tuple
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import box
-from rich.tree import Tree
-from rich.text import Text
-
+from rich.table import Table
 
 console = Console()
 
 
 class CheckStatus(Enum):
     """Status of a prerequisite check."""
+
     PASSED = "passed"
     WARNING = "warning"
     FAILED = "failed"
@@ -61,16 +59,18 @@ class CheckStatus(Enum):
 
 class CheckCategory(Enum):
     """Category of prerequisite checks."""
-    CORE = "core"           # Required for basic operation
-    LLM = "llm"             # LLM/AI functionality
+
+    CORE = "core"  # Required for basic operation
+    LLM = "llm"  # LLM/AI functionality
     SECURITY_TOOLS = "tools"  # Security scanning tools
-    OPTIONAL = "optional"   # Enhanced features
-    SYSTEM = "system"       # System resources
+    OPTIONAL = "optional"  # Enhanced features
+    SYSTEM = "system"  # System resources
 
 
 @dataclass
 class CheckResult:
     """Result of a single prerequisite check."""
+
     name: str
     status: CheckStatus
     category: CheckCategory
@@ -94,6 +94,7 @@ class CheckResult:
 @dataclass
 class PrerequisitesReport:
     """Complete prerequisites check report."""
+
     checks: List[CheckResult] = field(default_factory=list)
     system_info: Dict[str, str] = field(default_factory=dict)
     timestamp: str = ""
@@ -255,22 +256,26 @@ class PrerequisitesChecker:
         min_ver = self.MIN_PYTHON_VERSION
 
         if current >= min_ver:
-            self.report.checks.append(CheckResult(
-                name="Python Version",
-                status=CheckStatus.PASSED,
-                category=CheckCategory.CORE,
-                message=f"Python {current[0]}.{current[1]} meets requirements",
-                version=f"{current[0]}.{current[1]}",
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="Python Version",
+                    status=CheckStatus.PASSED,
+                    category=CheckCategory.CORE,
+                    message=f"Python {current[0]}.{current[1]} meets requirements",
+                    version=f"{current[0]}.{current[1]}",
+                )
+            )
         else:
-            self.report.checks.append(CheckResult(
-                name="Python Version",
-                status=CheckStatus.FAILED,
-                category=CheckCategory.CORE,
-                message=f"Python {current[0]}.{current[1]} is below minimum {min_ver[0]}.{min_ver[1]}",
-                remediation=f"Upgrade Python to version {min_ver[0]}.{min_ver[1]} or higher",
-                version=f"{current[0]}.{current[1]}",
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="Python Version",
+                    status=CheckStatus.FAILED,
+                    category=CheckCategory.CORE,
+                    message=f"Python {current[0]}.{current[1]} is below minimum {min_ver[0]}.{min_ver[1]}",
+                    remediation=f"Upgrade Python to version {min_ver[0]}.{min_ver[1]} or higher",
+                    version=f"{current[0]}.{current[1]}",
+                )
+            )
 
     async def _check_core_packages(self):
         """Check core package dependencies."""
@@ -285,11 +290,7 @@ class PrerequisitesChecker:
             self.report.checks.append(result)
 
     def _check_package(
-        self,
-        package: str,
-        version_req: str,
-        description: str,
-        category: CheckCategory
+        self, package: str, version_req: str, description: str, category: CheckCategory
     ) -> CheckResult:
         """
         Check if a Python package is installed.
@@ -313,6 +314,7 @@ class PrerequisitesChecker:
             if version is None:
                 try:
                     from importlib.metadata import version as get_version
+
                     version = get_version(package)
                 except Exception:
                     version = "unknown"
@@ -351,42 +353,50 @@ class PrerequisitesChecker:
                 found_providers.append(provider)
 
         if found_providers:
-            self.report.checks.append(CheckResult(
-                name="LLM API Key",
-                status=CheckStatus.PASSED,
-                category=CheckCategory.LLM,
-                message=f"API key configured for: {', '.join(found_providers)}",
-                details=f"Found keys for: {', '.join(found_providers)}",
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="LLM API Key",
+                    status=CheckStatus.PASSED,
+                    category=CheckCategory.LLM,
+                    message=f"API key configured for: {', '.join(found_providers)}",
+                    details=f"Found keys for: {', '.join(found_providers)}",
+                )
+            )
         else:
             env_vars = ", ".join(self.LLM_PROVIDERS.values())
-            self.report.checks.append(CheckResult(
-                name="LLM API Key",
-                status=CheckStatus.FAILED,
-                category=CheckCategory.LLM,
-                message="No LLM API key configured",
-                details="AI-powered features require an API key",
-                remediation=f"Set one of: {env_vars}\nOr run: aiptx setup",
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="LLM API Key",
+                    status=CheckStatus.FAILED,
+                    category=CheckCategory.LLM,
+                    message="No LLM API key configured",
+                    details="AI-powered features require an API key",
+                    remediation=f"Set one of: {env_vars}\nOr run: aiptx setup",
+                )
+            )
 
         # Check for config file
         config_file = Path.home() / ".aiptx" / ".env"
         if config_file.exists():
-            self.report.checks.append(CheckResult(
-                name="AIPTX Config",
-                status=CheckStatus.PASSED,
-                category=CheckCategory.LLM,
-                message="Configuration file found",
-                details=str(config_file),
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="AIPTX Config",
+                    status=CheckStatus.PASSED,
+                    category=CheckCategory.LLM,
+                    message="Configuration file found",
+                    details=str(config_file),
+                )
+            )
         else:
-            self.report.checks.append(CheckResult(
-                name="AIPTX Config",
-                status=CheckStatus.WARNING,
-                category=CheckCategory.LLM,
-                message="No configuration file found",
-                remediation="Run: aiptx setup",
-            ))
+            self.report.checks.append(
+                CheckResult(
+                    name="AIPTX Config",
+                    status=CheckStatus.WARNING,
+                    category=CheckCategory.LLM,
+                    message="No configuration file found",
+                    remediation="Run: aiptx setup",
+                )
+            )
 
     async def _check_security_tools(self):
         """Check security tool availability."""
@@ -396,21 +406,25 @@ class PrerequisitesChecker:
         for tool, description in self.SECURITY_TOOLS:
             if shutil.which(tool):
                 installed.append(tool)
-                self.report.checks.append(CheckResult(
-                    name=f"Tool: {tool}",
-                    status=CheckStatus.PASSED,
-                    category=CheckCategory.SECURITY_TOOLS,
-                    message=f"{description} - available",
-                ))
+                self.report.checks.append(
+                    CheckResult(
+                        name=f"Tool: {tool}",
+                        status=CheckStatus.PASSED,
+                        category=CheckCategory.SECURITY_TOOLS,
+                        message=f"{description} - available",
+                    )
+                )
             else:
                 missing.append(tool)
-                self.report.checks.append(CheckResult(
-                    name=f"Tool: {tool}",
-                    status=CheckStatus.WARNING,
-                    category=CheckCategory.SECURITY_TOOLS,
-                    message=f"{description} - not installed",
-                    remediation=f"aiptx tools install -t {tool}",
-                ))
+                self.report.checks.append(
+                    CheckResult(
+                        name=f"Tool: {tool}",
+                        status=CheckStatus.WARNING,
+                        category=CheckCategory.SECURITY_TOOLS,
+                        message=f"{description} - not installed",
+                        remediation=f"aiptx tools install -t {tool}",
+                    )
+                )
 
         # Summary check
         if len(installed) >= 3:
@@ -423,14 +437,16 @@ class PrerequisitesChecker:
             status = CheckStatus.FAILED
             message = "No security tools installed"
 
-        self.report.checks.append(CheckResult(
-            name="Security Tools Summary",
-            status=status,
-            category=CheckCategory.SECURITY_TOOLS,
-            message=message,
-            details=f"Installed: {', '.join(installed) if installed else 'None'}",
-            remediation="aiptx tools install" if status != CheckStatus.PASSED else None,
-        ))
+        self.report.checks.append(
+            CheckResult(
+                name="Security Tools Summary",
+                status=status,
+                category=CheckCategory.SECURITY_TOOLS,
+                message=message,
+                details=f"Installed: {', '.join(installed) if installed else 'None'}",
+                remediation="aiptx tools install" if status != CheckStatus.PASSED else None,
+            )
+        )
 
     async def _check_system_resources(self):
         """Check system resource availability."""
@@ -438,8 +454,8 @@ class PrerequisitesChecker:
 
         # Memory check
         memory = psutil.virtual_memory()
-        total_gb = memory.total / (1024 ** 3)
-        available_gb = memory.available / (1024 ** 3)
+        total_gb = memory.total / (1024**3)
+        available_gb = memory.available / (1024**3)
 
         if available_gb >= 2:
             status = CheckStatus.PASSED
@@ -451,17 +467,19 @@ class PrerequisitesChecker:
             status = CheckStatus.FAILED
             message = f"Very low memory: {available_gb:.1f} GB available"
 
-        self.report.checks.append(CheckResult(
-            name="System Memory",
-            status=status,
-            category=CheckCategory.SYSTEM,
-            message=message,
-            details=f"Total: {total_gb:.1f} GB, Available: {available_gb:.1f} GB",
-        ))
+        self.report.checks.append(
+            CheckResult(
+                name="System Memory",
+                status=status,
+                category=CheckCategory.SYSTEM,
+                message=message,
+                details=f"Total: {total_gb:.1f} GB, Available: {available_gb:.1f} GB",
+            )
+        )
 
         # Disk space check
         disk = psutil.disk_usage(str(Path.home()))
-        free_gb = disk.free / (1024 ** 3)
+        free_gb = disk.free / (1024**3)
 
         if free_gb >= 5:
             status = CheckStatus.PASSED
@@ -473,13 +491,15 @@ class PrerequisitesChecker:
             status = CheckStatus.FAILED
             message = f"Very low disk space: {free_gb:.1f} GB free"
 
-        self.report.checks.append(CheckResult(
-            name="Disk Space",
-            status=status,
-            category=CheckCategory.SYSTEM,
-            message=message,
-            details=f"Free: {free_gb:.1f} GB",
-        ))
+        self.report.checks.append(
+            CheckResult(
+                name="Disk Space",
+                status=status,
+                category=CheckCategory.SYSTEM,
+                message=message,
+                details=f"Free: {free_gb:.1f} GB",
+            )
+        )
 
     def print_report(self, show_passed: bool = True):
         """
@@ -490,11 +510,13 @@ class PrerequisitesChecker:
         """
         # Header
         console.print()
-        console.print(Panel.fit(
-            "[bold cyan]AIPTX Prerequisites Check[/bold cyan]\n"
-            "[dim]Enterprise System Validation[/dim]",
-            border_style="cyan",
-        ))
+        console.print(
+            Panel.fit(
+                "[bold cyan]AIPTX Prerequisites Check[/bold cyan]\n"
+                "[dim]Enterprise System Validation[/dim]",
+                border_style="cyan",
+            )
+        )
 
         # System info
         console.print("\n[bold]System Information[/bold]")
@@ -503,7 +525,9 @@ class PrerequisitesChecker:
         info_table.add_column("Value", style="green")
 
         info = self.report.system_info
-        info_table.add_row("Platform", f"{info.get('platform', 'Unknown')} {info.get('platform_release', '')}")
+        info_table.add_row(
+            "Platform", f"{info.get('platform', 'Unknown')} {info.get('platform_release', '')}"
+        )
         info_table.add_row("Architecture", info.get("architecture", "Unknown"))
         info_table.add_row("Python", info.get("python_version", "Unknown"))
 
@@ -595,7 +619,9 @@ class PrerequisitesChecker:
         console.print(status_panel)
 
         # Stats
-        console.print(f"\n[dim]Checks: {passed}/{total} passed, {warnings} warnings, {failures} failures[/dim]")
+        console.print(
+            f"\n[dim]Checks: {passed}/{total} passed, {warnings} warnings, {failures} failures[/dim]"
+        )
 
     def get_exit_code(self, strict: bool = False) -> int:
         """
@@ -672,7 +698,9 @@ def check_prerequisites_sync(
 
     # Python version
     if sys.version_info < (3, 9):
-        errors.append(f"Python 3.9+ required (found {sys.version_info.major}.{sys.version_info.minor})")
+        errors.append(
+            f"Python 3.9+ required (found {sys.version_info.major}.{sys.version_info.minor})"
+        )
 
     # Core packages
     core_packages = ["litellm", "rich", "click", "pydantic"]
@@ -685,8 +713,8 @@ def check_prerequisites_sync(
     # LLM API key
     if require_llm:
         has_key = any(
-            os.getenv(var) for var in
-            ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"]
+            os.getenv(var)
+            for var in ["ANTHROPIC_API_KEY", "OPENAI_API_KEY", "DEEPSEEK_API_KEY", "LLM_API_KEY"]
         )
         if not has_key:
             errors.append("No LLM API key configured (run: aiptx setup)")
@@ -702,9 +730,7 @@ def check_prerequisites_sync(
 
 
 def require_prerequisites(
-    require_llm: bool = True,
-    require_tools: bool = False,
-    operation: str = "this operation"
+    require_llm: bool = True, require_tools: bool = False, operation: str = "this operation"
 ):
     """
     Decorator/function to check prerequisites before running operations.
@@ -738,34 +764,24 @@ def main():
 
     parser = argparse.ArgumentParser(description="AIPTX Prerequisites Checker")
     parser.add_argument(
-        "--verbose", "-v",
-        action="store_true",
-        help="Show all checks including passed"
+        "--verbose", "-v", action="store_true", help="Show all checks including passed"
     )
+    parser.add_argument("--strict", "-s", action="store_true", help="Exit with error on warnings")
+    parser.add_argument("--json", "-j", action="store_true", help="Output JSON format")
     parser.add_argument(
-        "--strict", "-s",
-        action="store_true",
-        help="Exit with error on warnings"
-    )
-    parser.add_argument(
-        "--json", "-j",
-        action="store_true",
-        help="Output JSON format"
-    )
-    parser.add_argument(
-        "--minimal", "-m",
-        action="store_true",
-        help="Skip optional dependency checks"
+        "--minimal", "-m", action="store_true", help="Skip optional dependency checks"
     )
 
     args = parser.parse_args()
 
-    exit_code = asyncio.run(run_prerequisites_check(
-        verbose=args.verbose,
-        strict=args.strict,
-        json_output=args.json,
-        include_optional=not args.minimal,
-    ))
+    exit_code = asyncio.run(
+        run_prerequisites_check(
+            verbose=args.verbose,
+            strict=args.strict,
+            json_output=args.json,
+            include_optional=not args.minimal,
+        )
+    )
 
     sys.exit(exit_code)
 

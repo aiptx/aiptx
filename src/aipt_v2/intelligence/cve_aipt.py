@@ -6,13 +6,13 @@ Inspired by: pentest-agent's CVE scoring formula
 Score = 0.3*CVSS + 0.3*EPSS + 0.2*trending + 0.2*has_poc
 """
 
-import os
 import json
-import time
 import logging
-from typing import Optional
+import os
+import time
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 import requests
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CVEInfo:
     """Structured CVE information"""
+
     cve_id: str
     cvss: float = 0.0
     epss: float = 0.0
@@ -115,10 +116,12 @@ class CVEIntelligence:
                 results.append(info)
             except Exception as e:
                 # Create minimal info for failed lookups
-                results.append(CVEInfo(
-                    cve_id=cve_id,
-                    description=f"Lookup failed: {e}",
-                ))
+                results.append(
+                    CVEInfo(
+                        cve_id=cve_id,
+                        description=f"Lookup failed: {e}",
+                    )
+                )
 
         # Sort by priority score (descending)
         results.sort(key=lambda x: x.priority_score, reverse=True)
@@ -166,9 +169,9 @@ class CVEIntelligence:
 
                 # Check for POC
                 refs_str = " ".join(info.references).lower()
-                info.has_poc = any(kw in refs_str for kw in [
-                    "exploit", "poc", "github.com", "exploit-db"
-                ])
+                info.has_poc = any(
+                    kw in refs_str for kw in ["exploit", "poc", "github.com", "exploit-db"]
+                )
         except Exception as e:
             logger.debug("CVEMap lookup failed for %s: %s", cve_id, str(e))
 
@@ -250,10 +253,10 @@ class CVEIntelligence:
         poc_score = 1.0 if has_poc else 0.0
 
         score = (
-            self.WEIGHT_CVSS * cvss_normalized +
-            self.WEIGHT_EPSS * epss_normalized +
-            self.WEIGHT_TRENDING * trending_score +
-            self.WEIGHT_HAS_POC * poc_score
+            self.WEIGHT_CVSS * cvss_normalized
+            + self.WEIGHT_EPSS * epss_normalized
+            + self.WEIGHT_TRENDING * trending_score
+            + self.WEIGHT_HAS_POC * poc_score
         )
 
         return round(score, 4)
@@ -318,17 +321,20 @@ class CVEIntelligence:
 
         try:
             with open(cache_file, "w") as f:
-                json.dump({
-                    "cve_id": info.cve_id,
-                    "cvss": info.cvss,
-                    "epss": info.epss,
-                    "description": info.description,
-                    "affected_products": info.affected_products,
-                    "references": info.references,
-                    "exploit_urls": info.exploit_urls,
-                    "is_trending": info.is_trending,
-                    "has_poc": info.has_poc,
-                    "priority_score": info.priority_score,
-                }, f)
+                json.dump(
+                    {
+                        "cve_id": info.cve_id,
+                        "cvss": info.cvss,
+                        "epss": info.epss,
+                        "description": info.description,
+                        "affected_products": info.affected_products,
+                        "references": info.references,
+                        "exploit_urls": info.exploit_urls,
+                        "is_trending": info.is_trending,
+                        "has_poc": info.has_poc,
+                        "priority_score": info.priority_score,
+                    },
+                    f,
+                )
         except Exception as e:
             logger.debug("Failed to cache CVE data for %s: %s", info.cve_id, str(e))

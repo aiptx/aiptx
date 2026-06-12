@@ -13,7 +13,6 @@ from gql.transport.exceptions import TransportQueryError
 from gql.transport.requests import RequestsHTTPTransport
 from requests.exceptions import ProxyError, RequestException, Timeout
 
-
 if TYPE_CHECKING:
     from collections.abc import Callable
 
@@ -54,7 +53,8 @@ class ProxyManager:
             "source": "SOURCE",
         }
 
-        query = gql("""
+        query = gql(
+            """
             query GetRequests(
                 $limit: Int, $offset: Int, $filter: HTTPQL,
                 $order: RequestResponseOrderInput, $scopeId: ID
@@ -73,7 +73,8 @@ class ProxyManager:
                     count { value }
                 }
             }
-        """)
+        """
+        )
 
         variables = {
             "limit": limit,
@@ -457,7 +458,8 @@ class ProxyManager:
         if not scope_name:
             return {"error": "scope_name required for create"}
 
-        mutation = gql("""
+        mutation = gql(
+            """
             mutation CreateScope($input: CreateScopeInput!) {
                 createScope(input: $input) {
                     scope { id name allowlist denylist indexed }
@@ -467,7 +469,8 @@ class ProxyManager:
                     }
                 }
             }
-        """)
+        """
+        )
 
         result = self.client.execute(
             mutation,
@@ -497,7 +500,8 @@ class ProxyManager:
         if not scope_id or not scope_name:
             return {"error": "scope_id and scope_name required"}
 
-        mutation = gql("""
+        mutation = gql(
+            """
             mutation UpdateScope($id: ID!, $input: UpdateScopeInput!) {
                 updateScope(id: $id, input: $input) {
                     scope { id name allowlist denylist indexed }
@@ -507,7 +511,8 @@ class ProxyManager:
                     }
                 }
             }
-        """)
+        """
+        )
 
         result = self.client.execute(
             mutation,
@@ -596,7 +601,8 @@ class ProxyManager:
             skip_count = (page - 1) * page_size
 
             if parent_id:
-                query = gql("""
+                query = gql(
+                    """
                     query GetSitemapDescendants($parentId: ID!, $depth: SitemapDescendantsDepth!) {
                         sitemapDescendantEntries(parentId: $parentId, depth: $depth) {
                             edges {
@@ -608,13 +614,15 @@ class ProxyManager:
                             count { value }
                         }
                     }
-                """)
+                """
+                )
                 result = self.client.execute(
                     query, variable_values={"parentId": parent_id, "depth": depth}
                 )
                 data = result.get("sitemapDescendantEntries", {})
             else:
-                query = gql("""
+                query = gql(
+                    """
                     query GetSitemapRoots($scopeId: ID) {
                         sitemapRootEntries(scopeId: $scopeId) {
                             edges { node {
@@ -625,7 +633,8 @@ class ProxyManager:
                             count { value }
                         }
                     }
-                """)
+                """
+                )
                 result = self.client.execute(query, variable_values={"scopeId": scope_id})
                 data = result.get("sitemapRootEntries", {})
 
@@ -719,7 +728,8 @@ class ProxyManager:
 
     def view_sitemap_entry(self, entry_id: str) -> dict[str, Any]:
         try:
-            query = gql("""
+            query = gql(
+                """
                 query GetSitemapEntry($id: ID!) {
                     sitemapEntry(id: $id) {
                         id kind label hasDescendants
@@ -731,7 +741,8 @@ class ProxyManager:
                         }
                     }
                 }
-            """)
+            """
+            )
 
             result = self.client.execute(query, variable_values={"id": entry_id})
             entry = result.get("sitemapEntry")
@@ -769,7 +780,9 @@ class ProxyManager:
                 "showing": f"Latest {len(cleaned_requests)} requests",
             }
 
-            return {"entry": cleaned} if cleaned else {"error": "Failed to process sitemap entry"}  # noqa: TRY300
+            return (
+                {"entry": cleaned} if cleaned else {"error": "Failed to process sitemap entry"}
+            )  # noqa: TRY300
 
         except (TransportQueryError, ValueError, KeyError) as e:
             return {"error": f"Failed to fetch sitemap entry: {e}"}

@@ -21,13 +21,11 @@ Usage:
     findings = await scanner.scan()
 """
 
-import asyncio
 import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
-from urllib.parse import urlparse
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 
@@ -40,6 +38,7 @@ except ImportError:
 @dataclass
 class GraphQLConfig:
     """GraphQL scanner configuration."""
+
     endpoint: str
     headers: Dict[str, str] = field(default_factory=dict)
     cookies: Dict[str, str] = field(default_factory=dict)
@@ -72,6 +71,7 @@ class GraphQLConfig:
 @dataclass
 class GraphQLFinding:
     """GraphQL security finding."""
+
     vulnerability: str
     severity: str  # critical, high, medium, low, info
     description: str
@@ -89,6 +89,7 @@ class GraphQLFinding:
 @dataclass
 class GraphQLScanResult:
     """Result of GraphQL security scan."""
+
     endpoint: str
     status: str
     started_at: str
@@ -173,10 +174,31 @@ class GraphQLScanner:
 
     # Field suggestion payloads
     FIELD_SUGGESTIONS = [
-        "user", "users", "admin", "admins", "login", "me", "profile",
-        "account", "accounts", "password", "token", "secret", "key",
-        "credential", "auth", "session", "config", "setting", "flag",
-        "debug", "test", "internal", "private", "hidden", "system"
+        "user",
+        "users",
+        "admin",
+        "admins",
+        "login",
+        "me",
+        "profile",
+        "account",
+        "accounts",
+        "password",
+        "token",
+        "secret",
+        "key",
+        "credential",
+        "auth",
+        "session",
+        "config",
+        "setting",
+        "flag",
+        "debug",
+        "test",
+        "internal",
+        "private",
+        "hidden",
+        "system",
     ]
 
     # SQL injection payloads for GraphQL
@@ -187,16 +209,11 @@ class GraphQLScanner:
         "'; DROP TABLE users; --",
         "1' AND '1'='1",
         "admin'--",
-        "1; SELECT * FROM users--"
+        "1; SELECT * FROM users--",
     ]
 
     # NoSQL injection payloads
-    NOSQL_PAYLOADS = [
-        '{"$gt": ""}',
-        '{"$ne": null}',
-        '{"$regex": ".*"}',
-        '{"$where": "1==1"}'
-    ]
+    NOSQL_PAYLOADS = ['{"$gt": ""}', '{"$ne": null}', '{"$regex": ".*"}', '{"$where": "1==1"}']
 
     def __init__(self, endpoint: str, config: Optional[GraphQLConfig] = None):
         """
@@ -216,7 +233,7 @@ class GraphQLScanner:
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
-            "User-Agent": "AIPTX-GraphQL-Scanner/1.0"
+            "User-Agent": "AIPTX-GraphQL-Scanner/1.0",
         }
         headers.update(self.config.headers)
 
@@ -228,7 +245,9 @@ class GraphQLScanner:
     async def _send_query(self, query: str, variables: Optional[Dict] = None) -> Dict[str, Any]:
         """Send GraphQL query and return response."""
         if aiohttp is None:
-            raise ImportError("aiohttp is required for GraphQL scanning. Install with: pip install aiohttp")
+            raise ImportError(
+                "aiohttp is required for GraphQL scanning. Install with: pip install aiohttp"
+            )
 
         payload = {"query": query}
         if variables:
@@ -242,7 +261,7 @@ class GraphQLScanner:
                     headers=self._get_headers(),
                     cookies=self.config.cookies,
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                    ssl=False  # Allow self-signed certs
+                    ssl=False,  # Allow self-signed certs
                 ) as response:
                     text = await response.text()
                     try:
@@ -270,31 +289,46 @@ class GraphQLScanner:
                     types = schema_data.get("types", [])
                     custom_types = [t for t in types if not t.get("name", "").startswith("__")]
 
-                    findings.append(GraphQLFinding(
-                        vulnerability="GraphQL Introspection Enabled",
-                        severity="medium",
-                        description=f"Full introspection query is enabled, exposing {len(custom_types)} custom types",
-                        evidence=f"Exposed types: {', '.join([t.get('name') for t in custom_types[:10]])}...",
-                        remediation="Disable introspection in production or implement authentication for introspection queries",
-                        endpoint=self.endpoint,
-                        cwe="CWE-200"
-                    ))
+                    findings.append(
+                        GraphQLFinding(
+                            vulnerability="GraphQL Introspection Enabled",
+                            severity="medium",
+                            description=f"Full introspection query is enabled, exposing {len(custom_types)} custom types",
+                            evidence=f"Exposed types: {', '.join([t.get('name') for t in custom_types[:10]])}...",
+                            remediation="Disable introspection in production or implement authentication for introspection queries",
+                            endpoint=self.endpoint,
+                            cwe="CWE-200",
+                        )
+                    )
 
                     # Check for sensitive types
-                    sensitive_patterns = ["user", "admin", "auth", "password", "token", "secret", "key"]
-                    sensitive_types = [t for t in custom_types
-                                     if any(p in t.get("name", "").lower() for p in sensitive_patterns)]
+                    sensitive_patterns = [
+                        "user",
+                        "admin",
+                        "auth",
+                        "password",
+                        "token",
+                        "secret",
+                        "key",
+                    ]
+                    sensitive_types = [
+                        t
+                        for t in custom_types
+                        if any(p in t.get("name", "").lower() for p in sensitive_patterns)
+                    ]
 
                     if sensitive_types:
-                        findings.append(GraphQLFinding(
-                            vulnerability="Sensitive Types Exposed via Introspection",
-                            severity="high",
-                            description=f"Introspection reveals {len(sensitive_types)} potentially sensitive types",
-                            evidence=f"Sensitive types: {', '.join([t.get('name') for t in sensitive_types])}",
-                            remediation="Review exposed types and implement field-level authorization",
-                            endpoint=self.endpoint,
-                            cwe="CWE-200"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="Sensitive Types Exposed via Introspection",
+                                severity="high",
+                                description=f"Introspection reveals {len(sensitive_types)} potentially sensitive types",
+                                evidence=f"Sensitive types: {', '.join([t.get('name') for t in sensitive_types])}",
+                                remediation="Review exposed types and implement field-level authorization",
+                                endpoint=self.endpoint,
+                                cwe="CWE-200",
+                            )
+                        )
 
                     return findings
 
@@ -303,15 +337,17 @@ class GraphQLScanner:
         if "error" not in response:
             data = response.get("data", {})
             if isinstance(data, dict) and "__schema" in str(data):
-                findings.append(GraphQLFinding(
-                    vulnerability="GraphQL Partial Introspection Enabled",
-                    severity="low",
-                    description="Partial introspection query is allowed",
-                    evidence="__schema query returned type information",
-                    remediation="Disable all introspection queries in production",
-                    endpoint=self.endpoint,
-                    cwe="CWE-200"
-                ))
+                findings.append(
+                    GraphQLFinding(
+                        vulnerability="GraphQL Partial Introspection Enabled",
+                        severity="low",
+                        description="Partial introspection query is allowed",
+                        evidence="__schema query returned type information",
+                        remediation="Disable all introspection queries in production",
+                        endpoint=self.endpoint,
+                        cwe="CWE-200",
+                    )
+                )
 
         return findings
 
@@ -341,15 +377,17 @@ class GraphQLScanner:
                 data = response.get("data", {})
                 if "errors" not in data:
                     if depth >= 10:
-                        findings.append(GraphQLFinding(
-                            vulnerability="GraphQL Query Depth Attack",
-                            severity="medium",
-                            description=f"Server accepts queries with depth {depth}, allowing DoS attacks",
-                            evidence=f"Nested query with depth {depth} was accepted",
-                            remediation="Implement query depth limiting (recommended max: 5-7)",
-                            endpoint=self.endpoint,
-                            cwe="CWE-400"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="GraphQL Query Depth Attack",
+                                severity="medium",
+                                description=f"Server accepts queries with depth {depth}, allowing DoS attacks",
+                                evidence=f"Nested query with depth {depth} was accepted",
+                                remediation="Implement query depth limiting (recommended max: 5-7)",
+                                endpoint=self.endpoint,
+                                cwe="CWE-400",
+                            )
+                        )
                         break
 
         return findings
@@ -369,21 +407,20 @@ class GraphQLScanner:
             if isinstance(data, dict) and "data" in data:
                 result_data = data.get("data", {})
                 if isinstance(result_data, dict) and len(result_data) >= self.config.batch_size:
-                    findings.append(GraphQLFinding(
-                        vulnerability="GraphQL Batch Query Attack",
-                        severity="medium",
-                        description=f"Server accepts batch queries with {self.config.batch_size}+ aliases",
-                        evidence=f"Batch query with {self.config.batch_size} aliases was accepted",
-                        remediation="Implement query complexity limiting and alias restrictions",
-                        endpoint=self.endpoint,
-                        cwe="CWE-400"
-                    ))
+                    findings.append(
+                        GraphQLFinding(
+                            vulnerability="GraphQL Batch Query Attack",
+                            severity="medium",
+                            description=f"Server accepts batch queries with {self.config.batch_size}+ aliases",
+                            evidence=f"Batch query with {self.config.batch_size} aliases was accepted",
+                            remediation="Implement query complexity limiting and alias restrictions",
+                            endpoint=self.endpoint,
+                            cwe="CWE-400",
+                        )
+                    )
 
         # Test array batching
-        batch_payload = [
-            {"query": "{ __typename }"}
-            for _ in range(self.config.batch_size)
-        ]
+        batch_payload = [{"query": "{ __typename }"} for _ in range(self.config.batch_size)]
 
         if aiohttp:
             try:
@@ -393,20 +430,22 @@ class GraphQLScanner:
                         json=batch_payload,
                         headers=self._get_headers(),
                         timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                        ssl=False
+                        ssl=False,
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
                             if isinstance(data, list) and len(data) >= self.config.batch_size:
-                                findings.append(GraphQLFinding(
-                                    vulnerability="GraphQL Array Batching Enabled",
-                                    severity="medium",
-                                    description="Server accepts array-based batch queries",
-                                    evidence=f"Array batch with {self.config.batch_size} queries was accepted",
-                                    remediation="Disable array batching or implement strict rate limiting",
-                                    endpoint=self.endpoint,
-                                    cwe="CWE-400"
-                                ))
+                                findings.append(
+                                    GraphQLFinding(
+                                        vulnerability="GraphQL Array Batching Enabled",
+                                        severity="medium",
+                                        description="Server accepts array-based batch queries",
+                                        evidence=f"Array batch with {self.config.batch_size} queries was accepted",
+                                        remediation="Disable array batching or implement strict rate limiting",
+                                        endpoint=self.endpoint,
+                                        cwe="CWE-400",
+                                    )
+                                )
             except Exception:
                 pass
 
@@ -435,15 +474,17 @@ class GraphQLScanner:
 
         if discovered_fields:
             unique_fields = list(set(discovered_fields))
-            findings.append(GraphQLFinding(
-                vulnerability="GraphQL Field Suggestion Disclosure",
-                severity="low",
-                description=f"Error messages reveal {len(unique_fields)} valid field names",
-                evidence=f"Discovered fields: {', '.join(unique_fields[:10])}",
-                remediation="Disable field suggestions in production or use generic error messages",
-                endpoint=self.endpoint,
-                cwe="CWE-200"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="GraphQL Field Suggestion Disclosure",
+                    severity="low",
+                    description=f"Error messages reveal {len(unique_fields)} valid field names",
+                    evidence=f"Discovered fields: {', '.join(unique_fields[:10])}",
+                    remediation="Disable field suggestions in production or use generic error messages",
+                    endpoint=self.endpoint,
+                    cwe="CWE-200",
+                )
+            )
 
         return findings
 
@@ -463,20 +504,22 @@ class GraphQLScanner:
                     response_str = json.dumps(data).lower()
                     sql_errors = ["sql", "syntax", "mysql", "postgresql", "sqlite", "oracle"]
                     if any(err in response_str for err in sql_errors):
-                        findings.append(GraphQLFinding(
-                            vulnerability="Potential SQL Injection via GraphQL",
-                            severity="critical",
-                            description="GraphQL argument appears vulnerable to SQL injection",
-                            evidence=f"Payload: {payload} triggered SQL-related error",
-                            remediation="Use parameterized queries and input validation",
-                            endpoint=self.endpoint,
-                            cwe="CWE-89"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="Potential SQL Injection via GraphQL",
+                                severity="critical",
+                                description="GraphQL argument appears vulnerable to SQL injection",
+                                evidence=f"Payload: {payload} triggered SQL-related error",
+                                remediation="Use parameterized queries and input validation",
+                                endpoint=self.endpoint,
+                                cwe="CWE-89",
+                            )
+                        )
                         break
 
         # Test NoSQL injection
         for payload in self.NOSQL_PAYLOADS:
-            query = f'query {{ user(filter: {payload}) {{ id }} }}'
+            query = f"query {{ user(filter: {payload}) {{ id }} }}"
             response = await self._send_query(query)
 
             if "error" not in response:
@@ -484,15 +527,17 @@ class GraphQLScanner:
                 response_str = json.dumps(data).lower()
                 nosql_errors = ["mongodb", "mongoose", "objectid", "bson"]
                 if any(err in response_str for err in nosql_errors):
-                    findings.append(GraphQLFinding(
-                        vulnerability="Potential NoSQL Injection via GraphQL",
-                        severity="critical",
-                        description="GraphQL argument appears vulnerable to NoSQL injection",
-                        evidence=f"Payload triggered NoSQL-related response",
-                        remediation="Validate and sanitize all input before database queries",
-                        endpoint=self.endpoint,
-                        cwe="CWE-943"
-                    ))
+                    findings.append(
+                        GraphQLFinding(
+                            vulnerability="Potential NoSQL Injection via GraphQL",
+                            severity="critical",
+                            description="GraphQL argument appears vulnerable to NoSQL injection",
+                            evidence="Payload triggered NoSQL-related response",
+                            remediation="Validate and sanitize all input before database queries",
+                            endpoint=self.endpoint,
+                            cwe="CWE-943",
+                        )
+                    )
                     break
 
         return findings
@@ -504,9 +549,9 @@ class GraphQLScanner:
         # Try to access potentially restricted fields via aliases
         sensitive_queries = [
             'query { admin: user(role: "admin") { id email } }',
-            'query { allUsers: users(limit: 1000) { id email role } }',
-            'query { config: systemConfig { debugMode apiKeys } }',
-            'query { me: currentUser { id role permissions } }'
+            "query { allUsers: users(limit: 1000) { id email role } }",
+            "query { config: systemConfig { debugMode apiKeys } }",
+            "query { me: currentUser { id role permissions } }",
         ]
 
         for query in sensitive_queries:
@@ -519,15 +564,17 @@ class GraphQLScanner:
                     if result and "errors" not in data:
                         # Check if we got actual data
                         if any(result.values()):
-                            findings.append(GraphQLFinding(
-                                vulnerability="Potential Authorization Bypass",
-                                severity="high",
-                                description="Query returned data that may require authorization",
-                                evidence=f"Query '{query[:50]}...' returned data without proper auth check",
-                                remediation="Implement field-level authorization and access control",
-                                endpoint=self.endpoint,
-                                cwe="CWE-862"
-                            ))
+                            findings.append(
+                                GraphQLFinding(
+                                    vulnerability="Potential Authorization Bypass",
+                                    severity="high",
+                                    description="Query returned data that may require authorization",
+                                    evidence=f"Query '{query[:50]}...' returned data without proper auth check",
+                                    remediation="Implement field-level authorization and access control",
+                                    endpoint=self.endpoint,
+                                    cwe="CWE-862",
+                                )
+                            )
 
         return findings
 
@@ -568,7 +615,7 @@ class GraphQLScanner:
             "update": "medium",
             "modify": "medium",
             "create": "low",
-            "add": "low"
+            "add": "low",
         }
 
         sensitive_mutations = []
@@ -576,31 +623,38 @@ class GraphQLScanner:
             name = mutation.get("name", "").lower()
             for pattern, severity in dangerous_patterns.items():
                 if pattern in name:
-                    sensitive_mutations.append({
-                        "name": mutation.get("name"),
-                        "pattern": pattern,
-                        "severity": severity,
-                        "args": mutation.get("args", [])
-                    })
+                    sensitive_mutations.append(
+                        {
+                            "name": mutation.get("name"),
+                            "pattern": pattern,
+                            "severity": severity,
+                            "args": mutation.get("args", []),
+                        }
+                    )
                     break
 
         # Test dangerous mutations without authentication
         if sensitive_mutations:
-            findings.append(GraphQLFinding(
-                vulnerability="Sensitive Mutations Exposed",
-                severity="medium",
-                description=f"Schema exposes {len(sensitive_mutations)} potentially dangerous mutations",
-                evidence=f"Mutations: {', '.join([m['name'] for m in sensitive_mutations[:5]])}...",
-                remediation="Ensure all sensitive mutations require proper authorization",
-                endpoint=self.endpoint,
-                cwe="CWE-862"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="Sensitive Mutations Exposed",
+                    severity="medium",
+                    description=f"Schema exposes {len(sensitive_mutations)} potentially dangerous mutations",
+                    evidence=f"Mutations: {', '.join([m['name'] for m in sensitive_mutations[:5]])}...",
+                    remediation="Ensure all sensitive mutations require proper authorization",
+                    endpoint=self.endpoint,
+                    cwe="CWE-862",
+                )
+            )
 
         # Test for mass assignment in mutations
         mass_assignment_payloads = [
             ('mutation { updateUser(id: "1", role: "admin") { id role } }', "role escalation"),
-            ('mutation { updateProfile(isAdmin: true) { id isAdmin } }', "admin flag"),
-            ('mutation { createUser(role: "admin", verified: true) { id } }', "user creation with elevated privileges"),
+            ("mutation { updateProfile(isAdmin: true) { id isAdmin } }", "admin flag"),
+            (
+                'mutation { createUser(role: "admin", verified: true) { id } }',
+                "user creation with elevated privileges",
+            ),
         ]
 
         for payload, test_type in mass_assignment_payloads:
@@ -610,41 +664,45 @@ class GraphQLScanner:
                 if isinstance(data, dict):
                     # Check if mutation was accepted (even with errors, structure acceptance is a signal)
                     if "data" in data and data["data"]:
-                        findings.append(GraphQLFinding(
-                            vulnerability="Potential Mass Assignment via Mutation",
-                            severity="high",
-                            description=f"Mutation may allow {test_type}",
-                            evidence=f"Payload: {payload[:80]}...",
-                            remediation="Whitelist allowed fields in mutation resolvers, never blindly accept input",
-                            endpoint=self.endpoint,
-                            cwe="CWE-915"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="Potential Mass Assignment via Mutation",
+                                severity="high",
+                                description=f"Mutation may allow {test_type}",
+                                evidence=f"Payload: {payload[:80]}...",
+                                remediation="Whitelist allowed fields in mutation resolvers, never blindly accept input",
+                                endpoint=self.endpoint,
+                                cwe="CWE-915",
+                            )
+                        )
                         break
 
         # Test CSRF on mutations (check if mutations accept GET)
         if aiohttp:
             try:
                 async with aiohttp.ClientSession() as session:
-                    test_query = 'mutation { __typename }'
+                    test_query = "mutation { __typename }"
                     url_with_query = f"{self.endpoint}?query={test_query}"
                     async with session.get(
                         url_with_query,
                         headers=self._get_headers(),
                         timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                        ssl=False
+                        ssl=False,
                     ) as response:
                         if response.status == 200:
                             data = await response.json()
                             if "data" in data and data.get("data", {}).get("__typename"):
-                                findings.append(GraphQLFinding(
-                                    vulnerability="GraphQL Mutations Accept GET Requests",
-                                    severity="medium",
-                                    description="Mutations can be executed via GET requests, enabling CSRF attacks",
-                                    evidence="GET request with mutation query parameter was accepted",
-                                    remediation="Reject mutations via GET method, only accept POST for mutations",
-                                    endpoint=self.endpoint,
-                                    cwe="CWE-352"
-                                ))
+                                findings.append(
+                                    GraphQLFinding(
+                                        vulnerability="GraphQL Mutations Accept GET Requests",
+                                        severity="medium",
+                                        description="Mutations can be executed via GET requests, enabling CSRF attacks",
+                                        evidence="GET request with mutation query parameter was accepted",
+                                        remediation="Reject mutations via GET method, only accept POST for mutations",
+                                        endpoint=self.endpoint,
+                                        cwe="CWE-352",
+                                    )
+                                )
             except Exception:
                 pass
 
@@ -676,33 +734,46 @@ class GraphQLScanner:
                         break
 
         if subscriptions:
-            findings.append(GraphQLFinding(
-                vulnerability="GraphQL Subscriptions Enabled",
-                severity="info",
-                description=f"Schema exposes {len(subscriptions)} subscription endpoints",
-                evidence=f"Subscriptions: {', '.join([s.get('name') for s in subscriptions[:5]])}",
-                remediation="Ensure subscriptions require authentication and implement rate limiting",
-                endpoint=self.endpoint,
-                cwe="CWE-284"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="GraphQL Subscriptions Enabled",
+                    severity="info",
+                    description=f"Schema exposes {len(subscriptions)} subscription endpoints",
+                    evidence=f"Subscriptions: {', '.join([s.get('name') for s in subscriptions[:5]])}",
+                    remediation="Ensure subscriptions require authentication and implement rate limiting",
+                    endpoint=self.endpoint,
+                    cwe="CWE-284",
+                )
+            )
 
             # Check for sensitive subscriptions
-            sensitive_patterns = ["user", "admin", "payment", "order", "message", "notification", "event"]
+            sensitive_patterns = [
+                "user",
+                "admin",
+                "payment",
+                "order",
+                "message",
+                "notification",
+                "event",
+            ]
             sensitive_subs = [
-                s for s in subscriptions
+                s
+                for s in subscriptions
                 if any(p in s.get("name", "").lower() for p in sensitive_patterns)
             ]
 
             if sensitive_subs:
-                findings.append(GraphQLFinding(
-                    vulnerability="Sensitive Subscriptions Exposed",
-                    severity="medium",
-                    description=f"{len(sensitive_subs)} subscriptions may expose sensitive real-time data",
-                    evidence=f"Sensitive subscriptions: {', '.join([s.get('name') for s in sensitive_subs])}",
-                    remediation="Implement subscription-level authorization and validate user access to subscribed resources",
-                    endpoint=self.endpoint,
-                    cwe="CWE-200"
-                ))
+                findings.append(
+                    GraphQLFinding(
+                        vulnerability="Sensitive Subscriptions Exposed",
+                        severity="medium",
+                        description=f"{len(sensitive_subs)} subscriptions may expose sensitive real-time data",
+                        evidence=f"Sensitive subscriptions: {', '.join([s.get('name') for s in sensitive_subs])}",
+                        remediation="Implement subscription-level authorization and validate user access to subscribed resources",
+                        endpoint=self.endpoint,
+                        cwe="CWE-200",
+                    )
+                )
 
         # Try to discover WebSocket endpoint
         ws_endpoints = [
@@ -735,15 +806,17 @@ class GraphQLScanner:
         if "error" not in response and response.get("status") == 200:
             data = response.get("data", {})
             if "errors" not in data or not data.get("errors"):
-                findings.append(GraphQLFinding(
-                    vulnerability="GraphQL Query Width Attack",
-                    severity="medium",
-                    description="Server accepts queries with 50+ fields at the same level",
-                    evidence="Wide query with 50 aliases was accepted",
-                    remediation="Implement query complexity analysis and limit total field count",
-                    endpoint=self.endpoint,
-                    cwe="CWE-400"
-                ))
+                findings.append(
+                    GraphQLFinding(
+                        vulnerability="GraphQL Query Width Attack",
+                        severity="medium",
+                        description="Server accepts queries with 50+ fields at the same level",
+                        evidence="Wide query with 50 aliases was accepted",
+                        remediation="Implement query complexity analysis and limit total field count",
+                        endpoint=self.endpoint,
+                        cwe="CWE-400",
+                    )
+                )
 
         # Test 2: Fragment spread complexity
         fragment_query = """
@@ -760,30 +833,38 @@ class GraphQLScanner:
         if "error" not in response and response.get("status") == 200:
             data = response.get("data", {})
             if isinstance(data, dict) and "data" in data:
-                findings.append(GraphQLFinding(
-                    vulnerability="GraphQL Fragment Complexity Attack",
-                    severity="medium",
-                    description="Server accepts exponential fragment spreads (Fragment Bomb)",
-                    evidence="Fragment query with exponential expansion was accepted",
-                    remediation="Limit fragment spread depth and detect exponential patterns",
-                    endpoint=self.endpoint,
-                    cwe="CWE-400"
-                ))
+                findings.append(
+                    GraphQLFinding(
+                        vulnerability="GraphQL Fragment Complexity Attack",
+                        severity="medium",
+                        description="Server accepts exponential fragment spreads (Fragment Bomb)",
+                        evidence="Fragment query with exponential expansion was accepted",
+                        remediation="Limit fragment spread depth and detect exponential patterns",
+                        endpoint=self.endpoint,
+                        cwe="CWE-400",
+                    )
+                )
 
         # Test 3: Directive abuse
-        directive_query = "query { __typename @skip(if: false) @include(if: true) " + " @skip(if: false)" * 20 + " }"
+        directive_query = (
+            "query { __typename @skip(if: false) @include(if: true) "
+            + " @skip(if: false)" * 20
+            + " }"
+        )
         response = await self._send_query(directive_query)
 
         if "error" not in response and response.get("status") == 200:
-            findings.append(GraphQLFinding(
-                vulnerability="GraphQL Directive Abuse",
-                severity="low",
-                description="Server accepts excessive directive usage",
-                evidence="Query with 20+ directives was accepted",
-                remediation="Limit directive count per field/query",
-                endpoint=self.endpoint,
-                cwe="CWE-400"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="GraphQL Directive Abuse",
+                    severity="low",
+                    description="Server accepts excessive directive usage",
+                    evidence="Query with 20+ directives was accepted",
+                    remediation="Limit directive count per field/query",
+                    endpoint=self.endpoint,
+                    cwe="CWE-400",
+                )
+            )
 
         return findings
 
@@ -804,7 +885,10 @@ class GraphQLScanner:
             ('query { user(id: "1") { id email password passwordHash } }', "direct user access"),
             ('query { user(id: "2") { id email } }', "other user access"),
             ('query { order(id: "1") { id userId total items } }', "order access"),
-            ('query { profile(userId: "1") { id privateData ssn } }', "profile with sensitive data"),
+            (
+                'query { profile(userId: "1") { id privateData ssn } }',
+                "profile with sensitive data",
+            ),
         ]
 
         for query, test_type in idor_queries:
@@ -814,23 +898,36 @@ class GraphQLScanner:
                 if isinstance(data, dict) and "data" in data:
                     result = data.get("data", {})
                     if result and any(v for v in result.values() if v):
-                        findings.append(GraphQLFinding(
-                            vulnerability="Potential IDOR via GraphQL",
-                            severity="high",
-                            description=f"May allow {test_type} without proper authorization",
-                            evidence=f"Query returned data: {query[:60]}...",
-                            remediation="Implement field-level authorization, verify user owns requested resource",
-                            endpoint=self.endpoint,
-                            cwe="CWE-639"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="Potential IDOR via GraphQL",
+                                severity="high",
+                                description=f"May allow {test_type} without proper authorization",
+                                evidence=f"Query returned data: {query[:60]}...",
+                                remediation="Implement field-level authorization, verify user owns requested resource",
+                                endpoint=self.endpoint,
+                                cwe="CWE-639",
+                            )
+                        )
                         break
 
         # Test 2: Check for sensitive field exposure in schema
         if self.schema:
             sensitive_field_patterns = [
-                "password", "passwordHash", "secret", "apiKey", "privateKey",
-                "ssn", "socialSecurity", "creditCard", "token", "session",
-                "salt", "hash", "internal", "debug"
+                "password",
+                "passwordHash",
+                "secret",
+                "apiKey",
+                "privateKey",
+                "ssn",
+                "socialSecurity",
+                "creditCard",
+                "token",
+                "session",
+                "salt",
+                "hash",
+                "internal",
+                "debug",
             ]
 
             exposed_sensitive = []
@@ -843,15 +940,17 @@ class GraphQLScanner:
                         exposed_sensitive.append(f"{type_def.get('name')}.{field_def.get('name')}")
 
             if exposed_sensitive:
-                findings.append(GraphQLFinding(
-                    vulnerability="Sensitive Fields Exposed in Schema",
-                    severity="high",
-                    description=f"Schema exposes {len(exposed_sensitive)} potentially sensitive fields",
-                    evidence=f"Fields: {', '.join(exposed_sensitive[:10])}",
-                    remediation="Remove sensitive fields from schema or implement strict field-level authorization",
-                    endpoint=self.endpoint,
-                    cwe="CWE-200"
-                ))
+                findings.append(
+                    GraphQLFinding(
+                        vulnerability="Sensitive Fields Exposed in Schema",
+                        severity="high",
+                        description=f"Schema exposes {len(exposed_sensitive)} potentially sensitive fields",
+                        evidence=f"Fields: {', '.join(exposed_sensitive[:10])}",
+                        remediation="Remove sensitive fields from schema or implement strict field-level authorization",
+                        endpoint=self.endpoint,
+                        cwe="CWE-200",
+                    )
+                )
 
         # Test 3: Compare authenticated vs unauthenticated responses
         if self.config.auth_token:
@@ -871,15 +970,17 @@ class GraphQLScanner:
                 auth_data = auth_response.get("data", {}).get("data", {})
 
                 if unauth_data and unauth_data == auth_data:
-                    findings.append(GraphQLFinding(
-                        vulnerability="Missing Authentication Check",
-                        severity="critical",
-                        description="Query returns same data authenticated and unauthenticated",
-                        evidence="'me' query accessible without authentication",
-                        remediation="Implement authentication middleware for sensitive queries",
-                        endpoint=self.endpoint,
-                        cwe="CWE-306"
-                    ))
+                    findings.append(
+                        GraphQLFinding(
+                            vulnerability="Missing Authentication Check",
+                            severity="critical",
+                            description="Query returns same data authenticated and unauthenticated",
+                            evidence="'me' query accessible without authentication",
+                            remediation="Implement authentication middleware for sensitive queries",
+                            endpoint=self.endpoint,
+                            cwe="CWE-306",
+                        )
+                    )
 
         return findings
 
@@ -909,41 +1010,46 @@ class GraphQLScanner:
         for type_def in custom_types:
             for field_def in type_def.get("fields", []) or []:
                 if field_def.get("isDeprecated"):
-                    deprecated_fields.append({
-                        "type": type_def.get("name"),
-                        "field": field_def.get("name"),
-                        "reason": field_def.get("deprecationReason", "No reason provided")
-                    })
+                    deprecated_fields.append(
+                        {
+                            "type": type_def.get("name"),
+                            "field": field_def.get("name"),
+                            "reason": field_def.get("deprecationReason", "No reason provided"),
+                        }
+                    )
 
         if deprecated_fields:
             deprecated_list = [f"{d['type']}.{d['field']}" for d in deprecated_fields[:5]]
-            findings.append(GraphQLFinding(
-                vulnerability="Deprecated Fields Still Accessible",
-                severity="low",
-                description=f"{len(deprecated_fields)} deprecated fields are still accessible",
-                evidence=f"Deprecated: {', '.join(deprecated_list)}",
-                remediation="Remove deprecated fields or ensure they're properly secured",
-                endpoint=self.endpoint,
-                cwe="CWE-1104"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="Deprecated Fields Still Accessible",
+                    severity="low",
+                    description=f"{len(deprecated_fields)} deprecated fields are still accessible",
+                    evidence=f"Deprecated: {', '.join(deprecated_list)}",
+                    remediation="Remove deprecated fields or ensure they're properly secured",
+                    endpoint=self.endpoint,
+                    cwe="CWE-1104",
+                )
+            )
 
         # Test 2: Check for debug/internal types
         debug_patterns = ["debug", "internal", "test", "dev", "staging", "admin", "system"]
         debug_types = [
-            t for t in custom_types
-            if any(p in t.get("name", "").lower() for p in debug_patterns)
+            t for t in custom_types if any(p in t.get("name", "").lower() for p in debug_patterns)
         ]
 
         if debug_types:
-            findings.append(GraphQLFinding(
-                vulnerability="Debug/Internal Types Exposed",
-                severity="medium",
-                description=f"{len(debug_types)} potentially debug/internal types found",
-                evidence=f"Types: {', '.join([t.get('name') for t in debug_types])}",
-                remediation="Remove debug types from production schema",
-                endpoint=self.endpoint,
-                cwe="CWE-489"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="Debug/Internal Types Exposed",
+                    severity="medium",
+                    description=f"{len(debug_types)} potentially debug/internal types found",
+                    evidence=f"Types: {', '.join([t.get('name') for t in debug_types])}",
+                    remediation="Remove debug types from production schema",
+                    endpoint=self.endpoint,
+                    cwe="CWE-489",
+                )
+            )
 
         # Test 3: Check for overly permissive input types
         for type_def in custom_types:
@@ -954,15 +1060,17 @@ class GraphQLScanner:
                     field_type = field_def.get("type", {})
                     type_name = field_type.get("name", "") or ""
                     if type_name.lower() in ["json", "jsonobject", "any", "object", "map"]:
-                        findings.append(GraphQLFinding(
-                            vulnerability="Overly Permissive Input Type",
-                            severity="medium",
-                            description=f"Input type {type_def.get('name')} has untyped JSON/Any field",
-                            evidence=f"Field {field_def.get('name')} accepts arbitrary JSON",
-                            remediation="Use strongly-typed input objects instead of JSON/Any types",
-                            endpoint=self.endpoint,
-                            cwe="CWE-20"
-                        ))
+                        findings.append(
+                            GraphQLFinding(
+                                vulnerability="Overly Permissive Input Type",
+                                severity="medium",
+                                description=f"Input type {type_def.get('name')} has untyped JSON/Any field",
+                                evidence=f"Field {field_def.get('name')} accepts arbitrary JSON",
+                                remediation="Use strongly-typed input objects instead of JSON/Any types",
+                                endpoint=self.endpoint,
+                                cwe="CWE-20",
+                            )
+                        )
                         break
 
         # Test 4: Check for dangerous union/interface patterns
@@ -976,35 +1084,37 @@ class GraphQLScanner:
                 has_admin = any("admin" in n for n in type_names)
 
                 if has_user and has_admin:
-                    findings.append(GraphQLFinding(
-                        vulnerability="Mixed Privilege Types in Union",
-                        severity="low",
-                        description=f"Union {type_def.get('name')} mixes user and admin types",
-                        evidence=f"Types: {', '.join([pt.get('name') for pt in possible_types])}",
-                        remediation="Separate user and admin types into different unions",
-                        endpoint=self.endpoint,
-                        cwe="CWE-269"
-                    ))
+                    findings.append(
+                        GraphQLFinding(
+                            vulnerability="Mixed Privilege Types in Union",
+                            severity="low",
+                            description=f"Union {type_def.get('name')} mixes user and admin types",
+                            evidence=f"Types: {', '.join([pt.get('name') for pt in possible_types])}",
+                            remediation="Separate user and admin types into different unions",
+                            endpoint=self.endpoint,
+                            cwe="CWE-269",
+                        )
+                    )
 
         # Test 5: Estimate schema complexity
-        total_fields = sum(
-            len(t.get("fields", []) or []) for t in custom_types
-        )
+        total_fields = sum(len(t.get("fields", []) or []) for t in custom_types)
         total_args = sum(
             sum(len(f.get("args", []) or []) for f in t.get("fields", []) or [])
             for t in custom_types
         )
 
         if total_fields > 500 or total_args > 1000:
-            findings.append(GraphQLFinding(
-                vulnerability="Large Attack Surface",
-                severity="info",
-                description=f"Schema has {total_fields} fields and {total_args} arguments",
-                evidence="Large schemas increase attack surface and maintenance burden",
-                remediation="Consider schema pruning and removing unused fields",
-                endpoint=self.endpoint,
-                cwe="CWE-1104"
-            ))
+            findings.append(
+                GraphQLFinding(
+                    vulnerability="Large Attack Surface",
+                    severity="info",
+                    description=f"Schema has {total_fields} fields and {total_args} arguments",
+                    evidence="Large schemas increase attack surface and maintenance burden",
+                    remediation="Consider schema pruning and removing unused fields",
+                    endpoint=self.endpoint,
+                    cwe="CWE-1104",
+                )
+            )
 
         return findings
 
@@ -1104,10 +1214,11 @@ class GraphQLScanner:
                 "custom_types": len(custom_types),
                 "total_fields": sum(len(t.get("fields", []) or []) for t in custom_types),
                 "deprecated_fields": sum(
-                    1 for t in custom_types
+                    1
+                    for t in custom_types
                     for f in (t.get("fields", []) or [])
                     if f.get("isDeprecated")
-                )
+                ),
             }
 
         # Deduplicate findings by vulnerability name
@@ -1135,9 +1246,9 @@ class GraphQLScanner:
                     "subscriptions": self.config.test_subscriptions,
                     "complexity": self.config.test_complexity,
                     "field_authorization": self.config.test_field_authorization,
-                    "schema_security": self.config.test_schema_security
-                }
-            }
+                    "schema_security": self.config.test_schema_security,
+                },
+            },
         )
 
 
@@ -1147,7 +1258,7 @@ async def scan_graphql(
     auth_token: Optional[str] = None,
     headers: Optional[Dict[str, str]] = None,
     full_scan: bool = True,
-    enhanced_tests: bool = True
+    enhanced_tests: bool = True,
 ) -> GraphQLScanResult:
     """
     Quick GraphQL security scan.
@@ -1176,7 +1287,7 @@ async def scan_graphql(
         test_subscriptions=enhanced_tests,
         test_complexity=enhanced_tests,
         test_field_authorization=enhanced_tests,
-        test_schema_security=enhanced_tests
+        test_schema_security=enhanced_tests,
     )
 
     scanner = GraphQLScanner(endpoint, config)
@@ -1194,11 +1305,7 @@ def analyze_graphql_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
     Returns:
         Analysis results with security recommendations
     """
-    analysis = {
-        "summary": {},
-        "concerns": [],
-        "recommendations": []
-    }
+    analysis = {"summary": {}, "concerns": [], "recommendations": []}
 
     types = schema.get("types", [])
     custom_types = [t for t in types if not t.get("name", "").startswith("__")]
@@ -1231,24 +1338,22 @@ def analyze_graphql_schema(schema: Dict[str, Any]) -> Dict[str, Any]:
         for f in t.get("fields", []) or []:
             name = f.get("name", "").lower()
             if any(p in name for p in sensitive_patterns):
-                analysis["concerns"].append({
-                    "type": "sensitive_field",
-                    "location": f"{t.get('name')}.{f.get('name')}",
-                    "severity": "high"
-                })
+                analysis["concerns"].append(
+                    {
+                        "type": "sensitive_field",
+                        "location": f"{t.get('name')}.{f.get('name')}",
+                        "severity": "high",
+                    }
+                )
 
     # Recommendations
     if analysis["summary"]["mutations"] > 0:
-        analysis["recommendations"].append(
-            "Ensure all mutations require authentication"
-        )
+        analysis["recommendations"].append("Ensure all mutations require authentication")
     if analysis["summary"]["subscriptions"] > 0:
         analysis["recommendations"].append(
             "Implement subscription-level authorization and rate limiting"
         )
     if len(analysis["concerns"]) > 0:
-        analysis["recommendations"].append(
-            "Review and restrict access to sensitive fields"
-        )
+        analysis["recommendations"].append("Review and restrict access to sensitive fields")
 
     return analysis

@@ -3,22 +3,22 @@ AIPT Browser Automation
 
 Playwright-based browser automation for security testing.
 """
+
 from __future__ import annotations
 
-import asyncio
 import base64
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 logger = logging.getLogger(__name__)
 
 # Playwright import with fallback
 try:
-    from playwright.async_api import async_playwright, Browser, Page, BrowserContext
+    from playwright.async_api import Browser, BrowserContext, Page, async_playwright
+
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
@@ -43,6 +43,7 @@ This is needed because Playwright controls real browsers for:
 @dataclass
 class BrowserConfig:
     """Browser automation configuration"""
+
     headless: bool = True
     browser_type: str = "chromium"  # chromium, firefox, webkit
     viewport_width: int = 1920
@@ -66,6 +67,7 @@ class BrowserConfig:
 @dataclass
 class PageResult:
     """Result of a page interaction"""
+
     url: str
     status_code: int = 0
     content: str = ""
@@ -188,7 +190,14 @@ class BrowserAutomation:
         self._page.on("request", self._on_request)
 
         if self.config.disable_javascript:
-            await self._context.route("**/*", lambda route: route.fulfill(body="") if route.request.resource_type == "script" else route.continue_())
+            await self._context.route(
+                "**/*",
+                lambda route: (
+                    route.fulfill(body="")
+                    if route.request.resource_type == "script"
+                    else route.continue_()
+                ),
+            )
 
         logger.info(f"Browser started: {self.config.browser_type}")
 
@@ -294,13 +303,13 @@ class BrowserAutomation:
                 # Try multiple selector strategies
                 selectors = [
                     f'[name="{field_name}"]',
-                    f'#{field_name}',
+                    f"#{field_name}",
                     f'[id="{field_name}"]',
                     f'[placeholder*="{field_name}" i]',
                 ]
 
                 if form_selector:
-                    selectors = [f'{form_selector} {s}' for s in selectors]
+                    selectors = [f"{form_selector} {s}" for s in selectors]
 
                 for selector in selectors:
                     try:
@@ -456,11 +465,13 @@ class BrowserAutomation:
 
     def _on_request(self, request) -> None:
         """Handle network requests"""
-        self._network_requests.append({
-            "url": request.url,
-            "method": request.method,
-            "resource_type": request.resource_type,
-        })
+        self._network_requests.append(
+            {
+                "url": request.url,
+                "method": request.method,
+                "resource_type": request.resource_type,
+            }
+        )
 
     @property
     def page(self) -> Optional[Page]:

@@ -20,19 +20,20 @@ Usage:
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, List
+from typing import List, Optional
 
 
 @dataclass
 class ADCredentials:
     """Active Directory credentials."""
+
     username: str = ""
     password: str = ""
     domain: str = ""
 
     # Alternative auth methods
     ntlm_hash: str = ""  # Format: LMHASH:NTHASH or just NTHASH
-    aes_key: str = ""    # Kerberos AES key
+    aes_key: str = ""  # Kerberos AES key
     ccache_file: str = ""  # Kerberos ticket cache
 
     # Kerberos options
@@ -61,9 +62,9 @@ class ADCredentials:
     def has_credentials(self) -> bool:
         """Check if valid credentials are available."""
         return bool(
-            (self.username and self.password) or
-            (self.username and self.ntlm_hash) or
-            self.ccache_file
+            (self.username and self.password)
+            or (self.username and self.ntlm_hash)
+            or self.ccache_file
         )
 
     def is_hash_auth(self) -> bool:
@@ -78,6 +79,7 @@ class ADCredentials:
 @dataclass
 class ADConfig:
     """Active Directory scanning configuration."""
+
     # Domain settings
     domain: str = ""
     dc_ip: str = ""
@@ -147,9 +149,7 @@ class ADConfig:
     def is_configured(self) -> bool:
         """Check if AD is properly configured."""
         return bool(
-            self.domain and
-            (self.dc_ip or self.dc_hostname) and
-            self.credentials.has_credentials()
+            self.domain and (self.dc_ip or self.dc_hostname) and self.credentials.has_credentials()
         )
 
 
@@ -159,7 +159,7 @@ def get_ad_config(
     username: Optional[str] = None,
     password: Optional[str] = None,
     ntlm_hash: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> ADConfig:
     """
     Create ADConfig from parameters and environment.
@@ -179,7 +179,7 @@ def get_ad_config(
         username=username or os.getenv("AD_USERNAME", ""),
         password=password or os.getenv("AD_PASSWORD", ""),
         domain=domain or os.getenv("AD_DOMAIN", ""),
-        ntlm_hash=ntlm_hash or os.getenv("AD_NTLM_HASH", "")
+        ntlm_hash=ntlm_hash or os.getenv("AD_NTLM_HASH", ""),
     )
 
     return ADConfig(
@@ -191,7 +191,7 @@ def get_ad_config(
         timeout=kwargs.get("timeout", 30),
         run_kerberoast=kwargs.get("run_kerberoast", False),
         run_asreproast=kwargs.get("run_asreproast", False),
-        run_bloodhound=kwargs.get("run_bloodhound", False)
+        run_bloodhound=kwargs.get("run_bloodhound", False),
     )
 
 
@@ -205,11 +205,7 @@ def validate_ad_config(config: ADConfig) -> dict:
     Returns:
         Dict with validation results
     """
-    results = {
-        "valid": False,
-        "errors": [],
-        "warnings": []
-    }
+    results = {"valid": False, "errors": [], "warnings": []}
 
     # Check required fields
     if not config.domain:

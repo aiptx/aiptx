@@ -15,62 +15,115 @@ Advanced analysis capabilities for penetration testing:
 - Cross-target correlation
 """
 
-from aipt_v2.intelligence.cve_aipt import CVEIntelligence, CVEInfo
-from aipt_v2.intelligence.rag import ToolRAG, ToolMatch
-
-# Vulnerability Chaining - Connect related findings into attack paths
-from aipt_v2.intelligence.chaining import (
-    VulnerabilityChainer,
-    AttackChain,
-    ChainLink,
+# AD Attack Planning - LLM-guided Active Directory attack path selection
+from aipt_v2.intelligence.ad_attack_planner import (
+    ADAttackPlanner,
+    ADEnvironment,
+)
+from aipt_v2.intelligence.ad_attack_planner import AttackObjective as ADAttackObjective
+from aipt_v2.intelligence.ad_attack_planner import AttackPlan as ADAttackPlan
+from aipt_v2.intelligence.ad_attack_planner import AttackStep as ADAttackStep
+from aipt_v2.intelligence.ad_attack_planner import (
+    plan_ad_attack,
 )
 
-# AI-Powered Triage - Prioritize by real-world impact
-from aipt_v2.intelligence.triage import (
-    AITriage,
-    TriageResult,
-    RiskAssessment,
+# Real-Time Adaptation
+from aipt_v2.intelligence.adaptation import (
+    AdaptationAction,
+    AdaptationState,
+    AdaptationStrategy,
+    DefenseDetection,
+    DefenseType,
+    RealTimeAdapter,
+    RequestResult,
 )
 
-# Scope Enforcement - Stay within authorization
-from aipt_v2.intelligence.scope import (
-    ScopeEnforcer,
-    ScopeConfig,
-    ScopeViolation,
-    ScopeDecision,
-    create_scope_from_target,
+# Extended Attack Patterns - 50+ additional patterns for modern attacks
+from aipt_v2.intelligence.attack_patterns import (
+    ATTACK_TOOL_RECOMMENDATIONS,
+    EXTENDED_CHAIN_PATTERNS,
+    EXTENDED_TECHNIQUE_MAP,
+    get_all_patterns,
+    get_pattern_statistics,
+    get_patterns_by_impact,
+    get_patterns_by_keywords,
+    get_patterns_by_tactic,
+    get_recommended_tools,
+    get_technique_for_attack,
 )
 
 # Authentication - Test protected resources
 from aipt_v2.intelligence.auth import (
-    AuthenticationManager,
     AuthCredentials,
-    AuthSession,
-    AuthMethod,
     AuthenticationError,
-    create_bearer_auth,
-    create_basic_auth,
+    AuthenticationManager,
+    AuthMethod,
+    AuthSession,
     create_api_key_auth,
+    create_basic_auth,
+    create_bearer_auth,
     create_cookie_auth,
     create_form_login_auth,
     create_oauth2_auth,
 )
 
-# LLM-Powered Tool Selection
-from aipt_v2.intelligence.llm_tool_selector import (
-    LLMToolSelector,
-    ToolSelection,
-    ToolSelectionResult,
-    AVAILABLE_TOOLS,
+# Beast Mode - Business Logic Analysis
+from aipt_v2.intelligence.business_logic_analyzer import (
+    BL_CATEGORIES,
+    BusinessLogicAnalyzer,
+    BusinessLogicFlaw,
+    analyze_business_logic,
 )
 
-# LLM-Powered Vulnerability Analysis
-from aipt_v2.intelligence.llm_analyzer import (
-    LLMVulnerabilityAnalyzer,
-    LLMAnalysisResult,
-    DiscoveredChain,
-    ImplicitVulnerability,
-    ExploitationAssessment,
+# Chain Analysis - Advanced attack path detection with MITRE ATT&CK
+from aipt_v2.intelligence.chain_analysis import CHAIN_PATTERNS as ADVANCED_CHAIN_PATTERNS
+from aipt_v2.intelligence.chain_analysis import (
+    TECHNIQUE_MAP,
+)
+from aipt_v2.intelligence.chain_analysis import AttackChain as AdvancedAttackChain
+from aipt_v2.intelligence.chain_analysis import (
+    ChainAnalyzer,
+    ChainConfidence,
+    ChainImpact,
+    ChainNode,
+    ChainPattern,
+    MitreTactic,
+    MitreTechnique,
+    analyze_findings,
+    get_top_attack_paths,
+)
+
+# Beast Mode - Novel Chain Discovery
+from aipt_v2.intelligence.chain_discoverer import (
+    CHAIN_PATTERNS,
+    ChainDiscoverer,
+    NovelChain,
+    discover_attack_chains,
+)
+
+# Vulnerability Chaining - Connect related findings into attack paths
+from aipt_v2.intelligence.chaining import (
+    AttackChain,
+    ChainLink,
+    VulnerabilityChainer,
+)
+
+# Cross-Target Correlation
+from aipt_v2.intelligence.correlation import (
+    CommonVulnerability,
+    CrossTargetAnalyzer,
+    PortfolioReport,
+    SystemicIssue,
+    TargetSummary,
+)
+from aipt_v2.intelligence.cve_aipt import CVEInfo, CVEIntelligence
+
+# Security Knowledge Graph
+from aipt_v2.intelligence.knowledge_graph import (
+    AttackPath,
+    GraphEdge,
+    GraphNode,
+    SecurityKnowledgeGraph,
 )
 
 # Feedback Learning System
@@ -81,117 +134,67 @@ from aipt_v2.intelligence.learning import (
     TechniqueStats,
 )
 
-# Adaptive Payload Generation
-from aipt_v2.intelligence.payload_generator import (
-    AdaptivePayloadGenerator,
-    GeneratedPayload,
-    PayloadGenerationResult,
-    PAYLOAD_TEMPLATES,
-    WAF_BYPASS_TECHNIQUES,
-)
-
-# Security Knowledge Graph
-from aipt_v2.intelligence.knowledge_graph import (
-    SecurityKnowledgeGraph,
-    GraphNode,
-    GraphEdge,
-    AttackPath,
-)
-
-# Real-Time Adaptation
-from aipt_v2.intelligence.adaptation import (
-    RealTimeAdapter,
-    DefenseType,
-    AdaptationAction,
-    DefenseDetection,
-    AdaptationStrategy,
-    RequestResult,
-    AdaptationState,
-)
-
-# Cross-Target Correlation
-from aipt_v2.intelligence.correlation import (
-    CrossTargetAnalyzer,
-    TargetSummary,
-    CommonVulnerability,
-    SystemicIssue,
-    PortfolioReport,
+# LLM-Powered Vulnerability Analysis
+from aipt_v2.intelligence.llm_analyzer import (
+    DiscoveredChain,
+    ExploitationAssessment,
+    ImplicitVulnerability,
+    LLMAnalysisResult,
+    LLMVulnerabilityAnalyzer,
 )
 
 # Beast Mode - LLM Attack Planning
 from aipt_v2.intelligence.llm_attack_planner import (
-    LLMAttackPlanner,
+    ATTACK_TEMPLATES,
+    AttackObjective,
+    AttackPhase,
     AttackPlan,
     AttackStep,
-    AttackPhase,
-    AttackObjective,
-    ATTACK_TEMPLATES,
-)
-
-# Beast Mode - Novel Chain Discovery
-from aipt_v2.intelligence.chain_discoverer import (
-    ChainDiscoverer,
-    NovelChain,
-    CHAIN_PATTERNS,
-    discover_attack_chains,
-)
-
-# Beast Mode - Business Logic Analysis
-from aipt_v2.intelligence.business_logic_analyzer import (
-    BusinessLogicAnalyzer,
-    BusinessLogicFlaw,
-    BL_CATEGORIES,
-    analyze_business_logic,
+    LLMAttackPlanner,
 )
 
 # LLM Crawler Analyzer - Intelligent attack surface analysis
 from aipt_v2.intelligence.llm_crawler_analyzer import (
-    LLMCrawlerAnalyzer,
-    CrawlerAnalysisResult,
-    ParameterTarget,
-    FormTarget,
     AttackChainRecommendation,
     AttackType,
+    CrawlerAnalysisResult,
+    FormTarget,
+    LLMCrawlerAnalyzer,
+    ParameterTarget,
 )
 
-# Chain Analysis - Advanced attack path detection with MITRE ATT&CK
-from aipt_v2.intelligence.chain_analysis import (
-    ChainAnalyzer,
-    AttackChain as AdvancedAttackChain,
-    ChainNode,
-    ChainPattern,
-    ChainConfidence,
-    ChainImpact,
-    MitreTactic,
-    MitreTechnique,
-    CHAIN_PATTERNS as ADVANCED_CHAIN_PATTERNS,
-    TECHNIQUE_MAP,
-    analyze_findings,
-    get_top_attack_paths,
+# LLM-Powered Tool Selection
+from aipt_v2.intelligence.llm_tool_selector import (
+    AVAILABLE_TOOLS,
+    LLMToolSelector,
+    ToolSelection,
+    ToolSelectionResult,
 )
 
-# Extended Attack Patterns - 50+ additional patterns for modern attacks
-from aipt_v2.intelligence.attack_patterns import (
-    EXTENDED_CHAIN_PATTERNS,
-    EXTENDED_TECHNIQUE_MAP,
-    ATTACK_TOOL_RECOMMENDATIONS,
-    get_all_patterns,
-    get_patterns_by_tactic,
-    get_patterns_by_impact,
-    get_patterns_by_keywords,
-    get_recommended_tools,
-    get_technique_for_attack,
-    get_pattern_statistics,
+# Adaptive Payload Generation
+from aipt_v2.intelligence.payload_generator import (
+    PAYLOAD_TEMPLATES,
+    WAF_BYPASS_TECHNIQUES,
+    AdaptivePayloadGenerator,
+    GeneratedPayload,
+    PayloadGenerationResult,
+)
+from aipt_v2.intelligence.rag import ToolMatch, ToolRAG
+
+# Scope Enforcement - Stay within authorization
+from aipt_v2.intelligence.scope import (
+    ScopeConfig,
+    ScopeDecision,
+    ScopeEnforcer,
+    ScopeViolation,
+    create_scope_from_target,
 )
 
-# AD Attack Planning - LLM-guided Active Directory attack path selection
-from aipt_v2.intelligence.ad_attack_planner import (
-    ADAttackPlanner,
-    AttackPlan as ADAttackPlan,
-    AttackStep as ADAttackStep,
-    ADEnvironment,
-    AttackObjective as ADAttackObjective,
-    plan_ad_attack,
+# AI-Powered Triage - Prioritize by real-world impact
+from aipt_v2.intelligence.triage import (
+    AITriage,
+    RiskAssessment,
+    TriageResult,
 )
 
 __all__ = [

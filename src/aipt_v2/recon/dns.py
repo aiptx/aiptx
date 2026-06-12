@@ -3,6 +3,7 @@ AIPT DNS Analyzer
 
 DNS enumeration and analysis.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -10,15 +11,15 @@ import logging
 import socket
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 # dns.resolver import with fallback
 try:
+    import dns.query
     import dns.resolver
     import dns.zone
-    import dns.query
+
     DNS_AVAILABLE = True
 except ImportError:
     DNS_AVAILABLE = False
@@ -28,6 +29,7 @@ except ImportError:
 @dataclass
 class DNSRecord:
     """DNS record"""
+
     record_type: str  # A, AAAA, MX, NS, TXT, CNAME, etc.
     name: str
     value: str
@@ -47,6 +49,7 @@ class DNSRecord:
 @dataclass
 class DNSResult:
     """DNS analysis results"""
+
     domain: str
     records: list[DNSRecord] = field(default_factory=list)
     nameservers: list[str] = field(default_factory=list)
@@ -161,8 +164,7 @@ class DNSAnalyzer:
             # Run in thread pool for async
             loop = asyncio.get_event_loop()
             answers = await loop.run_in_executor(
-                None,
-                lambda: self._resolver.resolve(domain, record_type)
+                None, lambda: self._resolver.resolve(domain, record_type)
             )
 
             for rdata in answers:
@@ -221,8 +223,7 @@ class DNSAnalyzer:
                 # Run in thread pool
                 loop = asyncio.get_event_loop()
                 zone = await loop.run_in_executor(
-                    None,
-                    lambda: dns.zone.from_xfr(dns.query.xfr(ns_ip, domain, timeout=5))
+                    None, lambda: dns.zone.from_xfr(dns.query.xfr(ns_ip, domain, timeout=5))
                 )
 
                 if zone:

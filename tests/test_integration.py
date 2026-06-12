@@ -4,12 +4,11 @@ AIPT v2 Integration Tests
 Comprehensive integration tests to verify all Phase 2 components work together.
 """
 
-import asyncio
 import os
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+
+import pytest
 
 # Ensure aipt_v2 is importable (package is in src/aipt_v2/)
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
@@ -21,59 +20,60 @@ class TestImports:
     def test_import_llm_module(self):
         """Test LLM module imports."""
         from aipt_v2.llm import LLM, LLMConfig
-        from aipt_v2.llm.memory import MemoryCompressor
-        from aipt_v2.llm.utils import parse_tool_invocations, clean_content
+
         assert LLM is not None
         assert LLMConfig is not None
 
     def test_import_agents_module(self):
         """Test agents module imports."""
-        from aipt_v2.agents import PTT, Task, Phase, TaskStatus, PhaseType, AgentState
-        from aipt_v2.agents.base import BaseAgent
+        from aipt_v2.agents import PTT, AgentState
+
         assert PTT is not None
         assert AgentState is not None
 
     def test_import_aiptx_agent(self):
         """Test AIPTxAgent import."""
         from aipt_v2.agents.AIPTxAgent import AIPTxAgent
+
         assert AIPTxAgent is not None
 
     def test_import_intelligence_module(self):
         """Test intelligence module imports."""
-        from aipt_v2.intelligence import CVEIntelligence, CVEInfo, ToolRAG, ToolMatch
+        from aipt_v2.intelligence import CVEIntelligence, ToolRAG
+
         assert CVEIntelligence is not None
         assert ToolRAG is not None
 
     def test_import_tools_module(self):
         """Test tools module imports."""
-        from aipt_v2.tools import OutputParser, Finding, process_tool_invocations
+        from aipt_v2.tools import OutputParser
+
         assert OutputParser is not None
 
     def test_import_runtime_module(self):
         """Test runtime module imports."""
-        from aipt_v2.runtime import get_runtime, AbstractRuntime
+        from aipt_v2.runtime import get_runtime
+
         assert get_runtime is not None
 
     def test_import_database_module(self):
         """Test database module imports."""
         from aipt_v2.database.repository import Repository
-        from aipt_v2.database.models import Project, Session, Finding, Task
+
         assert Repository is not None
 
     def test_import_telemetry_module(self):
         """Test telemetry module imports."""
-        from aipt_v2.telemetry import Tracer, get_global_tracer, set_global_tracer
+        from aipt_v2.telemetry import Tracer
+
         assert Tracer is not None
 
     def test_import_interface_module(self):
         """Test interface module imports."""
         from aipt_v2.interface.utils import (
             get_severity_color,
-            build_final_stats_text,
-            build_live_stats_text,
-            generate_run_name,
-            infer_target_type,
         )
+
         assert get_severity_color is not None
 
 
@@ -299,10 +299,7 @@ class TestTracer:
 
         tracer = Tracer("test_scan")
         tracer.report_vulnerability(
-            "VULN001",
-            "SQL Injection",
-            "Found SQL injection in login form",
-            "high"
+            "VULN001", "SQL Injection", "Found SQL injection in login form", "high"
         )
 
         assert len(tracer.vulnerability_reports) == 1
@@ -313,12 +310,7 @@ class TestTracer:
         from aipt_v2.telemetry import Tracer
 
         tracer = Tracer("test_scan")
-        tracer.update_llm_stats(
-            "agent_1",
-            input_tokens=100,
-            output_tokens=50,
-            cost=0.01
-        )
+        tracer.update_llm_stats("agent_1", input_tokens=100, output_tokens=50, cost=0.01)
 
         stats = tracer.get_total_llm_stats()
         assert stats["total"]["input_tokens"] == 100
@@ -356,12 +348,14 @@ class TestToolRAG:
         rag = ToolRAG(lazy_load=True)
 
         # Add a test tool
-        rag.add_tool({
-            "name": "test_tool",
-            "description": "A test tool",
-            "phase": "recon",
-            "keywords": ["test"]
-        })
+        rag.add_tool(
+            {
+                "name": "test_tool",
+                "description": "A test tool",
+                "phase": "recon",
+                "keywords": ["test"],
+            }
+        )
 
         tool = rag.get_tool_by_name("test_tool")
         assert tool is not None
@@ -392,12 +386,7 @@ class TestCVEIntelligence:
 
         cve = CVEIntelligence(cache_dir=str(tmp_path))
 
-        score = cve.calculate_priority(
-            cvss=9.8,
-            epss=0.5,
-            trending=True,
-            has_poc=True
-        )
+        score = cve.calculate_priority(cvss=9.8, epss=0.5, trending=True, has_poc=True)
 
         # Score should be between 0 and 1
         assert 0 <= score <= 1
@@ -454,11 +443,7 @@ class TestDatabase:
         repo = Repository(f"sqlite:///{db_path}")
 
         # Create
-        project = repo.create_project(
-            name="Test Project",
-            target="example.com",
-            description="Test"
-        )
+        project = repo.create_project(name="Test Project", target="example.com", description="Test")
         assert project.id is not None
 
         # Read
@@ -512,7 +497,9 @@ class TestInterfaceUtils:
         """Test run name generation."""
         from aipt_v2.interface.utils import generate_run_name
 
-        name = generate_run_name([{"original": "example.com", "type": "web_application", "details": {}}])
+        name = generate_run_name(
+            [{"original": "example.com", "type": "web_application", "details": {}}]
+        )
         assert name is not None
         assert len(name) > 0
 
@@ -569,15 +556,13 @@ class TestAsyncOperations:
     @pytest.mark.asyncio
     async def test_tool_processing(self):
         """Test tool invocation processing."""
-        from aipt_v2.tools.tool_processing import process_tool_invocations
         from aipt_v2.agents.state import AgentState
+        from aipt_v2.tools.tool_processing import process_tool_invocations
 
         state = AgentState()
         conversation = []
 
-        actions = [
-            {"name": "execute_command", "arguments": {"command": "echo test"}}
-        ]
+        actions = [{"name": "execute_command", "arguments": {"command": "echo test"}}]
 
         result = await process_tool_invocations(actions, conversation, state)
         assert isinstance(result, bool)

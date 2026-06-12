@@ -24,23 +24,21 @@ from __future__ import annotations
 
 import asyncio
 import json
-import os
 import uuid
-import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional, Dict, Tuple, List, Any
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import asyncssh
+
     ASYNCSSH_AVAILABLE = True
 except ImportError:
     ASYNCSSH_AVAILABLE = False
 
-from aipt_v2.utils.logging import logger
 from aipt_v2.config import get_config
-
+from aipt_v2.utils.logging import logger
 
 # =============================================================================
 # Tool Definitions - Security tools to install on VPS
@@ -75,33 +73,78 @@ def get_tool_check_timeout(tool_name: str) -> int:
 VPS_TOOLS = {
     # Phase 1: RECON
     "recon": {
-        "subfinder": {"install": "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest", "check": "subfinder -version"},
-        "assetfinder": {"install": "go install -v github.com/tomnomnom/assetfinder@latest", "check": "assetfinder -h 2>&1 | head -1"},
-        "amass": {"install": "go install -v github.com/owasp-amass/amass/v4/...@master", "check": "amass -version"},
-        "httpx": {"install": "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest", "check": "httpx -version"},
+        "subfinder": {
+            "install": "go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
+            "check": "subfinder -version",
+        },
+        "assetfinder": {
+            "install": "go install -v github.com/tomnomnom/assetfinder@latest",
+            "check": "assetfinder -h 2>&1 | head -1",
+        },
+        "amass": {
+            "install": "go install -v github.com/owasp-amass/amass/v4/...@master",
+            "check": "amass -version",
+        },
+        "httpx": {
+            "install": "go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest",
+            "check": "httpx -version",
+        },
         "nmap": {"install": "apt-get install -y nmap", "check": "nmap --version | head -1"},
-        "waybackurls": {"install": "go install -v github.com/tomnomnom/waybackurls@latest", "check": "waybackurls -h 2>&1 | head -1"},
-        "theHarvester": {"install": "pip3 install theHarvester", "check": "theHarvester -h 2>&1 | head -1"},
+        "waybackurls": {
+            "install": "go install -v github.com/tomnomnom/waybackurls@latest",
+            "check": "waybackurls -h 2>&1 | head -1",
+        },
+        "theHarvester": {
+            "install": "pip3 install theHarvester",
+            "check": "theHarvester -h 2>&1 | head -1",
+        },
         "dnsrecon": {"install": "pip3 install dnsrecon", "check": "dnsrecon -h 2>&1 | head -1"},
         "wafw00f": {"install": "pip3 install wafw00f", "check": "wafw00f -h 2>&1 | head -1"},
         "whatweb": {"install": "apt-get install -y whatweb", "check": "whatweb --version"},
-        "dnsx": {"install": "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest", "check": "dnsx -version"},
-        "katana": {"install": "go install -v github.com/projectdiscovery/katana/cmd/katana@latest", "check": "katana -version"},
+        "dnsx": {
+            "install": "go install -v github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
+            "check": "dnsx -version",
+        },
+        "katana": {
+            "install": "go install -v github.com/projectdiscovery/katana/cmd/katana@latest",
+            "check": "katana -version",
+        },
     },
     # Phase 2: SCAN
     "scan": {
-        "nuclei": {"install": "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates", "check": "nuclei -version"},
+        "nuclei": {
+            "install": "go install -v github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest && nuclei -update-templates",
+            "check": "nuclei -version",
+        },
         "nikto": {"install": "apt-get install -y nikto", "check": "nikto -Version"},
         "wpscan": {"install": "gem install wpscan", "check": "wpscan --version"},
         "ffuf": {"install": "go install -v github.com/ffuf/ffuf/v2@latest", "check": "ffuf -V"},
-        "gobuster": {"install": "go install -v github.com/OJ/gobuster/v3@latest", "check": "gobuster version"},
+        "gobuster": {
+            "install": "go install -v github.com/OJ/gobuster/v3@latest",
+            "check": "gobuster version",
+        },
         "dirsearch": {"install": "pip3 install dirsearch", "check": "dirsearch -h 2>&1 | head -1"},
         "sslscan": {"install": "apt-get install -y sslscan", "check": "sslscan --version"},
-        "testssl": {"install": "git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl", "check": "test -f /opt/testssl/testssl.sh && echo 'installed'"},
-        "gitleaks": {"install": "go install github.com/gitleaks/gitleaks/v8@latest", "check": "gitleaks version"},
-        "trufflehog": {"install": "pip3 install trufflehog", "check": "trufflehog --version 2>&1 | head -1"},
-        "trivy": {"install": "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin", "check": "trivy --version"},
-        "feroxbuster": {"install": "curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash -s /usr/local/bin", "check": "feroxbuster --version"},
+        "testssl": {
+            "install": "git clone --depth 1 https://github.com/drwetter/testssl.sh.git /opt/testssl",
+            "check": "test -f /opt/testssl/testssl.sh && echo 'installed'",
+        },
+        "gitleaks": {
+            "install": "go install github.com/gitleaks/gitleaks/v8@latest",
+            "check": "gitleaks version",
+        },
+        "trufflehog": {
+            "install": "pip3 install trufflehog",
+            "check": "trufflehog --version 2>&1 | head -1",
+        },
+        "trivy": {
+            "install": "curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin",
+            "check": "trivy --version",
+        },
+        "feroxbuster": {
+            "install": "curl -sL https://raw.githubusercontent.com/epi052/feroxbuster/main/install-nix.sh | bash -s /usr/local/bin",
+            "check": "feroxbuster --version",
+        },
     },
     # Phase 3: EXPLOIT
     "exploit": {
@@ -109,27 +152,48 @@ VPS_TOOLS = {
         "commix": {"install": "pip3 install commix", "check": "commix --version 2>&1 | head -1"},
         "xsstrike": {"install": "pip3 install xsstrike", "check": "xsstrike -h 2>&1 | head -1"},
         "hydra": {"install": "apt-get install -y hydra", "check": "hydra -h 2>&1 | head -1"},
-        "searchsploit": {"install": "git clone https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/", "check": "searchsploit -h 2>&1 | head -1"},
-        "metasploit": {"install": "curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall && chmod 755 /tmp/msfinstall && /tmp/msfinstall", "check": "msfconsole -v"},
+        "searchsploit": {
+            "install": "git clone https://gitlab.com/exploit-database/exploitdb.git /opt/exploitdb && ln -sf /opt/exploitdb/searchsploit /usr/local/bin/",
+            "check": "searchsploit -h 2>&1 | head -1",
+        },
+        "metasploit": {
+            "install": "curl https://raw.githubusercontent.com/rapid7/metasploit-omnibus/master/config/templates/metasploit-framework-wrappers/msfupdate.erb > /tmp/msfinstall && chmod 755 /tmp/msfinstall && /tmp/msfinstall",
+            "check": "msfconsole -v",
+        },
         "john": {"install": "apt-get install -y john", "check": "john --version"},
         "hashcat": {"install": "apt-get install -y hashcat", "check": "hashcat --version"},
     },
     # Phase 4: POST-EXPLOIT
     "post_exploit": {
-        "linpeas": {"install": "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o /opt/linpeas.sh && chmod +x /opt/linpeas.sh", "check": "test -f /opt/linpeas.sh && echo 'installed'"},
-        "pspy": {"install": "curl -sL https://github.com/DominicBreuker/pspy/releases/latest/download/pspy64 -o /opt/pspy64 && chmod +x /opt/pspy64", "check": "test -f /opt/pspy64 && echo 'installed'"},
+        "linpeas": {
+            "install": "curl -sL https://github.com/carlospolop/PEASS-ng/releases/latest/download/linpeas.sh -o /opt/linpeas.sh && chmod +x /opt/linpeas.sh",
+            "check": "test -f /opt/linpeas.sh && echo 'installed'",
+        },
+        "pspy": {
+            "install": "curl -sL https://github.com/DominicBreuker/pspy/releases/latest/download/pspy64 -o /opt/pspy64 && chmod +x /opt/pspy64",
+            "check": "test -f /opt/pspy64 && echo 'installed'",
+        },
     },
     # API Security
     "api": {
         "arjun": {"install": "pip3 install arjun", "check": "arjun -h 2>&1 | head -1"},
-        "kiterunner": {"install": "go install github.com/assetnote/kiterunner/cmd/kr@latest", "check": "kr -h 2>&1 | head -1"},
+        "kiterunner": {
+            "install": "go install github.com/assetnote/kiterunner/cmd/kr@latest",
+            "check": "kr -h 2>&1 | head -1",
+        },
         "jwt_tool": {"install": "pip3 install jwt_tool", "check": "jwt_tool -h 2>&1 | head -1"},
     },
     # Network
     "network": {
         "masscan": {"install": "apt-get install -y masscan", "check": "masscan --version"},
-        "rustscan": {"install": "cargo install rustscan || (wget https://github.com/RustScan/RustScan/releases/latest/download/rustscan_2.1.1_amd64.deb && dpkg -i rustscan_2.1.1_amd64.deb)", "check": "rustscan --version"},
-        "naabu": {"install": "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest", "check": "naabu -version"},
+        "rustscan": {
+            "install": "cargo install rustscan || (wget https://github.com/RustScan/RustScan/releases/latest/download/rustscan_2.1.1_amd64.deb && dpkg -i rustscan_2.1.1_amd64.deb)",
+            "check": "rustscan --version",
+        },
+        "naabu": {
+            "install": "go install -v github.com/projectdiscovery/naabu/v2/cmd/naabu@latest",
+            "check": "naabu -version",
+        },
     },
 }
 
@@ -137,6 +201,7 @@ VPS_TOOLS = {
 @dataclass
 class VPSSandboxInfo:
     """Information about a VPS execution context."""
+
     sandbox_id: str
     created_at: datetime = field(default_factory=datetime.now)
     working_dir: str = "/tmp/aiptx"
@@ -266,16 +331,9 @@ class VPSRuntime:
             await self.connect()
 
         try:
-            result = await asyncio.wait_for(
-                self._conn.run(command, check=check),
-                timeout=timeout
-            )
+            result = await asyncio.wait_for(self._conn.run(command, check=check), timeout=timeout)
 
-            return (
-                result.stdout or "",
-                result.stderr or "",
-                result.exit_status or 0
-            )
+            return (result.stdout or "", result.stderr or "", result.exit_status or 0)
 
         except asyncio.TimeoutError:
             logger.warning("Command timed out on VPS", command=command[:50], timeout=timeout)
@@ -286,7 +344,9 @@ class VPSRuntime:
 
     async def check_tool_installed(self, tool_name: str) -> bool:
         """Check if a tool is installed on VPS."""
-        stdout, stderr, code = await self._run_command(f"which {tool_name} 2>/dev/null || command -v {tool_name} 2>/dev/null")
+        stdout, stderr, code = await self._run_command(
+            f"which {tool_name} 2>/dev/null || command -v {tool_name} 2>/dev/null"
+        )
         return code == 0 and len(stdout.strip()) > 0
 
     async def get_installed_tools(self) -> Dict[str, bool]:
@@ -339,8 +399,7 @@ class VPSRuntime:
         # Install
         logger.info(f"Installing tool: {tool_name}")
         stdout, stderr, code = await self._run_command(
-            f"sudo {install_cmd}",
-            timeout=600  # 10 minute timeout for installation
+            f"sudo {install_cmd}", timeout=600  # 10 minute timeout for installation
         )
 
         if code != 0:
@@ -411,7 +470,7 @@ class VPSRuntime:
         results = {}
 
         for i in range(0, len(tools_to_install), parallel):
-            batch = tools_to_install[i:i + parallel]
+            batch = tools_to_install[i : i + parallel]
             tasks = [self.install_tool(tool) for tool in batch]
             batch_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -431,11 +490,7 @@ class VPSRuntime:
 
         return results
 
-    async def create_sandbox(
-        self,
-        working_dir: Optional[str] = None,
-        **kwargs
-    ) -> VPSSandboxInfo:
+    async def create_sandbox(self, working_dir: Optional[str] = None, **kwargs) -> VPSSandboxInfo:
         """
         Create a VPS execution context (sandbox).
 
@@ -525,10 +580,7 @@ class VPSRuntime:
                 "exit_code": code,
                 "timestamp": datetime.now().isoformat(),
             }
-            await self._run_command(
-                f"echo '{json.dumps(output_data)}' > {output_file}",
-                timeout=10
-            )
+            await self._run_command(f"echo '{json.dumps(output_data)}' > {output_file}", timeout=10)
 
         return stdout, stderr, code
 
@@ -637,8 +689,15 @@ class VPSRuntime:
                 tools_to_run = ["nmap", "httpx", "nuclei", "ffuf", "nikto", "sslscan"]
             else:  # full
                 tools_to_run = [
-                    "subfinder", "httpx", "nmap", "nuclei", "nikto",
-                    "ffuf", "sslscan", "whatweb", "wafw00f"
+                    "subfinder",
+                    "httpx",
+                    "nmap",
+                    "nuclei",
+                    "nikto",
+                    "ffuf",
+                    "sslscan",
+                    "whatweb",
+                    "wafw00f",
                 ]
 
             # Run each tool
@@ -647,11 +706,7 @@ class VPSRuntime:
 
                 cmd = self._get_tool_command(tool, target, sandbox.results_dir)
                 if cmd:
-                    stdout, stderr, code = await self.execute(
-                        sandbox.sandbox_id,
-                        cmd,
-                        timeout=600
-                    )
+                    stdout, stderr, code = await self.execute(sandbox.sandbox_id, cmd, timeout=600)
 
                     results["tool_outputs"][tool] = {
                         "stdout": stdout,
@@ -703,6 +758,7 @@ class VPSRuntime:
 # VPS Setup Script Generator
 # =============================================================================
 
+
 def generate_vps_setup_script(
     categories: Optional[List[str]] = None,
     include_wordlists: bool = True,
@@ -717,7 +773,7 @@ def generate_vps_setup_script(
     Returns:
         Bash script as string
     """
-    script = '''#!/bin/bash
+    script = """#!/bin/bash
 # =============================================================================
 # AIPTX VPS Setup Script
 # =============================================================================
@@ -762,7 +818,7 @@ EOF
 # =============================================================================
 # Security Tools
 # =============================================================================
-'''
+"""
 
     cats = categories or list(VPS_TOOLS.keys())
 
@@ -780,7 +836,7 @@ EOF
             script += f"{install_cmd} || echo '    [!] Failed to install {tool_name}'\n"
 
     if include_wordlists:
-        script += '''
+        script += """
 # =============================================================================
 # Wordlists
 # =============================================================================
@@ -796,9 +852,9 @@ fi
 ln -sf /usr/share/wordlists/SecLists/Discovery/Web-Content/common.txt /usr/share/wordlists/common.txt
 ln -sf /usr/share/wordlists/SecLists/Discovery/Web-Content/directory-list-2.3-medium.txt /usr/share/wordlists/medium.txt
 ln -sf /usr/share/wordlists/SecLists/Passwords/Common-Credentials/10k-most-common.txt /usr/share/wordlists/passwords.txt
-'''
+"""
 
-    script += '''
+    script += """
 # =============================================================================
 # AIPTX Results Directory
 # =============================================================================
@@ -819,7 +875,7 @@ echo "  which nmap nuclei subfinder httpx ffuf"
 echo ""
 echo "Ready for AIPTX connection."
 echo "=============================================="
-'''
+"""
 
     return script
 

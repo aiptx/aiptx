@@ -14,16 +14,16 @@ Rule Categories:
 
 from aipt_v2.sast.rules.base import (
     Rule,
-    RuleMatch,
-    RuleSeverity,
     RuleCategory,
+    RuleMatch,
     RuleSet,
+    RuleSeverity,
 )
-from aipt_v2.sast.rules.secrets import SecretDetectionRules
-from aipt_v2.sast.rules.python_rules import PythonSecurityRules
-from aipt_v2.sast.rules.javascript_rules import JavaScriptSecurityRules
-from aipt_v2.sast.rules.java_rules import JavaSecurityRules
 from aipt_v2.sast.rules.go_rules import GoSecurityRules
+from aipt_v2.sast.rules.java_rules import JavaSecurityRules
+from aipt_v2.sast.rules.javascript_rules import JavaScriptSecurityRules
+from aipt_v2.sast.rules.python_rules import PythonSecurityRules
+from aipt_v2.sast.rules.secrets import SecretDetectionRules
 
 __all__ = [
     # Base

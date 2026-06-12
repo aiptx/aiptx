@@ -17,19 +17,17 @@ import asyncio
 import logging
 import os
 import re
-from pathlib import Path
 from typing import Any, Optional
 
-from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
-    AgentCapability,
-    AgentConfig,
-)
 from aipt_v2.agents.shared.finding_repository import (
+    Evidence,
     Finding,
     FindingSeverity,
     VulnerabilityType,
-    Evidence,
+)
+from aipt_v2.agents.specialized.base_specialized import (
+    AgentCapability,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,17 +37,17 @@ logger = logging.getLogger(__name__)
 SECURITY_RULES = {
     "python": {
         "sql_injection": [
-            (r'execute\s*\([^)]*\+[^)]*\)', "SQL string concatenation"),
-            (r'execute\s*\([^)]*%[^)]*\)', "SQL format string"),
+            (r"execute\s*\([^)]*\+[^)]*\)", "SQL string concatenation"),
+            (r"execute\s*\([^)]*%[^)]*\)", "SQL format string"),
             (r'execute\s*\(f["\'][^"\']*{[^}]*}', "SQL f-string interpolation"),
-            (r'cursor\.execute\s*\([^,]+\+', "Cursor execute with concatenation"),
+            (r"cursor\.execute\s*\([^,]+\+", "Cursor execute with concatenation"),
         ],
         "command_injection": [
-            (r'os\.system\s*\([^)]*\+', "os.system with concatenation"),
-            (r'subprocess\.call\s*\([^)]*shell\s*=\s*True', "subprocess with shell=True"),
-            (r'os\.popen\s*\([^)]*\+', "os.popen with concatenation"),
-            (r'eval\s*\([^)]*\)', "eval() usage"),
-            (r'exec\s*\([^)]*\)', "exec() usage"),
+            (r"os\.system\s*\([^)]*\+", "os.system with concatenation"),
+            (r"subprocess\.call\s*\([^)]*shell\s*=\s*True", "subprocess with shell=True"),
+            (r"os\.popen\s*\([^)]*\+", "os.popen with concatenation"),
+            (r"eval\s*\([^)]*\)", "eval() usage"),
+            (r"exec\s*\([^)]*\)", "exec() usage"),
         ],
         "secrets": [
             (r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']{8,}["\']', "Hardcoded password"),
@@ -59,93 +57,96 @@ SECURITY_RULES = {
             (r'(?i)aws_secret_access_key\s*=\s*["\'][A-Za-z0-9/+=]{40}["\']', "AWS Secret Key"),
         ],
         "xss": [
-            (r'render_template_string\s*\([^)]*\+', "Template string injection"),
-            (r'Markup\s*\([^)]*\+', "Unsafe Markup construction"),
+            (r"render_template_string\s*\([^)]*\+", "Template string injection"),
+            (r"Markup\s*\([^)]*\+", "Unsafe Markup construction"),
         ],
         "deserialization": [
-            (r'pickle\.loads?\s*\(', "Unsafe pickle deserialization"),
-            (r'yaml\.load\s*\([^)]*\)', "Unsafe YAML load (use safe_load)"),
-            (r'marshal\.loads?\s*\(', "Unsafe marshal deserialization"),
+            (r"pickle\.loads?\s*\(", "Unsafe pickle deserialization"),
+            (r"yaml\.load\s*\([^)]*\)", "Unsafe YAML load (use safe_load)"),
+            (r"marshal\.loads?\s*\(", "Unsafe marshal deserialization"),
         ],
         "path_traversal": [
-            (r'open\s*\([^)]*\+[^)]*\)', "File open with concatenation"),
-            (r'send_file\s*\([^)]*\+', "send_file with user input"),
+            (r"open\s*\([^)]*\+[^)]*\)", "File open with concatenation"),
+            (r"send_file\s*\([^)]*\+", "send_file with user input"),
         ],
     },
     "javascript": {
         "sql_injection": [
-            (r'query\s*\([^)]*\+[^)]*\)', "SQL string concatenation"),
-            (r'execute\s*\(`[^`]*\$\{', "SQL template literal injection"),
+            (r"query\s*\([^)]*\+[^)]*\)", "SQL string concatenation"),
+            (r"execute\s*\(`[^`]*\$\{", "SQL template literal injection"),
         ],
         "command_injection": [
-            (r'child_process\.exec\s*\([^)]*\+', "exec with concatenation"),
-            (r'child_process\.execSync\s*\([^)]*\+', "execSync with concatenation"),
-            (r'eval\s*\([^)]*\)', "eval() usage"),
+            (r"child_process\.exec\s*\([^)]*\+", "exec with concatenation"),
+            (r"child_process\.execSync\s*\([^)]*\+", "execSync with concatenation"),
+            (r"eval\s*\([^)]*\)", "eval() usage"),
         ],
         "secrets": [
             (r'(?i)(password|passwd|pwd)\s*[:=]\s*["\'][^"\']{8,}["\']', "Hardcoded password"),
-            (r'(?i)(api_key|apikey|api_secret)\s*[:=]\s*["\'][^"\']{16,}["\']', "Hardcoded API key"),
+            (
+                r'(?i)(api_key|apikey|api_secret)\s*[:=]\s*["\'][^"\']{16,}["\']',
+                "Hardcoded API key",
+            ),
             (r'(?i)(secret|token)\s*[:=]\s*["\'][^"\']{16,}["\']', "Hardcoded secret/token"),
         ],
         "xss": [
-            (r'innerHTML\s*=\s*[^;]*\+', "innerHTML with concatenation"),
-            (r'document\.write\s*\([^)]*\+', "document.write with concatenation"),
-            (r'\.html\s*\([^)]*\+', "jQuery .html() with concatenation"),
-            (r'dangerouslySetInnerHTML', "React dangerouslySetInnerHTML"),
+            (r"innerHTML\s*=\s*[^;]*\+", "innerHTML with concatenation"),
+            (r"document\.write\s*\([^)]*\+", "document.write with concatenation"),
+            (r"\.html\s*\([^)]*\+", "jQuery .html() with concatenation"),
+            (r"dangerouslySetInnerHTML", "React dangerouslySetInnerHTML"),
         ],
         "deserialization": [
-            (r'JSON\.parse\s*\(', "JSON.parse (verify input source)"),
-            (r'serialize\s*\(', "serialize usage"),
+            (r"JSON\.parse\s*\(", "JSON.parse (verify input source)"),
+            (r"serialize\s*\(", "serialize usage"),
         ],
         "path_traversal": [
-            (r'path\.join\s*\([^)]*req\.', "Path join with user input"),
-            (r'fs\.readFile\s*\([^)]*\+', "readFile with concatenation"),
+            (r"path\.join\s*\([^)]*req\.", "Path join with user input"),
+            (r"fs\.readFile\s*\([^)]*\+", "readFile with concatenation"),
         ],
         "prototype_pollution": [
-            (r'Object\.assign\s*\([^)]*,\s*req\.', "Object.assign with user input"),
-            (r'\[req\.[^\]]+\]\s*=', "Dynamic property assignment"),
+            (r"Object\.assign\s*\([^)]*,\s*req\.", "Object.assign with user input"),
+            (r"\[req\.[^\]]+\]\s*=", "Dynamic property assignment"),
         ],
     },
     "java": {
         "sql_injection": [
-            (r'Statement\.execute\s*\([^)]*\+', "Statement with concatenation"),
-            (r'createQuery\s*\([^)]*\+', "HQL/JPQL with concatenation"),
+            (r"Statement\.execute\s*\([^)]*\+", "Statement with concatenation"),
+            (r"createQuery\s*\([^)]*\+", "HQL/JPQL with concatenation"),
         ],
         "command_injection": [
-            (r'Runtime\.getRuntime\(\)\.exec\s*\([^)]*\+', "Runtime.exec with concatenation"),
-            (r'ProcessBuilder\s*\([^)]*\+', "ProcessBuilder with concatenation"),
+            (r"Runtime\.getRuntime\(\)\.exec\s*\([^)]*\+", "Runtime.exec with concatenation"),
+            (r"ProcessBuilder\s*\([^)]*\+", "ProcessBuilder with concatenation"),
         ],
         "secrets": [
             (r'(?i)(password|passwd)\s*=\s*"[^"]{8,}"', "Hardcoded password"),
             (r'(?i)(apiKey|api_key)\s*=\s*"[^"]{16,}"', "Hardcoded API key"),
         ],
         "xxe": [
-            (r'DocumentBuilderFactory\.newInstance\(\)', "XXE: Check if DTD disabled"),
-            (r'SAXParserFactory\.newInstance\(\)', "XXE: Check if DTD disabled"),
-            (r'XMLInputFactory\.newInstance\(\)', "XXE: Check if DTD disabled"),
+            (r"DocumentBuilderFactory\.newInstance\(\)", "XXE: Check if DTD disabled"),
+            (r"SAXParserFactory\.newInstance\(\)", "XXE: Check if DTD disabled"),
+            (r"XMLInputFactory\.newInstance\(\)", "XXE: Check if DTD disabled"),
         ],
         "deserialization": [
-            (r'ObjectInputStream\s*\(', "Unsafe deserialization"),
-            (r'readObject\s*\(\)', "readObject usage"),
+            (r"ObjectInputStream\s*\(", "Unsafe deserialization"),
+            (r"readObject\s*\(\)", "readObject usage"),
         ],
     },
     "go": {
         "sql_injection": [
-            (r'db\.Query\s*\([^)]*\+', "SQL with concatenation"),
-            (r'db\.Exec\s*\([^)]*\+', "SQL exec with concatenation"),
-            (r'fmt\.Sprintf\s*\([^)]*SELECT', "SQL in Sprintf"),
+            (r"db\.Query\s*\([^)]*\+", "SQL with concatenation"),
+            (r"db\.Exec\s*\([^)]*\+", "SQL exec with concatenation"),
+            (r"fmt\.Sprintf\s*\([^)]*SELECT", "SQL in Sprintf"),
         ],
         "command_injection": [
-            (r'exec\.Command\s*\([^)]*\+', "exec.Command with concatenation"),
-            (r'os\.exec\s*\([^)]*\+', "os.exec with concatenation"),
+            (r"exec\.Command\s*\([^)]*\+", "exec.Command with concatenation"),
+            (r"os\.exec\s*\([^)]*\+", "os.exec with concatenation"),
         ],
         "secrets": [
             (r'(?i)(password|passwd)\s*:?=\s*"[^"]{8,}"', "Hardcoded password"),
             (r'(?i)(apiKey|api_key)\s*:?=\s*"[^"]{16,}"', "Hardcoded API key"),
         ],
         "path_traversal": [
-            (r'filepath\.Join\s*\([^)]*,\s*r\.', "filepath.Join with user input"),
-            (r'os\.Open\s*\([^)]*\+', "os.Open with concatenation"),
+            (r"filepath\.Join\s*\([^)]*,\s*r\.", "filepath.Join with user input"),
+            (r"os\.Open\s*\([^)]*\+", "os.Open with concatenation"),
         ],
     },
 }
@@ -218,10 +219,14 @@ class SASTAgent(SpecializedAgent):
             results["files_scanned"] = self._total_files
 
             # Detect languages
-            results["languages_detected"] = list(set(
-                lang for lang, exts in LANGUAGE_EXTENSIONS.items()
-                for f in files if any(f.endswith(ext) for ext in exts)
-            ))
+            results["languages_detected"] = list(
+                set(
+                    lang
+                    for lang, exts in LANGUAGE_EXTENSIONS.items()
+                    for f in files
+                    if any(f.endswith(ext) for ext in exts)
+                )
+            )
 
             # Phase 2: Scan for secrets (30%)
             self.check_cancelled()
@@ -280,7 +285,12 @@ class SASTAgent(SpecializedAgent):
         try:
             temp_dir = tempfile.mkdtemp(prefix="aiptx_sast_")
             process = await asyncio.create_subprocess_exec(
-                "git", "clone", "--depth", "1", url, temp_dir,
+                "git",
+                "clone",
+                "--depth",
+                "1",
+                url,
+                temp_dir,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -299,10 +309,19 @@ class SASTAgent(SpecializedAgent):
 
         for root, _, filenames in os.walk(self.source_path):
             # Skip common non-source directories
-            if any(skip in root for skip in [
-                "node_modules", ".git", "__pycache__", "venv",
-                ".venv", "dist", "build", "vendor"
-            ]):
+            if any(
+                skip in root
+                for skip in [
+                    "node_modules",
+                    ".git",
+                    "__pycache__",
+                    "venv",
+                    ".venv",
+                    "dist",
+                    "build",
+                    "vendor",
+                ]
+            ):
                 continue
 
             for filename in filenames:
@@ -331,15 +350,13 @@ class SASTAgent(SpecializedAgent):
                         if re.search(pattern, line):
                             # Mask the actual secret in the finding
                             masked_line = re.sub(
-                                r'(["\'])[^"\']{8,}(["\'])',
-                                r'\1***REDACTED***\2',
-                                line
+                                r'(["\'])[^"\']{8,}(["\'])', r"\1***REDACTED***\2", line
                             )
 
                             finding = Finding(
                                 vuln_type=VulnerabilityType.HARDCODED_SECRETS,
                                 title=f"Hardcoded secret: {description}",
-                                description=f"Found potential hardcoded secret in source code",
+                                description="Found potential hardcoded secret in source code",
                                 severity=FindingSeverity.HIGH,
                                 target=self.target,
                                 file_path=self._relative_path(file_path),
@@ -355,10 +372,7 @@ class SASTAgent(SpecializedAgent):
             # Update progress
             if i % 10 == 0:
                 progress = 10 + (i / len(files)) * 20
-                await self.update_progress(
-                    f"Scanning for secrets ({i}/{len(files)})",
-                    progress
-                )
+                await self.update_progress(f"Scanning for secrets ({i}/{len(files)})", progress)
 
     async def _scan_for_injections(self, files: list[str]) -> None:
         """Scan files for injection vulnerabilities."""
@@ -405,10 +419,7 @@ class SASTAgent(SpecializedAgent):
             # Update progress
             if i % 10 == 0:
                 progress = 30 + (i / len(files)) * 20
-                await self.update_progress(
-                    f"Scanning for injections ({i}/{len(files)})",
-                    progress
-                )
+                await self.update_progress(f"Scanning for injections ({i}/{len(files)})", progress)
 
     async def _scan_dependencies(self) -> None:
         """Scan for vulnerable dependencies."""
@@ -438,12 +449,11 @@ class SASTAgent(SpecializedAgent):
             # Try to use safety for Python
             if language == "python" and file_path.endswith("requirements.txt"):
                 from aipt_v2.execution.tool_registry import get_registry
+
                 registry = get_registry()
 
                 if await registry.is_tool_available("safety"):
-                    result = await self._run_tool("safety", [
-                        "check", "-r", file_path, "--json"
-                    ])
+                    result = await self._run_tool("safety", ["check", "-r", file_path, "--json"])
                     if result.get("output"):
                         await self._parse_safety_output(result["output"])
 
@@ -451,12 +461,11 @@ class SASTAgent(SpecializedAgent):
             elif language == "javascript" and file_path.endswith("package.json"):
                 dir_path = os.path.dirname(file_path)
                 from aipt_v2.execution.tool_registry import get_registry
+
                 registry = get_registry()
 
                 if await registry.is_tool_available("npm"):
-                    result = await self._run_tool("npm", [
-                        "audit", "--json"
-                    ], cwd=dir_path)
+                    result = await self._run_tool("npm", ["audit", "--json"], cwd=dir_path)
                     if result.get("output"):
                         await self._parse_npm_audit(result["output"])
 
@@ -467,25 +476,23 @@ class SASTAgent(SpecializedAgent):
         """Run external SAST tools like Semgrep, Bandit."""
         try:
             from aipt_v2.execution.tool_registry import get_registry
+
             registry = get_registry()
 
             # Try Semgrep
             if await registry.is_tool_available("semgrep"):
-                result = await self._run_tool("semgrep", [
-                    "--config", "auto",
-                    "--json",
-                    self.source_path
-                ], timeout=300)
+                result = await self._run_tool(
+                    "semgrep", ["--config", "auto", "--json", self.source_path], timeout=300
+                )
                 if result.get("output"):
                     await self._parse_semgrep_output(result["output"])
 
             # Try Bandit for Python
             python_files = [f for f in await self._discover_files() if f.endswith(".py")]
             if python_files and await registry.is_tool_available("bandit"):
-                result = await self._run_tool("bandit", [
-                    "-r", self.source_path,
-                    "-f", "json"
-                ], timeout=180)
+                result = await self._run_tool(
+                    "bandit", ["-r", self.source_path, "-f", "json"], timeout=180
+                )
                 if result.get("output"):
                     await self._parse_bandit_output(result["output"])
 
@@ -495,6 +502,7 @@ class SASTAgent(SpecializedAgent):
     async def _parse_safety_output(self, output: str) -> None:
         """Parse safety check output."""
         import json
+
         try:
             data = json.loads(output)
             for vuln in data:
@@ -515,13 +523,16 @@ class SASTAgent(SpecializedAgent):
     async def _parse_npm_audit(self, output: str) -> None:
         """Parse npm audit output."""
         import json
+
         try:
             data = json.loads(output)
             for vuln_id, vuln in data.get("vulnerabilities", {}).items():
-                severity_map = {"critical": FindingSeverity.CRITICAL,
-                               "high": FindingSeverity.HIGH,
-                               "moderate": FindingSeverity.MEDIUM,
-                               "low": FindingSeverity.LOW}
+                severity_map = {
+                    "critical": FindingSeverity.CRITICAL,
+                    "high": FindingSeverity.HIGH,
+                    "moderate": FindingSeverity.MEDIUM,
+                    "low": FindingSeverity.LOW,
+                }
                 finding = Finding(
                     vuln_type=VulnerabilityType.MISCONFIGURATION,
                     title=f"Vulnerable dependency: {vuln_id}",
@@ -538,19 +549,21 @@ class SASTAgent(SpecializedAgent):
     async def _parse_semgrep_output(self, output: str) -> None:
         """Parse Semgrep output."""
         import json
+
         try:
             data = json.loads(output)
             for result in data.get("results", []):
-                severity_map = {"ERROR": FindingSeverity.HIGH,
-                               "WARNING": FindingSeverity.MEDIUM,
-                               "INFO": FindingSeverity.LOW}
+                severity_map = {
+                    "ERROR": FindingSeverity.HIGH,
+                    "WARNING": FindingSeverity.MEDIUM,
+                    "INFO": FindingSeverity.LOW,
+                }
                 finding = Finding(
                     vuln_type=VulnerabilityType.OTHER,
                     title=result.get("check_id", "Unknown rule"),
                     description=result.get("extra", {}).get("message", ""),
                     severity=severity_map.get(
-                        result.get("extra", {}).get("severity", "INFO"),
-                        FindingSeverity.INFO
+                        result.get("extra", {}).get("severity", "INFO"), FindingSeverity.INFO
                     ),
                     target=self.target,
                     file_path=result.get("path"),
@@ -564,19 +577,21 @@ class SASTAgent(SpecializedAgent):
     async def _parse_bandit_output(self, output: str) -> None:
         """Parse Bandit output."""
         import json
+
         try:
             data = json.loads(output)
             for result in data.get("results", []):
-                severity_map = {"HIGH": FindingSeverity.HIGH,
-                               "MEDIUM": FindingSeverity.MEDIUM,
-                               "LOW": FindingSeverity.LOW}
+                severity_map = {
+                    "HIGH": FindingSeverity.HIGH,
+                    "MEDIUM": FindingSeverity.MEDIUM,
+                    "LOW": FindingSeverity.LOW,
+                }
                 finding = Finding(
                     vuln_type=VulnerabilityType.OTHER,
                     title=result.get("test_name", "Unknown"),
                     description=result.get("issue_text", ""),
                     severity=severity_map.get(
-                        result.get("issue_severity", "LOW"),
-                        FindingSeverity.LOW
+                        result.get("issue_severity", "LOW"), FindingSeverity.LOW
                     ),
                     target=self.target,
                     file_path=result.get("filename"),
@@ -592,6 +607,7 @@ class SASTAgent(SpecializedAgent):
         """Read file content asynchronously."""
         try:
             import aiofiles
+
             async with aiofiles.open(file_path, "r", encoding="utf-8", errors="ignore") as f:
                 return await f.read()
         except Exception:
@@ -607,6 +623,7 @@ class SASTAgent(SpecializedAgent):
         """Run a SAST tool."""
         try:
             from aipt_v2.execution.tool_runner import ToolRunner
+
             runner = ToolRunner()
             return await runner.run(
                 tool_name=tool_name,
@@ -628,7 +645,7 @@ class SASTAgent(SpecializedAgent):
     def _relative_path(self, file_path: str) -> str:
         """Convert to relative path."""
         if self.source_path and file_path.startswith(self.source_path):
-            return file_path[len(self.source_path):].lstrip("/")
+            return file_path[len(self.source_path) :].lstrip("/")
         return file_path
 
     def _map_category_to_vuln_type(self, category: str) -> VulnerabilityType:

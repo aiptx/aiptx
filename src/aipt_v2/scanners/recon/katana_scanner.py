@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 from urllib.parse import urlparse
 
-from ..base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from ..base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -47,9 +47,21 @@ class KatanaConfig:
     timeout: int = 10
 
     # Filtering
-    extension_filter: List[str] = field(default_factory=lambda: [
-        "css", "png", "jpg", "jpeg", "gif", "svg", "ico", "woff", "woff2", "ttf", "eot"
-    ])
+    extension_filter: List[str] = field(
+        default_factory=lambda: [
+            "css",
+            "png",
+            "jpg",
+            "jpeg",
+            "gif",
+            "svg",
+            "ico",
+            "woff",
+            "woff2",
+            "ttf",
+            "eot",
+        ]
+    )
     match_regex: Optional[str] = None
     filter_regex: Optional[str] = None
 
@@ -85,12 +97,7 @@ class KatanaScanner(BaseScanner):
         """Check if katana is installed."""
         return shutil.which("katana") is not None
 
-    async def scan(
-        self,
-        target: str,
-        targets_file: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, targets_file: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run katana crawl.
 
@@ -118,8 +125,7 @@ class KatanaScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -303,7 +309,9 @@ class KatanaScanner(BaseScanner):
         return ScanFinding(
             title=f"Endpoint: {parsed.path[:60]}",
             severity=severity,
-            description="; ".join(description_parts) if description_parts else "Discovered endpoint",
+            description=(
+                "; ".join(description_parts) if description_parts else "Discovered endpoint"
+            ),
             url=url,
             host=parsed.netloc,
             evidence=json.dumps(data, indent=2)[:500] if data else url,

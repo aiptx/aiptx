@@ -20,7 +20,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 # Imports that are restricted in sandbox mode
@@ -159,7 +158,7 @@ class PythonSandbox:
             allowed.update(NETWORK_IMPORTS)
         allowed.update(self.config.allowed_imports)
 
-        wrapper = '''
+        wrapper = """
 import sys
 import io
 
@@ -187,7 +186,7 @@ print("=== STDOUT ===")
 print(_stdout.getvalue())
 print("=== STDERR ===")
 print(_stderr.getvalue())
-'''
+"""
         # Indent user code
         indented_code = "\n".join(f"    {line}" for line in code.split("\n"))
         return wrapper.format(code=indented_code)

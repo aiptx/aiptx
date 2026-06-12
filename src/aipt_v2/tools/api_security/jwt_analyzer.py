@@ -21,16 +21,16 @@ Usage:
 """
 
 import base64
-import hashlib
 import hmac
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 try:
     import jwt as pyjwt
+
     HAS_PYJWT = True
 except ImportError:
     HAS_PYJWT = False
@@ -39,6 +39,7 @@ except ImportError:
 @dataclass
 class JWTFinding:
     """JWT security finding."""
+
     vulnerability: str
     severity: str  # critical, high, medium, low, info
     description: str
@@ -57,6 +58,7 @@ class JWTFinding:
 @dataclass
 class JWTInfo:
     """Parsed JWT information."""
+
     raw: str
     header: Dict[str, Any]
     payload: Dict[str, Any]
@@ -79,30 +81,61 @@ class JWTAnalyzer:
 
     # Common weak secrets for brute-force
     COMMON_SECRETS = [
-        "secret", "password", "123456", "admin", "key",
-        "jwt_secret", "jwt-secret", "token", "auth",
-        "supersecret", "changeme", "default", "test",
-        "development", "dev", "production", "prod",
-        "your-256-bit-secret", "your-secret-key",
-        "HS256-secret", "secret123", "secretkey",
-        "application-secret", "app-secret", "api-secret"
+        "secret",
+        "password",
+        "123456",
+        "admin",
+        "key",
+        "jwt_secret",
+        "jwt-secret",
+        "token",
+        "auth",
+        "supersecret",
+        "changeme",
+        "default",
+        "test",
+        "development",
+        "dev",
+        "production",
+        "prod",
+        "your-256-bit-secret",
+        "your-secret-key",
+        "HS256-secret",
+        "secret123",
+        "secretkey",
+        "application-secret",
+        "app-secret",
+        "api-secret",
     ]
 
     # Extended wordlist
     EXTENDED_SECRETS = COMMON_SECRETS + [
         # Company-style secrets
-        "company-secret", "my-secret-key", "very-secret",
+        "company-secret",
+        "my-secret-key",
+        "very-secret",
         # Lazy admin secrets
-        "password123", "admin123", "root", "toor",
+        "password123",
+        "admin123",
+        "root",
+        "toor",
         # Framework defaults
-        "django-insecure", "flask-secret", "express-secret",
-        "rails-secret", "laravel-secret",
+        "django-insecure",
+        "flask-secret",
+        "express-secret",
+        "rails-secret",
+        "laravel-secret",
         # Environment-style
-        "JWT_SECRET", "API_SECRET", "AUTH_SECRET",
+        "JWT_SECRET",
+        "API_SECRET",
+        "AUTH_SECRET",
         # UUID-like
         "00000000-0000-0000-0000-000000000000",
         # Simple variations
-        "Secret", "SECRET", "Password", "PASSWORD"
+        "Secret",
+        "SECRET",
+        "Password",
+        "PASSWORD",
     ]
 
     def __init__(self, extended_wordlist: bool = False):
@@ -176,7 +209,7 @@ class JWTAnalyzer:
                 algorithm=header.get("alg", "unknown"),
                 expiration=expiration,
                 issued_at=issued_at,
-                not_before=not_before
+                not_before=not_before,
             )
 
         except Exception:
@@ -203,15 +236,17 @@ class JWTAnalyzer:
             variant_b64 = self._base64_encode(json.dumps(variant_header).encode())
             none_tokens.append(f"{variant_b64}.{payload_b64}.")
 
-        findings.append(JWTFinding(
-            vulnerability="None Algorithm Attack Vector",
-            severity="critical",
-            description="JWT library may accept 'none' algorithm, allowing signature bypass",
-            evidence=f"Generated attack tokens with none algorithm",
-            attack_vector=none_tokens[0],
-            remediation="Explicitly verify algorithm in JWT validation. Never accept 'none'.",
-            cwe="CWE-327"
-        ))
+        findings.append(
+            JWTFinding(
+                vulnerability="None Algorithm Attack Vector",
+                severity="critical",
+                description="JWT library may accept 'none' algorithm, allowing signature bypass",
+                evidence="Generated attack tokens with none algorithm",
+                attack_vector=none_tokens[0],
+                remediation="Explicitly verify algorithm in JWT validation. Never accept 'none'.",
+                cwe="CWE-327",
+            )
+        )
 
         return findings
 
@@ -221,17 +256,19 @@ class JWTAnalyzer:
 
         # If token uses RS256/RS384/RS512, could be vulnerable to HS256 confusion
         if jwt_info.algorithm in ["RS256", "RS384", "RS512", "PS256", "PS384", "PS512"]:
-            findings.append(JWTFinding(
-                vulnerability="Potential Algorithm Confusion",
-                severity="high",
-                description=f"Token uses {jwt_info.algorithm}. If the public key is known, "
-                           "attacker may forge tokens by switching to HS256 and using public key as secret.",
-                evidence=f"Current algorithm: {jwt_info.algorithm}",
-                attack_vector="Switch alg to HS256 and sign with public key",
-                remediation="Explicitly specify expected algorithm during verification. "
-                           "Never allow algorithm to be changed by the token itself.",
-                cwe="CWE-327"
-            ))
+            findings.append(
+                JWTFinding(
+                    vulnerability="Potential Algorithm Confusion",
+                    severity="high",
+                    description=f"Token uses {jwt_info.algorithm}. If the public key is known, "
+                    "attacker may forge tokens by switching to HS256 and using public key as secret.",
+                    evidence=f"Current algorithm: {jwt_info.algorithm}",
+                    attack_vector="Switch alg to HS256 and sign with public key",
+                    remediation="Explicitly specify expected algorithm during verification. "
+                    "Never allow algorithm to be changed by the token itself.",
+                    cwe="CWE-327",
+                )
+            )
 
         return findings
 
@@ -243,11 +280,7 @@ class JWTAnalyzer:
             return findings
 
         # Get algorithm details
-        alg_map = {
-            "HS256": ("sha256", 256),
-            "HS384": ("sha384", 384),
-            "HS512": ("sha512", 512)
-        }
+        alg_map = {"HS256": ("sha256", 256), "HS384": ("sha384", 384), "HS512": ("sha512", 512)}
 
         hash_alg, _ = alg_map.get(jwt_info.algorithm, ("sha256", 256))
 
@@ -260,11 +293,7 @@ class JWTAnalyzer:
         cracked_secret = None
         for secret in self.secrets:
             # Compute signature
-            sig = hmac.new(
-                secret.encode(),
-                message,
-                hash_alg
-            ).digest()
+            sig = hmac.new(secret.encode(), message, hash_alg).digest()
             computed_sig = self._base64_encode(sig)
 
             if computed_sig == target_sig:
@@ -272,25 +301,29 @@ class JWTAnalyzer:
                 break
 
         if cracked_secret:
-            findings.append(JWTFinding(
-                vulnerability="Weak JWT Secret",
-                severity="critical",
-                description=f"JWT secret is a common/weak value: '{cracked_secret}'",
-                evidence=f"Secret cracked: {cracked_secret}",
-                attack_vector=f"Use secret '{cracked_secret}' to forge tokens",
-                remediation="Use a strong, random secret (minimum 256 bits). "
-                           "Consider using asymmetric algorithms (RS256).",
-                cwe="CWE-521"
-            ))
+            findings.append(
+                JWTFinding(
+                    vulnerability="Weak JWT Secret",
+                    severity="critical",
+                    description=f"JWT secret is a common/weak value: '{cracked_secret}'",
+                    evidence=f"Secret cracked: {cracked_secret}",
+                    attack_vector=f"Use secret '{cracked_secret}' to forge tokens",
+                    remediation="Use a strong, random secret (minimum 256 bits). "
+                    "Consider using asymmetric algorithms (RS256).",
+                    cwe="CWE-521",
+                )
+            )
         else:
-            findings.append(JWTFinding(
-                vulnerability="JWT Secret Brute-Force Test",
-                severity="info",
-                description=f"Tested {len(self.secrets)} common secrets - none matched",
-                evidence="Secret not in common wordlist",
-                remediation="Continue using a strong secret",
-                cwe=""
-            ))
+            findings.append(
+                JWTFinding(
+                    vulnerability="JWT Secret Brute-Force Test",
+                    severity="info",
+                    description=f"Tested {len(self.secrets)} common secrets - none matched",
+                    evidence="Secret not in common wordlist",
+                    remediation="Continue using a strong secret",
+                    cwe="",
+                )
+            )
 
         return findings
 
@@ -302,40 +335,46 @@ class JWTAnalyzer:
         # Check for missing expiration
         if not jwt_info.expiration:
             if "exp" not in jwt_info.payload:
-                findings.append(JWTFinding(
-                    vulnerability="Missing Token Expiration",
-                    severity="high",
-                    description="Token has no expiration claim (exp)",
-                    evidence="No 'exp' claim in payload",
-                    affected_claim="exp",
-                    remediation="Always include expiration in tokens. Use short lifetimes.",
-                    cwe="CWE-613"
-                ))
+                findings.append(
+                    JWTFinding(
+                        vulnerability="Missing Token Expiration",
+                        severity="high",
+                        description="Token has no expiration claim (exp)",
+                        evidence="No 'exp' claim in payload",
+                        affected_claim="exp",
+                        remediation="Always include expiration in tokens. Use short lifetimes.",
+                        cwe="CWE-613",
+                    )
+                )
         else:
             # Check if expired
             if jwt_info.expiration < now:
-                findings.append(JWTFinding(
-                    vulnerability="Expired Token",
-                    severity="info",
-                    description=f"Token expired at {jwt_info.expiration.isoformat()}",
-                    evidence=f"exp: {jwt_info.payload.get('exp')}",
-                    affected_claim="exp",
-                    remediation="Refresh token or obtain new one",
-                    cwe=""
-                ))
+                findings.append(
+                    JWTFinding(
+                        vulnerability="Expired Token",
+                        severity="info",
+                        description=f"Token expired at {jwt_info.expiration.isoformat()}",
+                        evidence=f"exp: {jwt_info.payload.get('exp')}",
+                        affected_claim="exp",
+                        remediation="Refresh token or obtain new one",
+                        cwe="",
+                    )
+                )
             else:
                 # Check for excessively long expiration
                 time_until_exp = (jwt_info.expiration - now).total_seconds()
                 if time_until_exp > 86400 * 30:  # More than 30 days
-                    findings.append(JWTFinding(
-                        vulnerability="Long Token Lifetime",
-                        severity="medium",
-                        description=f"Token valid for {time_until_exp / 86400:.1f} days",
-                        evidence=f"exp: {jwt_info.payload.get('exp')}",
-                        affected_claim="exp",
-                        remediation="Use shorter token lifetimes. Implement refresh tokens.",
-                        cwe="CWE-613"
-                    ))
+                    findings.append(
+                        JWTFinding(
+                            vulnerability="Long Token Lifetime",
+                            severity="medium",
+                            description=f"Token valid for {time_until_exp / 86400:.1f} days",
+                            evidence=f"exp: {jwt_info.payload.get('exp')}",
+                            affected_claim="exp",
+                            remediation="Use shorter token lifetimes. Implement refresh tokens.",
+                            cwe="CWE-613",
+                        )
+                    )
 
         return findings
 
@@ -348,7 +387,7 @@ class JWTAnalyzer:
             "secret": r"(secret|api_key|apikey|private)",
             "credit_card": r"(\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4})",
             "ssn": r"\d{3}-\d{2}-\d{4}",
-            "email": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}"
+            "email": r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}",
         }
 
         payload_str = json.dumps(jwt_info.payload).lower()
@@ -358,27 +397,31 @@ class JWTAnalyzer:
                 # Check for key names
                 for key in jwt_info.payload.keys():
                     if re.search(pattern, key.lower()):
-                        findings.append(JWTFinding(
-                            vulnerability="Sensitive Data in JWT",
-                            severity="high",
-                            description=f"Token contains potentially sensitive claim: {key}",
-                            evidence=f"Claim name matches pattern: {data_type}",
-                            affected_claim=key,
-                            remediation="Never store sensitive data in JWT. "
-                                       "Store server-side and reference by ID.",
-                            cwe="CWE-200"
-                        ))
+                        findings.append(
+                            JWTFinding(
+                                vulnerability="Sensitive Data in JWT",
+                                severity="high",
+                                description=f"Token contains potentially sensitive claim: {key}",
+                                evidence=f"Claim name matches pattern: {data_type}",
+                                affected_claim=key,
+                                remediation="Never store sensitive data in JWT. "
+                                "Store server-side and reference by ID.",
+                                cwe="CWE-200",
+                            )
+                        )
             else:
                 # Check for patterns in values
                 if re.search(pattern, payload_str):
-                    findings.append(JWTFinding(
-                        vulnerability=f"Potential {data_type.replace('_', ' ').title()} in JWT",
-                        severity="medium",
-                        description=f"Token may contain {data_type} data",
-                        evidence=f"Pattern match for {data_type}",
-                        remediation="Review and remove sensitive data from token",
-                        cwe="CWE-200"
-                    ))
+                    findings.append(
+                        JWTFinding(
+                            vulnerability=f"Potential {data_type.replace('_', ' ').title()} in JWT",
+                            severity="medium",
+                            description=f"Token may contain {data_type} data",
+                            evidence=f"Pattern match for {data_type}",
+                            remediation="Review and remove sensitive data from token",
+                            cwe="CWE-200",
+                        )
+                    )
 
         return findings
 
@@ -393,42 +436,48 @@ class JWTAnalyzer:
             sql_patterns = ["'", '"', ";", "--", "/*", "*/", "OR", "AND"]
             for pattern in sql_patterns:
                 if pattern in kid:
-                    findings.append(JWTFinding(
-                        vulnerability="Potential SQL Injection in kid",
-                        severity="critical",
-                        description="kid header may be vulnerable to SQL injection",
-                        evidence=f"kid contains: {pattern}",
-                        attack_vector=f"kid: {kid}",
-                        remediation="Validate and sanitize kid before use in queries",
-                        cwe="CWE-89"
-                    ))
+                    findings.append(
+                        JWTFinding(
+                            vulnerability="Potential SQL Injection in kid",
+                            severity="critical",
+                            description="kid header may be vulnerable to SQL injection",
+                            evidence=f"kid contains: {pattern}",
+                            attack_vector=f"kid: {kid}",
+                            remediation="Validate and sanitize kid before use in queries",
+                            cwe="CWE-89",
+                        )
+                    )
                     break
 
             # Check for path traversal
             if ".." in kid or "/" in kid or "\\" in kid:
-                findings.append(JWTFinding(
-                    vulnerability="Potential Path Traversal in kid",
-                    severity="high",
-                    description="kid header may allow path traversal",
-                    evidence=f"kid: {kid}",
-                    attack_vector=f"kid: ../../path/to/key",
-                    remediation="Validate kid against allowlist of key identifiers",
-                    cwe="CWE-22"
-                ))
+                findings.append(
+                    JWTFinding(
+                        vulnerability="Potential Path Traversal in kid",
+                        severity="high",
+                        description="kid header may allow path traversal",
+                        evidence=f"kid: {kid}",
+                        attack_vector="kid: ../../path/to/key",
+                        remediation="Validate kid against allowlist of key identifiers",
+                        cwe="CWE-22",
+                    )
+                )
 
             # Check for command injection
             cmd_patterns = ["|", "`", "$", "(", ")", ";"]
             for pattern in cmd_patterns:
                 if pattern in kid:
-                    findings.append(JWTFinding(
-                        vulnerability="Potential Command Injection in kid",
-                        severity="critical",
-                        description="kid header may allow command injection",
-                        evidence=f"kid contains: {pattern}",
-                        attack_vector=f"kid: {kid}",
-                        remediation="Never use kid in shell commands",
-                        cwe="CWE-78"
-                    ))
+                    findings.append(
+                        JWTFinding(
+                            vulnerability="Potential Command Injection in kid",
+                            severity="critical",
+                            description="kid header may allow command injection",
+                            evidence=f"kid contains: {pattern}",
+                            attack_vector=f"kid: {kid}",
+                            remediation="Never use kid in shell commands",
+                            cwe="CWE-78",
+                        )
+                    )
                     break
 
         return findings
@@ -442,16 +491,18 @@ class JWTAnalyzer:
 
         for header_name, value in [("jku", jku), ("x5u", x5u)]:
             if value:
-                findings.append(JWTFinding(
-                    vulnerability=f"External Key Reference ({header_name})",
-                    severity="high",
-                    description=f"Token references external key via {header_name}: {value}",
-                    evidence=f"{header_name}: {value}",
-                    attack_vector=f"Replace {header_name} with attacker-controlled URL",
-                    remediation=f"Do not accept {header_name} from tokens. "
-                               "Use pre-configured key locations.",
-                    cwe="CWE-345"
-                ))
+                findings.append(
+                    JWTFinding(
+                        vulnerability=f"External Key Reference ({header_name})",
+                        severity="high",
+                        description=f"Token references external key via {header_name}: {value}",
+                        evidence=f"{header_name}: {value}",
+                        attack_vector=f"Replace {header_name} with attacker-controlled URL",
+                        remediation=f"Do not accept {header_name} from tokens. "
+                        "Use pre-configured key locations.",
+                        cwe="CWE-345",
+                    )
+                )
 
         return findings
 
@@ -499,20 +550,19 @@ class JWTAnalyzer:
         jwt_info = self.parse_token(token)
 
         if not jwt_info:
-            findings.append(JWTFinding(
-                vulnerability="Invalid JWT Format",
-                severity="info",
-                description="Token is not a valid JWT format",
-                evidence=f"Token: {token[:50]}...",
-                remediation="Ensure token has three base64url-encoded parts separated by dots"
-            ))
-            return JWTInfo(
-                raw=token,
-                header={},
-                payload={},
-                signature="",
-                algorithm="unknown"
-            ), findings
+            findings.append(
+                JWTFinding(
+                    vulnerability="Invalid JWT Format",
+                    severity="info",
+                    description="Token is not a valid JWT format",
+                    evidence=f"Token: {token[:50]}...",
+                    remediation="Ensure token has three base64url-encoded parts separated by dots",
+                )
+            )
+            return (
+                JWTInfo(raw=token, header={}, payload={}, signature="", algorithm="unknown"),
+                findings,
+            )
 
         # Run all tests
         findings.extend(self.test_none_algorithm(jwt_info))
@@ -533,7 +583,7 @@ class JWTAnalyzer:
             "high": len([f for f in findings if f.severity == "high"]),
             "medium": len([f for f in findings if f.severity == "medium"]),
             "low": len([f for f in findings if f.severity == "low"]),
-            "info": len([f for f in findings if f.severity == "info"])
+            "info": len([f for f in findings if f.severity == "info"]),
         }
 
 
@@ -572,6 +622,6 @@ def decode_jwt(token: str) -> Dict[str, Any]:
             "payload": jwt_info.payload,
             "algorithm": jwt_info.algorithm,
             "expiration": jwt_info.expiration.isoformat() if jwt_info.expiration else None,
-            "issued_at": jwt_info.issued_at.isoformat() if jwt_info.issued_at else None
+            "issued_at": jwt_info.issued_at.isoformat() if jwt_info.issued_at else None,
         }
     return {}

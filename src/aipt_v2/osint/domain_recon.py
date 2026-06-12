@@ -162,23 +162,114 @@ class DomainRecon:
 
     # Common subdomain wordlist
     SUBDOMAIN_WORDLIST = [
-        "www", "mail", "webmail", "ftp", "admin", "portal", "api",
-        "app", "apps", "blog", "shop", "store", "dev", "development",
-        "test", "testing", "staging", "stage", "uat", "qa", "demo",
-        "beta", "alpha", "cdn", "static", "assets", "media", "img",
-        "images", "files", "download", "downloads", "upload", "uploads",
-        "secure", "ssl", "vpn", "remote", "login", "signin", "auth",
-        "sso", "oauth", "m", "mobile", "wap", "ns1", "ns2", "ns3",
-        "mx", "mx1", "mx2", "smtp", "pop", "imap", "email",
-        "dashboard", "panel", "cpanel", "webmin", "plesk",
-        "git", "gitlab", "github", "bitbucket", "svn", "repo",
-        "jenkins", "ci", "build", "deploy", "prod", "production",
-        "db", "database", "mysql", "postgres", "mongo", "redis",
-        "cache", "search", "elastic", "kibana", "grafana", "monitor",
-        "status", "health", "metrics", "analytics", "tracking",
-        "support", "help", "docs", "documentation", "wiki", "kb",
-        "forum", "community", "social", "news", "press", "ir",
-        "careers", "jobs", "hr", "internal", "intranet", "extranet",
+        "www",
+        "mail",
+        "webmail",
+        "ftp",
+        "admin",
+        "portal",
+        "api",
+        "app",
+        "apps",
+        "blog",
+        "shop",
+        "store",
+        "dev",
+        "development",
+        "test",
+        "testing",
+        "staging",
+        "stage",
+        "uat",
+        "qa",
+        "demo",
+        "beta",
+        "alpha",
+        "cdn",
+        "static",
+        "assets",
+        "media",
+        "img",
+        "images",
+        "files",
+        "download",
+        "downloads",
+        "upload",
+        "uploads",
+        "secure",
+        "ssl",
+        "vpn",
+        "remote",
+        "login",
+        "signin",
+        "auth",
+        "sso",
+        "oauth",
+        "m",
+        "mobile",
+        "wap",
+        "ns1",
+        "ns2",
+        "ns3",
+        "mx",
+        "mx1",
+        "mx2",
+        "smtp",
+        "pop",
+        "imap",
+        "email",
+        "dashboard",
+        "panel",
+        "cpanel",
+        "webmin",
+        "plesk",
+        "git",
+        "gitlab",
+        "github",
+        "bitbucket",
+        "svn",
+        "repo",
+        "jenkins",
+        "ci",
+        "build",
+        "deploy",
+        "prod",
+        "production",
+        "db",
+        "database",
+        "mysql",
+        "postgres",
+        "mongo",
+        "redis",
+        "cache",
+        "search",
+        "elastic",
+        "kibana",
+        "grafana",
+        "monitor",
+        "status",
+        "health",
+        "metrics",
+        "analytics",
+        "tracking",
+        "support",
+        "help",
+        "docs",
+        "documentation",
+        "wiki",
+        "kb",
+        "forum",
+        "community",
+        "social",
+        "news",
+        "press",
+        "ir",
+        "careers",
+        "jobs",
+        "hr",
+        "internal",
+        "intranet",
+        "extranet",
     ]
 
     # Technology signatures
@@ -381,9 +472,7 @@ class DomainRecon:
                 if headers:
                     default_headers.update(headers)
 
-                async with self._session.get(
-                    url, headers=default_headers, ssl=False
-                ) as resp:
+                async with self._session.get(url, headers=default_headers, ssl=False) as resp:
                     if resp.status == 200:
                         return await resp.text()
             except Exception as e:
@@ -424,10 +513,7 @@ class DomainRecon:
 
         for record_type in ["A", "AAAA", "MX", "TXT", "NS"]:
             url = f"{doh_url}?name={domain}&type={record_type}"
-            content = await self._fetch(
-                url,
-                headers={"Accept": "application/dns-json"}
-            )
+            content = await self._fetch(url, headers={"Accept": "application/dns-json"})
 
             if content:
                 try:
@@ -441,10 +527,7 @@ class DomainRecon:
 
         # Check for DMARC record
         dmarc_url = f"{doh_url}?name=_dmarc.{domain}&type=TXT"
-        content = await self._fetch(
-            dmarc_url,
-            headers={"Accept": "application/dns-json"}
-        )
+        content = await self._fetch(dmarc_url, headers={"Accept": "application/dns-json"})
         if content:
             try:
                 data = json.loads(content)
@@ -517,10 +600,7 @@ class DomainRecon:
         async def check_subdomain(word: str) -> Optional[str]:
             subdomain = f"{word}.{domain}"
             url = f"{doh_url}?name={subdomain}&type=A"
-            content = await self._fetch(
-                url,
-                headers={"Accept": "application/dns-json"}
-            )
+            content = await self._fetch(url, headers={"Accept": "application/dns-json"})
             if content:
                 try:
                     data = json.loads(content)
@@ -587,7 +667,14 @@ class DomainRecon:
                                             # Categorize
                                             if tech in ["WordPress", "Drupal", "Joomla", "Magento"]:
                                                 result["cms"] = tech
-                                            elif tech in ["React", "Angular", "Vue.js", "Laravel", "Django", "Rails"]:
+                                            elif tech in [
+                                                "React",
+                                                "Angular",
+                                                "Vue.js",
+                                                "Laravel",
+                                                "Django",
+                                                "Rails",
+                                            ]:
                                                 result["frameworks"].append(tech)
                                         break
 

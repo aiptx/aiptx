@@ -17,7 +17,7 @@ import shutil
 import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from aipt_v2.sast.analyzer import SASTAnalyzer, SASTConfig, SASTResult
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class GitHubScanConfig:
     """Configuration for GitHub scanning."""
+
     clone_depth: int = 1  # Shallow clone depth
     scan_history: bool = False  # Scan git history for secrets
     scan_branches: list[str] = field(default_factory=lambda: ["main", "master"])
@@ -41,6 +42,7 @@ class GitHubScanConfig:
 @dataclass
 class CIConfigFinding:
     """Finding from CI/CD configuration analysis."""
+
     file_path: str
     issue: str
     severity: str
@@ -51,6 +53,7 @@ class CIConfigFinding:
 @dataclass
 class GitHubScanResult:
     """Result of GitHub repository scan."""
+
     repo_url: str
     repo_name: str
     branch: str
@@ -345,24 +348,55 @@ class GitHubScanner:
 
             # Check for common CI security issues
             checks = [
-                (r"--no-verify", "Git hooks bypassed", "medium",
-                 "Remove --no-verify to enable git hooks"),
-                (r"npm\s+config\s+set\s+strict-ssl\s+false", "SSL verification disabled", "high",
-                 "Enable SSL verification"),
-                (r"curl\s+-k\s+", "Insecure curl (no cert validation)", "high",
-                 "Remove -k flag from curl"),
-                (r"wget\s+--no-check-certificate", "Insecure wget", "high",
-                 "Enable certificate checking"),
-                (r"\$\{\{\s*secrets\.", "Secret usage (verify proper handling)", "info",
-                 "Ensure secrets are properly scoped"),
-                (r"password\s*:\s*['\"][^$]+['\"]", "Hardcoded password in CI", "critical",
-                 "Use secrets instead of hardcoded passwords"),
-                (r"pip\s+install\s+--trusted-host", "Trusted host override", "medium",
-                 "Use HTTPS package sources"),
-                (r"sudo\s+", "Sudo usage in CI", "low",
-                 "Minimize use of sudo in CI"),
-                (r"docker\s+run.*--privileged", "Privileged Docker container", "high",
-                 "Avoid privileged containers"),
+                (
+                    r"--no-verify",
+                    "Git hooks bypassed",
+                    "medium",
+                    "Remove --no-verify to enable git hooks",
+                ),
+                (
+                    r"npm\s+config\s+set\s+strict-ssl\s+false",
+                    "SSL verification disabled",
+                    "high",
+                    "Enable SSL verification",
+                ),
+                (
+                    r"curl\s+-k\s+",
+                    "Insecure curl (no cert validation)",
+                    "high",
+                    "Remove -k flag from curl",
+                ),
+                (
+                    r"wget\s+--no-check-certificate",
+                    "Insecure wget",
+                    "high",
+                    "Enable certificate checking",
+                ),
+                (
+                    r"\$\{\{\s*secrets\.",
+                    "Secret usage (verify proper handling)",
+                    "info",
+                    "Ensure secrets are properly scoped",
+                ),
+                (
+                    r"password\s*:\s*['\"][^$]+['\"]",
+                    "Hardcoded password in CI",
+                    "critical",
+                    "Use secrets instead of hardcoded passwords",
+                ),
+                (
+                    r"pip\s+install\s+--trusted-host",
+                    "Trusted host override",
+                    "medium",
+                    "Use HTTPS package sources",
+                ),
+                (r"sudo\s+", "Sudo usage in CI", "low", "Minimize use of sudo in CI"),
+                (
+                    r"docker\s+run.*--privileged",
+                    "Privileged Docker container",
+                    "high",
+                    "Avoid privileged containers",
+                ),
             ]
 
             import re
@@ -392,9 +426,14 @@ class GitHubScanner:
         try:
             # Use git log to search for potential secrets
             cmd = [
-                "git", "-C", repo_path, "log",
-                "--all", "--full-history",
-                "-p", "--max-count=100",  # Limit history depth
+                "git",
+                "-C",
+                repo_path,
+                "log",
+                "--all",
+                "--full-history",
+                "-p",
+                "--max-count=100",  # Limit history depth
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -443,12 +482,14 @@ class GitHubScanner:
             if line.startswith("+") and not line.startswith("+++"):
                 for pattern, secret_type in secret_patterns:
                     if re.search(pattern, line):
-                        secrets.append({
-                            "type": secret_type,
-                            "commit": current_commit,
-                            "file": current_file,
-                            "line_preview": line[:100],
-                        })
+                        secrets.append(
+                            {
+                                "type": secret_type,
+                                "commit": current_commit,
+                                "file": current_file,
+                                "line_preview": line[:100],
+                            }
+                        )
 
         return secrets
 

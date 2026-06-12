@@ -5,18 +5,18 @@ Provides comprehensive API integration with Acunetix Web Vulnerability Scanner.
 """
 
 import json
+import logging
 import os
 import time
-import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, List, Optional
+
 import requests
+import urllib3
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
-from typing import Optional, Dict, List, Any
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
-from pathlib import Path
-import urllib3
 
 # Disable SSL warnings for self-signed certificates
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
@@ -26,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ScanProfile(Enum):
     """Acunetix scan profile types."""
+
     FULL_SCAN = "11111111-1111-1111-1111-111111111111"
     HIGH_RISK = "11111111-1111-1111-1111-111111111112"
     WEAK_PASSWORDS = "11111111-1111-1111-1111-111111111115"
@@ -37,6 +38,7 @@ class ScanProfile(Enum):
 
 class ScanStatus(Enum):
     """Acunetix scan status types."""
+
     PENDING = "pending"
     QUEUED = "queued"
     STARTING = "starting"
@@ -49,6 +51,7 @@ class ScanStatus(Enum):
 
 class Severity(Enum):
     """Vulnerability severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -59,8 +62,15 @@ class Severity(Enum):
 @dataclass
 class AcunetixConfig:
     """Configuration for Acunetix connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_URL") or os.getenv("ACUNETIX_URL", "https://localhost:3443"))
-    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY") or os.getenv("ACUNETIX_API_KEY", ""))
+
+    base_url: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_URL")
+        or os.getenv("ACUNETIX_URL", "https://localhost:3443")
+    )
+    api_key: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__ACUNETIX_API_KEY")
+        or os.getenv("ACUNETIX_API_KEY", "")
+    )
     verify_ssl: bool = False
     timeout: int = 120  # Increased for slow/remote networks
 
@@ -68,6 +78,7 @@ class AcunetixConfig:
 @dataclass
 class ScanResult:
     """Result of an Acunetix scan."""
+
     scan_id: str
     target_id: str
     target_url: str
@@ -82,6 +93,7 @@ class ScanResult:
 @dataclass
 class Vulnerability:
     """Vulnerability finding from Acunetix."""
+
     vuln_id: str
     severity: str
     name: str
@@ -106,11 +118,13 @@ class AcunetixTool:
         """Initialize Acunetix tool with configuration."""
         self.config = config or AcunetixConfig()
         self.session = requests.Session()
-        self.session.headers.update({
-            "X-Auth": self.config.api_key,
-            "Content-Type": "application/json",
-            "Connection": "close",  # Avoid stale connection pooling
-        })
+        self.session.headers.update(
+            {
+                "X-Auth": self.config.api_key,
+                "Content-Type": "application/json",
+                "Connection": "close",  # Avoid stale connection pooling
+            }
+        )
         self.session.verify = self.config.verify_ssl
         self._connected = False
 
@@ -130,17 +144,14 @@ class AcunetixTool:
         """Get the API base URL."""
         return f"{self.config.base_url}/api/v1"
 
-    def _request(self, method: str, endpoint: str, data: Optional[Dict] = None,
-                 params: Optional[Dict] = None) -> Dict[str, Any]:
+    def _request(
+        self, method: str, endpoint: str, data: Optional[Dict] = None, params: Optional[Dict] = None
+    ) -> Dict[str, Any]:
         """Make an API request to Acunetix."""
         url = f"{self.api_url}/{endpoint}"
         try:
             response = self.session.request(
-                method=method,
-                url=url,
-                json=data,
-                params=params,
-                timeout=self.config.timeout
+                method=method, url=url, json=data, params=params, timeout=self.config.timeout
             )
             response.raise_for_status()
             if response.content:
@@ -173,8 +184,7 @@ class AcunetixTool:
 
     # ==================== Target Management ====================
 
-    def add_target(self, url: str, description: str = "",
-                   criticality: int = 10) -> str:
+    def add_target(self, url: str, description: str = "", criticality: int = 10) -> str:
         """
         Add a new target to Acunetix.
 
@@ -189,7 +199,7 @@ class AcunetixTool:
         data = {
             "address": url,
             "description": description or f"AIPT Target - {datetime.now().isoformat()}",
-            "criticality": criticality
+            "criticality": criticality,
         }
         result = self._request("POST", "targets", data=data)
         target_id = result.get("target_id")
@@ -222,9 +232,14 @@ class AcunetixTool:
         except Exception:
             return False
 
-    def configure_target(self, target_id: str, login_url: str = None,
-                         username: str = None, password: str = None,
-                         custom_headers: Dict[str, str] = None) -> bool:
+    def configure_target(
+        self,
+        target_id: str,
+        login_url: str = None,
+        username: str = None,
+        password: str = None,
+        custom_headers: Dict[str, str] = None,
+    ) -> bool:
         """
         Configure target with authentication and custom settings.
 
@@ -240,17 +255,11 @@ class AcunetixTool:
         if login_url and username and password:
             config["login"] = {
                 "kind": "automatic",
-                "credentials": {
-                    "enabled": True,
-                    "username": username,
-                    "password": password
-                }
+                "credentials": {"enabled": True, "username": username, "password": password},
             }
 
         if custom_headers:
-            config["custom_headers"] = [
-                {"name": k, "value": v} for k, v in custom_headers.items()
-            ]
+            config["custom_headers"] = [{"name": k, "value": v} for k, v in custom_headers.items()]
 
         if config:
             self._request("PATCH", f"targets/{target_id}/configuration", data=config)
@@ -260,9 +269,9 @@ class AcunetixTool:
 
     # ==================== Scan Management ====================
 
-    def start_scan(self, target_id: str,
-                   profile: ScanProfile = ScanProfile.FULL_SCAN,
-                   schedule: bool = False) -> str:
+    def start_scan(
+        self, target_id: str, profile: ScanProfile = ScanProfile.FULL_SCAN, schedule: bool = False
+    ) -> str:
         """
         Start a scan on a target.
 
@@ -277,11 +286,7 @@ class AcunetixTool:
         data = {
             "target_id": target_id,
             "profile_id": profile.value,
-            "schedule": {
-                "disable": False,
-                "start_date": None,
-                "time_sensitive": False
-            }
+            "schedule": {"disable": False, "start_date": None, "time_sensitive": False},
         }
         result = self._request("POST", "scans", data=data)
         scan_id = result.get("scan_id") or self._get_latest_scan_id(target_id)
@@ -296,8 +301,9 @@ class AcunetixTool:
                 return scan.get("scan_id")
         return None
 
-    def scan_url(self, url: str, profile: ScanProfile = ScanProfile.FULL_SCAN,
-                 description: str = "") -> str:
+    def scan_url(
+        self, url: str, profile: ScanProfile = ScanProfile.FULL_SCAN, description: str = ""
+    ) -> str:
         """
         Convenience method to add target and start scan in one call.
 
@@ -331,7 +337,7 @@ class AcunetixTool:
             progress=current.get("progress", 0),
             start_time=current.get("start_date"),
             vulnerabilities=current.get("severity_counts", {}),
-            threat_level=current.get("threat", 0)
+            threat_level=current.get("threat", 0),
         )
 
     def list_scans(self, limit: int = 20) -> List[Dict[str, Any]]:
@@ -372,9 +378,9 @@ class AcunetixTool:
         except Exception:
             return False
 
-    def wait_for_scan(self, scan_id: str, timeout: int = 3600,
-                      poll_interval: int = 30,
-                      callback: callable = None) -> ScanResult:
+    def wait_for_scan(
+        self, scan_id: str, timeout: int = 3600, poll_interval: int = 30, callback: callable = None
+    ) -> ScanResult:
         """
         Wait for a scan to complete.
 
@@ -396,9 +402,11 @@ class AcunetixTool:
             if callback:
                 callback(result)
 
-            if result.status in [ScanStatus.COMPLETED.value,
-                                 ScanStatus.FAILED.value,
-                                 ScanStatus.ABORTED.value]:
+            if result.status in [
+                ScanStatus.COMPLETED.value,
+                ScanStatus.FAILED.value,
+                ScanStatus.ABORTED.value,
+            ]:
                 return result
 
             logger.info(f"Scan {scan_id}: {result.status} ({result.progress}%)")
@@ -406,23 +414,20 @@ class AcunetixTool:
 
         # Timeout reached - return last known result instead of raising exception
         # This allows partial results to be collected
-        logger.warning(f"Scan {scan_id} timeout after {timeout}s - returning partial results (progress: {last_result.progress if last_result else 0}%)")
+        logger.warning(
+            f"Scan {scan_id} timeout after {timeout}s - returning partial results (progress: {last_result.progress if last_result else 0}%)"
+        )
         if last_result:
             last_result.status = "timeout"
             return last_result
         # Return a timeout result if we never got any status
-        return ScanResult(
-            scan_id=scan_id,
-            target_id="",
-            status="timeout",
-            progress=0
-        )
+        return ScanResult(scan_id=scan_id, target_id="", status="timeout", progress=0)
 
     # ==================== Vulnerability Management ====================
 
-    def get_vulnerabilities(self, scan_id: str = None,
-                           severity: Severity = None,
-                           limit: int = 100) -> List[Vulnerability]:
+    def get_vulnerabilities(
+        self, scan_id: str = None, severity: Severity = None, limit: int = 100
+    ) -> List[Vulnerability]:
         """
         Get vulnerabilities from scans.
 
@@ -439,17 +444,19 @@ class AcunetixTool:
         vulns = []
 
         for v in result.get("vulnerabilities", []):
-            vulns.append(Vulnerability(
-                vuln_id=v.get("vuln_id", ""),
-                severity=v.get("severity", "info"),
-                name=v.get("vt_name", "Unknown"),
-                description=v.get("vt_description", ""),
-                target_url=v.get("target", {}).get("address", ""),
-                affected_url=v.get("affects_url", ""),
-                recommendation=v.get("recommendation", ""),
-                cvss_score=v.get("cvss_score"),
-                cwe_id=v.get("cwe_id")
-            ))
+            vulns.append(
+                Vulnerability(
+                    vuln_id=v.get("vuln_id", ""),
+                    severity=v.get("severity", "info"),
+                    name=v.get("vt_name", "Unknown"),
+                    description=v.get("vt_description", ""),
+                    target_url=v.get("target", {}).get("address", ""),
+                    affected_url=v.get("affects_url", ""),
+                    recommendation=v.get("recommendation", ""),
+                    cvss_score=v.get("cvss_score"),
+                    cwe_id=v.get("cwe_id"),
+                )
+            )
 
         return vulns
 
@@ -469,20 +476,21 @@ class AcunetixTool:
 
             # Use the general vulnerabilities endpoint with target filter
             # This works across all Acunetix versions
-            result = self._request("GET", "vulnerabilities", params={
-                "q": f"target_id:{target_id}",
-                "l": 100
-            })
+            result = self._request(
+                "GET", "vulnerabilities", params={"q": f"target_id:{target_id}", "l": 100}
+            )
 
             for v in result.get("vulnerabilities", []):
-                vulns.append(Vulnerability(
-                    vuln_id=v.get("vuln_id", ""),
-                    severity=v.get("severity", "info"),
-                    name=v.get("vt_name", "Unknown"),
-                    description=v.get("vt_description", ""),
-                    target_url=target_url,
-                    affected_url=v.get("affects_url", "")
-                ))
+                vulns.append(
+                    Vulnerability(
+                        vuln_id=v.get("vuln_id", ""),
+                        severity=v.get("severity", "info"),
+                        name=v.get("vt_name", "Unknown"),
+                        description=v.get("vt_description", ""),
+                        target_url=target_url,
+                        affected_url=v.get("affects_url", ""),
+                    )
+                )
 
         except requests.exceptions.RequestException as e:
             logger.warning(f"Failed to get scan vulnerabilities: {e}")
@@ -493,9 +501,12 @@ class AcunetixTool:
 
     # ==================== Reporting ====================
 
-    def generate_report(self, scan_id: str,
-                        template: str = "11111111-1111-1111-1111-111111111111",
-                        format_type: str = "pdf") -> str:
+    def generate_report(
+        self,
+        scan_id: str,
+        template: str = "11111111-1111-1111-1111-111111111111",
+        format_type: str = "pdf",
+    ) -> str:
         """
         Generate a report for a scan.
 
@@ -510,13 +521,7 @@ class AcunetixTool:
         # Get scan to find source
         scan = self._request("GET", f"scans/{scan_id}")
 
-        data = {
-            "template_id": template,
-            "source": {
-                "list_type": "scans",
-                "id_list": [scan_id]
-            }
-        }
+        data = {"template_id": template, "source": {"list_type": "scans", "id_list": [scan_id]}}
         result = self._request("POST", "reports", data=data)
         return result.get("report_id", "")
 
@@ -539,7 +544,7 @@ class AcunetixTool:
         response = self.session.get(url, stream=True)
         response.raise_for_status()
 
-        with open(output_path, 'wb') as f:
+        with open(output_path, "wb") as f:
             for chunk in response.iter_content(chunk_size=8192):
                 f.write(chunk)
 
@@ -557,11 +562,13 @@ class AcunetixTool:
             scans = self.list_scans(limit=100)
             stats = {
                 "total_scans": len(scans),
-                "completed": sum(1 for s in scans if s.get("current_session", {}).get("status") == "completed"),
-                "running": sum(1 for s in scans if s.get("current_session", {}).get("status") == "processing"),
-                "vulnerabilities": {
-                    "critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0
-                }
+                "completed": sum(
+                    1 for s in scans if s.get("current_session", {}).get("status") == "completed"
+                ),
+                "running": sum(
+                    1 for s in scans if s.get("current_session", {}).get("status") == "processing"
+                ),
+                "vulnerabilities": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
             }
             for scan in scans:
                 counts = scan.get("current_session", {}).get("severity_counts", {})
@@ -576,7 +583,7 @@ class AcunetixTool:
             "total_scans": len(scans),
             "by_status": {},
             "total_vulnerabilities": {"critical": 0, "high": 0, "medium": 0, "low": 0, "info": 0},
-            "recent_scans": []
+            "recent_scans": [],
         }
 
         for scan in scans:
@@ -588,13 +595,15 @@ class AcunetixTool:
                 summary["total_vulnerabilities"][sev] += counts.get(sev, 0)
 
             if len(summary["recent_scans"]) < 10:
-                summary["recent_scans"].append({
-                    "scan_id": scan.get("scan_id"),
-                    "target": scan.get("target", {}).get("address"),
-                    "status": status,
-                    "progress": scan.get("current_session", {}).get("progress", 0),
-                    "vulnerabilities": counts
-                })
+                summary["recent_scans"].append(
+                    {
+                        "scan_id": scan.get("scan_id"),
+                        "target": scan.get("target", {}).get("address"),
+                        "status": status,
+                        "progress": scan.get("current_session", {}).get("progress", 0),
+                        "vulnerabilities": counts,
+                    }
+                )
 
         return summary
 
@@ -614,8 +623,8 @@ class AcunetixTool:
                 "target_url": vuln.target_url,
                 "affected_url": vuln.affected_url,
                 "cvss_score": vuln.cvss_score,
-                "cwe_id": vuln.cwe_id
-            }
+                "cwe_id": vuln.cwe_id,
+            },
         }
 
     def export_findings(self, scan_id: str, output_path: str = None) -> List[Dict[str, Any]]:
@@ -633,7 +642,7 @@ class AcunetixTool:
         findings = [self.to_finding(v) for v in vulns]
 
         if output_path:
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(findings, f, indent=2)
             logger.info(f"Exported {len(findings)} findings to {output_path}")
 
@@ -672,7 +681,7 @@ def acunetix_scan(url: str, profile: str = "full") -> ScanResult:
         "xss": ScanProfile.XSS_SCAN,
         "sqli": ScanProfile.SQL_INJECTION,
         "crawl": ScanProfile.CRAWL_ONLY,
-        "malware": ScanProfile.MALWARE_SCAN
+        "malware": ScanProfile.MALWARE_SCAN,
     }
 
     acunetix = get_acunetix()

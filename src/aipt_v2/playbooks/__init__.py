@@ -32,10 +32,10 @@ CLI Usage:
 
 from typing import Dict, List, Optional, Tuple, Type
 
-from .base_playbook import BasePlaybook, Phase, PlaybookMode
-from .web_playbook import WebPlaybook, WebAPIPlaybook
-from .api_playbook import APIPlaybook, GraphQLPlaybook
 from .ad_playbook import ADPlaybook, ADQuickPlaybook
+from .api_playbook import APIPlaybook, GraphQLPlaybook
+from .base_playbook import BasePlaybook, Phase, PlaybookMode
+from .web_playbook import WebAPIPlaybook, WebPlaybook
 
 # Registry of available playbooks
 PLAYBOOKS: Dict[str, Type[BasePlaybook]] = {

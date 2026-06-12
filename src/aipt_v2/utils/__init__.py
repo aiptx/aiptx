@@ -8,7 +8,7 @@ Provides common utilities used across the framework:
 - Searcher utilities
 """
 
-from .logging import logger, setup_logging, get_logger
+from .logging import get_logger, logger, setup_logging
 
 __all__ = [
     "logger",

@@ -35,43 +35,56 @@ def __getattr__(name):
     # Vulnerability skills loader (NEW - from Strix integration)
     if name == "load_skill":
         from aipt_v2.skills.loader import load_skill
+
         return load_skill
     elif name == "load_skills":
         from aipt_v2.skills.loader import load_skills
+
         return load_skills
     elif name == "get_available_skills":
         from aipt_v2.skills.loader import get_available_skills
+
         return get_available_skills
     elif name == "get_all_skill_names":
         from aipt_v2.skills.loader import get_all_skill_names
+
         return get_all_skill_names
     elif name == "validate_skill_names":
         from aipt_v2.skills.loader import validate_skill_names
+
         return validate_skill_names
     elif name == "generate_skills_description":
         from aipt_v2.skills.loader import generate_skills_description
+
         return generate_skills_description
     elif name == "load_skills_for_phase":
         from aipt_v2.skills.loader import load_skills_for_phase
+
         return load_skills_for_phase
     elif name == "SkillsLoader":
         from aipt_v2.skills.loader import SkillsLoader
+
         return SkillsLoader
     # Existing agent imports
     elif name == "SecurityAgent":
         from aipt_v2.skills.agents.security_agent import SecurityAgent
+
         return SecurityAgent
     elif name == "CodeReviewAgent":
         from aipt_v2.skills.agents.code_review import CodeReviewAgent
+
         return CodeReviewAgent
     elif name == "APITestAgent":
         from aipt_v2.skills.agents.api_tester import APITestAgent
+
         return APITestAgent
     elif name == "WebPentestAgent":
         from aipt_v2.skills.agents.web_pentest import WebPentestAgent
+
         return WebPentestAgent
     elif name == "SkillPrompts":
         from aipt_v2.skills.prompts import SkillPrompts
+
         return SkillPrompts
     raise AttributeError(f"module 'aipt_v2.skills' has no attribute '{name}'")
 

@@ -15,7 +15,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class StoredPayload:
     """A payload stored in memory with its metadata."""
+
     payload: str
     payload_type: str
     success_rate: float
@@ -88,7 +89,8 @@ class PayloadMemory:
         """Initialize database schema."""
         cursor = self._conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS payloads (
                 payload_hash TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,
@@ -105,20 +107,26 @@ class PayloadMemory:
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
                 updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_payloads_type
             ON payloads(payload_type)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_payloads_success_rate
             ON payloads(success_rate DESC)
-        """)
+        """
+        )
 
         # Context table for efficient querying
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS payload_contexts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 payload_hash TEXT NOT NULL,
@@ -127,12 +135,15 @@ class PayloadMemory:
                 success_count INTEGER DEFAULT 0,
                 FOREIGN KEY (payload_hash) REFERENCES payloads(payload_hash)
             )
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_contexts_type
             ON payload_contexts(context_type, context_value)
-        """)
+        """
+        )
 
         self._conn.commit()
 
@@ -165,10 +176,7 @@ class PayloadMemory:
         timestamp = datetime.now(timezone.utc).isoformat()
 
         # Check if exists
-        cursor.execute(
-            "SELECT * FROM payloads WHERE payload_hash = ?",
-            (payload_hash,)
-        )
+        cursor.execute("SELECT * FROM payloads WHERE payload_hash = ?", (payload_hash,))
         existing = cursor.fetchone()
 
         if existing:
@@ -205,7 +213,8 @@ class PayloadMemory:
                     if t not in stored_tags:
                         stored_tags.append(t)
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE payloads SET
                     success_rate = ?,
                     total_uses = ?,
@@ -217,20 +226,22 @@ class PayloadMemory:
                     tags = ?,
                     updated_at = ?
                 WHERE payload_hash = ?
-            """, (
-                success_rate,
-                total_uses,
-                json.dumps(waf_compat),
-                json.dumps(contexts),
-                json.dumps(stored_mutations),
-                success,
-                timestamp,
-                notes,
-                notes,
-                json.dumps(stored_tags),
-                timestamp,
-                payload_hash,
-            ))
+            """,
+                (
+                    success_rate,
+                    total_uses,
+                    json.dumps(waf_compat),
+                    json.dumps(contexts),
+                    json.dumps(stored_mutations),
+                    success,
+                    timestamp,
+                    notes,
+                    notes,
+                    json.dumps(stored_tags),
+                    timestamp,
+                    payload_hash,
+                ),
+            )
 
         else:
             # Insert new
@@ -240,35 +251,41 @@ class PayloadMemory:
 
             contexts = [context] if context and success else []
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO payloads (
                     payload_hash, payload, payload_type, success_rate,
                     total_uses, waf_compatibility, contexts_successful,
                     mutations_applied, first_success, last_success,
                     notes, tags
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                payload_hash,
-                payload,
-                payload_type,
-                1.0 if success else 0.0,
-                1,
-                json.dumps(waf_compat),
-                json.dumps(contexts),
-                json.dumps(mutations or []),
-                timestamp if success else None,
-                timestamp if success else None,
-                notes,
-                json.dumps(tags or []),
-            ))
+            """,
+                (
+                    payload_hash,
+                    payload,
+                    payload_type,
+                    1.0 if success else 0.0,
+                    1,
+                    json.dumps(waf_compat),
+                    json.dumps(contexts),
+                    json.dumps(mutations or []),
+                    timestamp if success else None,
+                    timestamp if success else None,
+                    notes,
+                    json.dumps(tags or []),
+                ),
+            )
 
         # Update context index
         if context:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO payload_contexts (payload_hash, context_type, context_value, success_count)
                 VALUES (?, 'general', ?, ?)
                 ON CONFLICT DO UPDATE SET success_count = success_count + ?
-            """, (payload_hash, context, 1 if success else 0, 1 if success else 0))
+            """,
+                (payload_hash, context, 1 if success else 0, 1 if success else 0),
+            )
 
         self._conn.commit()
         logger.debug(f"Stored payload {payload_hash} ({payload_type})")
@@ -281,10 +298,7 @@ class PayloadMemory:
     def get_by_hash(self, payload_hash: str) -> StoredPayload | None:
         """Get a stored payload by its hash."""
         cursor = self._conn.cursor()
-        cursor.execute(
-            "SELECT * FROM payloads WHERE payload_hash = ?",
-            (payload_hash,)
-        )
+        cursor.execute("SELECT * FROM payloads WHERE payload_hash = ?", (payload_hash,))
         row = cursor.fetchone()
 
         if not row:
@@ -376,7 +390,7 @@ class PayloadMemory:
             results.append(stored)
 
         # Sort by adjusted score
-        results.sort(key=lambda x: getattr(x, '_adjusted_score', 0), reverse=True)
+        results.sort(key=lambda x: getattr(x, "_adjusted_score", 0), reverse=True)
         return results[:limit]
 
     def get_by_tag(self, tag: str, limit: int = 20) -> list[StoredPayload]:
@@ -384,12 +398,15 @@ class PayloadMemory:
         cursor = self._conn.cursor()
 
         # SQLite JSON query
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT * FROM payloads
             WHERE tags LIKE ?
             ORDER BY success_rate DESC
             LIMIT ?
-        """, (f'%"{tag}"%', limit))
+        """,
+            (f'%"{tag}"%', limit),
+        )
 
         return [self._row_to_stored(row) for row in cursor.fetchall()]
 

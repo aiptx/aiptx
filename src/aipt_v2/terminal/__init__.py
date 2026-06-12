@@ -10,9 +10,9 @@ Secure shell command execution with:
 """
 
 from .executor import (
-    TerminalExecutor,
     CommandResult,
     ExecutionConfig,
+    TerminalExecutor,
 )
 from .sandbox import (
     DockerSandbox,

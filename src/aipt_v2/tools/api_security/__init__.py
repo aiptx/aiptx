@@ -28,30 +28,27 @@ Usage:
     findings = analyzer.analyze(token)
 """
 
+from aipt_v2.tools.api_security.api_discovery import (
+    APIDiscovery,
+    DiscoveredEndpoint,
+    discover_api,
+)
 from aipt_v2.tools.api_security.graphql_scanner import (
-    GraphQLScanner,
     GraphQLConfig,
     GraphQLFinding,
+    GraphQLScanner,
     scan_graphql,
 )
-
-from aipt_v2.tools.api_security.openapi_fuzzer import (
-    OpenAPIFuzzer,
-    OpenAPIConfig,
-    OpenAPIFinding,
-    fuzz_openapi,
-)
-
 from aipt_v2.tools.api_security.jwt_analyzer import (
     JWTAnalyzer,
     JWTFinding,
     analyze_jwt,
 )
-
-from aipt_v2.tools.api_security.api_discovery import (
-    APIDiscovery,
-    DiscoveredEndpoint,
-    discover_api,
+from aipt_v2.tools.api_security.openapi_fuzzer import (
+    OpenAPIConfig,
+    OpenAPIFinding,
+    OpenAPIFuzzer,
+    fuzz_openapi,
 )
 
 __all__ = [

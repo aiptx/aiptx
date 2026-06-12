@@ -31,14 +31,16 @@ logger = logging.getLogger(__name__)
 
 class MessagePriority(str, Enum):
     """Message priority levels for delivery ordering."""
+
     CRITICAL = "critical"  # Security critical findings
-    HIGH = "high"          # Important findings, agent requests
-    NORMAL = "normal"      # Standard messages
-    LOW = "low"            # Informational updates
+    HIGH = "high"  # Important findings, agent requests
+    NORMAL = "normal"  # Standard messages
+    LOW = "low"  # Informational updates
 
 
 class MessageType(str, Enum):
     """Standard message types for agent communication."""
+
     # Finding messages
     FINDING_NEW = "findings.new"
     FINDING_VALIDATED = "findings.validated"
@@ -71,6 +73,7 @@ class MessageType(str, Enum):
 @dataclass
 class AgentMessage:
     """Message structure for inter-agent communication."""
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     topic: str = ""
     message_type: MessageType = MessageType.AGENT_PROGRESS
@@ -110,7 +113,9 @@ class AgentMessage:
             sender_name=data.get("sender_name", ""),
             content=data.get("content"),
             priority=MessagePriority(data.get("priority", "normal")),
-            timestamp=datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now(),
+            timestamp=(
+                datetime.fromisoformat(data["timestamp"]) if "timestamp" in data else datetime.now()
+            ),
             correlation_id=data.get("correlation_id"),
             reply_to=data.get("reply_to"),
             metadata=data.get("metadata", {}),
@@ -123,6 +128,7 @@ Callback = Callable[[AgentMessage], Coroutine[Any, Any, None]]
 @dataclass
 class Subscription:
     """Represents a topic subscription."""
+
     id: str
     topic: str
     callback: Callback
@@ -189,10 +195,7 @@ class MessageBus:
             try:
                 # Wait for messages with timeout
                 try:
-                    message = await asyncio.wait_for(
-                        self._pending_messages.get(),
-                        timeout=1.0
-                    )
+                    message = await asyncio.wait_for(self._pending_messages.get(), timeout=1.0)
                 except asyncio.TimeoutError:
                     continue
 
@@ -230,9 +233,7 @@ class MessageBus:
             if sub.subscriber_id == message.sender_id:
                 continue
 
-            delivery_tasks.append(
-                self._safe_deliver(sub, message)
-            )
+            delivery_tasks.append(self._safe_deliver(sub, message))
 
         if delivery_tasks:
             await asyncio.gather(*delivery_tasks, return_exceptions=True)
@@ -242,10 +243,7 @@ class MessageBus:
         try:
             await sub.callback(message)
         except Exception as e:
-            logger.error(
-                f"Error delivering message to {sub.subscriber_id}: {e}",
-                exc_info=True
-            )
+            logger.error(f"Error delivering message to {sub.subscriber_id}: {e}", exc_info=True)
 
     async def _get_matching_subscriptions(self, topic: str) -> list[Subscription]:
         """Get all subscriptions matching the topic pattern."""
@@ -348,14 +346,13 @@ class MessageBus:
             self._message_history.append(message)
             # Trim history if needed
             if len(self._message_history) > self._max_history:
-                self._message_history = self._message_history[-self._max_history:]
+                self._message_history = self._message_history[-self._max_history :]
 
         # Queue for delivery
         await self._pending_messages.put(message)
 
         logger.debug(
-            f"Published message {message.id} to {message.topic} "
-            f"from {message.sender_name}"
+            f"Published message {message.id} to {message.topic} " f"from {message.sender_name}"
         )
 
     async def publish_finding(

@@ -6,18 +6,20 @@ Provides utilities to build custom images with:
 - Custom configurations
 - Optimized for pentest workflows
 """
+
 from __future__ import annotations
 
 import subprocess
 import tempfile
-from typing import Optional, List, Dict
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Dict, List, Optional
 
 
 @dataclass
 class ImageSpec:
     """Specification for a custom Docker image"""
+
     name: str
     tag: str = "latest"
     base_image: str = "kalilinux/kali-rolling"
@@ -95,39 +97,47 @@ class ImageBuilder:
 
         # Install system packages
         if spec.packages:
-            lines.extend([
-                "# Install security tools",
-                "RUN apt-get update && apt-get install -y \\",
-                "    " + " \\\n    ".join(spec.packages) + " \\",
-                "    && rm -rf /var/lib/apt/lists/*",
-                "",
-            ])
+            lines.extend(
+                [
+                    "# Install security tools",
+                    "RUN apt-get update && apt-get install -y \\",
+                    "    " + " \\\n    ".join(spec.packages) + " \\",
+                    "    && rm -rf /var/lib/apt/lists/*",
+                    "",
+                ]
+            )
 
         # Install pip packages
         if spec.pip_packages:
-            lines.extend([
-                "# Install Python packages",
-                "RUN pip3 install --no-cache-dir \\",
-                "    " + " \\\n    ".join(spec.pip_packages),
-                "",
-            ])
+            lines.extend(
+                [
+                    "# Install Python packages",
+                    "RUN pip3 install --no-cache-dir \\",
+                    "    " + " \\\n    ".join(spec.pip_packages),
+                    "",
+                ]
+            )
 
         # Install Go packages
         if spec.go_packages:
-            lines.extend([
-                "# Install Go tools",
-                "ENV GOPATH=/go",
-                "ENV PATH=$PATH:/go/bin",
-            ])
+            lines.extend(
+                [
+                    "# Install Go tools",
+                    "ENV GOPATH=/go",
+                    "ENV PATH=$PATH:/go/bin",
+                ]
+            )
             for pkg in spec.go_packages:
                 lines.append(f"RUN go install {pkg}")
             lines.append("")
 
         # Custom commands
         if spec.custom_commands:
-            lines.extend([
-                "# Custom commands",
-            ])
+            lines.extend(
+                [
+                    "# Custom commands",
+                ]
+            )
             for cmd in spec.custom_commands:
                 lines.append(f"RUN {cmd}")
             lines.append("")
@@ -140,12 +150,14 @@ class ImageBuilder:
             lines.append("")
 
         # Set workdir
-        lines.extend([
-            f"WORKDIR {spec.workdir}",
-            "",
-            "# Default command",
-            'CMD ["/bin/bash"]',
-        ])
+        lines.extend(
+            [
+                f"WORKDIR {spec.workdir}",
+                "",
+                "# Default command",
+                'CMD ["/bin/bash"]',
+            ]
+        )
 
         return "\n".join(lines)
 
@@ -220,12 +232,7 @@ class ImageBuilder:
         except Exception:
             return False
 
-    def build_preset(
-        self,
-        preset: str,
-        name: Optional[str] = None,
-        **kwargs
-    ) -> bool:
+    def build_preset(self, preset: str, name: Optional[str] = None, **kwargs) -> bool:
         """
         Build image from preset tool set.
 
@@ -238,7 +245,9 @@ class ImageBuilder:
             True if successful
         """
         if preset not in self.TOOL_SETS:
-            raise ValueError(f"Unknown preset: {preset}. Choose from: {list(self.TOOL_SETS.keys())}")
+            raise ValueError(
+                f"Unknown preset: {preset}. Choose from: {list(self.TOOL_SETS.keys())}"
+            )
 
         tools = self.TOOL_SETS[preset]
 
@@ -247,7 +256,7 @@ class ImageBuilder:
             packages=tools.get("packages", []),
             pip_packages=tools.get("pip_packages", []),
             go_packages=tools.get("go_packages", []),
-            **kwargs
+            **kwargs,
         )
 
         return self.build(spec)

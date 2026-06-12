@@ -19,6 +19,7 @@ Output structure:
 
 Report generators read ONLY from canonical_findings.json.
 """
+
 from __future__ import annotations
 
 import json
@@ -29,10 +30,10 @@ from pathlib import Path
 from typing import Any, Optional
 
 from aipt_v2.models.finding_v2 import (
-    FindingV2,
     FindingCategory,
-    VerificationStatusV2,
+    FindingV2,
     SeverityV2,
+    VerificationStatusV2,
 )
 
 logger = logging.getLogger(__name__)
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CanonicalSummary:
     """Summary statistics for canonical findings"""
+
     total_raw: int = 0
     after_dedup: int = 0
     after_verification: int = 0
@@ -70,6 +72,7 @@ class CanonicalSummary:
 @dataclass
 class ToolStatusEntry:
     """Status entry for a single tool"""
+
     tool_name: str
     status: str  # "completed", "failed", "timeout", "skipped"
     finding_count: int = 0
@@ -97,6 +100,7 @@ class CanonicalFindings:
     This is the final output of the pipeline, containing all verified
     findings with proper categorization and statistics.
     """
+
     scan_id: str
     target: str
     verified_at: datetime
@@ -120,13 +124,14 @@ class CanonicalFindings:
             "pipeline_version": self.pipeline_version,
             "summary": self.summary.to_dict(),
             "findings": [f.to_dict() for f in self.findings],
-            "tool_status": {
-                name: entry.to_dict()
-                for name, entry in self.tool_status.items()
-            },
+            "tool_status": {name: entry.to_dict() for name, entry in self.tool_status.items()},
             "metadata": {
-                "scan_started_at": self.scan_started_at.isoformat() if self.scan_started_at else None,
-                "scan_completed_at": self.scan_completed_at.isoformat() if self.scan_completed_at else None,
+                "scan_started_at": (
+                    self.scan_started_at.isoformat() if self.scan_started_at else None
+                ),
+                "scan_completed_at": (
+                    self.scan_completed_at.isoformat() if self.scan_completed_at else None
+                ),
                 "scan_duration_seconds": self.scan_duration_seconds,
             },
         }
@@ -164,13 +169,25 @@ class CanonicalFindings:
         return cls(
             scan_id=data.get("scan_id", ""),
             target=data.get("target", ""),
-            verified_at=datetime.fromisoformat(data["verified_at"]) if data.get("verified_at") else datetime.now(timezone.utc),
+            verified_at=(
+                datetime.fromisoformat(data["verified_at"])
+                if data.get("verified_at")
+                else datetime.now(timezone.utc)
+            ),
             pipeline_version=data.get("pipeline_version", "2.0"),
             summary=summary,
             findings=findings,
             tool_status=tool_status,
-            scan_started_at=datetime.fromisoformat(metadata["scan_started_at"]) if metadata.get("scan_started_at") else None,
-            scan_completed_at=datetime.fromisoformat(metadata["scan_completed_at"]) if metadata.get("scan_completed_at") else None,
+            scan_started_at=(
+                datetime.fromisoformat(metadata["scan_started_at"])
+                if metadata.get("scan_started_at")
+                else None
+            ),
+            scan_completed_at=(
+                datetime.fromisoformat(metadata["scan_completed_at"])
+                if metadata.get("scan_completed_at")
+                else None
+            ),
             scan_duration_seconds=metadata.get("scan_duration_seconds"),
         )
 
@@ -184,14 +201,21 @@ class CanonicalFindings:
 
     def get_needs_review_findings(self) -> list[FindingV2]:
         """Get findings that need manual review"""
-        return [f for f in self.findings if f.verification_status in [
-            VerificationStatusV2.NEEDS_REVIEW,
-            VerificationStatusV2.MANUAL_REVIEW,
-        ]]
+        return [
+            f
+            for f in self.findings
+            if f.verification_status
+            in [
+                VerificationStatusV2.NEEDS_REVIEW,
+                VerificationStatusV2.MANUAL_REVIEW,
+            ]
+        ]
 
     def get_suppressed_findings(self) -> list[FindingV2]:
         """Get suppressed (false positive) findings"""
-        return [f for f in self.findings if f.verification_status == VerificationStatusV2.SUPPRESSED_FP]
+        return [
+            f for f in self.findings if f.verification_status == VerificationStatusV2.SUPPRESSED_FP
+        ]
 
     def get_by_severity(self, severity: SeverityV2) -> list[FindingV2]:
         """Get findings by severity level"""
@@ -289,34 +313,49 @@ class PipelinePersistence:
         confirmed = canonical.get_confirmed_findings()
         confirmed_path = self.verified_dir / "confirmed.json"
         with open(confirmed_path, "w") as f:
-            json.dump({
-                "scan_id": canonical.scan_id,
-                "target": canonical.target,
-                "count": len(confirmed),
-                "findings": [f.to_dict() for f in confirmed],
-            }, f, indent=2, default=str)
+            json.dump(
+                {
+                    "scan_id": canonical.scan_id,
+                    "target": canonical.target,
+                    "count": len(confirmed),
+                    "findings": [f.to_dict() for f in confirmed],
+                },
+                f,
+                indent=2,
+                default=str,
+            )
 
         # Save needs-review file
         needs_review = canonical.get_needs_review_findings()
         needs_review_path = self.verified_dir / "needs_review.json"
         with open(needs_review_path, "w") as f:
-            json.dump({
-                "scan_id": canonical.scan_id,
-                "target": canonical.target,
-                "count": len(needs_review),
-                "findings": [f.to_dict() for f in needs_review],
-            }, f, indent=2, default=str)
+            json.dump(
+                {
+                    "scan_id": canonical.scan_id,
+                    "target": canonical.target,
+                    "count": len(needs_review),
+                    "findings": [f.to_dict() for f in needs_review],
+                },
+                f,
+                indent=2,
+                default=str,
+            )
 
         # Save suppressed file
         suppressed = canonical.get_suppressed_findings()
         suppressed_path = self.verified_dir / "suppressed_fp.json"
         with open(suppressed_path, "w") as f:
-            json.dump({
-                "scan_id": canonical.scan_id,
-                "target": canonical.target,
-                "count": len(suppressed),
-                "findings": [f.to_dict() for f in suppressed],
-            }, f, indent=2, default=str)
+            json.dump(
+                {
+                    "scan_id": canonical.scan_id,
+                    "target": canonical.target,
+                    "count": len(suppressed),
+                    "findings": [f.to_dict() for f in suppressed],
+                },
+                f,
+                indent=2,
+                default=str,
+            )
 
         logger.info(
             f"Saved split files: confirmed={len(confirmed)}, "
@@ -471,7 +510,11 @@ def save_canonical_findings(
             else:
                 tool_status[name] = ToolStatusEntry(
                     tool_name=name,
-                    status=getattr(stats, "status", "unknown").value if hasattr(getattr(stats, "status", ""), "value") else str(getattr(stats, "status", "unknown")),
+                    status=(
+                        getattr(stats, "status", "unknown").value
+                        if hasattr(getattr(stats, "status", ""), "value")
+                        else str(getattr(stats, "status", "unknown"))
+                    ),
                     finding_count=getattr(stats, "finding_count", 0),
                     error=getattr(stats, "error", None),
                     duration=getattr(stats, "duration", None),
@@ -482,8 +525,16 @@ def save_canonical_findings(
     if scan_started_at and scan_completed_at:
         # Guard against naive/aware mismatch: normalize both to tz-aware UTC
         # before subtracting so a naive timestamp can never raise TypeError.
-        start = scan_started_at if scan_started_at.tzinfo else scan_started_at.replace(tzinfo=timezone.utc)
-        end = scan_completed_at if scan_completed_at.tzinfo else scan_completed_at.replace(tzinfo=timezone.utc)
+        start = (
+            scan_started_at
+            if scan_started_at.tzinfo
+            else scan_started_at.replace(tzinfo=timezone.utc)
+        )
+        end = (
+            scan_completed_at
+            if scan_completed_at.tzinfo
+            else scan_completed_at.replace(tzinfo=timezone.utc)
+        )
         duration = (end - start).total_seconds()
 
     # Create container

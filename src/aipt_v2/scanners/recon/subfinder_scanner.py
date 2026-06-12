@@ -12,9 +12,9 @@ import logging
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
-from ..base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from ..base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -76,12 +76,7 @@ class SubfinderScanner(BaseScanner):
         """Check if subfinder is installed."""
         return shutil.which("subfinder") is not None
 
-    async def scan(
-        self,
-        target: str,
-        domains_file: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, domains_file: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run subfinder scan.
 
@@ -109,8 +104,7 @@ class SubfinderScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 300)
+                process.communicate(), timeout=kwargs.get("timeout", 300)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -249,7 +243,9 @@ class SubfinderScanner(BaseScanner):
         severity = ScanSeverity.INFO
         subdomain_lower = subdomain.lower()
 
-        if any(x in subdomain_lower for x in ["admin", "dev", "staging", "test", "api", "internal"]):
+        if any(
+            x in subdomain_lower for x in ["admin", "dev", "staging", "test", "api", "internal"]
+        ):
             severity = ScanSeverity.LOW
             tags.append("interesting")
 

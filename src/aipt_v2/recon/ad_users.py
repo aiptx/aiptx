@@ -7,6 +7,7 @@ Multiple techniques for discovering AD users:
 - LDAP enumeration (anonymous and authenticated)
 - GPO preference extraction
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -16,13 +17,14 @@ import struct
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, AsyncIterator
+from typing import Optional
 
 logger = logging.getLogger(__name__)
 
 
 class EnumMethod(Enum):
     """User enumeration methods"""
+
     KERBEROS = "kerberos"
     RID_CYCLE = "rid_cycle"
     LDAP_ANON = "ldap_anonymous"
@@ -34,6 +36,7 @@ class EnumMethod(Enum):
 @dataclass
 class ADUser:
     """Discovered AD user"""
+
     username: str
     domain: str = ""
     sid: str = ""
@@ -79,10 +82,10 @@ class ADUser:
     def is_high_value(self) -> bool:
         """Check if user is high-value target"""
         return (
-            self.is_domain_admin or
-            self.is_enterprise_admin or
-            self.admin_count or
-            self.trusted_for_delegation
+            self.is_domain_admin
+            or self.is_enterprise_admin
+            or self.admin_count
+            or self.trusted_for_delegation
         )
 
     def to_dict(self) -> dict:
@@ -108,6 +111,7 @@ class ADUser:
 @dataclass
 class ADUserEnumConfig:
     """User enumeration configuration"""
+
     # Methods to use
     use_kerberos: bool = True
     use_rid_cycle: bool = True
@@ -136,17 +140,38 @@ class ADUserEnumConfig:
     domain: Optional[str] = None
 
     # Custom wordlist for kerbrute-style enum
-    username_wordlist: list[str] = field(default_factory=lambda: [
-        "administrator", "admin", "guest", "krbtgt", "support",
-        "backup", "service", "svc", "sql", "web", "app",
-        "test", "dev", "mail", "exchange", "sharepoint",
-        "helpdesk", "it", "security", "audit", "hr", "finance",
-    ])
+    username_wordlist: list[str] = field(
+        default_factory=lambda: [
+            "administrator",
+            "admin",
+            "guest",
+            "krbtgt",
+            "support",
+            "backup",
+            "service",
+            "svc",
+            "sql",
+            "web",
+            "app",
+            "test",
+            "dev",
+            "mail",
+            "exchange",
+            "sharepoint",
+            "helpdesk",
+            "it",
+            "security",
+            "audit",
+            "hr",
+            "finance",
+        ]
+    )
 
 
 @dataclass
 class ADUserEnumResult:
     """User enumeration results"""
+
     target_domain: str
     dc_ip: str
     users: list[ADUser] = field(default_factory=list)
@@ -275,7 +300,11 @@ class ADUserEnumerator:
                         # LDAP has richer data - merge
                         existing = discovered_users[key]
                         self._merge_user_data(existing, user)
-                result.methods_used.append(EnumMethod.LDAP_AUTH.value if self.config.username else EnumMethod.LDAP_ANON.value)
+                result.methods_used.append(
+                    EnumMethod.LDAP_AUTH.value
+                    if self.config.username
+                    else EnumMethod.LDAP_ANON.value
+                )
 
         except Exception as e:
             logger.error(f"User enumeration failed: {e}")
@@ -317,6 +346,7 @@ class ADUserEnumerator:
 
         # Create temporary wordlist file
         import tempfile
+
         with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             for username in self.config.username_wordlist:
                 f.write(f"{username}\n")
@@ -324,16 +354,19 @@ class ADUserEnumerator:
 
         try:
             proc = await asyncio.create_subprocess_exec(
-                "kerbrute", "userenum",
-                "--dc", dc_ip,
-                "-d", domain,
+                "kerbrute",
+                "userenum",
+                "--dc",
+                dc_ip,
+                "-d",
+                domain,
                 wordlist_path,
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(),
-                timeout=self.config.kerberos_timeout * len(self.config.username_wordlist)
+                timeout=self.config.kerberos_timeout * len(self.config.username_wordlist),
             )
 
             output = stdout.decode() + stderr.decode()
@@ -343,16 +376,19 @@ class ADUserEnumerator:
             pattern = r"VALID USERNAME:\s+(\S+)@"
             for match in re.finditer(pattern, output, re.IGNORECASE):
                 username = match.group(1)
-                users.append(ADUser(
-                    username=username,
-                    domain=domain,
-                    enum_method=EnumMethod.KERBEROS.value,
-                ))
+                users.append(
+                    ADUser(
+                        username=username,
+                        domain=domain,
+                        enum_method=EnumMethod.KERBEROS.value,
+                    )
+                )
 
         except asyncio.TimeoutError:
             logger.warning("kerbrute enumeration timed out")
         finally:
             import os
+
             os.unlink(wordlist_path)
 
         return users
@@ -373,8 +409,7 @@ class ADUserEnumerator:
 
                 # Send to KDC
                 reader, writer = await asyncio.wait_for(
-                    asyncio.open_connection(dc_ip, 88),
-                    timeout=self.config.kerberos_timeout
+                    asyncio.open_connection(dc_ip, 88), timeout=self.config.kerberos_timeout
                 )
 
                 # Kerberos uses length-prefixed messages
@@ -384,16 +419,14 @@ class ADUserEnumerator:
 
                 # Read response
                 response_len = await asyncio.wait_for(
-                    reader.read(4),
-                    timeout=self.config.kerberos_timeout
+                    reader.read(4), timeout=self.config.kerberos_timeout
                 )
                 if len(response_len) < 4:
                     return None
 
                 length = struct.unpack(">I", response_len)[0]
                 response = await asyncio.wait_for(
-                    reader.read(length),
-                    timeout=self.config.kerberos_timeout
+                    reader.read(length), timeout=self.config.kerberos_timeout
                 )
 
                 writer.close()
@@ -457,15 +490,17 @@ class ADUserEnumerator:
         try:
             from impacket.krb5 import constants
             from impacket.krb5.asn1 import AS_REQ, seq_set, seq_set_iter
-            from impacket.krb5.types import Principal, KerberosTime
-            from pyasn1.type.univ import noValue
+            from impacket.krb5.types import KerberosTime, Principal
             from pyasn1.codec.der import encoder
+            from pyasn1.type.univ import noValue
 
             # Build proper AS-REQ using impacket
             clientName = Principal(username, type=constants.PrincipalNameType.NT_PRINCIPAL.value)
 
             asReq = AS_REQ()
-            serverName = Principal(f"krbtgt/{realm.upper()}", type=constants.PrincipalNameType.NT_SRV_INST.value)
+            serverName = Principal(
+                f"krbtgt/{realm.upper()}", type=constants.PrincipalNameType.NT_SRV_INST.value
+            )
 
             pacReq = {
                 "include-pac": True,
@@ -486,11 +521,15 @@ class ADUserEnumerator:
             seq_set(reqBody, "till", KerberosTime.to_asn1(now + timedelta(days=1)))
             seq_set(reqBody, "rtime", KerberosTime.to_asn1(now + timedelta(days=1)))
             seq_set(reqBody, "nonce", 12345678)
-            seq_set_iter(reqBody, "etype", [
-                constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
-                constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
-                constants.EncryptionTypes.rc4_hmac.value,
-            ])
+            seq_set_iter(
+                reqBody,
+                "etype",
+                [
+                    constants.EncryptionTypes.aes256_cts_hmac_sha1_96.value,
+                    constants.EncryptionTypes.aes128_cts_hmac_sha1_96.value,
+                    constants.EncryptionTypes.rc4_hmac.value,
+                ],
+            )
 
             return encoder.encode(asReq)
 
@@ -552,9 +591,15 @@ class ADUserEnumerator:
         # First, get domain SID
         try:
             proc = await asyncio.create_subprocess_exec(
-                "rpcclient", "-U", "", "-N", dc_ip, "-c", "lsaquery",
+                "rpcclient",
+                "-U",
+                "",
+                "-N",
+                dc_ip,
+                "-c",
+                "lsaquery",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await proc.communicate()
             output = stdout.decode()
@@ -580,9 +625,15 @@ class ADUserEnumerator:
                 # Use lookupsids to resolve RIDs
                 sids = " ".join(f"{domain_sid}-{r}" for r in range(rid, batch_end))
                 proc = await asyncio.create_subprocess_exec(
-                    "rpcclient", "-U", "", "-N", dc_ip, "-c", f"lookupsids {sids}",
+                    "rpcclient",
+                    "-U",
+                    "",
+                    "-N",
+                    dc_ip,
+                    "-c",
+                    f"lookupsids {sids}",
                     stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
+                    stderr=asyncio.subprocess.PIPE,
                 )
                 stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=30)
                 output = stdout.decode()
@@ -598,13 +649,15 @@ class ADUserEnumerator:
                     # Type 1 = User, Type 2 = Group
                     if sid_type == 1 and username != "unknown":
                         rid_num = int(sid.split("-")[-1])
-                        users.append(ADUser(
-                            username=username,
-                            domain=user_domain,
-                            sid=sid,
-                            rid=rid_num,
-                            enum_method=EnumMethod.RID_CYCLE.value,
-                        ))
+                        users.append(
+                            ADUser(
+                                username=username,
+                                domain=user_domain,
+                                sid=sid,
+                                rid=rid_num,
+                                enum_method=EnumMethod.RID_CYCLE.value,
+                            )
+                        )
 
             except Exception as e:
                 logger.debug(f"RID batch {rid}-{batch_end} failed: {e}")
@@ -622,10 +675,13 @@ class ADUserEnumerator:
             if self.config.username and self.config.password:
                 cmd.append(f"{domain}/{self.config.username}:{self.config.password}@{dc_ip}")
             elif self.config.username and self.config.ntlm_hash:
-                cmd.extend([
-                    f"{domain}/{self.config.username}@{dc_ip}",
-                    "-hashes", f":{self.config.ntlm_hash}"
-                ])
+                cmd.extend(
+                    [
+                        f"{domain}/{self.config.username}@{dc_ip}",
+                        "-hashes",
+                        f":{self.config.ntlm_hash}",
+                    ]
+                )
             else:
                 # Try null session
                 cmd.append(f"{domain}/guest@{dc_ip}")
@@ -634,9 +690,7 @@ class ADUserEnumerator:
             cmd.extend(["-maxRid", str(self.config.rid_end)])
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await asyncio.wait_for(proc.communicate(), timeout=300)
             output = stdout.decode()
@@ -648,12 +702,14 @@ class ADUserEnumerator:
                 user_domain = match.group(2)
                 username = match.group(3)
 
-                users.append(ADUser(
-                    username=username,
-                    domain=user_domain,
-                    rid=rid,
-                    enum_method=EnumMethod.RID_CYCLE.value,
-                ))
+                users.append(
+                    ADUser(
+                        username=username,
+                        domain=user_domain,
+                        rid=rid,
+                        enum_method=EnumMethod.RID_CYCLE.value,
+                    )
+                )
 
         except FileNotFoundError:
             logger.warning("lookupsid.py not found, skipping RID cycling")
@@ -667,18 +723,19 @@ class ADUserEnumerator:
         users = []
 
         try:
-            from ldap3 import Server, Connection, ALL, SUBTREE, ANONYMOUS, SIMPLE
+            from ldap3 import ALL, ANONYMOUS, SIMPLE, SUBTREE, Connection, Server
 
             server = Server(dc_ip, port=389, get_info=ALL, connect_timeout=self.config.ldap_timeout)
 
             # Determine authentication
             if self.config.username and self.config.password:
-                user_dn = f"{self.config.domain}\\{self.config.username}" if self.config.domain else self.config.username
+                user_dn = (
+                    f"{self.config.domain}\\{self.config.username}"
+                    if self.config.domain
+                    else self.config.username
+                )
                 conn = Connection(
-                    server,
-                    user=user_dn,
-                    password=self.config.password,
-                    authentication=SIMPLE
+                    server, user=user_dn, password=self.config.password, authentication=SIMPLE
                 )
             else:
                 conn = Connection(server, authentication=ANONYMOUS)
@@ -693,9 +750,16 @@ class ADUserEnumerator:
             # Search for all users
             search_filter = "(&(objectCategory=person)(objectClass=user))"
             attributes = [
-                "sAMAccountName", "distinguishedName", "objectSid",
-                "userAccountControl", "memberOf", "servicePrincipalName",
-                "lastLogon", "pwdLastSet", "description", "adminCount",
+                "sAMAccountName",
+                "distinguishedName",
+                "objectSid",
+                "userAccountControl",
+                "memberOf",
+                "servicePrincipalName",
+                "lastLogon",
+                "pwdLastSet",
+                "description",
+                "adminCount",
             ]
 
             conn.search(
@@ -769,7 +833,11 @@ class ADUserEnumerator:
 
             # Group memberships
             if hasattr(entry, "memberOf"):
-                groups = entry.memberOf.values if hasattr(entry.memberOf, "values") else [str(entry.memberOf)]
+                groups = (
+                    entry.memberOf.values
+                    if hasattr(entry.memberOf, "values")
+                    else [str(entry.memberOf)]
+                )
                 user.groups = [str(g) for g in groups]
 
                 # Check for privileged groups
@@ -782,7 +850,11 @@ class ADUserEnumerator:
 
             # Service Principal Names
             if hasattr(entry, "servicePrincipalName"):
-                spns = entry.servicePrincipalName.values if hasattr(entry.servicePrincipalName, "values") else [str(entry.servicePrincipalName)]
+                spns = (
+                    entry.servicePrincipalName.values
+                    if hasattr(entry.servicePrincipalName, "values")
+                    else [str(entry.servicePrincipalName)]
+                )
                 user.spn = [str(s) for s in spns if s]
 
             # Description
@@ -808,10 +880,14 @@ class ADUserEnumerator:
         # Flags
         existing.enabled = new.enabled
         existing.locked = new.locked
-        existing.password_never_expires = new.password_never_expires or existing.password_never_expires
+        existing.password_never_expires = (
+            new.password_never_expires or existing.password_never_expires
+        )
         existing.password_not_required = new.password_not_required or existing.password_not_required
         existing.dont_req_preauth = new.dont_req_preauth or existing.dont_req_preauth
-        existing.trusted_for_delegation = new.trusted_for_delegation or existing.trusted_for_delegation
+        existing.trusted_for_delegation = (
+            new.trusted_for_delegation or existing.trusted_for_delegation
+        )
         existing.admin_count = new.admin_count or existing.admin_count
 
         # Groups and SPNs
@@ -827,9 +903,7 @@ class ADUserEnumerator:
 
 # Convenience functions
 async def enumerate_users(
-    domain: str,
-    dc_ip: str,
-    config: Optional[ADUserEnumConfig] = None
+    domain: str, dc_ip: str, config: Optional[ADUserEnumConfig] = None
 ) -> ADUserEnumResult:
     """
     Enumerate Active Directory users.

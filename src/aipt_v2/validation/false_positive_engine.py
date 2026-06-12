@@ -41,11 +41,11 @@ logger = logging.getLogger(__name__)
 class ConfidenceLevel(Enum):
     """Confidence levels for validation results."""
 
-    VERY_HIGH = "very_high"    # >= 0.90
-    HIGH = "high"              # 0.75-0.90
-    MEDIUM = "medium"          # 0.50-0.75
-    LOW = "low"                # 0.25-0.50
-    VERY_LOW = "very_low"      # < 0.25
+    VERY_HIGH = "very_high"  # >= 0.90
+    HIGH = "high"  # 0.75-0.90
+    MEDIUM = "medium"  # 0.50-0.75
+    LOW = "low"  # 0.25-0.50
+    VERY_LOW = "very_low"  # < 0.25
 
     @classmethod
     def from_score(cls, score: float) -> "ConfidenceLevel":
@@ -64,12 +64,12 @@ class ConfidenceLevel(Enum):
 class FindingStatus(Enum):
     """Status of a security finding after validation."""
 
-    CONFIRMED = "confirmed"           # Verified exploitable
-    LIKELY = "likely"                 # High confidence, awaiting verification
-    SUSPECTED = "suspected"           # Medium confidence
-    FALSE_POSITIVE = "false_positive" # Determined to be FP
-    UNDER_REVIEW = "under_review"     # Needs manual review
-    SUPPRESSED = "suppressed"         # User-suppressed
+    CONFIRMED = "confirmed"  # Verified exploitable
+    LIKELY = "likely"  # High confidence, awaiting verification
+    SUSPECTED = "suspected"  # Medium confidence
+    FALSE_POSITIVE = "false_positive"  # Determined to be FP
+    UNDER_REVIEW = "under_review"  # Needs manual review
+    SUPPRESSED = "suppressed"  # User-suppressed
 
 
 @dataclass
@@ -83,14 +83,14 @@ class CVSSData:
     vector_string: str = ""
 
     # CVSS v3.1 base metrics
-    attack_vector: Optional[str] = None       # N, A, L, P
-    attack_complexity: Optional[str] = None   # L, H
-    privileges_required: Optional[str] = None # N, L, H
-    user_interaction: Optional[str] = None    # N, R
-    scope: Optional[str] = None               # U, C
+    attack_vector: Optional[str] = None  # N, A, L, P
+    attack_complexity: Optional[str] = None  # L, H
+    privileges_required: Optional[str] = None  # N, L, H
+    user_interaction: Optional[str] = None  # N, R
+    scope: Optional[str] = None  # U, C
     confidentiality_impact: Optional[str] = None  # N, L, H
-    integrity_impact: Optional[str] = None    # N, L, H
-    availability_impact: Optional[str] = None # N, L, H
+    integrity_impact: Optional[str] = None  # N, L, H
+    availability_impact: Optional[str] = None  # N, L, H
 
     def get_effective_score(self) -> float:
         """Get the most specific CVSS score available."""
@@ -119,8 +119,8 @@ class EPSSData:
     """EPSS (Exploit Prediction Scoring System) data."""
 
     cve_id: str
-    epss_score: float      # 0-1 probability of exploitation
-    percentile: float      # Percentile ranking
+    epss_score: float  # 0-1 probability of exploitation
+    percentile: float  # Percentile ranking
     date: datetime = field(default_factory=datetime.now)
 
     def is_high_probability(self) -> bool:
@@ -144,9 +144,9 @@ class RiskFactors:
 
     cvss_data: CVSSData = field(default_factory=CVSSData)
     epss_score: float = 0.0
-    business_impact: float = 0.0      # 0-1 scale
-    exploitability: float = 0.0       # 0-1 scale
-    asset_criticality: float = 0.0    # 0-1 scale
+    business_impact: float = 0.0  # 0-1 scale
+    exploitability: float = 0.0  # 0-1 scale
+    asset_criticality: float = 0.0  # 0-1 scale
 
     # Context factors
     internet_exposed: bool = False
@@ -303,8 +303,28 @@ class BayesianFilter:
 
     def _extract_features(self, text: str) -> List[str]:
         """Extract feature words from text."""
-        stopwords = {"the", "a", "an", "is", "are", "was", "were", "be", "been", "being",
-                     "and", "or", "but", "in", "on", "at", "to", "for", "of", "with"}
+        stopwords = {
+            "the",
+            "a",
+            "an",
+            "is",
+            "are",
+            "was",
+            "were",
+            "be",
+            "been",
+            "being",
+            "and",
+            "or",
+            "but",
+            "in",
+            "on",
+            "at",
+            "to",
+            "for",
+            "of",
+            "with",
+        }
         words = text.lower().split()
         return [w.strip(".,;:!?()[]{}") for w in words if len(w) > 3 and w not in stopwords]
 
@@ -331,7 +351,7 @@ class FalsePositiveDatabase:
         finding_hash: str,
         description: str,
         is_false_positive: bool,
-        user_feedback: Optional[bool] = None
+        user_feedback: Optional[bool] = None,
     ):
         """Add or update a finding in the database."""
         now = datetime.now()
@@ -384,7 +404,8 @@ class FalsePositiveDatabase:
                         user_feedback=item.get("user_feedback"),
                         feedback_timestamp=(
                             datetime.fromisoformat(item["feedback_timestamp"])
-                            if item.get("feedback_timestamp") else None
+                            if item.get("feedback_timestamp")
+                            else None
                         ),
                     )
                     self.findings[hist.finding_hash] = hist
@@ -436,12 +457,7 @@ class LLMVotingEngine:
         logger.info(f"Registered LLM '{name}' for FP voting")
 
     async def vote_on_finding(
-        self,
-        title: str,
-        description: str,
-        severity: str,
-        vuln_type: str,
-        evidence: Dict[str, Any]
+        self, title: str, description: str, severity: str, vuln_type: str, evidence: Dict[str, Any]
     ) -> Tuple[Dict[str, str], float]:
         """
         Conduct multi-LLM voting on a finding.
@@ -457,9 +473,7 @@ class LLMVotingEngine:
         tasks = []
 
         for name, client in self.llm_clients.items():
-            task = self._query_llm(
-                name, client, title, description, severity, vuln_type, evidence
-            )
+            task = self._query_llm(name, client, title, description, severity, vuln_type, evidence)
             tasks.append(task)
 
         results = await asyncio.gather(*tasks, return_exceptions=True)
@@ -493,7 +507,7 @@ class LLMVotingEngine:
         description: str,
         severity: str,
         vuln_type: str,
-        evidence: Dict[str, Any]
+        evidence: Dict[str, Any],
     ) -> str:
         """Query a single LLM for its opinion."""
         prompt = self._build_prompt(title, description, severity, vuln_type, evidence)
@@ -513,12 +527,7 @@ class LLMVotingEngine:
             raise
 
     def _build_prompt(
-        self,
-        title: str,
-        description: str,
-        severity: str,
-        vuln_type: str,
-        evidence: Dict[str, Any]
+        self, title: str, description: str, severity: str, vuln_type: str, evidence: Dict[str, Any]
     ) -> str:
         """Build the analysis prompt for LLMs."""
         return f"""Analyze this security finding and determine if it's likely a FALSE POSITIVE:
@@ -550,8 +559,14 @@ Respond with ONLY "TRUE_POSITIVE" or "FALSE_POSITIVE".
     def _heuristic_decision(self, description: str, severity: str) -> str:
         """Heuristic fallback when LLM unavailable."""
         fp_indicators = [
-            "informational", "note", "best practice", "recommendation",
-            "consider", "might be", "possibly", "could potentially",
+            "informational",
+            "note",
+            "best practice",
+            "recommendation",
+            "consider",
+            "might be",
+            "possibly",
+            "could potentially",
         ]
         desc_lower = description.lower()
         indicator_count = sum(1 for ind in fp_indicators if ind in desc_lower)
@@ -608,9 +623,7 @@ class FalsePositiveEngine:
         logger.info("FalsePositiveEngine initialized")
 
     async def validate_finding(
-        self,
-        finding: Any,
-        context: Optional[Dict[str, Any]] = None
+        self, finding: Any, context: Optional[Dict[str, Any]] = None
     ) -> FPValidationResult:
         """
         Validate a finding and determine if it's a false positive.
@@ -642,8 +655,12 @@ class FalsePositiveEngine:
         # Build evidence dict
         evidence_dict = {
             "raw_evidence": evidence[:1000] if isinstance(evidence, str) else str(evidence)[:1000],
-            "request": getattr(finding, "request", "")[:500] if getattr(finding, "request", None) else "",
-            "response": getattr(finding, "response", "")[:500] if getattr(finding, "response", None) else "",
+            "request": (
+                getattr(finding, "request", "")[:500] if getattr(finding, "request", None) else ""
+            ),
+            "response": (
+                getattr(finding, "response", "")[:500] if getattr(finding, "response", None) else ""
+            ),
         }
 
         # 1. Historical validation
@@ -685,8 +702,14 @@ class FalsePositiveEngine:
 
         # Make decision
         is_fp, confidence, reasoning = self._make_decision(
-            historical, bayesian_fp_prob, llm_votes, llm_confidence,
-            risk_score, context_score, description, severity
+            historical,
+            bayesian_fp_prob,
+            llm_votes,
+            llm_confidence,
+            risk_score,
+            context_score,
+            description,
+            severity,
         )
 
         # Determine status
@@ -722,9 +745,7 @@ class FalsePositiveEngine:
         return result
 
     async def validate_findings(
-        self,
-        findings: List[Any],
-        context: Optional[Dict[str, Any]] = None
+        self, findings: List[Any], context: Optional[Dict[str, Any]] = None
     ) -> List[FPValidationResult]:
         """
         Validate multiple findings in parallel.
@@ -739,10 +760,7 @@ class FalsePositiveEngine:
         tasks = [self.validate_finding(f, context) for f in findings]
         return await asyncio.gather(*tasks)
 
-    def prioritize_findings(
-        self,
-        results: List[FPValidationResult]
-    ) -> List[FPValidationResult]:
+    def prioritize_findings(self, results: List[FPValidationResult]) -> List[FPValidationResult]:
         """
         Sort findings by priority (confirmed true positives first).
 
@@ -752,16 +770,14 @@ class FalsePositiveEngine:
         Returns:
             Sorted list with highest priority first
         """
+
         def priority_key(r: FPValidationResult) -> Tuple[int, float]:
             return (r.priority, -r.risk_score)
 
         return sorted(results, key=priority_key)
 
     async def learn_from_feedback(
-        self,
-        finding_id: str,
-        finding_description: str,
-        is_false_positive: bool
+        self, finding_id: str, finding_description: str, is_false_positive: bool
     ):
         """
         Learn from user feedback to improve accuracy.
@@ -773,10 +789,7 @@ class FalsePositiveEngine:
         """
         finding_hash = hashlib.sha256(finding_id.encode()).hexdigest()[:16]
         self.fp_database.add_finding(
-            finding_hash,
-            finding_description,
-            is_false_positive,
-            user_feedback=is_false_positive
+            finding_hash, finding_description, is_false_positive, user_feedback=is_false_positive
         )
         logger.info(f"Learned from feedback for {finding_id[:8]}...: FP={is_false_positive}")
 
@@ -819,12 +832,7 @@ class FalsePositiveEngine:
 
         return risk_score
 
-    def _analyze_context(
-        self,
-        description: str,
-        severity: str,
-        risk_factors: RiskFactors
-    ) -> float:
+    def _analyze_context(self, description: str, severity: str, risk_factors: RiskFactors) -> float:
         """Analyze contextual factors."""
         score = 0.5
 
@@ -836,12 +844,7 @@ class FalsePositiveEngine:
             score += 0.2
 
         # Data classification
-        data_weights = {
-            "public": 0.0,
-            "internal": 0.1,
-            "confidential": 0.2,
-            "restricted": 0.3
-        }
+        data_weights = {"public": 0.0, "internal": 0.1, "confidential": 0.2, "restricted": 0.3}
         score += data_weights.get(risk_factors.data_classification, 0.1)
 
         return min(1.0, score)
@@ -855,7 +858,7 @@ class FalsePositiveEngine:
         risk_score: float,
         context_score: float,
         description: str,
-        severity: str
+        severity: str,
     ) -> Tuple[bool, float, str]:
         """Make the final FP/TP decision."""
         reasons = []
@@ -865,7 +868,7 @@ class FalsePositiveEngine:
             return (
                 historical.user_feedback,
                 0.95,
-                f"Based on historical feedback ({historical.occurrence_count} occurrences)"
+                f"Based on historical feedback ({historical.occurrence_count} occurrences)",
             )
 
         # Aggregated indicators
@@ -901,9 +904,14 @@ class FalsePositiveEngine:
 
         # FP patterns in description
         fp_patterns = [
-            "informational", "low severity", "best practice",
-            "consider implementing", "might be", "possibly",
-            "could potentially", "recommendation"
+            "informational",
+            "low severity",
+            "best practice",
+            "consider implementing",
+            "might be",
+            "possibly",
+            "could potentially",
+            "recommendation",
         ]
         desc_lower = description.lower()
         pattern_matches = sum(1 for p in fp_patterns if p in desc_lower)
@@ -939,12 +947,7 @@ class FalsePositiveEngine:
         else:
             return FindingStatus.SUSPECTED
 
-    def _calculate_priority(
-        self,
-        is_fp: bool,
-        risk_score: float,
-        risk_factors: RiskFactors
-    ) -> int:
+    def _calculate_priority(self, is_fp: bool, risk_score: float, risk_factors: RiskFactors) -> int:
         """Calculate remediation priority (1 = highest)."""
         if is_fp:
             return 999  # Lowest priority for FPs
@@ -972,10 +975,7 @@ class FalsePositiveEngine:
         return priority
 
     def _generate_recommendations(
-        self,
-        is_fp: bool,
-        risk_score: float,
-        risk_factors: RiskFactors
+        self, is_fp: bool, risk_score: float, risk_factors: RiskFactors
     ) -> List[str]:
         """Generate actionable recommendations."""
         recommendations = []
@@ -1008,9 +1008,7 @@ class FalsePositiveEngine:
 
 # Convenience function for direct use
 async def validate_finding(
-    finding: Any,
-    context: Optional[Dict[str, Any]] = None,
-    llm: Any = None
+    finding: Any, context: Optional[Dict[str, Any]] = None, llm: Any = None
 ) -> FPValidationResult:
     """
     Convenience function to validate a single finding.

@@ -15,27 +15,27 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-import re
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
-from urllib.parse import urlparse
+from typing import Optional
 
-from aipt_v2.scanners.base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from aipt_v2.scanners.base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
 
 class MessageDirection(str, Enum):
     """Direction of WebSocket message."""
+
     SENT = "sent"
     RECEIVED = "received"
 
 
 class AttackType(str, Enum):
     """Types of WebSocket attacks."""
+
     SQLI = "sql_injection"
     NOSQLI = "nosql_injection"
     COMMAND_INJECTION = "command_injection"
@@ -50,6 +50,7 @@ class AttackType(str, Enum):
 @dataclass
 class WebSocketMessage:
     """Captured WebSocket message."""
+
     direction: MessageDirection
     data: str
     timestamp: datetime = field(default_factory=datetime.now)
@@ -69,6 +70,7 @@ class WebSocketMessage:
 @dataclass
 class WebSocketFinding:
     """Security finding from WebSocket testing."""
+
     attack_type: AttackType
     title: str
     description: str
@@ -96,6 +98,7 @@ class WebSocketFinding:
 @dataclass
 class WebSocketScanConfig:
     """Configuration for WebSocket scanning."""
+
     timeout: float = 30.0
     max_messages: int = 100
     test_injection: bool = True
@@ -112,6 +115,7 @@ class WebSocketScanConfig:
 @dataclass
 class WebSocketScanResult:
     """Result of WebSocket security scan."""
+
     endpoint: str
     started_at: datetime
     completed_at: Optional[datetime] = None
@@ -170,6 +174,7 @@ class WebSocketScanner(BaseScanner):
         """Check if websockets library is available."""
         try:
             import websockets
+
             return True
         except ImportError:
             return False
@@ -230,7 +235,7 @@ class WebSocketScanner(BaseScanner):
                     open_timeout=self.config.timeout,
                 ) as ws:
                     result.connected = True
-                    logger.info(f"[WebSocket] Connected successfully")
+                    logger.info("[WebSocket] Connected successfully")
 
                     # Run security tests
                     if self.config.test_injection:
@@ -328,9 +333,7 @@ class WebSocketScanner(BaseScanner):
         for msg in formats:
             try:
                 await ws.send(msg)
-                result.messages.append(
-                    WebSocketMessage(direction=MessageDirection.SENT, data=msg)
-                )
+                result.messages.append(WebSocketMessage(direction=MessageDirection.SENT, data=msg))
 
                 # Wait for response with timeout
                 try:
@@ -340,9 +343,7 @@ class WebSocketScanner(BaseScanner):
                     )
 
                     # Check for vulnerability indicators
-                    vuln = self._check_vulnerability_indicators(
-                        payload, response, attack_type
-                    )
+                    vuln = self._check_vulnerability_indicators(payload, response, attack_type)
                     if vuln:
                         result.findings.append(vuln)
 
@@ -364,8 +365,14 @@ class WebSocketScanner(BaseScanner):
         # SQL injection indicators
         if attack_type == AttackType.SQLI:
             sql_errors = [
-                "sql syntax", "mysql", "postgresql", "sqlite",
-                "ora-", "sql server", "odbc", "database error",
+                "sql syntax",
+                "mysql",
+                "postgresql",
+                "sqlite",
+                "ora-",
+                "sql server",
+                "odbc",
+                "database error",
             ]
             if any(err in response_lower for err in sql_errors):
                 return WebSocketFinding(

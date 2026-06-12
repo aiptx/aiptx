@@ -17,25 +17,19 @@ import platform
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
-from aipt_v2.tools.ps_arsenal.ps_config import (
-    PSArsenalConfig,
-    PSScanConfig,
-    PSLoadMode
-)
+from aipt_v2.tools.ps_arsenal.ps_config import PSScanConfig
 from aipt_v2.tools.ps_arsenal.ps_executor import PSArsenalExecutor
-from aipt_v2.tools.ps_arsenal.ps_parsers import (
-    PSArsenalParser,
-    PSFinding,
-    PSCredential,
-    PSFindingSeverity
-)
 from aipt_v2.tools.ps_arsenal.ps_metadata import (
     SCRIPT_METADATA,
     get_script_metadata,
-    ScriptCategory
+)
+from aipt_v2.tools.ps_arsenal.ps_parsers import (
+    PSArsenalParser,
+    PSCredential,
+    PSFinding,
+    PSFindingSeverity,
 )
 
 logger = logging.getLogger(__name__)
@@ -45,8 +39,10 @@ logger = logging.getLogger(__name__)
 # SCAN RESULT MODELS
 # =============================================================================
 
+
 class ScanSeverity:
     """Severity levels for scan findings."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -57,6 +53,7 @@ class ScanSeverity:
 @dataclass
 class ScanFinding:
     """Standard scan finding compatible with AIPTX pipeline."""
+
     title: str
     severity: str
     description: str
@@ -94,13 +91,14 @@ class ScanFinding:
             "cvss": self.cvss,
             "tags": self.tags,
             "metadata": self.metadata,
-            "timestamp": self.timestamp
+            "timestamp": self.timestamp,
         }
 
 
 @dataclass
 class ScanResult:
     """Complete scan result."""
+
     scanner: str
     target: str
     status: str = "pending"  # pending, running, completed, failed
@@ -129,13 +127,14 @@ class ScanResult:
             "start_time": self.start_time.isoformat() if self.start_time else None,
             "end_time": self.end_time.isoformat() if self.end_time else None,
             "duration_seconds": self.duration_seconds,
-            "errors": self.errors
+            "errors": self.errors,
         }
 
 
 # =============================================================================
 # POWERSHELL ARSENAL SCANNER
 # =============================================================================
+
 
 class PSArsenalScanner:
     """
@@ -157,7 +156,7 @@ class PSArsenalScanner:
             scripts_path=self.config.scripts_path,
             base_url=self.config.base_url,
             load_mode=self.config.load_mode,
-            bypass_amsi=self.config.bypass_amsi
+            bypass_amsi=self.config.bypass_amsi,
         )
         self.parser = PSArsenalParser()
 
@@ -186,11 +185,7 @@ class PSArsenalScanner:
         }
         return mapping.get(severity, ScanSeverity.INFO)
 
-    def _convert_finding(
-        self,
-        finding: PSFinding,
-        target: str
-    ) -> ScanFinding:
+    def _convert_finding(self, finding: PSFinding, target: str) -> ScanFinding:
         """Convert PSFinding to ScanFinding."""
         return ScanFinding(
             title=finding.title,
@@ -201,15 +196,10 @@ class PSArsenalScanner:
             template=finding.source_script,
             evidence=finding.raw_data[:500] if finding.raw_data else "",
             tags=finding.mitre_attack,
-            metadata=finding.metadata
+            metadata=finding.metadata,
         )
 
-    async def scan(
-        self,
-        target: str,
-        scripts: Optional[List[str]] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, scripts: Optional[List[str]] = None, **kwargs) -> ScanResult:
         """
         Run PowerShell Arsenal scan against target.
 
@@ -243,17 +233,14 @@ class PSArsenalScanner:
                     script_name=script_name,
                     function_name=metadata.function_name,
                     parameters=kwargs.get("params", {}),
-                    timeout=self.config.timeout
+                    timeout=self.config.timeout,
                 )
 
                 result.raw_output += f"\n=== {script_name} ===\n{ps_result.output}"
 
                 if ps_result.success:
                     # Parse output
-                    findings, credentials = self.parser.parse_all(
-                        ps_result.output,
-                        script_name
-                    )
+                    findings, credentials = self.parser.parse_all(ps_result.output, script_name)
 
                     # Convert and add findings
                     for f in findings:
@@ -275,9 +262,7 @@ class PSArsenalScanner:
 
         result.status = "completed"
         result.end_time = datetime.now(timezone.utc)
-        result.duration_seconds = (
-            result.end_time - result.start_time
-        ).total_seconds()
+        result.duration_seconds = (result.end_time - result.start_time).total_seconds()
 
         return result
 
@@ -291,10 +276,7 @@ class PSArsenalScanner:
         Returns:
             ScanResult with basic system info
         """
-        return await self.scan(
-            target,
-            scripts=["Get-Information", "Check-VM"]
-        )
+        return await self.scan(target, scripts=["Get-Information", "Check-VM"])
 
     async def credential_scan(self, target: str) -> ScanResult:
         """
@@ -313,7 +295,7 @@ class PSArsenalScanner:
                 "Get-PassHashes",
                 "Get-WLAN-Keys",
                 "Get-WebCredentials",
-            ]
+            ],
         )
 
     def parse_output(self, output: str) -> List[ScanFinding]:
@@ -333,15 +315,14 @@ class PSArsenalScanner:
                 severity=self._convert_severity(f.severity),
                 description=f.description,
                 scanner="ps_arsenal",
-                template=f.source_script
+                template=f.source_script,
             )
             for f in findings
         ]
 
 
 def create_ps_scanner(
-    scripts_path: Optional[str] = None,
-    scripts_to_run: Optional[List[str]] = None
+    scripts_path: Optional[str] = None, scripts_to_run: Optional[List[str]] = None
 ) -> PSArsenalScanner:
     """
     Factory function to create PSArsenalScanner.
@@ -355,7 +336,7 @@ def create_ps_scanner(
     """
     config = PSScanConfig(
         scripts_path=scripts_path or "/tmp/ps_arsenal",
-        scripts_to_run=scripts_to_run or ["Get-Information", "Check-VM"]
+        scripts_to_run=scripts_to_run or ["Get-Information", "Check-VM"],
     )
     return PSArsenalScanner(config)
 

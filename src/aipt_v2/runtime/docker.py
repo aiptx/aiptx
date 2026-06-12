@@ -15,7 +15,6 @@ from docker.models.containers import Container
 
 from .runtime import AbstractRuntime, SandboxInfo
 
-
 AIPT_IMAGE = os.getenv("AIPT_IMAGE", "ghcr.io/aipt/aipt-sandbox:0.1.10")
 logger = logging.getLogger(__name__)
 

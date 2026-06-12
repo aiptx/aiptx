@@ -6,21 +6,22 @@ Tests for config.py - Pydantic-based configuration validation.
 """
 
 import os
-import pytest
 from pathlib import Path
 from unittest.mock import patch
 
+import pytest
+
 from aipt_v2.config import (
     AIPTConfig,
-    LLMSettings,
-    ScannerSettings,
-    VPSSettings,
     APISettings,
     DatabaseSettings,
+    LLMSettings,
     LoggingSettings,
+    ScannerSettings,
+    VPSSettings,
     get_config,
-    validate_config_for_features,
     require_config,
+    validate_config_for_features,
 )
 
 
@@ -199,9 +200,7 @@ class TestDatabaseSettings:
 
     def test_postgres_url(self):
         """Test PostgreSQL database URL."""
-        settings = DatabaseSettings(
-            url="postgresql://user:pass@localhost:5432/aipt"
-        )
+        settings = DatabaseSettings(url="postgresql://user:pass@localhost:5432/aipt")
 
         assert "postgresql://" in settings.url
 

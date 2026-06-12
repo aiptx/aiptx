@@ -9,7 +9,6 @@ import os
 from dataclasses import dataclass
 from typing import Optional
 
-
 # ==================== Server Configuration ====================
 
 # Remote Scanner Server - MUST be configured via environment variable
@@ -27,9 +26,11 @@ BURP_URL = os.getenv("AIPT_BURP_URL", f"http://{SCANNER_SERVER_IP}:{BURP_PORT}/v
 
 # ==================== Acunetix Configuration ====================
 
+
 @dataclass
 class AcunetixSettings:
     """Acunetix scanner settings."""
+
     base_url: str = ACUNETIX_URL
     # API key MUST be provided via environment variable - no default for security
     api_key: str = os.getenv("AIPT_ACUNETIX_API_KEY", "")
@@ -47,9 +48,11 @@ class AcunetixSettings:
 
 # ==================== Burp Suite Configuration ====================
 
+
 @dataclass
 class BurpSettings:
     """Burp Suite scanner settings."""
+
     base_url: str = BURP_URL
     # API key MUST be provided via environment variable - no default for security
     api_key: str = os.getenv("AIPT_BURP_API_KEY", "")
@@ -66,9 +69,11 @@ class BurpSettings:
 
 # ==================== Global Settings ====================
 
+
 @dataclass
 class ScannerSettings:
     """Global scanner settings."""
+
     # Timeouts
     scan_timeout: int = 3600  # 1 hour max per scan
     connection_timeout: int = 30
@@ -96,13 +101,14 @@ SCANNER = ScannerSettings()
 
 # ==================== Configuration Helpers ====================
 
+
 def get_acunetix_config() -> dict:
     """Get Acunetix configuration as dict for tool initialization."""
     return {
         "base_url": ACUNETIX.base_url,
         "api_key": ACUNETIX.api_key,
         "verify_ssl": ACUNETIX.verify_ssl,
-        "timeout": ACUNETIX.timeout
+        "timeout": ACUNETIX.timeout,
     }
 
 
@@ -112,7 +118,7 @@ def get_burp_config() -> dict:
         "base_url": BURP.base_url,
         "api_key": BURP.api_key,
         "verify_ssl": BURP.verify_ssl,
-        "timeout": BURP.timeout
+        "timeout": BURP.timeout,
     }
 
 
@@ -122,11 +128,11 @@ def print_config():
     print("AIPT Scanner Configuration")
     print("=" * 60)
     print(f"\nServer IP: {SCANNER_SERVER_IP}")
-    print(f"\nAcunetix:")
+    print("\nAcunetix:")
     print(f"  URL:     {ACUNETIX.base_url}")
     print(f"  API Key: {ACUNETIX.api_key[:20]}..." if ACUNETIX.api_key else "  API Key: Not set")
     print(f"  SSL:     {ACUNETIX.verify_ssl}")
-    print(f"\nBurp Suite:")
+    print("\nBurp Suite:")
     print(f"  URL:     {BURP.base_url}")
     print(f"  API Key: {BURP.api_key[:20]}..." if BURP.api_key else "  API Key: Not set")
     print(f"  SSL:     {BURP.verify_ssl}")

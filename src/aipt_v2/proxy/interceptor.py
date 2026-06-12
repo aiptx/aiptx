@@ -3,18 +3,16 @@ AIPT Proxy Interceptor
 
 HTTP/HTTPS traffic interception using mitmproxy.
 """
+
 from __future__ import annotations
 
 import asyncio
 import json
 import logging
-import os
-import tempfile
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Callable, Optional
-from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
 
@@ -22,6 +20,7 @@ logger = logging.getLogger(__name__)
 try:
     from mitmproxy import http, options
     from mitmproxy.tools import dump
+
     MITMPROXY_AVAILABLE = True
 except ImportError:
     MITMPROXY_AVAILABLE = False
@@ -31,6 +30,7 @@ except ImportError:
 @dataclass
 class InterceptedRequest:
     """Captured HTTP request"""
+
     id: str
     timestamp: datetime
     method: str
@@ -81,6 +81,7 @@ class InterceptedRequest:
 @dataclass
 class InterceptedResponse:
     """Captured HTTP response"""
+
     request_id: str
     timestamp: datetime
     status_code: int
@@ -119,6 +120,7 @@ class InterceptedResponse:
 @dataclass
 class ProxyConfig:
     """Proxy configuration"""
+
     listen_host: str = "127.0.0.1"
     listen_port: int = 8080
 
@@ -127,13 +129,15 @@ class ProxyConfig:
 
     # Filtering
     include_hosts: list[str] = field(default_factory=list)
-    exclude_hosts: list[str] = field(default_factory=lambda: [
-        "*.google.com",
-        "*.googleapis.com",
-        "*.gstatic.com",
-        "*.doubleclick.net",
-        "*.google-analytics.com",
-    ])
+    exclude_hosts: list[str] = field(
+        default_factory=lambda: [
+            "*.google.com",
+            "*.googleapis.com",
+            "*.gstatic.com",
+            "*.doubleclick.net",
+            "*.google-analytics.com",
+        ]
+    )
 
     # Capture settings
     capture_requests: bool = True
@@ -175,8 +179,12 @@ class ProxyInterceptor:
         self.config = config or ProxyConfig()
         self._requests: dict[str, InterceptedRequest] = {}
         self._responses: dict[str, InterceptedResponse] = {}
-        self._request_callbacks: list[Callable[[InterceptedRequest], Optional[InterceptedRequest]]] = []
-        self._response_callbacks: list[Callable[[InterceptedResponse], Optional[InterceptedResponse]]] = []
+        self._request_callbacks: list[
+            Callable[[InterceptedRequest], Optional[InterceptedRequest]]
+        ] = []
+        self._response_callbacks: list[
+            Callable[[InterceptedResponse], Optional[InterceptedResponse]]
+        ] = []
         self._master = None
         self._thread: Optional[threading.Thread] = None
         self._running = False
@@ -287,7 +295,9 @@ class ProxyInterceptor:
                         modified = callback(req)
                         if modified:
                             # Apply modifications to flow
-                            flow.request.headers = http.Headers([(k, v) for k, v in modified.headers.items()])
+                            flow.request.headers = http.Headers(
+                                [(k, v) for k, v in modified.headers.items()]
+                            )
                             if modified.body:
                                 flow.request.content = modified.body
                     except Exception as e:
@@ -320,7 +330,9 @@ class ProxyInterceptor:
 
                 # Calculate response time
                 if request:
-                    resp.response_time_ms = (resp.timestamp - request.timestamp).total_seconds() * 1000
+                    resp.response_time_ms = (
+                        resp.timestamp - request.timestamp
+                    ).total_seconds() * 1000
 
                 # Parse content type
                 content_type = flow.response.headers.get("content-type", "")
@@ -336,7 +348,9 @@ class ProxyInterceptor:
                     try:
                         modified = callback(resp)
                         if modified:
-                            flow.response.headers = http.Headers([(k, v) for k, v in modified.headers.items()])
+                            flow.response.headers = http.Headers(
+                                [(k, v) for k, v in modified.headers.items()]
+                            )
                             if modified.body:
                                 flow.response.content = modified.body
                     except Exception as e:

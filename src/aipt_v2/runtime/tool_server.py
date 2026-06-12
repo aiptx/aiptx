@@ -14,7 +14,6 @@ from fastapi import Depends, FastAPI, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, ValidationError
 
-
 SANDBOX_MODE = os.getenv("AIPT_SANDBOX_MODE", "false").lower() == "true"
 if not SANDBOX_MODE:
     raise RuntimeError("Tool server should only run in sandbox mode (AIPT_SANDBOX_MODE=true)")

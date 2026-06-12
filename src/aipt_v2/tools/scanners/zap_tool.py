@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import requests
 
@@ -34,8 +34,10 @@ logger = logging.getLogger(__name__)
 
 # ==================== Enums ====================
 
+
 class ScanStatus(Enum):
     """ZAP scan status."""
+
     RUNNING = "running"
     COMPLETED = "completed"
     STOPPED = "stopped"
@@ -44,6 +46,7 @@ class ScanStatus(Enum):
 
 class RiskLevel(Enum):
     """ZAP alert risk levels."""
+
     HIGH = 3
     MEDIUM = 2
     LOW = 1
@@ -52,6 +55,7 @@ class RiskLevel(Enum):
 
 class ConfidenceLevel(Enum):
     """ZAP alert confidence levels."""
+
     HIGH = 3
     MEDIUM = 2
     LOW = 1
@@ -60,17 +64,26 @@ class ConfidenceLevel(Enum):
 
 # ==================== Data Classes ====================
 
+
 @dataclass
 class ZAPConfig:
     """Configuration for ZAP connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_URL") or os.getenv("ZAP_URL", "http://localhost:8080"))
-    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_API_KEY") or os.getenv("ZAP_API_KEY", ""))
+
+    base_url: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_URL")
+        or os.getenv("ZAP_URL", "http://localhost:8080")
+    )
+    api_key: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__ZAP_API_KEY")
+        or os.getenv("ZAP_API_KEY", "")
+    )
     timeout: int = 120  # Increased for slow/remote networks
 
 
 @dataclass
 class ScanResult:
     """Result of a ZAP scan."""
+
     scan_id: str
     status: str
     progress: int = 0
@@ -84,6 +97,7 @@ class ScanResult:
 @dataclass
 class Alert:
     """ZAP security alert."""
+
     alert_id: str
     name: str
     risk: int
@@ -103,6 +117,7 @@ class Alert:
 
 
 # ==================== Main Tool Class ====================
+
 
 class ZAPTool:
     """
@@ -214,11 +229,7 @@ class ZAPTool:
             Spider scan ID
         """
         try:
-            params = {
-                "url": url,
-                "maxChildren": str(max_children),
-                "recurse": str(recurse).lower()
-            }
+            params = {"url": url, "maxChildren": str(max_children), "recurse": str(recurse).lower()}
             result = self._action("spider", "scan", params)
             scan_id = result.get("scan", "")
             logger.info(f"Started spider scan: {scan_id} for {url}")
@@ -256,11 +267,7 @@ class ZAPTool:
     # ==================== Active Scan ====================
 
     def active_scan(
-        self,
-        url: str,
-        recurse: bool = True,
-        in_scope_only: bool = False,
-        scan_policy: str = None
+        self, url: str, recurse: bool = True, in_scope_only: bool = False, scan_policy: str = None
     ) -> str:
         """
         Start active vulnerability scan.
@@ -278,7 +285,7 @@ class ZAPTool:
             params = {
                 "url": url,
                 "recurse": str(recurse).lower(),
-                "inScopeOnly": str(in_scope_only).lower()
+                "inScopeOnly": str(in_scope_only).lower(),
             }
             if scan_policy:
                 params["scanPolicyName"] = scan_policy
@@ -303,10 +310,7 @@ class ZAPTool:
             status = "running" if progress < 100 else "completed"
 
             return ScanResult(
-                scan_id=scan_id,
-                status=status,
-                progress=progress,
-                alerts_count=len(alerts)
+                scan_id=scan_id, status=status, progress=progress, alerts_count=len(alerts)
             )
         except Exception as e:
             return ScanResult(scan_id=scan_id, status="error", error=str(e))
@@ -316,7 +320,7 @@ class ZAPTool:
         scan_id: str,
         timeout: int = 3600,
         poll_interval: int = 10,
-        callback: Callable[[ScanResult], None] = None
+        callback: Callable[[ScanResult], None] = None,
     ) -> ScanResult:
         """
         Wait for active scan to complete.
@@ -344,9 +348,7 @@ class ZAPTool:
             time.sleep(poll_interval)
 
         return ScanResult(
-            scan_id=scan_id,
-            status="timeout",
-            error=f"Scan timed out after {timeout}s"
+            scan_id=scan_id, status="timeout", error=f"Scan timed out after {timeout}s"
         )
 
     def stop_scan(self, scan_id: str) -> bool:
@@ -397,11 +399,7 @@ class ZAPTool:
     # ==================== Alert Management ====================
 
     def get_alerts(
-        self,
-        base_url: str = None,
-        risk: str = None,
-        start: int = 0,
-        count: int = 1000
+        self, base_url: str = None, risk: str = None, start: int = 0, count: int = 1000
     ) -> List[Alert]:
         """
         Get security alerts.
@@ -426,24 +424,26 @@ class ZAPTool:
             alerts = []
 
             for a in result.get("alerts", []):
-                alerts.append(Alert(
-                    alert_id=str(a.get("id", "")),
-                    name=a.get("name", "Unknown"),
-                    risk=int(a.get("riskcode", 0)),
-                    risk_name=a.get("risk", "Unknown"),
-                    confidence=int(a.get("confidence", 0)),
-                    confidence_name=a.get("confidence", "Unknown"),
-                    url=a.get("url", ""),
-                    description=a.get("description", ""),
-                    solution=a.get("solution", ""),
-                    reference=a.get("reference", ""),
-                    cwe_id=int(a.get("cweid", 0) or 0),
-                    wasc_id=int(a.get("wascid", 0) or 0),
-                    evidence=a.get("evidence", ""),
-                    param=a.get("param", ""),
-                    attack=a.get("attack", ""),
-                    other_info=a.get("other", "")
-                ))
+                alerts.append(
+                    Alert(
+                        alert_id=str(a.get("id", "")),
+                        name=a.get("name", "Unknown"),
+                        risk=int(a.get("riskcode", 0)),
+                        risk_name=a.get("risk", "Unknown"),
+                        confidence=int(a.get("confidence", 0)),
+                        confidence_name=a.get("confidence", "Unknown"),
+                        url=a.get("url", ""),
+                        description=a.get("description", ""),
+                        solution=a.get("solution", ""),
+                        reference=a.get("reference", ""),
+                        cwe_id=int(a.get("cweid", 0) or 0),
+                        wasc_id=int(a.get("wascid", 0) or 0),
+                        evidence=a.get("evidence", ""),
+                        param=a.get("param", ""),
+                        attack=a.get("attack", ""),
+                        other_info=a.get("other", ""),
+                    )
+                )
 
             return alerts
         except Exception as e:
@@ -486,9 +486,9 @@ class ZAPTool:
                 "solution": alert.solution,
                 "evidence": alert.evidence[:500] if alert.evidence else "",
                 "param": alert.param,
-                "attack": alert.attack
+                "attack": alert.attack,
             },
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def export_findings(self, output_path: str = None, base_url: str = None) -> List[Dict]:
@@ -564,7 +564,7 @@ def zap_summary() -> Dict:
         "connected": True,
         "url": zap.config.base_url,
         "version": info.get("version", "unknown"),
-        "alerts": alerts_summary
+        "alerts": alerts_summary,
     }
 
 

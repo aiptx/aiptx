@@ -16,45 +16,41 @@ These tests verify:
 import asyncio
 import json
 import os
-import pytest
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 from unittest.mock import AsyncMock, MagicMock, patch
+
+import pytest
+
+from aipt_v2.execution.local_tool_executor import (
+    ExecutionBatch,
+    ExecutionState,
+    ToolExecution,
+)
+from aipt_v2.execution.parser import Finding
 
 # Import pipeline components
 from aipt_v2.execution.phase_runner import (
-    PhaseRunner,
+    AICheckpointClient,
     PhaseConfig,
+    PhaseRunner,
     PipelineConfig,
     PipelineState,
-    AICheckpointClient,
-    run_quick_scan,
     run_full_scan,
+    run_quick_scan,
+)
+from aipt_v2.execution.result_collector import (
+    NormalizedFinding,
+    ResultCollector,
 )
 from aipt_v2.execution.tool_registry import (
-    ToolRegistry,
-    ToolPhase,
-    ToolCapability,
     TOOL_REGISTRY,
-    get_registry,
+    ToolCapability,
+    ToolPhase,
+    ToolRegistry,
 )
-from aipt_v2.execution.local_tool_executor import LocalToolExecutor
-from aipt_v2.execution.result_collector import (
-    ResultCollector,
-    NormalizedFinding,
-    AttackPath,
-)
-from aipt_v2.execution.parser import Finding
-from aipt_v2.execution.local_tool_executor import (
-    ToolExecution,
-    ExecutionState,
-    ExecutionBatch,
-)
-from aipt_v2.execution.tool_registry import TOOL_REGISTRY
-from aipt_v2.scanners.base import ScanResult, ScanFinding, ScanSeverity
-
+from aipt_v2.scanners.base import ScanFinding, ScanSeverity
 
 # ============================================================================
 # Test helpers
@@ -172,29 +168,32 @@ def build_execution_batch(scan_findings, phase) -> ExecutionBatch:
 # Fixtures
 # ============================================================================
 
+
 @pytest.fixture
 def mock_ollama_response():
     """Mock Ollama API response for AI checkpoints."""
     return {
         "model": "mistral:7b",
         "created_at": datetime.utcnow().isoformat(),
-        "response": json.dumps({
-            "recommendations": [
-                {
-                    "tool": "nuclei",
-                    "priority": 1,
-                    "reason": "Template-based scanning for known CVEs"
-                },
-                {
-                    "tool": "sqlmap",
-                    "priority": 2,
-                    "reason": "SQL injection testing on discovered endpoints"
-                }
-            ],
-            "attack_vectors": ["sqli", "xss", "ssrf"],
-            "risk_assessment": "HIGH",
-            "next_phase": "SCAN"
-        }),
+        "response": json.dumps(
+            {
+                "recommendations": [
+                    {
+                        "tool": "nuclei",
+                        "priority": 1,
+                        "reason": "Template-based scanning for known CVEs",
+                    },
+                    {
+                        "tool": "sqlmap",
+                        "priority": 2,
+                        "reason": "SQL injection testing on discovered endpoints",
+                    },
+                ],
+                "attack_vectors": ["sqli", "xss", "ssrf"],
+                "risk_assessment": "HIGH",
+                "next_phase": "SCAN",
+            }
+        ),
         "done": True,
     }
 
@@ -338,6 +337,7 @@ def pipeline_config(temp_output_dir):
 # AI Checkpoint Tests
 # ============================================================================
 
+
 class TestAICheckpointClient:
     """Tests for Ollama AI checkpoint integration."""
 
@@ -399,9 +399,11 @@ class TestAICheckpointClient:
         with patch("aiohttp.ClientSession.post") as mock_post:
             mock_response = AsyncMock()
             mock_response.status = 200
-            mock_response.json = AsyncMock(return_value={
-                "response": json.dumps({"recommendations": [], "risk_assessment": "LOW"})
-            })
+            mock_response.json = AsyncMock(
+                return_value={
+                    "response": json.dumps({"recommendations": [], "risk_assessment": "LOW"})
+                }
+            )
             mock_post.return_value.__aenter__.return_value = mock_response
 
             result = await client.analyze_phase(
@@ -416,6 +418,7 @@ class TestAICheckpointClient:
 # ============================================================================
 # Phase Runner Tests
 # ============================================================================
+
 
 class TestPhaseRunner:
     """Tests for PhaseRunner pipeline execution."""
@@ -568,6 +571,7 @@ class TestPhaseRunner:
 # Result Aggregation Tests
 # ============================================================================
 
+
 class TestResultCollector:
     """Tests for cross-phase result aggregation."""
 
@@ -615,9 +619,7 @@ class TestResultCollector:
 
         stats = collector.get_statistics()
         assert stats["total_findings"] == (
-            len(sample_recon_findings) +
-            len(sample_scan_findings) +
-            len(sample_exploit_findings)
+            len(sample_recon_findings) + len(sample_scan_findings) + len(sample_exploit_findings)
         )
         assert "recon" in stats["tools_summary"]
         assert "scan" in stats["tools_summary"]
@@ -627,6 +629,7 @@ class TestResultCollector:
 # ============================================================================
 # Attack Path Detection Tests
 # ============================================================================
+
 
 class TestAttackPathDetection:
     """Tests for attack chain/path detection."""
@@ -694,6 +697,7 @@ class TestAttackPathDetection:
 # Tool Registry Integration Tests
 # ============================================================================
 
+
 class TestToolRegistryIntegration:
     """Tests for tool registry with pipeline."""
 
@@ -725,7 +729,8 @@ class TestToolRegistryIntegration:
 
         # Find tools with SQLI capability
         sqli_tools = [
-            t for t in TOOL_REGISTRY.values()
+            t
+            for t in TOOL_REGISTRY.values()
             if ToolCapability.SQLI_SCAN in t.capabilities
             or ToolCapability.SQLI_EXPLOIT in t.capabilities
         ]
@@ -737,6 +742,7 @@ class TestToolRegistryIntegration:
 # ============================================================================
 # Offline Mode Tests
 # ============================================================================
+
 
 class TestOfflineMode:
     """Tests for offline operation without internet."""
@@ -778,6 +784,7 @@ class TestOfflineMode:
 # ============================================================================
 # Export Format Tests
 # ============================================================================
+
 
 class TestExportFormats:
     """Tests for result export in various formats."""
@@ -844,6 +851,7 @@ class TestExportFormats:
 # Performance Tests
 # ============================================================================
 
+
 class TestPerformance:
     """Performance and resource tests."""
 
@@ -879,7 +887,9 @@ class TestPerformance:
         with patch.object(runner.registry, "is_available", return_value=True):
             with patch.object(runner.registry, "get_tools_by_phase", return_value=recon_tools):
                 with patch.object(runner.executor, "run_tool", side_effect=timed_tool):
-                    with patch.object(runner.ai_client, "is_available", AsyncMock(return_value=False)):
+                    with patch.object(
+                        runner.ai_client, "is_available", AsyncMock(return_value=False)
+                    ):
                         report = await runner.run_phase(ToolPhase.RECON)
 
         # Both tools ran, and they ran at the same time (concurrently).
@@ -913,6 +923,7 @@ class TestPerformance:
 # ============================================================================
 # Integration Test - Full E2E
 # ============================================================================
+
 
 class TestFullE2EIntegration:
     """Full end-to-end integration tests."""
@@ -999,7 +1010,7 @@ class TestFullE2EIntegration:
     @pytest.mark.integration
     @pytest.mark.skipif(
         os.environ.get("SKIP_OLLAMA_TESTS", "1") == "1",
-        reason="Ollama not available or SKIP_OLLAMA_TESTS=1"
+        reason="Ollama not available or SKIP_OLLAMA_TESTS=1",
     )
     async def test_real_ollama_checkpoint(self, sample_recon_findings):
         """
@@ -1026,6 +1037,7 @@ class TestFullE2EIntegration:
 # ============================================================================
 # Convenience Function Tests
 # ============================================================================
+
 
 class TestConvenienceFunctions:
     """Tests for run_quick_scan and run_full_scan helpers."""

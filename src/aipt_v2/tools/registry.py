@@ -7,7 +7,6 @@ from inspect import signature
 from pathlib import Path
 from typing import Any
 
-
 tools: list[dict[str, Any]] = []
 _tools_by_name: dict[str, Callable[..., Any]] = {}
 logger = logging.getLogger(__name__)

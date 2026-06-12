@@ -17,8 +17,8 @@ Usage:
 """
 
 from dataclasses import dataclass, field
-from typing import List, Dict, Optional
 from enum import Enum
+from typing import Dict, List, Optional
 
 # Import RequiredPrivilege from ps_config to avoid duplicate enum definitions
 from aipt_v2.tools.ps_arsenal.ps_config import RequiredPrivilege
@@ -26,6 +26,7 @@ from aipt_v2.tools.ps_arsenal.ps_config import RequiredPrivilege
 
 class ScriptCategory(Enum):
     """PowerShell script categories."""
+
     GATHER = "Gather"
     SHELLS = "Shells"
     UTILITY = "Utility"
@@ -44,6 +45,7 @@ class ScriptCategory(Enum):
 
 class OutputType(Enum):
     """Script output type."""
+
     TEXT = "text"
     CREDENTIALS = "credentials"
     SHELL = "shell"
@@ -54,6 +56,7 @@ class OutputType(Enum):
 @dataclass
 class ScriptMetadata:
     """Metadata for a single PowerShell script."""
+
     name: str
     category: ScriptCategory
     function_name: str
@@ -93,7 +96,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1003.001", "T1552.004"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Invoke-MimikatzWDigestDowngrade": ScriptMetadata(
         name="Invoke-MimikatzWDigestDowngrade",
         category=ScriptCategory.GATHER,
@@ -106,7 +108,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1003.001", "T1112"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Get-PassHashes": ScriptMetadata(
         name="Get-PassHashes",
         category=ScriptCategory.GATHER,
@@ -119,7 +120,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1003.002"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Get-LSASecret": ScriptMetadata(
         name="Get-LSASecret",
         category=ScriptCategory.GATHER,
@@ -130,7 +130,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1003.004"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Get-WLAN-Keys": ScriptMetadata(
         name="Get-WLAN-Keys",
         category=ScriptCategory.GATHER,
@@ -141,7 +140,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1552.001"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Get-WebCredentials": ScriptMetadata(
         name="Get-WebCredentials",
         category=ScriptCategory.GATHER,
@@ -152,7 +150,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1555.003"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Get-Information": ScriptMetadata(
         name="Get-Information",
         category=ScriptCategory.GATHER,
@@ -163,7 +160,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1082", "T1016", "T1033"],
         output_type=OutputType.TEXT,
     ),
-
     "Get-PassHints": ScriptMetadata(
         name="Get-PassHints",
         category=ScriptCategory.GATHER,
@@ -174,7 +170,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1552.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Check-VM": ScriptMetadata(
         name="Check-VM",
         category=ScriptCategory.GATHER,
@@ -185,7 +180,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1497.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Copy-VSS": ScriptMetadata(
         name="Copy-VSS",
         category=ScriptCategory.GATHER,
@@ -198,7 +192,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1003.002", "T1490"],
         output_type=OutputType.FILE,
     ),
-
     "Keylogger": ScriptMetadata(
         name="Keylogger",
         category=ScriptCategory.GATHER,
@@ -218,7 +211,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         requires_interaction=True,
         supports_exfil=True,
     ),
-
     "Invoke-CredentialsPhish": ScriptMetadata(
         name="Invoke-CredentialsPhish",
         category=ScriptCategory.GATHER,
@@ -230,7 +222,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.CREDENTIALS,
         requires_interaction=True,
     ),
-
     "Invoke-Mimikittenz": ScriptMetadata(
         name="Invoke-Mimikittenz",
         category=ScriptCategory.GATHER,
@@ -241,7 +232,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1552.004"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Invoke-SessionGopher": ScriptMetadata(
         name="Invoke-SessionGopher",
         category=ScriptCategory.GATHER,
@@ -256,7 +246,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1552.001", "T1555"],
         output_type=OutputType.CREDENTIALS,
     ),
-
     "Invoke-SSIDExfil": ScriptMetadata(
         name="Invoke-SSIDExfil",
         category=ScriptCategory.GATHER,
@@ -269,7 +258,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1011", "T1567"],
         output_type=OutputType.TEXT,
     ),
-
     "Show-TargetScreen": ScriptMetadata(
         name="Show-TargetScreen",
         category=ScriptCategory.GATHER,
@@ -284,7 +272,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1113"],
         output_type=OutputType.STREAM,
     ),
-
     "FireBuster": ScriptMetadata(
         name="FireBuster",
         category=ScriptCategory.GATHER,
@@ -300,7 +287,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1046"],
         output_type=OutputType.TEXT,
     ),
-
     "FireListener": ScriptMetadata(
         name="FireListener",
         category=ScriptCategory.GATHER,
@@ -314,7 +300,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1046"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # SHELLS CATEGORY (15 scripts)
     # =========================================================================
@@ -334,7 +319,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001", "T1071.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellTcpOneLine": ScriptMetadata(
         name="Invoke-PowerShellTcpOneLine",
         category=ScriptCategory.SHELLS,
@@ -349,7 +333,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellTcpOneLineBind": ScriptMetadata(
         name="Invoke-PowerShellTcpOneLineBind",
         category=ScriptCategory.SHELLS,
@@ -363,7 +346,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellUdp": ScriptMetadata(
         name="Invoke-PowerShellUdp",
         category=ScriptCategory.SHELLS,
@@ -380,7 +362,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001", "T1095"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellUdpOneLine": ScriptMetadata(
         name="Invoke-PowerShellUdpOneLine",
         category=ScriptCategory.SHELLS,
@@ -395,7 +376,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001", "T1095"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellIcmp": ScriptMetadata(
         name="Invoke-PowerShellIcmp",
         category=ScriptCategory.SHELLS,
@@ -411,7 +391,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1095", "T1572"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PowerShellWmi": ScriptMetadata(
         name="Invoke-PowerShellWmi",
         category=ScriptCategory.SHELLS,
@@ -427,7 +406,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1047", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PoshRatHttp": ScriptMetadata(
         name="Invoke-PoshRatHttp",
         category=ScriptCategory.SHELLS,
@@ -442,7 +420,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.001", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PoshRatHttps": ScriptMetadata(
         name="Invoke-PoshRatHttps",
         category=ScriptCategory.SHELLS,
@@ -457,7 +434,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.001", "T1059.001", "T1573.002"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-ConPtyShell": ScriptMetadata(
         name="Invoke-ConPtyShell",
         category=ScriptCategory.SHELLS,
@@ -474,7 +450,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-JSRatRegsvr": ScriptMetadata(
         name="Invoke-JSRatRegsvr",
         category=ScriptCategory.SHELLS,
@@ -489,7 +464,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.010", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-JSRatRundll": ScriptMetadata(
         name="Invoke-JSRatRundll",
         category=ScriptCategory.SHELLS,
@@ -504,7 +478,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.011", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PsGcat": ScriptMetadata(
         name="Invoke-PsGcat",
         category=ScriptCategory.SHELLS,
@@ -519,7 +492,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1102", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-PsGcatAgent": ScriptMetadata(
         name="Invoke-PsGcatAgent",
         category=ScriptCategory.SHELLS,
@@ -534,7 +506,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1102", "T1059.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Remove-PoshRat": ScriptMetadata(
         name="Remove-PoshRat",
         category=ScriptCategory.SHELLS,
@@ -545,7 +516,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1070"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # UTILITY CATEGORY (15 scripts)
     # =========================================================================
@@ -564,7 +534,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Add-Exfiltration": ScriptMetadata(
         name="Add-Exfiltration",
         category=ScriptCategory.UTILITY,
@@ -581,7 +550,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         supports_exfil=True,
     ),
-
     "Do-Exfiltration": ScriptMetadata(
         name="Do-Exfiltration",
         category=ScriptCategory.UTILITY,
@@ -596,7 +564,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1041"],
         output_type=OutputType.TEXT,
     ),
-
     "Invoke-Encode": ScriptMetadata(
         name="Invoke-Encode",
         category=ScriptCategory.UTILITY,
@@ -611,7 +578,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1027", "T1140"],
         output_type=OutputType.TEXT,
     ),
-
     "Invoke-Decode": ScriptMetadata(
         name="Invoke-Decode",
         category=ScriptCategory.UTILITY,
@@ -625,7 +591,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1140"],
         output_type=OutputType.TEXT,
     ),
-
     "Download": ScriptMetadata(
         name="Download",
         category=ScriptCategory.UTILITY,
@@ -640,7 +605,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1105"],
         output_type=OutputType.FILE,
     ),
-
     "Base64ToString": ScriptMetadata(
         name="Base64ToString",
         category=ScriptCategory.UTILITY,
@@ -654,7 +618,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1140"],
         output_type=OutputType.TEXT,
     ),
-
     "StringToBase64": ScriptMetadata(
         name="StringToBase64",
         category=ScriptCategory.UTILITY,
@@ -668,7 +631,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1027"],
         output_type=OutputType.TEXT,
     ),
-
     "ConvertTo-ROT13": ScriptMetadata(
         name="ConvertTo-ROT13",
         category=ScriptCategory.UTILITY,
@@ -682,7 +644,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1027"],
         output_type=OutputType.TEXT,
     ),
-
     "ExetoText": ScriptMetadata(
         name="ExetoText",
         category=ScriptCategory.UTILITY,
@@ -696,7 +657,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1027"],
         output_type=OutputType.TEXT,
     ),
-
     "TexttoExe": ScriptMetadata(
         name="TexttoExe",
         category=ScriptCategory.UTILITY,
@@ -711,7 +671,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1140"],
         output_type=OutputType.FILE,
     ),
-
     "Out-DnsTxt": ScriptMetadata(
         name="Out-DnsTxt",
         category=ScriptCategory.UTILITY,
@@ -725,7 +684,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.004"],
         output_type=OutputType.TEXT,
     ),
-
     "Parse_Keys": ScriptMetadata(
         name="Parse_Keys",
         category=ScriptCategory.UTILITY,
@@ -739,7 +697,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1056.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Remove-Persistence": ScriptMetadata(
         name="Remove-Persistence",
         category=ScriptCategory.UTILITY,
@@ -750,7 +707,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1070"],
         output_type=OutputType.TEXT,
     ),
-
     "Start-CaptureServer": ScriptMetadata(
         name="Start-CaptureServer",
         category=ScriptCategory.UTILITY,
@@ -764,7 +720,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1557", "T1040"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # BACKDOORS CATEGORY (10 scripts)
     # =========================================================================
@@ -784,7 +739,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.001", "T1105"],
         output_type=OutputType.SHELL,
     ),
-
     "DNS_TXT_Pwnage": ScriptMetadata(
         name="DNS_TXT_Pwnage",
         category=ScriptCategory.BACKDOORS,
@@ -801,7 +755,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.004", "T1568.002"],
         output_type=OutputType.SHELL,
     ),
-
     "Add-RegBackdoor": ScriptMetadata(
         name="Add-RegBackdoor",
         category=ScriptCategory.BACKDOORS,
@@ -813,7 +766,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Add-ScrnSaveBackdoor": ScriptMetadata(
         name="Add-ScrnSaveBackdoor",
         category=ScriptCategory.BACKDOORS,
@@ -828,7 +780,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Execute-OnTime": ScriptMetadata(
         name="Execute-OnTime",
         category=ScriptCategory.BACKDOORS,
@@ -847,7 +798,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Gupt-Backdoor": ScriptMetadata(
         name="Gupt-Backdoor",
         category=ScriptCategory.BACKDOORS,
@@ -862,7 +812,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1205.001"],
         output_type=OutputType.SHELL,
     ),
-
     "Invoke-ADSBackdoor": ScriptMetadata(
         name="Invoke-ADSBackdoor",
         category=ScriptCategory.BACKDOORS,
@@ -877,7 +826,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Set-RemotePSRemoting": ScriptMetadata(
         name="Set-RemotePSRemoting",
         category=ScriptCategory.BACKDOORS,
@@ -893,7 +841,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Set-RemoteWMI": ScriptMetadata(
         name="Set-RemoteWMI",
         category=ScriptCategory.BACKDOORS,
@@ -910,7 +857,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     # =========================================================================
     # ESCALATION CATEGORY (3 scripts)
     # =========================================================================
@@ -928,7 +874,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Enable-DuplicateToken": ScriptMetadata(
         name="Enable-DuplicateToken",
         category=ScriptCategory.ESCALATION,
@@ -939,7 +884,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1134.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Remove-Update": ScriptMetadata(
         name="Remove-Update",
         category=ScriptCategory.ESCALATION,
@@ -953,7 +897,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     # =========================================================================
     # CLIENT CATEGORY (10 scripts)
     # =========================================================================
@@ -972,7 +915,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1204.002", "T1559.002"],
         output_type=OutputType.FILE,
     ),
-
     "Out-Excel": ScriptMetadata(
         name="Out-Excel",
         category=ScriptCategory.CLIENT,
@@ -987,7 +929,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1204.002"],
         output_type=OutputType.FILE,
     ),
-
     "Out-CHM": ScriptMetadata(
         name="Out-CHM",
         category=ScriptCategory.CLIENT,
@@ -1002,7 +943,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.001"],
         output_type=OutputType.FILE,
     ),
-
     "Out-HTA": ScriptMetadata(
         name="Out-HTA",
         category=ScriptCategory.CLIENT,
@@ -1017,7 +957,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.005"],
         output_type=OutputType.FILE,
     ),
-
     "Out-JS": ScriptMetadata(
         name="Out-JS",
         category=ScriptCategory.CLIENT,
@@ -1031,7 +970,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.007"],
         output_type=OutputType.FILE,
     ),
-
     "Out-SCF": ScriptMetadata(
         name="Out-SCF",
         category=ScriptCategory.CLIENT,
@@ -1046,7 +984,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1187"],
         output_type=OutputType.FILE,
     ),
-
     "Out-SCT": ScriptMetadata(
         name="Out-SCT",
         category=ScriptCategory.CLIENT,
@@ -1060,7 +997,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.010"],
         output_type=OutputType.FILE,
     ),
-
     "Out-Shortcut": ScriptMetadata(
         name="Out-Shortcut",
         category=ScriptCategory.CLIENT,
@@ -1076,7 +1012,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1547.009"],
         output_type=OutputType.FILE,
     ),
-
     "Out-WebQuery": ScriptMetadata(
         name="Out-WebQuery",
         category=ScriptCategory.CLIENT,
@@ -1091,7 +1026,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1566.001"],
         output_type=OutputType.FILE,
     ),
-
     "Out-Java": ScriptMetadata(
         name="Out-Java",
         category=ScriptCategory.CLIENT,
@@ -1105,7 +1039,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1189"],
         output_type=OutputType.FILE,
     ),
-
     # =========================================================================
     # EXECUTION CATEGORY (5 scripts)
     # =========================================================================
@@ -1124,7 +1057,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1059.001", "T1105"],
         output_type=OutputType.TEXT,
     ),
-
     "Download_Execute": ScriptMetadata(
         name="Download_Execute",
         category=ScriptCategory.EXECUTION,
@@ -1138,7 +1070,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1105", "T1204.002"],
         output_type=OutputType.TEXT,
     ),
-
     "Execute-Command-MSSQL": ScriptMetadata(
         name="Execute-Command-MSSQL",
         category=ScriptCategory.EXECUTION,
@@ -1155,7 +1086,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1505.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Execute-DNSTXT-Code": ScriptMetadata(
         name="Execute-DNSTXT-Code",
         category=ScriptCategory.EXECUTION,
@@ -1170,7 +1100,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1071.004", "T1055"],
         output_type=OutputType.TEXT,
     ),
-
     "Out-RundllCommand": ScriptMetadata(
         name="Out-RundllCommand",
         category=ScriptCategory.EXECUTION,
@@ -1183,7 +1112,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1218.011"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # SCAN CATEGORY (2 scripts)
     # =========================================================================
@@ -1203,7 +1131,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1110.001"],
         output_type=OutputType.TEXT,
     ),
-
     "Invoke-PortScan": ScriptMetadata(
         name="Invoke-PortScan",
         category=ScriptCategory.SCAN,
@@ -1221,7 +1148,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1046"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # PIVOT CATEGORY (3 scripts)
     # =========================================================================
@@ -1240,7 +1166,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1021.006"],
         output_type=OutputType.TEXT,
     ),
-
     "Invoke-NetworkRelay": ScriptMetadata(
         name="Invoke-NetworkRelay",
         category=ScriptCategory.PIVOT,
@@ -1256,7 +1181,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1572"],
         output_type=OutputType.TEXT,
     ),
-
     "Run-EXEonRemote": ScriptMetadata(
         name="Run-EXEonRemote",
         category=ScriptCategory.PIVOT,
@@ -1272,7 +1196,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1021.002", "T1570"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # MITM CATEGORY (1 script)
     # =========================================================================
@@ -1288,7 +1211,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1557", "T1557.002"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # ACTIVE DIRECTORY CATEGORY (2 scripts)
     # =========================================================================
@@ -1310,7 +1232,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     "Set-DCShadowPermissions": ScriptMetadata(
         name="Set-DCShadowPermissions",
         category=ScriptCategory.ACTIVE_DIRECTORY,
@@ -1325,7 +1246,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         output_type=OutputType.TEXT,
         is_destructive=True,
     ),
-
     # =========================================================================
     # BYPASS CATEGORY (1 script)
     # =========================================================================
@@ -1339,7 +1259,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=["T1562.001"],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # MISC CATEGORY (1 script)
     # =========================================================================
@@ -1356,7 +1275,6 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
         mitre_techniques=[],
         output_type=OutputType.TEXT,
     ),
-
     # =========================================================================
     # PRASADHAK CATEGORY (1 script)
     # =========================================================================
@@ -1379,6 +1297,7 @@ SCRIPT_METADATA: Dict[str, ScriptMetadata] = {
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def get_script_metadata(name: str) -> Optional[ScriptMetadata]:
     """Get metadata for a script by name."""
     return SCRIPT_METADATA.get(name)
@@ -1391,20 +1310,21 @@ def get_scripts_by_category(category: ScriptCategory) -> List[ScriptMetadata]:
 
 def get_credential_scripts() -> List[ScriptMetadata]:
     """Get all scripts that extract credentials."""
-    return [s for s in SCRIPT_METADATA.values()
-            if s.output_type == OutputType.CREDENTIALS]
+    return [s for s in SCRIPT_METADATA.values() if s.output_type == OutputType.CREDENTIALS]
 
 
 def get_shell_scripts() -> List[ScriptMetadata]:
     """Get all shell scripts."""
-    return [s for s in SCRIPT_METADATA.values()
-            if s.output_type == OutputType.SHELL]
+    return [s for s in SCRIPT_METADATA.values() if s.output_type == OutputType.SHELL]
 
 
 def get_admin_scripts() -> List[ScriptMetadata]:
     """Get scripts requiring admin privileges."""
-    return [s for s in SCRIPT_METADATA.values()
-            if s.required_privilege in [RequiredPrivilege.ADMIN, RequiredPrivilege.SYSTEM]]
+    return [
+        s
+        for s in SCRIPT_METADATA.values()
+        if s.required_privilege in [RequiredPrivilege.ADMIN, RequiredPrivilege.SYSTEM]
+    ]
 
 
 def get_destructive_scripts() -> List[ScriptMetadata]:
@@ -1414,8 +1334,7 @@ def get_destructive_scripts() -> List[ScriptMetadata]:
 
 def get_scripts_by_mitre(technique_id: str) -> List[ScriptMetadata]:
     """Get scripts that map to a MITRE ATT&CK technique."""
-    return [s for s in SCRIPT_METADATA.values()
-            if technique_id in s.mitre_techniques]
+    return [s for s in SCRIPT_METADATA.values() if technique_id in s.mitre_techniques]
 
 
 def get_all_script_names() -> List[str]:

@@ -10,13 +10,14 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Optional
+from typing import Optional
 
-from aipt_v2.sast.parsers.base import ParsedFile, CodeLocation
+from aipt_v2.sast.parsers.base import CodeLocation, ParsedFile
 
 
 class RuleSeverity(str, Enum):
     """Severity levels for security rules."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -26,17 +27,18 @@ class RuleSeverity(str, Enum):
 
 class RuleCategory(str, Enum):
     """Categories of security rules."""
-    INJECTION = "injection"          # SQL, Command, LDAP, etc.
-    XSS = "xss"                       # Cross-site scripting
-    CRYPTO = "crypto"                 # Cryptography issues
-    AUTH = "auth"                     # Authentication/Authorization
-    CONFIG = "config"                 # Configuration issues
-    SECRETS = "secrets"               # Hardcoded secrets
-    SSRF = "ssrf"                     # Server-side request forgery
-    PATH_TRAVERSAL = "path_traversal" # Path traversal/LFI
+
+    INJECTION = "injection"  # SQL, Command, LDAP, etc.
+    XSS = "xss"  # Cross-site scripting
+    CRYPTO = "crypto"  # Cryptography issues
+    AUTH = "auth"  # Authentication/Authorization
+    CONFIG = "config"  # Configuration issues
+    SECRETS = "secrets"  # Hardcoded secrets
+    SSRF = "ssrf"  # Server-side request forgery
+    PATH_TRAVERSAL = "path_traversal"  # Path traversal/LFI
     DESERIALIZATION = "deserialization"
-    XXE = "xxe"                       # XML external entities
-    LOGGING = "logging"               # Logging sensitive data
+    XXE = "xxe"  # XML external entities
+    LOGGING = "logging"  # Logging sensitive data
     ERROR_HANDLING = "error_handling"
     RACE_CONDITION = "race_condition"
     MISCELLANEOUS = "misc"
@@ -53,6 +55,7 @@ class Rule:
     - Parsed structures (AST patterns)
     - Data flows (source to sink)
     """
+
     id: str
     name: str
     description: str
@@ -116,6 +119,7 @@ class RuleMatch:
 
     Contains all information needed to report the finding.
     """
+
     rule: Rule
     file_path: str
     line: int
@@ -221,8 +225,8 @@ class RuleSet:
             for i, line in enumerate(parsed.lines, 1):
                 if rule.matches_line(line):
                     # Get context
-                    context_before = parsed.lines[max(0, i-4):i-1]
-                    context_after = parsed.lines[i:min(len(parsed.lines), i+3)]
+                    context_before = parsed.lines[max(0, i - 4) : i - 1]
+                    context_after = parsed.lines[i : min(len(parsed.lines), i + 3)]
 
                     match = RuleMatch(
                         rule=rule,
@@ -237,9 +241,7 @@ class RuleSet:
 
         return matches
 
-    def match_content(
-        self, content: str, file_path: str
-    ) -> list[RuleMatch]:
+    def match_content(self, content: str, file_path: str) -> list[RuleMatch]:
         """
         Match rules against raw content.
 
@@ -256,8 +258,8 @@ class RuleSet:
         for rule in self.get_rules():
             for i, line in enumerate(lines, 1):
                 if rule.matches_line(line):
-                    context_before = lines[max(0, i-4):i-1]
-                    context_after = lines[i:min(len(lines), i+3)]
+                    context_before = lines[max(0, i - 4) : i - 1]
+                    context_after = lines[i : min(len(lines), i + 3)]
 
                     match = RuleMatch(
                         rule=rule,

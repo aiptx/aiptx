@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SMBSprayResult:
     """Result of SMB spray attempt."""
+
     target: str
     username: str
     password: str
@@ -94,7 +95,9 @@ class SMBSprayer:
         Returns:
             List of Impacket commands
         """
-        cred_str = f"{self.domain}/{username}:{password}" if self.domain else f"{username}:{password}"
+        cred_str = (
+            f"{self.domain}/{username}:{password}" if self.domain else f"{username}:{password}"
+        )
 
         return [
             {
@@ -154,39 +157,45 @@ class SMBSprayer:
         commands = []
 
         # Anonymous enumeration
-        commands.append({
-            "name": "smbclient_anon",
-            "command": f"smbclient -L //{target} -N",
-            "description": "List shares anonymously",
-        })
+        commands.append(
+            {
+                "name": "smbclient_anon",
+                "command": f"smbclient -L //{target} -N",
+                "description": "List shares anonymously",
+            }
+        )
 
-        commands.append({
-            "name": "smbmap_anon",
-            "command": f"smbmap -H {target}",
-            "description": "Map shares with permissions",
-        })
+        commands.append(
+            {
+                "name": "smbmap_anon",
+                "command": f"smbmap -H {target}",
+                "description": "Map shares with permissions",
+            }
+        )
 
         # Authenticated enumeration
         if username and password:
             cred_str = f"{self.domain}\\{username}" if self.domain else username
 
-            commands.extend([
-                {
-                    "name": "smbclient_auth",
-                    "command": f"smbclient -L //{target} -U '{cred_str}%{password}'",
-                    "description": "List shares with creds",
-                },
-                {
-                    "name": "smbmap_auth",
-                    "command": f"smbmap -H {target} -u '{username}' -p '{password}' -d '{self.domain or '.'}'",
-                    "description": "Map shares with permissions",
-                },
-                {
-                    "name": "cme_shares",
-                    "command": f"crackmapexec smb {target} -u '{username}' -p '{password}' --shares",
-                    "description": "CME share enumeration",
-                },
-            ])
+            commands.extend(
+                [
+                    {
+                        "name": "smbclient_auth",
+                        "command": f"smbclient -L //{target} -U '{cred_str}%{password}'",
+                        "description": "List shares with creds",
+                    },
+                    {
+                        "name": "smbmap_auth",
+                        "command": f"smbmap -H {target} -u '{username}' -p '{password}' -d '{self.domain or '.'}'",
+                        "description": "Map shares with permissions",
+                    },
+                    {
+                        "name": "cme_shares",
+                        "command": f"crackmapexec smb {target} -u '{username}' -p '{password}' --shares",
+                        "description": "CME share enumeration",
+                    },
+                ]
+            )
 
         return commands
 

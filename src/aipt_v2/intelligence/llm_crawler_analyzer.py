@@ -24,6 +24,7 @@ Example:
     for target in result.get_high_priority_targets():
         print(f"[P{target.priority}] {target.url} - {target.attack_type}")
 """
+
 from __future__ import annotations
 
 import json
@@ -32,7 +33,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 from aipt_v2.config import get_config
 
@@ -41,6 +42,7 @@ logger = logging.getLogger(__name__)
 
 class AttackType(str, Enum):
     """Types of attacks to test."""
+
     SQLI = "sql_injection"
     XSS = "cross_site_scripting"
     IDOR = "insecure_direct_object_reference"
@@ -62,6 +64,7 @@ class AttackType(str, Enum):
 @dataclass
 class ParameterTarget:
     """A parameter identified for testing."""
+
     name: str
     url: str
     method: str  # GET, POST
@@ -85,6 +88,7 @@ class ParameterTarget:
 @dataclass
 class FormTarget:
     """A form identified for testing."""
+
     action: str
     method: str
     purpose: str  # login, registration, search, upload, payment, contact
@@ -108,6 +112,7 @@ class FormTarget:
 @dataclass
 class AttackChainRecommendation:
     """A recommended attack chain based on discovered surface."""
+
     name: str
     steps: list[dict[str, str]]
     entry_point: str
@@ -129,6 +134,7 @@ class AttackChainRecommendation:
 @dataclass
 class CrawlerAnalysisResult:
     """Complete result of LLM crawler analysis."""
+
     high_priority_parameters: list[ParameterTarget]
     high_priority_forms: list[FormTarget]
     attack_chains: list[AttackChainRecommendation]
@@ -162,8 +168,11 @@ class CrawlerAnalysisResult:
 
     def get_idor_targets(self) -> list[ParameterTarget]:
         """Get parameters likely vulnerable to IDOR/BOLA."""
-        return [p for p in self.high_priority_parameters
-                if AttackType.IDOR in p.attack_types or AttackType.BOLA in p.attack_types]
+        return [
+            p
+            for p in self.high_priority_parameters
+            if AttackType.IDOR in p.attack_types or AttackType.BOLA in p.attack_types
+        ]
 
     def get_login_forms(self) -> list[FormTarget]:
         """Get forms identified as login forms."""
@@ -235,7 +244,7 @@ def _parse_llm_json(result_text: Any, expected_key: str) -> dict[str, Any] | Non
         return None
 
     candidate: str | None = None
-    json_match = re.search(r'```json\s*([\s\S]*?)\s*```', result_text)
+    json_match = re.search(r"```json\s*([\s\S]*?)\s*```", result_text)
     if json_match:
         candidate = json_match.group(1)
     else:
@@ -529,7 +538,9 @@ class LLMCrawlerAnalyzer:
 
         try:
             # Analyze parameters
-            param_result = await self._analyze_parameters(parameters, target, tech_stack, len(endpoints), len(forms))
+            param_result = await self._analyze_parameters(
+                parameters, target, tech_stack, len(endpoints), len(forms)
+            )
 
             # Analyze forms
             form_result = await self._analyze_forms(forms, target, tech_stack)
@@ -541,7 +552,7 @@ class LLMCrawlerAnalyzer:
                 target,
                 tech_stack,
                 len(endpoints),
-                len(parameters)
+                len(parameters),
             )
 
             # Categorize endpoints
@@ -553,7 +564,11 @@ class LLMCrawlerAnalyzer:
                         name=p["name"],
                         url=p.get("url", target),
                         method=p.get("method", "GET"),
-                        attack_types=[AttackType(a) for a in p.get("attack_types", []) if a in [e.value for e in AttackType]],
+                        attack_types=[
+                            AttackType(a)
+                            for a in p.get("attack_types", [])
+                            if a in [e.value for e in AttackType]
+                        ],
                         priority=p.get("priority", 3),
                         reasoning=p.get("reasoning", ""),
                         suggested_payloads=p.get("suggested_payloads", []),
@@ -566,7 +581,11 @@ class LLMCrawlerAnalyzer:
                         method=f.get("method", "POST"),
                         purpose=f.get("purpose", "unknown"),
                         inputs=f.get("inputs", []),
-                        attack_types=[AttackType(a) for a in f.get("attack_types", []) if a in [e.value for e in AttackType]],
+                        attack_types=[
+                            AttackType(a)
+                            for a in f.get("attack_types", [])
+                            if a in [e.value for e in AttackType]
+                        ],
                         priority=f.get("priority", 3),
                         attack_strategy=f.get("attack_strategy", ""),
                     )
@@ -586,7 +605,9 @@ class LLMCrawlerAnalyzer:
                 endpoint_categories=endpoint_categories,
                 technology_inferences=param_result.get("technology_inferences", []),
                 attack_surface_summary=param_result.get("attack_surface_summary", ""),
-                recommended_tool_order=chain_result.get("recommended_tool_order", ["sqlmap", "xsstrike", "nuclei"]),
+                recommended_tool_order=chain_result.get(
+                    "recommended_tool_order", ["sqlmap", "xsstrike", "nuclei"]
+                ),
                 llm_model=self.llm_model,
             )
 
@@ -640,11 +661,19 @@ class LLMCrawlerAnalyzer:
             parsed = _parse_llm_json(result_text, "high_priority_params")
             if parsed is not None:
                 return parsed
-            return {"high_priority_params": [], "technology_inferences": [], "attack_surface_summary": "Analysis failed"}
+            return {
+                "high_priority_params": [],
+                "technology_inferences": [],
+                "attack_surface_summary": "Analysis failed",
+            }
 
         except Exception as e:
             logger.error(f"Parameter analysis failed: {e}")
-            return {"high_priority_params": [], "technology_inferences": [], "attack_surface_summary": "Analysis failed"}
+            return {
+                "high_priority_params": [],
+                "technology_inferences": [],
+                "attack_surface_summary": "Analysis failed",
+            }
 
     async def _analyze_forms(
         self,
@@ -771,7 +800,12 @@ class LLMCrawlerAnalyzer:
                 categories["api"].append(endpoint)
             elif "/admin" in ep_lower or "/dashboard" in ep_lower or "/manage" in ep_lower:
                 categories["admin"].append(endpoint)
-            elif "/login" in ep_lower or "/auth" in ep_lower or "/signin" in ep_lower or "/signup" in ep_lower:
+            elif (
+                "/login" in ep_lower
+                or "/auth" in ep_lower
+                or "/signin" in ep_lower
+                or "/signup" in ep_lower
+            ):
                 categories["auth"].append(endpoint)
             elif "/user" in ep_lower or "/profile" in ep_lower or "/account" in ep_lower:
                 categories["user"].append(endpoint)
@@ -800,12 +834,37 @@ class LLMCrawlerAnalyzer:
         """
         # Heuristic parameter patterns
         param_patterns = {
-            AttackType.IDOR: ["id", "user_id", "uid", "account_id", "customer_id", "order_id", "doc_id"],
+            AttackType.IDOR: [
+                "id",
+                "user_id",
+                "uid",
+                "account_id",
+                "customer_id",
+                "order_id",
+                "doc_id",
+            ],
             AttackType.LFI: ["file", "path", "document", "download", "include", "template", "page"],
-            AttackType.SSRF: ["url", "redirect", "next", "return", "callback", "ref", "link", "site"],
+            AttackType.SSRF: [
+                "url",
+                "redirect",
+                "next",
+                "return",
+                "callback",
+                "ref",
+                "link",
+                "site",
+            ],
             AttackType.RCE: ["cmd", "exec", "command", "run", "shell", "code", "eval"],
             AttackType.SQLI: ["search", "query", "q", "keyword", "filter", "sort", "order", "id"],
-            AttackType.XSS: ["name", "title", "description", "comment", "message", "content", "text"],
+            AttackType.XSS: [
+                "name",
+                "title",
+                "description",
+                "comment",
+                "message",
+                "content",
+                "text",
+            ],
             AttackType.BUSINESS_LOGIC: ["amount", "price", "quantity", "total", "discount", "qty"],
         }
 
@@ -816,15 +875,19 @@ class LLMCrawlerAnalyzer:
 
             for attack_type, patterns in param_patterns.items():
                 if any(p in param_name for p in patterns):
-                    priority = 5 if attack_type in [AttackType.IDOR, AttackType.LFI, AttackType.RCE] else 4
-                    high_priority_params.append(ParameterTarget(
-                        name=param.get("name", ""),
-                        url=param.get("url", target),
-                        method=param.get("method", "GET"),
-                        attack_types=[attack_type],
-                        priority=priority,
-                        reasoning=f"Parameter name '{param_name}' matches {attack_type.value} pattern",
-                    ))
+                    priority = (
+                        5 if attack_type in [AttackType.IDOR, AttackType.LFI, AttackType.RCE] else 4
+                    )
+                    high_priority_params.append(
+                        ParameterTarget(
+                            name=param.get("name", ""),
+                            url=param.get("url", target),
+                            method=param.get("method", "GET"),
+                            attack_types=[attack_type],
+                            priority=priority,
+                            reasoning=f"Parameter name '{param_name}' matches {attack_type.value} pattern",
+                        )
+                    )
                     break
 
         # Sort by priority
@@ -847,7 +910,10 @@ class LLMCrawlerAnalyzer:
                     purpose = "login"
                     attack_types = [AttackType.AUTH_BYPASS, AttackType.SQLI]
                     priority = 5
-                elif "confirm" in " ".join(input_names) or "register" in str(form.get("action", "")).lower():
+                elif (
+                    "confirm" in " ".join(input_names)
+                    or "register" in str(form.get("action", "")).lower()
+                ):
                     purpose = "registration"
                     attack_types = [AttackType.SQLI, AttackType.XSS]
                     priority = 4
@@ -863,15 +929,17 @@ class LLMCrawlerAnalyzer:
                 priority = 4
 
             if attack_types:
-                high_priority_forms.append(FormTarget(
-                    action=form.get("action", ""),
-                    method=form.get("method", "POST"),
-                    purpose=purpose,
-                    inputs=inputs,
-                    attack_types=attack_types,
-                    priority=priority,
-                    attack_strategy=f"Test {', '.join([a.value for a in attack_types])} on {purpose} form",
-                ))
+                high_priority_forms.append(
+                    FormTarget(
+                        action=form.get("action", ""),
+                        method=form.get("method", "POST"),
+                        purpose=purpose,
+                        inputs=inputs,
+                        attack_types=attack_types,
+                        priority=priority,
+                        attack_strategy=f"Test {', '.join([a.value for a in attack_types])} on {purpose} form",
+                    )
+                )
 
         high_priority_forms.sort(key=lambda x: x.priority, reverse=True)
 
@@ -908,7 +976,7 @@ async def demo():
             "inputs": [
                 {"name": "username", "type": "text"},
                 {"name": "password", "type": "password"},
-            ]
+            ],
         },
         {
             "action": "https://example.com/upload",
@@ -916,8 +984,8 @@ async def demo():
             "inputs": [
                 {"name": "file", "type": "file"},
                 {"name": "description", "type": "text"},
-            ]
-        }
+            ],
+        },
     ]
 
     parameters = [
@@ -938,7 +1006,9 @@ async def demo():
     print("=== LLM Crawler Analysis Result ===\n")
     print(f"High Priority Parameters: {len(result.high_priority_parameters)}")
     for param in result.get_high_priority_targets():
-        print(f"  [P{param.priority}] {param.name} @ {param.url} - {[a.value for a in param.attack_types]}")
+        print(
+            f"  [P{param.priority}] {param.name} @ {param.url} - {[a.value for a in param.attack_types]}"
+        )
 
     print(f"\nHigh Priority Forms: {len(result.high_priority_forms)}")
     for form in result.high_priority_forms:
@@ -949,4 +1019,5 @@ async def demo():
 
 if __name__ == "__main__":
     import asyncio
+
     asyncio.run(demo())

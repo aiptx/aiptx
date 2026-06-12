@@ -10,11 +10,11 @@ Provides comprehensive WebSocket security testing:
 """
 
 from aipt_v2.scanners.websocket.scanner import (
-    WebSocketScanner,
-    WebSocketScanConfig,
-    WebSocketScanResult,
-    WebSocketMessage,
     WebSocketFinding,
+    WebSocketMessage,
+    WebSocketScanConfig,
+    WebSocketScanner,
+    WebSocketScanResult,
 )
 
 __all__ = [

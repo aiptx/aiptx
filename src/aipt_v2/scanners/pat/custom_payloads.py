@@ -78,30 +78,31 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from string import Template
-from typing import Iterator, Optional, Union
+from typing import Optional, Union
 
 logger = logging.getLogger(__name__)
 
 # Try to import yaml
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
     yaml = None
 
-from .config import VulnerabilityType, PayloadTechnique
+from .config import PayloadTechnique, VulnerabilityType
 from .payload_parser import ParsedPayload
 
 
 @dataclass
 class CustomPayloadFile:
     """Parsed custom payload file."""
+
     name: str
     version: str
     vuln_type: VulnerabilityType
@@ -116,6 +117,7 @@ class CustomPayloadFile:
 @dataclass
 class PayloadTemplate:
     """A payload template with variables."""
+
     payload: str
     variables: list[str]  # Variable names found in payload
     technique: PayloadTechnique = PayloadTechnique.DIRECT
@@ -308,12 +310,14 @@ class CustomPayloadLoader:
 
         parsed = []
         for payload in payloads:
-            parsed.append(ParsedPayload(
-                content=payload,
-                category=vtype,
-                technique=PayloadTechnique.DIRECT,
-                source_file="inline",
-            ))
+            parsed.append(
+                ParsedPayload(
+                    content=payload,
+                    category=vtype,
+                    technique=PayloadTechnique.DIRECT,
+                    source_file="inline",
+                )
+            )
 
         return CustomPayloadFile(
             name=name,
@@ -518,7 +522,7 @@ class PayloadTemplateEngine:
         variables: dict[str, str],
     ) -> str:
         """Process ${fn:args} function calls."""
-        pattern = r'\$\{(\w+):([^}]+)\}'
+        pattern = r"\$\{(\w+):([^}]+)\}"
 
         def replace_fn(match):
             fn_name = match.group(1).lower()
@@ -540,8 +544,8 @@ class PayloadTemplateEngine:
 
         encode_type, value = parts
 
-        import urllib.parse
         import base64
+        import urllib.parse
 
         if encode_type == "url":
             return urllib.parse.quote(value, safe="")
@@ -567,7 +571,7 @@ class PayloadTemplateEngine:
             length = 8
 
         chars = string.ascii_letters + string.digits
-        return ''.join(random.choice(chars) for _ in range(length))
+        return "".join(random.choice(chars) for _ in range(length))
 
     def _fn_upper(self, args: str) -> str:
         """Uppercase: ${upper:value}"""
@@ -584,10 +588,12 @@ class PayloadTemplateEngine:
     def _fn_base64(self, args: str) -> str:
         """Base64 encode: ${base64:value}"""
         import base64
+
         return base64.b64encode(args.encode()).decode()
 
 
 # Convenience functions
+
 
 def load_custom_payloads(file_path: str) -> list[ParsedPayload]:
     """

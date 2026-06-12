@@ -9,20 +9,19 @@ from __future__ import annotations
 
 import ast
 import re
-from typing import Optional
 
 from aipt_v2.sast.parsers.base import (
     BaseParser,
+    CodeLocation,
+    DataFlow,
     Language,
+    ParsedClass,
     ParsedFile,
     ParsedFunction,
-    ParsedClass,
-    ParsedVariable,
     ParsedImport,
     ParsedParameter,
-    CodeLocation,
+    ParsedVariable,
     SecurityPattern,
-    DataFlow,
 )
 
 
@@ -65,18 +64,14 @@ class PythonParser(BaseParser):
             self._fallback_parse(content, parsed, file_path)
 
         # Find security patterns
-        parsed.security_patterns = self._find_python_security_patterns(
-            content, file_path
-        )
+        parsed.security_patterns = self._find_python_security_patterns(content, file_path)
 
         # Analyze data flows
         parsed.data_flows = self._analyze_data_flows(parsed)
 
         return parsed
 
-    def _extract_from_ast(
-        self, tree: ast.AST, parsed: ParsedFile, file_path: str
-    ) -> None:
+    def _extract_from_ast(self, tree: ast.AST, parsed: ParsedFile, file_path: str) -> None:
         """Extract information from AST."""
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
@@ -121,7 +116,11 @@ class PythonParser(BaseParser):
                         parsed.variables.append(
                             ParsedVariable(
                                 name=target.id,
-                                value=ast.unparse(node.value) if hasattr(ast, 'unparse') else str(node.value),
+                                value=(
+                                    ast.unparse(node.value)
+                                    if hasattr(ast, "unparse")
+                                    else str(node.value)
+                                ),
                                 location=CodeLocation(
                                     file_path=file_path,
                                     line=node.lineno,
@@ -140,19 +139,19 @@ class PythonParser(BaseParser):
             params.append(
                 ParsedParameter(
                     name=arg.arg,
-                    type_hint=ast.unparse(arg.annotation) if arg.annotation and hasattr(ast, 'unparse') else None,
+                    type_hint=(
+                        ast.unparse(arg.annotation)
+                        if arg.annotation and hasattr(ast, "unparse")
+                        else None
+                    ),
                 )
             )
 
         # Handle *args and **kwargs
         if node.args.vararg:
-            params.append(
-                ParsedParameter(name=f"*{node.args.vararg.arg}", is_variadic=True)
-            )
+            params.append(ParsedParameter(name=f"*{node.args.vararg.arg}", is_variadic=True))
         if node.args.kwarg:
-            params.append(
-                ParsedParameter(name=f"**{node.args.kwarg.arg}", is_variadic=True)
-            )
+            params.append(ParsedParameter(name=f"**{node.args.kwarg.arg}", is_variadic=True))
 
         # Get decorators
         decorators = []
@@ -160,7 +159,7 @@ class PythonParser(BaseParser):
             if isinstance(dec, ast.Name):
                 decorators.append(dec.id)
             elif isinstance(dec, ast.Attribute):
-                decorators.append(ast.unparse(dec) if hasattr(ast, 'unparse') else str(dec))
+                decorators.append(ast.unparse(dec) if hasattr(ast, "unparse") else str(dec))
             elif isinstance(dec, ast.Call):
                 if isinstance(dec.func, ast.Name):
                     decorators.append(dec.func.id)
@@ -177,8 +176,10 @@ class PythonParser(BaseParser):
         func = ParsedFunction(
             name=node.name,
             parameters=params,
-            return_type=ast.unparse(node.returns) if node.returns and hasattr(ast, 'unparse') else None,
-            body=ast.unparse(node) if hasattr(ast, 'unparse') else "",
+            return_type=(
+                ast.unparse(node.returns) if node.returns and hasattr(ast, "unparse") else None
+            ),
+            body=ast.unparse(node) if hasattr(ast, "unparse") else "",
             location=CodeLocation(
                 file_path=file_path,
                 line=node.lineno,
@@ -202,7 +203,7 @@ class PythonParser(BaseParser):
             if isinstance(base, ast.Name):
                 bases.append(base.id)
             elif isinstance(base, ast.Attribute):
-                bases.append(ast.unparse(base) if hasattr(ast, 'unparse') else str(base))
+                bases.append(ast.unparse(base) if hasattr(ast, "unparse") else str(base))
 
         # Get methods
         methods = []
@@ -232,7 +233,11 @@ class PythonParser(BaseParser):
 
         # Get decorators
         decorators = [
-            dec.id if isinstance(dec, ast.Name) else ast.unparse(dec) if hasattr(ast, 'unparse') else str(dec)
+            (
+                dec.id
+                if isinstance(dec, ast.Name)
+                else ast.unparse(dec) if hasattr(ast, "unparse") else str(dec)
+            )
             for dec in node.decorator_list
         ]
 
@@ -260,7 +265,7 @@ class PythonParser(BaseParser):
                     calls.append(child.func.id)
                 elif isinstance(child.func, ast.Attribute):
                     calls.append(
-                        ast.unparse(child.func) if hasattr(ast, 'unparse') else child.func.attr
+                        ast.unparse(child.func) if hasattr(ast, "unparse") else child.func.attr
                     )
         return calls
 
@@ -283,15 +288,15 @@ class PythonParser(BaseParser):
                             parts.append(str(value.value))
                     joined = "".join(parts).upper()
                     if any(kw in joined for kw in sql_keywords):
-                        sql_patterns.append(ast.unparse(child) if hasattr(ast, 'unparse') else "f-string SQL")
+                        sql_patterns.append(
+                            ast.unparse(child) if hasattr(ast, "unparse") else "f-string SQL"
+                        )
                 except Exception:
                     pass
 
         return sql_patterns
 
-    def _fallback_parse(
-        self, content: str, parsed: ParsedFile, file_path: str
-    ) -> None:
+    def _fallback_parse(self, content: str, parsed: ParsedFile, file_path: str) -> None:
         """Regex-based fallback parsing for invalid syntax."""
         lines = content.split("\n")
 
@@ -309,7 +314,9 @@ class PythonParser(BaseParser):
                     for p in params_str.split(","):
                         p = p.strip()
                         if p and p != "self":
-                            params.append(ParsedParameter(name=p.split(":")[0].split("=")[0].strip()))
+                            params.append(
+                                ParsedParameter(name=p.split(":")[0].split("=")[0].strip())
+                            )
 
                 parsed.functions.append(
                     ParsedFunction(
@@ -353,9 +360,7 @@ class PythonParser(BaseParser):
                     )
                 )
 
-    def _find_python_security_patterns(
-        self, content: str, file_path: str
-    ) -> list[SecurityPattern]:
+    def _find_python_security_patterns(self, content: str, file_path: str) -> list[SecurityPattern]:
         """Find Python-specific security patterns."""
         patterns = self._find_security_patterns(content, file_path)
         lines = content.split("\n")
@@ -371,18 +376,21 @@ class PythonParser(BaseParser):
             "command_injection": [
                 (r"\bos\.system\s*\(", "os.system() - command execution"),
                 (r"\bos\.popen\s*\(", "os.popen() - command execution"),
-                (r"\bsubprocess\.(run|call|Popen|check_output)\s*\(", "subprocess - command execution"),
+                (
+                    r"\bsubprocess\.(run|call|Popen|check_output)\s*\(",
+                    "subprocess - command execution",
+                ),
                 (r"\bcommands\.(getoutput|getstatusoutput)\s*\(", "commands module - deprecated"),
             ],
             "sql_injection": [
                 (r'cursor\.(execute|executemany)\s*\(\s*["\'].*%', "SQL with string formatting"),
                 (r'cursor\.(execute|executemany)\s*\(\s*f["\']', "SQL with f-string"),
-                (r'\.raw\s*\(', "Django raw SQL"),
-                (r'\.extra\s*\(', "Django extra() - potential SQL injection"),
+                (r"\.raw\s*\(", "Django raw SQL"),
+                (r"\.extra\s*\(", "Django extra() - potential SQL injection"),
             ],
             "path_traversal": [
-                (r'open\s*\([^)]*\+', "open() with string concatenation"),
-                (r'os\.path\.join\s*\([^)]*request', "os.path.join with user input"),
+                (r"open\s*\([^)]*\+", "open() with string concatenation"),
+                (r"os\.path\.join\s*\([^)]*request", "os.path.join with user input"),
             ],
             "deserialization": [
                 (r"\bpickle\.(loads?|Unpickler)\s*\(", "pickle - unsafe deserialization"),
@@ -395,14 +403,20 @@ class PythonParser(BaseParser):
                 (r"lxml\.etree", "lxml parsing - check for XXE protection"),
             ],
             "ssrf": [
-                (r"requests\.(get|post|put|delete|head|options)\s*\([^)]*\+", "requests with dynamic URL"),
+                (
+                    r"requests\.(get|post|put|delete|head|options)\s*\([^)]*\+",
+                    "requests with dynamic URL",
+                ),
                 (r"urllib\.request\.urlopen\s*\(", "urllib - potential SSRF"),
                 (r"http\.client\.HTTPConnection\s*\(", "HTTP client - potential SSRF"),
             ],
             "hardcoded_secret": [
                 (r'(?i)(password|passwd|pwd)\s*=\s*["\'][^"\']+["\']', "Hardcoded password"),
                 (r'(?i)(api_key|apikey|api_secret)\s*=\s*["\'][^"\']+["\']', "Hardcoded API key"),
-                (r'(?i)(secret|token)\s*=\s*["\'][A-Za-z0-9+/=]{20,}["\']', "Hardcoded secret/token"),
+                (
+                    r'(?i)(secret|token)\s*=\s*["\'][A-Za-z0-9+/=]{20,}["\']',
+                    "Hardcoded secret/token",
+                ),
             ],
             "weak_crypto": [
                 (r"\bhashlib\.md5\s*\(", "MD5 - weak hash"),

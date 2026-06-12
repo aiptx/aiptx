@@ -22,6 +22,7 @@ from typing import NamedTuple
 
 class IconSet(NamedTuple):
     """A pair of icons: unicode (preferred) and ascii (fallback)."""
+
     unicode: str
     ascii: str
 
@@ -56,6 +57,7 @@ def _detect_unicode_support() -> bool:
         # Check codepage - 65001 is UTF-8
         try:
             import ctypes
+
             kernel32 = ctypes.windll.kernel32
             codepage = kernel32.GetConsoleOutputCP()
             if codepage == 65001:
@@ -211,7 +213,7 @@ def get_icon(icon: IconSet, prefer_ascii: bool = False) -> str:
         return icon.ascii
 
     # For emoji icons (those with multi-byte sequences), check emoji support
-    if len(icon.unicode.encode('utf-8')) > 3:  # Emoji are typically 4+ bytes
+    if len(icon.unicode.encode("utf-8")) > 3:  # Emoji are typically 4+ bytes
         if supports_emoji():
             return icon.unicode
         return icon.ascii
@@ -225,6 +227,7 @@ def get_icon(icon: IconSet, prefer_ascii: bool = False) -> str:
 # =============================================================================
 # Convenience Functions
 # =============================================================================
+
 
 def icon(name: str, prefer_ascii: bool = False) -> str:
     """
@@ -360,6 +363,7 @@ def shield() -> str:
 # =============================================================================
 # Rich Console Integration
 # =============================================================================
+
 
 def rich_icon(name: str, style: str = "") -> str:
     """

@@ -29,17 +29,19 @@ class SummarizationConfig:
 class CompactFinding:
     """Minimal representation for LLM consumption."""
 
-    id: str           # e.g., "F001"
-    type: str         # "sqli", "xss", "open_port"
-    target: str       # URL or host:port
-    severity: str     # "C", "H", "M", "L", "I"
-    key_detail: str   # One-line essence (< 100 chars)
+    id: str  # e.g., "F001"
+    type: str  # "sqli", "xss", "open_port"
+    target: str  # URL or host:port
+    severity: str  # "C", "H", "M", "L", "I"
+    key_detail: str  # One-line essence (< 100 chars)
     chain_potential: List[str] = field(default_factory=list)
 
     def to_compact_str(self) -> str:
         """Format: [F001|sqli|H] /api/users?id= -> auth_bypass,rce"""
         chain_str = f" -> {','.join(self.chain_potential)}" if self.chain_potential else ""
-        return f"[{self.id}|{self.type}|{self.severity}] {self.target}: {self.key_detail}{chain_str}"
+        return (
+            f"[{self.id}|{self.type}|{self.severity}] {self.target}: {self.key_detail}{chain_str}"
+        )
 
 
 class ReconSummarizer:
@@ -84,7 +86,7 @@ class ReconSummarizer:
 
         # Build summary
         lines = [
-            f"## RECON SUMMARY",
+            "## RECON SUMMARY",
             f"Hosts: {len(hosts)} | Ports: {len(ports)} | Services: {len(services)} | Tech: {len(technologies)}",
             "",
         ]
@@ -92,7 +94,7 @@ class ReconSummarizer:
         # High-value hosts (live, with services)
         if hosts:
             lines.append("### DISCOVERED HOSTS")
-            for h in hosts[:self.config.max_findings_per_type]:
+            for h in hosts[: self.config.max_findings_per_type]:
                 status = "alive" if h.get("metadata", {}).get("alive") else "unknown"
                 lines.append(f"- {h.get('value', 'unknown')} [{status}]")
             if len(hosts) > self.config.max_findings_per_type:
@@ -128,7 +130,9 @@ class ReconSummarizer:
         if notable:
             lines.append("### NOTABLE FINDINGS")
             for n in notable[:5]:
-                lines.append(f"- [{n.get('severity', '').upper()}] {n.get('description', n.get('value', ''))[:100]}")
+                lines.append(
+                    f"- [{n.get('severity', '').upper()}] {n.get('description', n.get('value', ''))[:100]}"
+                )
             lines.append("")
 
         return "\n".join(lines)
@@ -228,11 +232,13 @@ class ScanSummarizer:
         ]
 
         # Critical and high findings first
-        critical_high = [f for f in findings if f.get("severity", "").lower() in ("critical", "high")]
+        critical_high = [
+            f for f in findings if f.get("severity", "").lower() in ("critical", "high")
+        ]
 
         if critical_high:
             lines.append("### CRITICAL/HIGH FINDINGS")
-            for i, f in enumerate(critical_high[:self.config.max_findings_per_type]):
+            for i, f in enumerate(critical_high[: self.config.max_findings_per_type]):
                 fid = f"F{i+1:03d}"
                 sev = f.get("severity", "?")[0].upper()
                 target = f.get("url") or f.get("host") or f.get("target", "unknown")
@@ -289,11 +295,10 @@ class ScanSummarizer:
         """
         result = []
         exploitable = [
-            f for f in findings
-            if f.get("severity", "").lower() in ("critical", "high", "medium")
+            f for f in findings if f.get("severity", "").lower() in ("critical", "high", "medium")
         ]
 
-        for i, f in enumerate(exploitable[:self.config.max_findings_total]):
+        for i, f in enumerate(exploitable[: self.config.max_findings_total]):
             vuln_type = self._classify_vulnerability(f)
 
             # Determine chain potential
@@ -307,14 +312,16 @@ class ScanSummarizer:
             elif vuln_type in ("RCE/Command Injection", "LFI/Path Traversal"):
                 chain_potential = ["full_compromise"]
 
-            result.append(CompactFinding(
-                id=f"F{i+1:03d}",
-                type=vuln_type.lower().replace("/", "_").replace(" ", "_"),
-                target=(f.get("url") or f.get("host") or "unknown")[:60],
-                severity=f.get("severity", "?")[0].upper(),
-                key_detail=(f.get("title") or f.get("description", ""))[:80],
-                chain_potential=chain_potential,
-            ))
+            result.append(
+                CompactFinding(
+                    id=f"F{i+1:03d}",
+                    type=vuln_type.lower().replace("/", "_").replace(" ", "_"),
+                    target=(f.get("url") or f.get("host") or "unknown")[:60],
+                    severity=f.get("severity", "?")[0].upper(),
+                    key_detail=(f.get("title") or f.get("description", ""))[:80],
+                    chain_potential=chain_potential,
+                )
+            )
 
         return result
 
@@ -400,8 +407,14 @@ class ExploitSummarizer:
 
         # General success indicators
         general_success = [
-            "vulnerable", "injection successful", "pwned", "shell obtained",
-            "access granted", "authenticated", "logged in", "admin",
+            "vulnerable",
+            "injection successful",
+            "pwned",
+            "shell obtained",
+            "access granted",
+            "authenticated",
+            "logged in",
+            "admin",
         ]
         for indicator in general_success:
             if indicator in output_lower:
@@ -410,8 +423,17 @@ class ExploitSummarizer:
         # SQLi specific
         if "sqli" in vuln_type.lower():
             sqli_indicators = [
-                "database", "mysql", "postgresql", "oracle", "mssql",
-                "table", "column", "row", "user", "password", "hash",
+                "database",
+                "mysql",
+                "postgresql",
+                "oracle",
+                "mssql",
+                "table",
+                "column",
+                "row",
+                "user",
+                "password",
+                "hash",
             ]
             for ind in sqli_indicators:
                 if ind in output_lower:

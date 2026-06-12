@@ -14,11 +14,10 @@ intelligence/searchers modules.
 
 import os
 import re
-from typing import List, Set
 from pathlib import Path
+from typing import List, Set
 
 from aipt_v2.utils.logging import logger
-
 
 # Blocked domains for security/ethical reasons
 BLOCKED_DOMAINS: Set[str] = {
@@ -217,9 +216,9 @@ def sanitize_filename(filename: str) -> str:
         Sanitized filename
     """
     # Remove or replace dangerous characters
-    sanitized = re.sub(r'[<>:"/\\|?*]', '_', filename)
-    sanitized = re.sub(r'\s+', '_', sanitized)
-    sanitized = sanitized.strip('._')
+    sanitized = re.sub(r'[<>:"/\\|?*]', "_", filename)
+    sanitized = re.sub(r"\s+", "_", sanitized)
+    sanitized = sanitized.strip("._")
 
     # Limit length
     if len(sanitized) > 200:
@@ -238,7 +237,7 @@ def validate_cve_id(cve_id: str) -> bool:
     Returns:
         True if valid CVE format
     """
-    pattern = r'^CVE-\d{4}-\d{4,}$'
+    pattern = r"^CVE-\d{4}-\d{4,}$"
     return bool(re.match(pattern, cve_id.upper()))
 
 
@@ -252,7 +251,7 @@ def extract_cve_ids(text: str) -> List[str]:
     Returns:
         List of CVE IDs found
     """
-    pattern = r'CVE-\d{4}-\d{4,}'
+    pattern = r"CVE-\d{4}-\d{4,}"
     matches = re.findall(pattern, text.upper())
     return list(set(matches))
 
@@ -260,6 +259,7 @@ def extract_cve_ids(text: str) -> List[str]:
 # GitHub configuration compatibility
 class GitHubConfig:
     """GitHub API configuration."""
+
     API_URL = "https://api.github.com"
     SEARCH_URL = f"{API_URL}/search"
     RATE_LIMIT = 30  # requests per minute for unauthenticated

@@ -10,6 +10,7 @@ based on:
 
 This replaces static tool lists with intelligent, context-aware selection.
 """
+
 from __future__ import annotations
 
 import json
@@ -17,7 +18,7 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 
 from aipt_v2.models.findings import Finding, VulnerabilityType
 
@@ -215,6 +216,7 @@ Select the 3-5 most valuable tools to run next. Consider:
 @dataclass
 class ToolSelection:
     """Result of LLM tool selection."""
+
     name: str
     priority: int
     reasoning: str
@@ -225,6 +227,7 @@ class ToolSelection:
 @dataclass
 class ToolSelectionResult:
     """Complete tool selection result."""
+
     selected_tools: list[ToolSelection]
     skip_tools: list[dict[str, str]]
     overall_strategy: str
@@ -269,6 +272,7 @@ class LLMToolSelector:
         if self._llm is None:
             try:
                 import litellm
+
                 self._llm = litellm
             except ImportError:
                 logger.warning("litellm not installed, falling back to heuristics")
@@ -307,8 +311,7 @@ class LLMToolSelector:
         if llm is None or not self._has_api_key():
             # Fall back to heuristic selection
             return self._heuristic_selection(
-                target, phase, findings, tech_stack,
-                waf_detected, tools_already_run, stealth_mode
+                target, phase, findings, tech_stack, waf_detected, tools_already_run, stealth_mode
             )
 
         # Prepare context for LLM
@@ -334,8 +337,7 @@ class LLMToolSelector:
         except Exception as e:
             logger.warning(f"LLM tool selection failed: {e}, falling back to heuristics")
             return self._heuristic_selection(
-                target, phase, findings, tech_stack,
-                waf_detected, tools_already_run, stealth_mode
+                target, phase, findings, tech_stack, waf_detected, tools_already_run, stealth_mode
             )
 
     async def _call_llm(self, prompt: str) -> str:
@@ -371,13 +373,15 @@ class LLMToolSelector:
 
             selected = []
             for tool_data in data.get("selected_tools", []):
-                selected.append(ToolSelection(
-                    name=tool_data["name"],
-                    priority=tool_data.get("priority", 1),
-                    reasoning=tool_data.get("reasoning", ""),
-                    expected_findings=tool_data.get("expected_findings", ""),
-                    custom_args=tool_data.get("custom_args"),
-                ))
+                selected.append(
+                    ToolSelection(
+                        name=tool_data["name"],
+                        priority=tool_data.get("priority", 1),
+                        reasoning=tool_data.get("reasoning", ""),
+                        expected_findings=tool_data.get("expected_findings", ""),
+                        custom_args=tool_data.get("custom_args"),
+                    )
+                )
 
             return ToolSelectionResult(
                 selected_tools=selected,
@@ -443,7 +447,10 @@ class LLMToolSelector:
                 elif finding.vuln_type == VulnerabilityType.COMMAND_INJECTION:
                     if "commix" not in priority_order:
                         priority_order.append("commix")
-                elif finding.vuln_type in [VulnerabilityType.XSS_REFLECTED, VulnerabilityType.XSS_STORED]:
+                elif finding.vuln_type in [
+                    VulnerabilityType.XSS_REFLECTED,
+                    VulnerabilityType.XSS_STORED,
+                ]:
                     if "xsstrike" not in priority_order:
                         priority_order.append("xsstrike")
 
@@ -459,12 +466,14 @@ class LLMToolSelector:
                 continue
 
             tool_info = available[tool_name]
-            selected.append(ToolSelection(
-                name=tool_name,
-                priority=priority,
-                reasoning=f"Standard {phase} phase tool: {tool_info['description']}",
-                expected_findings=f"Discover {', '.join(tool_info['best_for'][:2])}",
-            ))
+            selected.append(
+                ToolSelection(
+                    name=tool_name,
+                    priority=priority,
+                    reasoning=f"Standard {phase} phase tool: {tool_info['description']}",
+                    expected_findings=f"Discover {', '.join(tool_info['best_for'][:2])}",
+                )
+            )
             priority += 1
 
             if len(selected) >= 5:

@@ -10,11 +10,11 @@ import asyncio
 import json
 import logging
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, AsyncIterator, Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
-from ..base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from ..base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,7 @@ class HttpxScanner(BaseScanner):
         """Check if httpx is installed."""
         return shutil.which("httpx") is not None
 
-    async def scan(
-        self,
-        target: str,
-        targets_file: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, targets_file: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run httpx scan on target(s).
 
@@ -117,8 +112,7 @@ class HttpxScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 300)
+                process.communicate(), timeout=kwargs.get("timeout", 300)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -275,13 +269,15 @@ class HttpxScanner(BaseScanner):
             parts = line.split()
             if parts:
                 url = parts[0]
-                findings.append(ScanFinding(
-                    title=url,
-                    severity=ScanSeverity.INFO,
-                    description="Live host detected",
-                    url=url,
-                    scanner="httpx",
-                ))
+                findings.append(
+                    ScanFinding(
+                        title=url,
+                        severity=ScanSeverity.INFO,
+                        description="Live host detected",
+                        url=url,
+                        scanner="httpx",
+                    )
+                )
 
         return findings
 

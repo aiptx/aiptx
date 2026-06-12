@@ -8,7 +8,7 @@ RDP-specific credential spraying and session management.
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class RDPSprayResult:
     """Result of RDP spray attempt."""
+
     target: str
     port: int
     username: str
@@ -237,13 +238,13 @@ class RDPSprayer:
             },
             {
                 "name": "enable_restricted_admin",
-                "command": f"reg add HKLM\\System\\CurrentControlSet\\Control\\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0",
+                "command": "reg add HKLM\\System\\CurrentControlSet\\Control\\Lsa /t REG_DWORD /v DisableRestrictedAdmin /d 0",
                 "description": "Enable Restricted Admin (run on target)",
                 "requires_admin": True,
             },
             {
                 "name": "check_restricted_admin",
-                "command": f"reg query HKLM\\System\\CurrentControlSet\\Control\\Lsa /v DisableRestrictedAdmin",
+                "command": "reg query HKLM\\System\\CurrentControlSet\\Control\\Lsa /v DisableRestrictedAdmin",
                 "description": "Check if Restricted Admin is enabled",
             },
         ]

@@ -16,25 +16,24 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
-from aipt_v2.sast.parsers import (
-    get_parser_for_file,
-    get_supported_extensions,
-    ParsedFile,
-)
-from aipt_v2.sast.rules import (
-    get_rules_for_language,
-    SecretDetectionRules,
-    RuleMatch,
-    RuleSeverity,
-)
 from aipt_v2.agents.shared.finding_repository import (
     Finding,
     FindingSeverity,
     FindingStatus,
     VulnerabilityType,
+)
+from aipt_v2.sast.parsers import (
+    ParsedFile,
+    get_parser_for_file,
+    get_supported_extensions,
+)
+from aipt_v2.sast.rules import (
+    RuleMatch,
+    RuleSeverity,
+    SecretDetectionRules,
+    get_rules_for_language,
 )
 
 logger = logging.getLogger(__name__)
@@ -43,19 +42,22 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SASTConfig:
     """Configuration for SAST analysis."""
+
     max_file_size_mb: float = 5.0
     max_files: int = 10000
     include_patterns: list[str] = field(default_factory=list)
-    exclude_patterns: list[str] = field(default_factory=lambda: [
-        "**/node_modules/**",
-        "**/.git/**",
-        "**/vendor/**",
-        "**/dist/**",
-        "**/build/**",
-        "**/__pycache__/**",
-        "**/*.min.js",
-        "**/*.min.css",
-    ])
+    exclude_patterns: list[str] = field(
+        default_factory=lambda: [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/vendor/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/__pycache__/**",
+            "**/*.min.js",
+            "**/*.min.css",
+        ]
+    )
     enabled_categories: list[str] = field(default_factory=list)  # Empty = all
     min_severity: RuleSeverity = RuleSeverity.LOW
     enable_secrets_detection: bool = True
@@ -65,6 +67,7 @@ class SASTConfig:
 @dataclass
 class SASTFinding:
     """A finding from SAST analysis."""
+
     rule_id: str
     title: str
     description: str
@@ -138,6 +141,7 @@ class SASTFinding:
 @dataclass
 class SASTResult:
     """Result of SAST analysis."""
+
     target_path: str
     started_at: datetime
     completed_at: Optional[datetime] = None
@@ -205,7 +209,9 @@ class SASTAnalyzer:
             config: Analysis configuration
         """
         self.config = config or SASTConfig()
-        self._secrets_rules = SecretDetectionRules() if self.config.enable_secrets_detection else None
+        self._secrets_rules = (
+            SecretDetectionRules() if self.config.enable_secrets_detection else None
+        )
 
     async def scan_directory(
         self,
@@ -259,17 +265,21 @@ class SASTAnalyzer:
             if progress_callback:
                 try:
                     if asyncio.iscoroutinefunction(progress_callback):
-                        await progress_callback({
-                            "completed": completed,
-                            "total": len(files),
-                            "findings": len(result.findings),
-                        })
+                        await progress_callback(
+                            {
+                                "completed": completed,
+                                "total": len(files),
+                                "findings": len(result.findings),
+                            }
+                        )
                     else:
-                        progress_callback({
-                            "completed": completed,
-                            "total": len(files),
-                            "findings": len(result.findings),
-                        })
+                        progress_callback(
+                            {
+                                "completed": completed,
+                                "total": len(files),
+                                "findings": len(result.findings),
+                            }
+                        )
                 except Exception as e:
                     logger.warning(f"Progress callback error: {e}")
 
@@ -398,7 +408,9 @@ class SASTAnalyzer:
                 SASTFinding(
                     rule_id=f"PATTERN-{pattern.pattern_type.upper()}",
                     title=f"Security Pattern: {pattern.pattern_type}",
-                    description=pattern.context.get("description", f"Detected {pattern.pattern_type} pattern"),
+                    description=pattern.context.get(
+                        "description", f"Detected {pattern.pattern_type} pattern"
+                    ),
                     severity="medium",
                     category=pattern.pattern_type,
                     file_path=pattern.location.file_path,
@@ -465,7 +477,8 @@ class SASTAnalyzer:
         for root, dirs, filenames in os.walk(directory):
             # Apply exclude patterns to directories
             dirs[:] = [
-                d for d in dirs
+                d
+                for d in dirs
                 if not any(
                     fnmatch.fnmatch(os.path.join(root, d), pattern)
                     for pattern in self.config.exclude_patterns

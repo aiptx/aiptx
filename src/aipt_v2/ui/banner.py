@@ -27,12 +27,9 @@ from __future__ import annotations
 
 import sys
 import time
-import random
-from dataclasses import dataclass
-from typing import Dict, Optional, List
+from typing import Dict
 
 from .animations import Colors
-
 
 # ASCII Art Banners
 BANNERS = {
@@ -168,7 +165,7 @@ class Banner:
 
         # Cyan to Purple gradient
         start = (0, 255, 255)  # Cyan
-        end = (138, 43, 226)   # Purple
+        end = (138, 43, 226)  # Purple
 
         for i, line in enumerate(lines):
             ratio = i / max(len(lines) - 1, 1)
@@ -271,7 +268,9 @@ def print_startup_banner(target: str = None, mode: str = "scan"):
 
     if target:
         print(f"    {Colors.BOLD}Target:{Colors.RESET} {Colors.BRIGHT_CYAN}{target}{Colors.RESET}")
-        print(f"    {Colors.BOLD}Mode:{Colors.RESET}   {Colors.BRIGHT_YELLOW}{mode.upper()}{Colors.RESET}")
+        print(
+            f"    {Colors.BOLD}Mode:{Colors.RESET}   {Colors.BRIGHT_YELLOW}{mode.upper()}{Colors.RESET}"
+        )
         print(f"    {Colors.DIM}{'─' * 50}{Colors.RESET}\n")
 
 
@@ -326,7 +325,7 @@ def demo():
                 "Report": True,
                 "LLM": "loading",
                 "VPS": True,
-            }
+            },
         )
         time.sleep(0.5)
 

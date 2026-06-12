@@ -26,12 +26,12 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional
+from typing import Callable, Dict, List, Optional
 
 import requests
 from requests.adapters import HTTPAdapter
-from urllib3.util.retry import Retry
 from requests.packages.urllib3.exceptions import InsecureRequestWarning
+from urllib3.util.retry import Retry
 
 # Suppress SSL warnings for self-signed certs
 requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
@@ -41,8 +41,10 @@ logger = logging.getLogger(__name__)
 
 # ==================== Enums ====================
 
+
 class ScanStatus(Enum):
     """Nessus scan status."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -54,15 +56,17 @@ class ScanStatus(Enum):
 
 class Severity(Enum):
     """Nessus severity levels (CVSS-based)."""
+
     CRITICAL = 4  # CVSS >= 9.0
-    HIGH = 3      # CVSS 7.0-8.9
-    MEDIUM = 2    # CVSS 4.0-6.9
-    LOW = 1       # CVSS 0.1-3.9
-    INFO = 0      # Informational
+    HIGH = 3  # CVSS 7.0-8.9
+    MEDIUM = 2  # CVSS 4.0-6.9
+    LOW = 1  # CVSS 0.1-3.9
+    INFO = 0  # Informational
 
 
 class ScanTemplate(Enum):
     """Nessus scan templates."""
+
     BASIC_NETWORK = "basic"
     ADVANCED = "advanced"
     WEB_APP = "webapp"
@@ -73,12 +77,23 @@ class ScanTemplate(Enum):
 
 # ==================== Data Classes ====================
 
+
 @dataclass
 class NessusConfig:
     """Configuration for Nessus connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_URL") or os.getenv("NESSUS_URL", "https://localhost:8834"))
-    access_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY") or os.getenv("NESSUS_ACCESS_KEY", ""))
-    secret_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY") or os.getenv("NESSUS_SECRET_KEY", ""))
+
+    base_url: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_URL")
+        or os.getenv("NESSUS_URL", "https://localhost:8834")
+    )
+    access_key: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_ACCESS_KEY")
+        or os.getenv("NESSUS_ACCESS_KEY", "")
+    )
+    secret_key: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__NESSUS_SECRET_KEY")
+        or os.getenv("NESSUS_SECRET_KEY", "")
+    )
     verify_ssl: bool = False
     timeout: int = 60  # Increased from 30s for high-latency networks
     max_retries: int = 3
@@ -87,6 +102,7 @@ class NessusConfig:
 @dataclass
 class ScanResult:
     """Result of a Nessus scan."""
+
     scan_id: str
     status: str
     progress: int = 0
@@ -101,6 +117,7 @@ class ScanResult:
 @dataclass
 class Vulnerability:
     """Nessus vulnerability finding."""
+
     vuln_id: str
     plugin_id: str
     plugin_name: str
@@ -119,6 +136,7 @@ class Vulnerability:
 
 
 # ==================== Main Tool Class ====================
+
 
 class NessusTool:
     """
@@ -155,7 +173,14 @@ class NessusTool:
         self._session.mount("https://", adapter)
         self._session.mount("http://", adapter)
 
-    def _request(self, method: str, endpoint: str, data: dict = None, retries: int = None, silent: bool = False) -> dict:
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        data: dict = None,
+        retries: int = None,
+        silent: bool = False,
+    ) -> dict:
         """Make authenticated request to Nessus API with retry logic.
 
         Args:
@@ -176,15 +201,17 @@ class NessusTool:
                     url=url,
                     json=data,
                     verify=self.config.verify_ssl,
-                    timeout=self.config.timeout
+                    timeout=self.config.timeout,
                 )
                 response.raise_for_status()
                 return response.json() if response.text else {}
             except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
                 last_error = e
-                wait_time = min((2 ** attempt) * 2, 30)  # Cap at 30 seconds
+                wait_time = min((2**attempt) * 2, 30)  # Cap at 30 seconds
                 if not silent and attempt < retries - 1:
-                    logger.debug(f"Nessus connection issue (attempt {attempt + 1}/{retries}), retrying in {wait_time}s...")
+                    logger.debug(
+                        f"Nessus connection issue (attempt {attempt + 1}/{retries}), retrying in {wait_time}s..."
+                    )
                 if attempt < retries - 1:
                     time.sleep(wait_time)
             except requests.exceptions.RequestException as e:
@@ -193,7 +220,9 @@ class NessusTool:
 
         # All retries exhausted - only log once
         if not silent:
-            logger.warning(f"Nessus unreachable after {retries} attempts (timeout={self.config.timeout}s)")
+            logger.warning(
+                f"Nessus unreachable after {retries} attempts (timeout={self.config.timeout}s)"
+            )
         raise last_error
 
     # ==================== Connection ====================
@@ -243,7 +272,7 @@ class NessusTool:
         targets: str,
         template: str = "basic",
         description: str = "",
-        credentials: dict = None
+        credentials: dict = None,
     ) -> str:
         """
         Create a new scan.
@@ -274,13 +303,10 @@ class NessusTool:
             "name": name,
             "description": description or f"AIPTX Scan - {datetime.now().isoformat()}",
             "text_targets": targets,
-            "launch_now": False
+            "launch_now": False,
         }
 
-        data = {
-            "uuid": template_uuid,
-            "settings": settings
-        }
+        data = {"uuid": template_uuid, "settings": settings}
 
         if credentials:
             data["credentials"] = credentials
@@ -301,11 +327,7 @@ class NessusTool:
             return False
 
     def scan_host(
-        self,
-        target: str,
-        template: str = "basic",
-        name: str = None,
-        credentials: dict = None
+        self, target: str, template: str = "basic", name: str = None, credentials: dict = None
     ) -> str:
         """
         Convenience method to create and launch a scan.
@@ -344,11 +366,15 @@ class NessusTool:
                 hosts_completed=info.get("hosts_done", 0) or 0,
                 vulnerabilities_count=len(result.get("vulnerabilities", [])),
                 start_time=info.get("scan_start", ""),
-                end_time=info.get("scan_end", "")
+                end_time=info.get("scan_end", ""),
             )
         except (requests.exceptions.ConnectTimeout, requests.exceptions.ConnectionError) as e:
             # Return error status instead of raising for connection issues
-            return ScanResult(scan_id=scan_id, status="unreachable", error=f"Connection failed: {type(e).__name__}")
+            return ScanResult(
+                scan_id=scan_id,
+                status="unreachable",
+                error=f"Connection failed: {type(e).__name__}",
+            )
         except Exception as e:
             return ScanResult(scan_id=scan_id, status="error", error=str(e))
 
@@ -357,7 +383,7 @@ class NessusTool:
         scan_id: str,
         timeout: int = 3600,
         poll_interval: int = 30,
-        callback: Callable[[ScanResult], None] = None
+        callback: Callable[[ScanResult], None] = None,
     ) -> ScanResult:
         """
         Wait for scan to complete.
@@ -385,11 +411,13 @@ class NessusTool:
             if result.status == "unreachable":
                 consecutive_failures += 1
                 if consecutive_failures >= max_consecutive_failures:
-                    logger.warning(f"Nessus scan {scan_id}: server unreachable after {consecutive_failures} attempts")
+                    logger.warning(
+                        f"Nessus scan {scan_id}: server unreachable after {consecutive_failures} attempts"
+                    )
                     return ScanResult(
                         scan_id=scan_id,
                         status="unreachable",
-                        error=f"Server unreachable after {consecutive_failures} consecutive failures"
+                        error=f"Server unreachable after {consecutive_failures} consecutive failures",
                     )
                 # Wait longer before retrying
                 time.sleep(poll_interval * 2)
@@ -404,9 +432,7 @@ class NessusTool:
             time.sleep(poll_interval)
 
         return ScanResult(
-            scan_id=scan_id,
-            status="timeout",
-            error=f"Scan timed out after {timeout}s"
+            scan_id=scan_id, status="timeout", error=f"Scan timed out after {timeout}s"
         )
 
     def stop_scan(self, scan_id: str) -> bool:
@@ -475,8 +501,7 @@ class NessusTool:
                     # Get plugin details
                     try:
                         plugin_result = self._request(
-                            "GET",
-                            f"/scans/{scan_id}/hosts/{host_id}/plugins/{plugin_id}"
+                            "GET", f"/scans/{scan_id}/hosts/{host_id}/plugins/{plugin_id}"
                         )
                         plugin_info = plugin_result.get("info", {}).get("plugindescription", {})
                         plugin_attrs = plugin_info.get("pluginattributes", {})
@@ -484,23 +509,29 @@ class NessusTool:
                         plugin_info = {}
                         plugin_attrs = {}
 
-                    vulns.append(Vulnerability(
-                        vuln_id=f"{scan_id}-{host_id}-{plugin_id}",
-                        plugin_id=str(plugin_id),
-                        plugin_name=vuln.get("plugin_name", "Unknown"),
-                        severity=sev,
-                        severity_name=self._severity_name(sev),
-                        host=hostname,
-                        port=vuln.get("port", 0),
-                        protocol=vuln.get("protocol", "tcp"),
-                        description=plugin_attrs.get("description", ""),
-                        solution=plugin_attrs.get("solution", ""),
-                        cvss_score=float(plugin_attrs.get("cvss_base_score", 0) or 0),
-                        cvss_vector=plugin_attrs.get("cvss_vector", ""),
-                        cve=plugin_attrs.get("cve", []) or [],
-                        references=plugin_attrs.get("see_also", []) or [],
-                        plugin_output=plugin_result.get("outputs", [{}])[0].get("plugin_output", "") if plugin_result.get("outputs") else ""
-                    ))
+                    vulns.append(
+                        Vulnerability(
+                            vuln_id=f"{scan_id}-{host_id}-{plugin_id}",
+                            plugin_id=str(plugin_id),
+                            plugin_name=vuln.get("plugin_name", "Unknown"),
+                            severity=sev,
+                            severity_name=self._severity_name(sev),
+                            host=hostname,
+                            port=vuln.get("port", 0),
+                            protocol=vuln.get("protocol", "tcp"),
+                            description=plugin_attrs.get("description", ""),
+                            solution=plugin_attrs.get("solution", ""),
+                            cvss_score=float(plugin_attrs.get("cvss_base_score", 0) or 0),
+                            cvss_vector=plugin_attrs.get("cvss_vector", ""),
+                            cve=plugin_attrs.get("cve", []) or [],
+                            references=plugin_attrs.get("see_also", []) or [],
+                            plugin_output=(
+                                plugin_result.get("outputs", [{}])[0].get("plugin_output", "")
+                                if plugin_result.get("outputs")
+                                else ""
+                            ),
+                        )
+                    )
 
             return vulns
         except Exception as e:
@@ -529,9 +560,9 @@ class NessusTool:
                 "cvss_score": vuln.cvss_score,
                 "cve": vuln.cve,
                 "protocol": vuln.protocol,
-                "solution": vuln.solution
+                "solution": vuln.solution,
             },
-            "timestamp": datetime.now(timezone.utc).isoformat()
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     def export_findings(self, scan_id: str, output_path: str = None) -> List[Dict]:
@@ -616,7 +647,7 @@ def nessus_summary() -> Dict:
         "connected": True,
         "url": nessus.config.base_url,
         "version": info.get("nessus_ui_version", "unknown"),
-        "scans_count": len(scans)
+        "scans_count": len(scans),
     }
 
 

@@ -10,11 +10,11 @@ via their REST APIs:
 
 Each scanner has its own workflow (start scan, poll status, get results).
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-from abc import abstractmethod
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
@@ -28,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 class ScannerType(Enum):
     """Supported enterprise scanners"""
+
     ACUNETIX = "acunetix"
     BURP = "burp"
     NESSUS = "nessus"
@@ -319,14 +320,16 @@ class EnterpriseAPIRunner(BaseRunner):
                 if resp.status == 200:
                     data = await resp.json()
                     for vuln in data.get("vulnerabilities", []):
-                        findings.append({
-                            "source": "acunetix",
-                            "vuln_id": vuln.get("vuln_id"),
-                            "severity": vuln.get("severity"),
-                            "name": vuln.get("vt_name"),
-                            "url": vuln.get("affects_url"),
-                            "description": vuln.get("description"),
-                        })
+                        findings.append(
+                            {
+                                "source": "acunetix",
+                                "vuln_id": vuln.get("vuln_id"),
+                                "severity": vuln.get("severity"),
+                                "name": vuln.get("vt_name"),
+                                "url": vuln.get("affects_url"),
+                                "description": vuln.get("description"),
+                            }
+                        )
         except Exception as e:
             logger.error(f"Acunetix get results error: {e}")
 

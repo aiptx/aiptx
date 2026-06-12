@@ -18,17 +18,17 @@ Usage:
     groups = await enum.enumerate_groups()
 """
 
-import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 
 try:
     import ldap3
-    from ldap3 import Server, Connection, ALL, NTLM, KERBEROS, SASL
+    from ldap3 import ALL, KERBEROS, NTLM, SASL, Connection, Server
+
     HAS_LDAP3 = True
 except ImportError:
     HAS_LDAP3 = False
@@ -37,6 +37,7 @@ except ImportError:
 @dataclass
 class LDAPFinding:
     """LDAP enumeration finding."""
+
     category: str  # user, group, computer, gpo, trust, misc
     severity: str  # critical, high, medium, low, info
     title: str
@@ -54,6 +55,7 @@ class LDAPFinding:
 @dataclass
 class LDAPEnumResult:
     """Result of LDAP enumeration."""
+
     domain: str
     status: str
     started_at: str
@@ -88,7 +90,7 @@ class LDAPEnum:
         "Print Operators",
         "DnsAdmins",
         "Domain Controllers",
-        "Group Policy Creator Owners"
+        "Group Policy Creator Owners",
     ]
 
     # Dangerous user attributes
@@ -104,7 +106,7 @@ class LDAPEnum:
         0x00400000: "NOT_DELEGATED",
         0x00800000: "USE_DES_KEY_ONLY",
         0x01000000: "DONT_REQ_PREAUTH",
-        0x04000000: "TRUSTED_TO_AUTH_FOR_DELEGATION"
+        0x04000000: "TRUSTED_TO_AUTH_FOR_DELEGATION",
     }
 
     def __init__(self, config: Optional[ADConfig] = None):
@@ -128,26 +130,19 @@ class LDAPEnum:
                 self.config.dc_ip,
                 port=self.config.ldaps_port if self.config.use_ssl else self.config.ldap_port,
                 use_ssl=self.config.use_ssl,
-                get_info=ALL
+                get_info=ALL,
             )
 
             # Determine authentication method
             if self.config.credentials.use_kerberos:
-                self.connection = Connection(
-                    server,
-                    authentication=SASL,
-                    sasl_mechanism=KERBEROS
-                )
+                self.connection = Connection(server, authentication=SASL, sasl_mechanism=KERBEROS)
             else:
                 # NTLM authentication
                 user = self.config.credentials.get_auth_string()
                 password = self.config.credentials.get_password_or_hash()
 
                 self.connection = Connection(
-                    server,
-                    user=user,
-                    password=password,
-                    authentication=NTLM
+                    server, user=user, password=password, authentication=NTLM
                 )
 
             return self.connection.bind()
@@ -157,10 +152,7 @@ class LDAPEnum:
             return False
 
     def _search(
-        self,
-        search_filter: str,
-        attributes: List[str] = None,
-        search_base: str = None
+        self, search_filter: str, attributes: List[str] = None, search_base: str = None
     ) -> List[Dict]:
         """Execute LDAP search."""
         if not self.connection:
@@ -170,17 +162,13 @@ class LDAPEnum:
         attrs = attributes or ["*"]
 
         try:
-            self.connection.search(
-                search_base=base,
-                search_filter=search_filter,
-                attributes=attrs
-            )
+            self.connection.search(search_base=base, search_filter=search_filter, attributes=attrs)
 
             results = []
             for entry in self.connection.entries:
                 entry_dict = {
                     "dn": entry.entry_dn,
-                    "attributes": dict(entry.entry_attributes_as_dict)
+                    "attributes": dict(entry.entry_attributes_as_dict),
                 }
                 results.append(entry_dict)
 
@@ -195,11 +183,18 @@ class LDAPEnum:
         users = self._search(
             "(objectClass=user)",
             attributes=[
-                "sAMAccountName", "userPrincipalName", "displayName",
-                "description", "memberOf", "userAccountControl",
-                "pwdLastSet", "lastLogonTimestamp", "adminCount",
-                "servicePrincipalName", "msDS-AllowedToDelegateTo"
-            ]
+                "sAMAccountName",
+                "userPrincipalName",
+                "displayName",
+                "description",
+                "memberOf",
+                "userAccountControl",
+                "pwdLastSet",
+                "lastLogonTimestamp",
+                "adminCount",
+                "servicePrincipalName",
+                "msDS-AllowedToDelegateTo",
+            ],
         )
 
         # Analyze users for security issues
@@ -212,58 +207,72 @@ class LDAPEnum:
             if isinstance(uac, int):
                 for flag_value, flag_name in self.DANGEROUS_FLAGS.items():
                     if uac & flag_value:
-                        severity = "high" if flag_name in [
-                            "DONT_REQ_PREAUTH", "TRUSTED_FOR_DELEGATION",
-                            "PASSWORD_NOT_REQUIRED"
-                        ] else "medium"
+                        severity = (
+                            "high"
+                            if flag_name
+                            in [
+                                "DONT_REQ_PREAUTH",
+                                "TRUSTED_FOR_DELEGATION",
+                                "PASSWORD_NOT_REQUIRED",
+                            ]
+                            else "medium"
+                        )
 
-                        self.findings.append(LDAPFinding(
-                            category="user",
-                            severity=severity,
-                            title=f"User has {flag_name} flag",
-                            description=f"User {sam} has {flag_name} UAC flag set",
-                            object_dn=user.get("dn", ""),
-                            attributes={"flag": flag_name, "uac": uac},
-                            remediation=f"Review and remove {flag_name} flag if not required"
-                        ))
+                        self.findings.append(
+                            LDAPFinding(
+                                category="user",
+                                severity=severity,
+                                title=f"User has {flag_name} flag",
+                                description=f"User {sam} has {flag_name} UAC flag set",
+                                object_dn=user.get("dn", ""),
+                                attributes={"flag": flag_name, "uac": uac},
+                                remediation=f"Review and remove {flag_name} flag if not required",
+                            )
+                        )
 
             # Check for service accounts (Kerberoastable)
             spns = attrs.get("servicePrincipalName", [])
             if spns:
-                self.findings.append(LDAPFinding(
-                    category="user",
-                    severity="high",
-                    title="Kerberoastable Account",
-                    description=f"User {sam} has SPNs and may be Kerberoastable",
-                    object_dn=user.get("dn", ""),
-                    attributes={"spns": spns},
-                    remediation="Use strong passwords for service accounts"
-                ))
+                self.findings.append(
+                    LDAPFinding(
+                        category="user",
+                        severity="high",
+                        title="Kerberoastable Account",
+                        description=f"User {sam} has SPNs and may be Kerberoastable",
+                        object_dn=user.get("dn", ""),
+                        attributes={"spns": spns},
+                        remediation="Use strong passwords for service accounts",
+                    )
+                )
 
             # Check for delegation
             delegation = attrs.get("msDS-AllowedToDelegateTo", [])
             if delegation:
-                self.findings.append(LDAPFinding(
-                    category="user",
-                    severity="high",
-                    title="Constrained Delegation",
-                    description=f"User {sam} can delegate to specific services",
-                    object_dn=user.get("dn", ""),
-                    attributes={"delegation_targets": delegation},
-                    remediation="Review delegation configuration"
-                ))
+                self.findings.append(
+                    LDAPFinding(
+                        category="user",
+                        severity="high",
+                        title="Constrained Delegation",
+                        description=f"User {sam} can delegate to specific services",
+                        object_dn=user.get("dn", ""),
+                        attributes={"delegation_targets": delegation},
+                        remediation="Review delegation configuration",
+                    )
+                )
 
             # Check admin count
             if attrs.get("adminCount", [0])[0] == 1:
-                self.findings.append(LDAPFinding(
-                    category="user",
-                    severity="info",
-                    title="Protected Admin Account",
-                    description=f"User {sam} has adminCount=1 (was/is admin)",
-                    object_dn=user.get("dn", ""),
-                    attributes={},
-                    remediation="Verify admin privileges are appropriate"
-                ))
+                self.findings.append(
+                    LDAPFinding(
+                        category="user",
+                        severity="info",
+                        title="Protected Admin Account",
+                        description=f"User {sam} has adminCount=1 (was/is admin)",
+                        object_dn=user.get("dn", ""),
+                        attributes={},
+                        remediation="Verify admin privileges are appropriate",
+                    )
+                )
 
         return users
 
@@ -272,9 +281,13 @@ class LDAPEnum:
         groups = self._search(
             "(objectClass=group)",
             attributes=[
-                "sAMAccountName", "description", "member",
-                "memberOf", "adminCount", "groupType"
-            ]
+                "sAMAccountName",
+                "description",
+                "member",
+                "memberOf",
+                "adminCount",
+                "groupType",
+            ],
         )
 
         # Check for privileged groups
@@ -284,15 +297,17 @@ class LDAPEnum:
             members = attrs.get("member", [])
 
             if name in self.PRIVILEGED_GROUPS:
-                self.findings.append(LDAPFinding(
-                    category="group",
-                    severity="info",
-                    title=f"Privileged Group: {name}",
-                    description=f"Group {name} has {len(members)} members",
-                    object_dn=group.get("dn", ""),
-                    attributes={"member_count": len(members)},
-                    remediation="Review membership regularly"
-                ))
+                self.findings.append(
+                    LDAPFinding(
+                        category="group",
+                        severity="info",
+                        title=f"Privileged Group: {name}",
+                        description=f"Group {name} has {len(members)} members",
+                        object_dn=group.get("dn", ""),
+                        attributes={"member_count": len(members)},
+                        remediation="Review membership regularly",
+                    )
+                )
 
         return groups
 
@@ -301,11 +316,15 @@ class LDAPEnum:
         computers = self._search(
             "(objectClass=computer)",
             attributes=[
-                "sAMAccountName", "dNSHostName", "operatingSystem",
-                "operatingSystemVersion", "userAccountControl",
-                "lastLogonTimestamp", "servicePrincipalName",
-                "msDS-AllowedToDelegateTo"
-            ]
+                "sAMAccountName",
+                "dNSHostName",
+                "operatingSystem",
+                "operatingSystemVersion",
+                "userAccountControl",
+                "lastLogonTimestamp",
+                "servicePrincipalName",
+                "msDS-AllowedToDelegateTo",
+            ],
         )
 
         for computer in computers:
@@ -314,31 +333,35 @@ class LDAPEnum:
             os_name = attrs.get("operatingSystem", [""])[0]
 
             # Check for legacy OS
-            if os_name and any(legacy in os_name.lower() for legacy in [
-                "2003", "2008", "xp", "vista", "windows 7"
-            ]):
-                self.findings.append(LDAPFinding(
-                    category="computer",
-                    severity="high",
-                    title="Legacy Operating System",
-                    description=f"Computer {name} runs {os_name}",
-                    object_dn=computer.get("dn", ""),
-                    attributes={"os": os_name},
-                    remediation="Upgrade to supported operating system"
-                ))
+            if os_name and any(
+                legacy in os_name.lower() for legacy in ["2003", "2008", "xp", "vista", "windows 7"]
+            ):
+                self.findings.append(
+                    LDAPFinding(
+                        category="computer",
+                        severity="high",
+                        title="Legacy Operating System",
+                        description=f"Computer {name} runs {os_name}",
+                        object_dn=computer.get("dn", ""),
+                        attributes={"os": os_name},
+                        remediation="Upgrade to supported operating system",
+                    )
+                )
 
             # Check for unconstrained delegation
             uac = attrs.get("userAccountControl", [0])[0]
             if isinstance(uac, int) and (uac & 0x00080000):  # TRUSTED_FOR_DELEGATION
-                self.findings.append(LDAPFinding(
-                    category="computer",
-                    severity="critical",
-                    title="Unconstrained Delegation",
-                    description=f"Computer {name} has unconstrained delegation",
-                    object_dn=computer.get("dn", ""),
-                    attributes={},
-                    remediation="Remove unconstrained delegation or use constrained"
-                ))
+                self.findings.append(
+                    LDAPFinding(
+                        category="computer",
+                        severity="critical",
+                        title="Unconstrained Delegation",
+                        description=f"Computer {name} has unconstrained delegation",
+                        object_dn=computer.get("dn", ""),
+                        attributes={},
+                        remediation="Remove unconstrained delegation or use constrained",
+                    )
+                )
 
         return computers
 
@@ -347,9 +370,11 @@ class LDAPEnum:
         gpos = self._search(
             "(objectClass=groupPolicyContainer)",
             attributes=[
-                "displayName", "gPCFileSysPath", "versionNumber",
-                "gPCFunctionalityVersion"
-            ]
+                "displayName",
+                "gPCFileSysPath",
+                "versionNumber",
+                "gPCFunctionalityVersion",
+            ],
         )
 
         return gpos
@@ -359,9 +384,12 @@ class LDAPEnum:
         trusts = self._search(
             "(objectClass=trustedDomain)",
             attributes=[
-                "name", "trustDirection", "trustType",
-                "trustAttributes", "securityIdentifier"
-            ]
+                "name",
+                "trustDirection",
+                "trustType",
+                "trustAttributes",
+                "securityIdentifier",
+            ],
         )
 
         for trust in trusts:
@@ -369,22 +397,19 @@ class LDAPEnum:
             name = attrs.get("name", [""])[0]
             direction = attrs.get("trustDirection", [0])[0]
 
-            direction_map = {
-                0: "Disabled",
-                1: "Inbound",
-                2: "Outbound",
-                3: "Bidirectional"
-            }
+            direction_map = {0: "Disabled", 1: "Inbound", 2: "Outbound", 3: "Bidirectional"}
 
-            self.findings.append(LDAPFinding(
-                category="trust",
-                severity="info",
-                title=f"Domain Trust: {name}",
-                description=f"Trust direction: {direction_map.get(direction, 'Unknown')}",
-                object_dn=trust.get("dn", ""),
-                attributes={"direction": direction_map.get(direction)},
-                remediation="Review trust relationships regularly"
-            ))
+            self.findings.append(
+                LDAPFinding(
+                    category="trust",
+                    severity="info",
+                    title=f"Domain Trust: {name}",
+                    description=f"Trust direction: {direction_map.get(direction, 'Unknown')}",
+                    object_dn=trust.get("dn", ""),
+                    attributes={"direction": direction_map.get(direction)},
+                    remediation="Review trust relationships regularly",
+                )
+            )
 
         return trusts
 
@@ -393,22 +418,24 @@ class LDAPEnum:
         # Users with DONT_REQ_PREAUTH flag
         users = self._search(
             "(&(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=4194304))",
-            attributes=["sAMAccountName", "userPrincipalName", "description"]
+            attributes=["sAMAccountName", "userPrincipalName", "description"],
         )
 
         for user in users:
             attrs = user.get("attributes", {})
             sam = attrs.get("sAMAccountName", [""])[0]
 
-            self.findings.append(LDAPFinding(
-                category="user",
-                severity="high",
-                title="AS-REP Roastable Account",
-                description=f"User {sam} does not require Kerberos pre-authentication",
-                object_dn=user.get("dn", ""),
-                attributes={},
-                remediation="Enable Kerberos pre-authentication"
-            ))
+            self.findings.append(
+                LDAPFinding(
+                    category="user",
+                    severity="high",
+                    title="AS-REP Roastable Account",
+                    description=f"User {sam} does not require Kerberos pre-authentication",
+                    object_dn=user.get("dn", ""),
+                    attributes={},
+                    remediation="Enable Kerberos pre-authentication",
+                )
+            )
 
         return users
 
@@ -417,29 +444,33 @@ class LDAPEnum:
         # Check if LAPS schema is present
         computers = self._search(
             "(&(objectClass=computer)(ms-Mcs-AdmPwd=*))",
-            attributes=["sAMAccountName", "ms-Mcs-AdmPwd", "ms-Mcs-AdmPwdExpirationTime"]
+            attributes=["sAMAccountName", "ms-Mcs-AdmPwd", "ms-Mcs-AdmPwdExpirationTime"],
         )
 
         if computers:
-            self.findings.append(LDAPFinding(
-                category="misc",
-                severity="info",
-                title="LAPS Deployed",
-                description=f"LAPS is deployed on {len(computers)} computers",
-                object_dn="",
-                attributes={"computer_count": len(computers)},
-                remediation="Ensure LAPS passwords are retrieved securely"
-            ))
+            self.findings.append(
+                LDAPFinding(
+                    category="misc",
+                    severity="info",
+                    title="LAPS Deployed",
+                    description=f"LAPS is deployed on {len(computers)} computers",
+                    object_dn="",
+                    attributes={"computer_count": len(computers)},
+                    remediation="Ensure LAPS passwords are retrieved securely",
+                )
+            )
         else:
-            self.findings.append(LDAPFinding(
-                category="misc",
-                severity="medium",
-                title="LAPS Not Detected",
-                description="LAPS does not appear to be deployed",
-                object_dn="",
-                attributes={},
-                remediation="Consider deploying LAPS for local admin password management"
-            ))
+            self.findings.append(
+                LDAPFinding(
+                    category="misc",
+                    severity="medium",
+                    title="LAPS Not Detected",
+                    description="LAPS does not appear to be deployed",
+                    object_dn="",
+                    attributes={},
+                    remediation="Consider deploying LAPS for local admin password management",
+                )
+            )
 
         return computers
 
@@ -461,7 +492,7 @@ class LDAPEnum:
                 gpos=[],
                 trusts=[],
                 findings=[],
-                metadata={"error": "LDAP connection failed"}
+                metadata={"error": "LDAP connection failed"},
             )
 
         # Run enumeration
@@ -496,18 +527,14 @@ class LDAPEnum:
                 "user_count": len(users),
                 "group_count": len(groups),
                 "computer_count": len(computers),
-                "finding_count": len(self.findings)
-            }
+                "finding_count": len(self.findings),
+            },
         )
 
 
 # Convenience function
 async def enumerate_ldap(
-    domain: str,
-    dc_ip: str,
-    username: str,
-    password: str,
-    **kwargs
+    domain: str, dc_ip: str, username: str, password: str, **kwargs
 ) -> LDAPEnumResult:
     """
     Quick LDAP enumeration.
@@ -523,11 +550,7 @@ async def enumerate_ldap(
         LDAPEnumResult
     """
     config = get_ad_config(
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username,
-        password=password,
-        **kwargs
+        domain=domain, dc_ip=dc_ip, username=username, password=password, **kwargs
     )
 
     enum = LDAPEnum(config)

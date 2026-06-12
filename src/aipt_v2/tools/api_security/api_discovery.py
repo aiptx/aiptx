@@ -21,7 +21,7 @@ import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import List, Dict, Any, Optional, Set
+from typing import Any, Dict, List, Optional, Set
 from urllib.parse import urljoin, urlparse
 
 from aipt_v2.core.event_loop_manager import current_time
@@ -35,6 +35,7 @@ except ImportError:
 @dataclass
 class APIValidationResult:
     """Result of API content validation."""
+
     is_valid: bool = False
     endpoint_type: str = "unknown"
     confidence: float = 0.0  # 0.0 to 1.0
@@ -44,6 +45,7 @@ class APIValidationResult:
 @dataclass
 class DiscoveredEndpoint:
     """Discovered API endpoint."""
+
     url: str
     method: str
     status_code: int
@@ -64,6 +66,7 @@ class DiscoveredEndpoint:
 @dataclass
 class APIDiscoveryConfig:
     """API discovery configuration."""
+
     base_url: str
 
     # Discovery options
@@ -86,6 +89,7 @@ class APIDiscoveryConfig:
 @dataclass
 class APIDiscoveryResult:
     """Result of API discovery."""
+
     base_url: str
     status: str
     started_at: str
@@ -109,67 +113,122 @@ class APIDiscovery:
 
     # OpenAPI/Swagger spec locations
     SWAGGER_PATHS = [
-        "/openapi.json", "/openapi.yaml",
-        "/swagger.json", "/swagger.yaml",
-        "/api-docs", "/api-docs.json",
-        "/v1/api-docs", "/v2/api-docs", "/v3/api-docs",
+        "/openapi.json",
+        "/openapi.yaml",
+        "/swagger.json",
+        "/swagger.yaml",
+        "/api-docs",
+        "/api-docs.json",
+        "/v1/api-docs",
+        "/v2/api-docs",
+        "/v3/api-docs",
         "/swagger/v1/swagger.json",
         "/swagger-resources",
-        "/api/swagger.json", "/api/openapi.json",
+        "/api/swagger.json",
+        "/api/openapi.json",
         "/.well-known/openapi.json",
-        "/docs", "/docs/", "/redoc",
-        "/api/docs", "/api/documentation"
+        "/docs",
+        "/docs/",
+        "/redoc",
+        "/api/docs",
+        "/api/documentation",
     ]
 
     # GraphQL common endpoints
     GRAPHQL_PATHS = [
-        "/graphql", "/graphiql", "/graphql/console",
-        "/api/graphql", "/v1/graphql",
-        "/gql", "/query",
-        "/graphql/v1", "/graphql/v2"
+        "/graphql",
+        "/graphiql",
+        "/graphql/console",
+        "/api/graphql",
+        "/v1/graphql",
+        "/gql",
+        "/query",
+        "/graphql/v1",
+        "/graphql/v2",
     ]
 
     # Common API paths to enumerate
     COMMON_API_PATHS = [
         # Authentication
-        "/api/auth", "/api/login", "/api/logout", "/api/register",
-        "/api/oauth", "/api/token", "/api/refresh",
-        "/auth/login", "/auth/token", "/oauth/token",
-
+        "/api/auth",
+        "/api/login",
+        "/api/logout",
+        "/api/register",
+        "/api/oauth",
+        "/api/token",
+        "/api/refresh",
+        "/auth/login",
+        "/auth/token",
+        "/oauth/token",
         # User management
-        "/api/users", "/api/user", "/api/me", "/api/profile",
-        "/api/account", "/api/accounts",
-        "/users", "/user", "/me", "/profile",
-
+        "/api/users",
+        "/api/user",
+        "/api/me",
+        "/api/profile",
+        "/api/account",
+        "/api/accounts",
+        "/users",
+        "/user",
+        "/me",
+        "/profile",
         # Common resources
-        "/api/items", "/api/products", "/api/orders",
-        "/api/customers", "/api/data", "/api/resources",
-
+        "/api/items",
+        "/api/products",
+        "/api/orders",
+        "/api/customers",
+        "/api/data",
+        "/api/resources",
         # Admin endpoints
-        "/api/admin", "/admin/api", "/api/internal",
-        "/api/management", "/api/config", "/api/settings",
-
+        "/api/admin",
+        "/admin/api",
+        "/api/internal",
+        "/api/management",
+        "/api/config",
+        "/api/settings",
         # Health/Status
-        "/api/health", "/api/status", "/api/ping",
-        "/health", "/healthz", "/ready", "/status",
-        "/_health", "/_status",
-
+        "/api/health",
+        "/api/status",
+        "/api/ping",
+        "/health",
+        "/healthz",
+        "/ready",
+        "/status",
+        "/_health",
+        "/_status",
         # Info/Debug
-        "/api/info", "/api/version", "/api/debug",
-        "/info", "/version", "/debug",
-        "/actuator", "/actuator/health", "/actuator/info",
-
+        "/api/info",
+        "/api/version",
+        "/api/debug",
+        "/info",
+        "/version",
+        "/debug",
+        "/actuator",
+        "/actuator/health",
+        "/actuator/info",
         # SOAP/Legacy
-        "/soap", "/wsdl", "/service", "/services",
-        "/ws", "/webservice"
+        "/soap",
+        "/wsdl",
+        "/service",
+        "/services",
+        "/ws",
+        "/webservice",
     ]
 
     # API version patterns
     VERSION_PATTERNS = [
-        "/v1", "/v2", "/v3", "/v4",
-        "/api/v1", "/api/v2", "/api/v3",
-        "/api/1.0", "/api/2.0", "/api/3.0",
-        "/1.0", "/2.0", "/3.0"
+        "/v1",
+        "/v2",
+        "/v3",
+        "/v4",
+        "/api/v1",
+        "/api/v2",
+        "/api/v3",
+        "/api/1.0",
+        "/api/2.0",
+        "/api/3.0",
+        "/1.0",
+        "/2.0",
+        "/3.0",
     ]
 
     # GraphQL introspection query
@@ -197,7 +256,7 @@ class APIDiscovery:
         """Build request headers."""
         headers = {
             "User-Agent": "AIPTX-API-Discovery/1.0",
-            "Accept": "application/json, text/html, */*"
+            "Accept": "application/json, text/html, */*",
         }
         headers.update(self.config.headers)
 
@@ -235,7 +294,7 @@ class APIDiscovery:
                     headers=self._get_headers(),
                     timeout=aiohttp.ClientTimeout(total=self.config.timeout),
                     ssl=False,
-                    allow_redirects=False
+                    allow_redirects=False,
                 ) as response:
                     # First filter: check status codes
                     if response.status not in [200, 201, 301, 302, 401, 403]:
@@ -269,7 +328,7 @@ class APIDiscovery:
                         content_type=content_type,
                         response_size=len(body),
                         auth_required=auth_required,
-                        confidence=validation.confidence
+                        confidence=validation.confidence,
                     )
 
         except Exception:
@@ -309,11 +368,7 @@ class APIDiscovery:
         return "rest"
 
     def _validate_api_content(
-        self,
-        path: str,
-        content_type: str,
-        body: str,
-        status_code: int
+        self, path: str, content_type: str, body: str, status_code: int
     ) -> APIValidationResult:
         """
         Validate that response is actually API content, not a generic page.
@@ -498,9 +553,22 @@ class APIDiscovery:
             # Object with typical API structure
             if isinstance(data, dict):
                 # Has common API keys
-                api_keys = ["data", "results", "items", "response", "status",
-                           "message", "error", "errors", "success", "id",
-                           "user", "users", "token", "access_token"]
+                api_keys = [
+                    "data",
+                    "results",
+                    "items",
+                    "response",
+                    "status",
+                    "message",
+                    "error",
+                    "errors",
+                    "success",
+                    "id",
+                    "user",
+                    "users",
+                    "token",
+                    "access_token",
+                ]
                 if any(key in data for key in api_keys):
                     return True
 
@@ -521,7 +589,7 @@ class APIDiscovery:
         body_lower = body.lower()
 
         # WSDL indicators
-        if "<wsdl:" in body_lower or 'xmlns:wsdl=' in body_lower:
+        if "<wsdl:" in body_lower or "xmlns:wsdl=" in body_lower:
             return True
 
         # SOAP envelope
@@ -572,22 +640,24 @@ class APIDiscovery:
                         json={"query": self.GRAPHQL_INTROSPECTION},
                         headers={"Content-Type": "application/json", **self._get_headers()},
                         timeout=aiohttp.ClientTimeout(total=self.config.timeout),
-                        ssl=False
+                        ssl=False,
                     ) as response:
                         if response.status == 200:
                             body = await response.text()
                             if "__schema" in body or "queryType" in body:
                                 graphql_eps.append(url)
                                 self.discovered.add(url)
-                                self.endpoints.append(DiscoveredEndpoint(
-                                    url=url,
-                                    method="POST",
-                                    status_code=200,
-                                    endpoint_type="graphql",
-                                    content_type="application/json",
-                                    response_size=len(body),
-                                    auth_required=False
-                                ))
+                                self.endpoints.append(
+                                    DiscoveredEndpoint(
+                                        url=url,
+                                        method="POST",
+                                        status_code=200,
+                                        endpoint_type="graphql",
+                                        content_type="application/json",
+                                        response_size=len(body),
+                                        auth_required=False,
+                                    )
+                                )
             except Exception:
                 pass
 
@@ -646,9 +716,7 @@ class APIDiscovery:
             async with aiohttp.ClientSession() as session:
                 # Fetch main page
                 async with session.get(
-                    self.base_url,
-                    headers=self._get_headers(),
-                    ssl=False
+                    self.base_url, headers=self._get_headers(), ssl=False
                 ) as response:
                     body = await response.text()
 
@@ -658,7 +726,7 @@ class APIDiscovery:
                         r'["\'](/v\d+/[^"\']+)["\']',
                         r'["\'](https?://[^"\']*api[^"\']*)["\']',
                         r'fetch\(["\']([^"\']+)["\']',
-                        r'axios\.\w+\(["\']([^"\']+)["\']'
+                        r'axios\.\w+\(["\']([^"\']+)["\']',
                     ]
 
                     extracted_urls = set()
@@ -790,16 +858,14 @@ class APIDiscovery:
             api_versions=self.api_versions,
             metadata={
                 "urls_checked": len(self.discovered),
-                "endpoints_found": len(unique_endpoints)
-            }
+                "endpoints_found": len(unique_endpoints),
+            },
         )
 
 
 # Convenience function
 async def discover_api(
-    base_url: str,
-    auth_token: Optional[str] = None,
-    full_scan: bool = True
+    base_url: str, auth_token: Optional[str] = None, full_scan: bool = True
 ) -> APIDiscoveryResult:
     """
     Quick API discovery.
@@ -818,7 +884,7 @@ async def discover_api(
         discover_swagger=True,
         discover_graphql=True,
         discover_common_paths=full_scan,
-        discover_versions=full_scan
+        discover_versions=full_scan,
     )
 
     discovery = APIDiscovery(base_url, config)
@@ -843,7 +909,7 @@ async def quick_api_check(base_url: str) -> Dict[str, Any]:
         "has_api": False,
         "swagger_url": None,
         "graphql_url": None,
-        "api_version": None
+        "api_version": None,
     }
 
     # Quick checks

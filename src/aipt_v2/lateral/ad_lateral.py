@@ -10,6 +10,7 @@ Remote execution methods for Windows/AD environments:
 - WinRM: Windows Remote Management
 - SSH: OpenSSH if available
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -25,6 +26,7 @@ logger = logging.getLogger(__name__)
 
 class ExecMethod(Enum):
     """Remote execution methods"""
+
     PSEXEC = "psexec"
     WMIEXEC = "wmiexec"
     SMBEXEC = "smbexec"
@@ -36,6 +38,7 @@ class ExecMethod(Enum):
 
 class AuthMethod(Enum):
     """Authentication methods"""
+
     PASSWORD = "password"
     NTLM_HASH = "ntlm_hash"  # Pass-the-Hash
     KERBEROS = "kerberos"  # Pass-the-Ticket
@@ -45,6 +48,7 @@ class AuthMethod(Enum):
 @dataclass
 class ExecResult:
     """Command execution result"""
+
     target: str
     method: ExecMethod
     command: str
@@ -78,6 +82,7 @@ class ExecResult:
 @dataclass
 class ADLateralConfig:
     """Lateral movement configuration"""
+
     # Authentication
     username: Optional[str] = None
     password: Optional[str] = None
@@ -89,11 +94,13 @@ class ADLateralConfig:
 
     # Execution preferences
     preferred_method: ExecMethod = ExecMethod.WMIEXEC
-    fallback_methods: list[ExecMethod] = field(default_factory=lambda: [
-        ExecMethod.SMBEXEC,
-        ExecMethod.PSEXEC,
-        ExecMethod.ATEXEC,
-    ])
+    fallback_methods: list[ExecMethod] = field(
+        default_factory=lambda: [
+            ExecMethod.SMBEXEC,
+            ExecMethod.PSEXEC,
+            ExecMethod.ATEXEC,
+        ]
+    )
 
     # Options
     share: str = "C$"  # Share for file operations
@@ -104,6 +111,7 @@ class ADLateralConfig:
 @dataclass
 class SprayResult:
     """Password spray / local admin check result"""
+
     target: str
     username: str
     success: bool = False
@@ -156,7 +164,9 @@ class ADLateralMovement:
         Returns:
             ExecResult with output
         """
-        methods = [method] if method else [self.config.preferred_method] + self.config.fallback_methods
+        methods = (
+            [method] if method else [self.config.preferred_method] + self.config.fallback_methods
+        )
 
         for exec_method in methods:
             try:
@@ -335,15 +345,9 @@ class ADLateralMovement:
             env["KRB5CCNAME"] = self.config.ticket_file
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=self.config.timeout
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
         output = stdout.decode()
 
@@ -388,14 +392,9 @@ class ADLateralMovement:
         cmd.extend(["-c", command])
 
         proc = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
-        stdout, stderr = await asyncio.wait_for(
-            proc.communicate(),
-            timeout=self.config.timeout
-        )
+        stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
         return stdout.decode()
 
@@ -413,10 +412,14 @@ class ADLateralMovement:
             session = winrm.Session(
                 target,
                 auth=(
-                    f"{self.config.domain}\\{self.config.username}" if self.config.domain else self.config.username,
-                    self.config.password
+                    (
+                        f"{self.config.domain}\\{self.config.username}"
+                        if self.config.domain
+                        else self.config.username
+                    ),
+                    self.config.password,
                 ),
-                transport="ntlm"
+                transport="ntlm",
             )
 
             result = session.run_cmd(command)
@@ -446,20 +449,17 @@ class ADLateralMovement:
             *cmd,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
-            stdin=asyncio.subprocess.PIPE
+            stdin=asyncio.subprocess.PIPE,
         )
 
         # If password auth, we need to handle it
         if self.config.password:
             stdout, stderr = await asyncio.wait_for(
                 proc.communicate(input=f"{self.config.password}\n".encode()),
-                timeout=self.config.timeout
+                timeout=self.config.timeout,
             )
         else:
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=self.config.timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
         return stdout.decode()
 
@@ -536,6 +536,7 @@ class ADLateralMovement:
         """
         try:
             import tempfile
+
             ccache_file = tempfile.mktemp(suffix=".ccache")
 
             cmd = ["getTGT.py"]
@@ -549,15 +550,9 @@ class ADLateralMovement:
             env["KRB5CCNAME"] = ccache_file
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE,
-                env=env
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
             )
-            await asyncio.wait_for(
-                proc.communicate(),
-                timeout=self.config.timeout
-            )
+            await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
             if os.path.exists(ccache_file):
                 return ccache_file

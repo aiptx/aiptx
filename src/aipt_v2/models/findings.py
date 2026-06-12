@@ -6,14 +6,14 @@ This model represents vulnerabilities discovered by ANY tool in the pipeline:
 - AI-autonomous agents (Strix)
 - Manual exploitation attempts
 """
+
 from __future__ import annotations
 
+import hashlib
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
-import hashlib
-import json
 
 
 class VerificationStatus(Enum):
@@ -25,23 +25,25 @@ class VerificationStatus(Enum):
     - Medium findings can be CONFIRMED or LIKELY
     - Low/Info can be POTENTIAL but not UNVERIFIED
     """
-    UNVERIFIED = "unverified"           # Initial state, no validation attempted
-    PENDING = "pending"                  # Queued for validation
-    IN_PROGRESS = "in_progress"          # Currently being validated
-    CONFIRMED = "confirmed"              # Verified with evidence (callback, content, etc.)
-    LIKELY = "likely"                    # High confidence but no definitive proof
-    POTENTIAL = "potential"              # Low confidence, needs manual review
-    FALSE_POSITIVE = "false_positive"    # Proven not exploitable
-    MANUAL_REVIEW = "manual_review"      # Cannot be auto-verified, needs human review
+
+    UNVERIFIED = "unverified"  # Initial state, no validation attempted
+    PENDING = "pending"  # Queued for validation
+    IN_PROGRESS = "in_progress"  # Currently being validated
+    CONFIRMED = "confirmed"  # Verified with evidence (callback, content, etc.)
+    LIKELY = "likely"  # High confidence but no definitive proof
+    POTENTIAL = "potential"  # Low confidence, needs manual review
+    FALSE_POSITIVE = "false_positive"  # Proven not exploitable
+    MANUAL_REVIEW = "manual_review"  # Cannot be auto-verified, needs human review
 
 
 class Severity(Enum):
     """CVSS-aligned severity levels"""
+
     CRITICAL = "critical"  # CVSS 9.0-10.0
-    HIGH = "high"          # CVSS 7.0-8.9
-    MEDIUM = "medium"      # CVSS 4.0-6.9
-    LOW = "low"            # CVSS 0.1-3.9
-    INFO = "info"          # CVSS 0.0 / Informational
+    HIGH = "high"  # CVSS 7.0-8.9
+    MEDIUM = "medium"  # CVSS 4.0-6.9
+    LOW = "low"  # CVSS 0.1-3.9
+    INFO = "info"  # CVSS 0.0 / Informational
 
     @classmethod
     def from_cvss(cls, score: float) -> "Severity":
@@ -70,6 +72,7 @@ class VulnerabilityType(Enum):
 
     Includes additional types for vulnerability chaining analysis.
     """
+
     # A01:2021 - Broken Access Control
     IDOR = "idor"
     BROKEN_ACCESS_CONTROL = "broken_access_control"
@@ -319,7 +322,7 @@ class Finding:
         if self.severity == Severity.MEDIUM:
             return self.verification_status in [
                 VerificationStatus.CONFIRMED,
-                VerificationStatus.LIKELY
+                VerificationStatus.LIKELY,
             ]
 
         # Low and Info can be potential (for informational purposes)
@@ -327,7 +330,7 @@ class Finding:
         return self.verification_status not in [
             VerificationStatus.UNVERIFIED,
             VerificationStatus.PENDING,
-            VerificationStatus.FALSE_POSITIVE
+            VerificationStatus.FALSE_POSITIVE,
         ]
 
     def needs_verification(self) -> bool:
@@ -338,19 +341,16 @@ class Finding:
         - Status is UNVERIFIED or PENDING
         - Severity is CRITICAL, HIGH, or MEDIUM (important enough to verify)
         """
-        return (
-            self.verification_status in [
-                VerificationStatus.UNVERIFIED,
-                VerificationStatus.PENDING
-            ]
-            and self.severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM]
-        )
+        return self.verification_status in [
+            VerificationStatus.UNVERIFIED,
+            VerificationStatus.PENDING,
+        ] and self.severity in [Severity.CRITICAL, Severity.HIGH, Severity.MEDIUM]
 
     def mark_verified(
         self,
         status: VerificationStatus,
         evidence: str | None = None,
-        confidence: float | None = None
+        confidence: float | None = None,
     ) -> None:
         """
         Mark finding as verified with given status.
@@ -366,7 +366,11 @@ class Finding:
 
         if evidence:
             self.verification_evidence.append(evidence)
-            self.evidence = f"{self.evidence}\n\n--- Verification Evidence ---\n{evidence}" if self.evidence else evidence
+            self.evidence = (
+                f"{self.evidence}\n\n--- Verification Evidence ---\n{evidence}"
+                if self.evidence
+                else evidence
+            )
 
         if confidence is not None:
             self.ai_confidence = confidence
@@ -395,17 +399,16 @@ class Finding:
         # Merge evidence
         merged_evidence = base.evidence
         if supplement.evidence and supplement.evidence not in merged_evidence:
-            merged_evidence = f"{merged_evidence}\n\n--- Additional Evidence ---\n{supplement.evidence}"
+            merged_evidence = (
+                f"{merged_evidence}\n\n--- Additional Evidence ---\n{supplement.evidence}"
+            )
 
         # Merge sources
         sources = set([base.source, supplement.source])
         merged_source = ", ".join(sorted(sources))
 
         # Take highest confidence
-        confidence = max(
-            base.ai_confidence or 0,
-            supplement.ai_confidence or 0
-        ) or None
+        confidence = max(base.ai_confidence or 0, supplement.ai_confidence or 0) or None
 
         # Determine best verification status (prefer CONFIRMED over others)
         verification_priority = [
@@ -418,12 +421,26 @@ class Finding:
             VerificationStatus.UNVERIFIED,
             VerificationStatus.FALSE_POSITIVE,
         ]
-        base_priority = verification_priority.index(base.verification_status) if base.verification_status in verification_priority else 99
-        supp_priority = verification_priority.index(supplement.verification_status) if supplement.verification_status in verification_priority else 99
-        best_verification = base.verification_status if base_priority <= supp_priority else supplement.verification_status
+        base_priority = (
+            verification_priority.index(base.verification_status)
+            if base.verification_status in verification_priority
+            else 99
+        )
+        supp_priority = (
+            verification_priority.index(supplement.verification_status)
+            if supplement.verification_status in verification_priority
+            else 99
+        )
+        best_verification = (
+            base.verification_status
+            if base_priority <= supp_priority
+            else supplement.verification_status
+        )
 
         # Merge verification evidence
-        merged_verification_evidence = list(set(base.verification_evidence + supplement.verification_evidence))
+        merged_verification_evidence = list(
+            set(base.verification_evidence + supplement.verification_evidence)
+        )
 
         return Finding(
             title=base.title,
@@ -487,7 +504,9 @@ class Finding:
             # Verification fields
             "verification_status": self.verification_status.value,
             "verification_attempts": self.verification_attempts,
-            "last_verification_at": self.last_verification_at.isoformat() if self.last_verification_at else None,
+            "last_verification_at": (
+                self.last_verification_at.isoformat() if self.last_verification_at else None
+            ),
             "callback_id": self.callback_id,
             "callback_received": self.callback_received,
             "callback_data": self.callback_data,
@@ -535,7 +554,11 @@ class Finding:
             cve_ids=data.get("cve_ids", []),
             references=data.get("references", []),
             remediation=data.get("remediation", ""),
-            discovered_at=datetime.fromisoformat(data["discovered_at"]) if "discovered_at" in data else datetime.utcnow(),
+            discovered_at=(
+                datetime.fromisoformat(data["discovered_at"])
+                if "discovered_at" in data
+                else datetime.utcnow()
+            ),
             ai_reasoning=data.get("ai_reasoning"),
             ai_confidence=data.get("ai_confidence"),
             # Verification fields

@@ -25,36 +25,39 @@ logger = logging.getLogger(__name__)
 
 class ExecutionMode(str, Enum):
     """Execution mode for exploits."""
-    DIRECT = "direct"           # Direct execution (careful!)
-    DOCKER = "docker"           # Docker container isolation
-    SUBPROCESS = "subprocess"   # Subprocess with restrictions
+
+    DIRECT = "direct"  # Direct execution (careful!)
+    DOCKER = "docker"  # Docker container isolation
+    SUBPROCESS = "subprocess"  # Subprocess with restrictions
 
 
 @dataclass
 class SandboxConfig:
     """Configuration for sandbox execution."""
+
     mode: ExecutionMode = ExecutionMode.DIRECT
-    timeout: float = 30.0              # Execution timeout in seconds
-    max_memory_mb: int = 256           # Max memory for Docker
-    max_cpu_percent: float = 50.0      # Max CPU for Docker
-    network_enabled: bool = True        # Allow network access
+    timeout: float = 30.0  # Execution timeout in seconds
+    max_memory_mb: int = 256  # Max memory for Docker
+    max_cpu_percent: float = 50.0  # Max CPU for Docker
+    network_enabled: bool = True  # Allow network access
     docker_image: str = "python:3.11-slim"  # Docker image to use
-    cleanup_after: bool = True          # Cleanup containers after
-    rate_limit_rps: float = 10.0        # Max requests per second
+    cleanup_after: bool = True  # Cleanup containers after
+    rate_limit_rps: float = 10.0  # Max requests per second
 
 
 @dataclass
 class ExecutionContext:
     """Context for exploit execution."""
-    target: str                         # Target URL
-    finding_id: str                     # Finding being validated
-    payload: str                        # Payload to execute
-    method: str = "GET"                 # HTTP method
+
+    target: str  # Target URL
+    finding_id: str  # Finding being validated
+    payload: str  # Payload to execute
+    method: str = "GET"  # HTTP method
     headers: dict = field(default_factory=dict)
     cookies: dict = field(default_factory=dict)
     params: dict = field(default_factory=dict)
     body: Optional[str] = None
-    auth: Optional[tuple] = None        # (username, password)
+    auth: Optional[tuple] = None  # (username, password)
     verify_ssl: bool = False
     follow_redirects: bool = True
     extra_config: dict = field(default_factory=dict)
@@ -63,6 +66,7 @@ class ExecutionContext:
 @dataclass
 class ExecutionResult:
     """Result from exploit execution."""
+
     success: bool = False
     status_code: int = 0
     response_body: str = ""
@@ -236,7 +240,7 @@ class ExploitExecutor:
                 # Run in Docker
                 container = client.containers.run(
                     self.config.docker_image,
-                    f"python /script.py",
+                    "python /script.py",
                     volumes={script_path: {"bind": "/script.py", "mode": "ro"}},
                     mem_limit=f"{self.config.max_memory_mb}m",
                     cpu_period=100000,
@@ -286,7 +290,7 @@ class ExploitExecutor:
             "allow_redirects": context.follow_redirects,
         }
         config_literal = repr(_json.dumps(config))
-        return f'''
+        return f"""
 import json
 import requests
 import time
@@ -320,7 +324,7 @@ except Exception as e:
     }}
 
 print(json.dumps(result))
-'''
+"""
 
     def _parse_docker_output(self, output: str) -> ExecutionResult:
         """Parse output from Docker container."""
@@ -349,8 +353,14 @@ print(json.dumps(result))
 
         # SQL error indicators
         sql_errors = [
-            "sql syntax", "mysql", "postgresql", "sqlite",
-            "ora-", "sql server", "odbc", "jdbc",
+            "sql syntax",
+            "mysql",
+            "postgresql",
+            "sqlite",
+            "ora-",
+            "sql server",
+            "odbc",
+            "jdbc",
         ]
         if any(err in body_lower for err in sql_errors):
             indicators.append("sql_error")
@@ -406,11 +416,14 @@ print(json.dumps(result))
 
         # Compare results
         comparison = {
-            "time_difference_ms": payload_result.response_time_ms - baseline_result.response_time_ms,
+            "time_difference_ms": payload_result.response_time_ms
+            - baseline_result.response_time_ms,
             "status_changed": payload_result.status_code != baseline_result.status_code,
-            "body_length_diff": len(payload_result.response_body) - len(baseline_result.response_body),
+            "body_length_diff": len(payload_result.response_body)
+            - len(baseline_result.response_body),
             "new_indicators": [
-                i for i in payload_result.evidence_indicators
+                i
+                for i in payload_result.evidence_indicators
                 if i not in baseline_result.evidence_indicators
             ],
         }

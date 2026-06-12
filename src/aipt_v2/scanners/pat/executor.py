@@ -4,6 +4,7 @@ PAT Parallel Executor
 Executes HTTP requests in parallel with rate limiting,
 WAF detection, and adaptive backoff.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -11,11 +12,11 @@ import logging
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Callable, Optional, AsyncIterator
+from typing import AsyncIterator, Callable, Optional
 
 import httpx
 
-from .config import ExecutorConfig, EnhancedPATScanConfig, SecurityError, ScopeViolation
+from .config import EnhancedPATScanConfig, ExecutorConfig
 from .request_generator import InjectionRequest
 
 # Lazy imports for WAF detection/bypass modules
@@ -29,6 +30,7 @@ def _get_advanced_waf_detector():
     if _advanced_waf_detector is None:
         try:
             from aipt_v2.exploitation.waf_detector import WAFDetector as AdvancedWAFDetector
+
             _advanced_waf_detector = AdvancedWAFDetector
         except ImportError:
             return None
@@ -41,10 +43,12 @@ def _get_payload_engine():
     if _payload_engine is None:
         try:
             from aipt_v2.exploitation.payload_engine import PayloadEngine
+
             _payload_engine = PayloadEngine
         except ImportError:
             return None
     return _payload_engine()
+
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +56,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ExecutionResult:
     """Result of executing a single request."""
+
     request: InjectionRequest
     response: Optional[httpx.Response] = None
 
@@ -235,6 +240,7 @@ class ScopeEnforcer:
     def _compile_pattern(self, pattern: str) -> str:
         """Convert glob pattern to regex."""
         import re
+
         # Escape special chars except * and ?
         escaped = re.escape(pattern)
         # Convert glob wildcards
@@ -373,10 +379,11 @@ class ParallelExecutor:
                         self._waf_count += 1
                         # Increase backoff
                         self._waf_backoff = min(
-                            self._waf_backoff * self.config.waf_backoff_multiplier,
-                            30.0
+                            self._waf_backoff * self.config.waf_backoff_multiplier, 30.0
                         )
-                        logger.warning(f"WAF detected ({waf_type}), backoff: {self._waf_backoff:.1f}s")
+                        logger.warning(
+                            f"WAF detected ({waf_type}), backoff: {self._waf_backoff:.1f}s"
+                        )
                     else:
                         # Gradually reduce backoff
                         self._waf_backoff = max(1.0, self._waf_backoff * 0.9)
@@ -387,12 +394,12 @@ class ParallelExecutor:
             except httpx.TimeoutException:
                 result.error = "Request timeout"
                 if attempt < self.config.retry_count:
-                    await asyncio.sleep(self.config.retry_backoff ** attempt)
+                    await asyncio.sleep(self.config.retry_backoff**attempt)
 
             except httpx.RequestError as e:
                 result.error = str(e)
                 if attempt < self.config.retry_count:
-                    await asyncio.sleep(self.config.retry_backoff ** attempt)
+                    await asyncio.sleep(self.config.retry_backoff**attempt)
 
             except Exception as e:
                 result.error = f"Unexpected error: {e}"
@@ -477,10 +484,7 @@ class ParallelExecutor:
                 return await self.execute(request)
 
         # Create tasks
-        tasks = {
-            asyncio.create_task(execute_with_semaphore(req)): req
-            for req in requests
-        }
+        tasks = {asyncio.create_task(execute_with_semaphore(req)): req for req in requests}
 
         # Yield results as they complete
         while tasks:
@@ -535,6 +539,7 @@ async def execute_requests(
 @dataclass
 class WAFProbeResult:
     """Result of WAF fingerprinting probe."""
+
     detected: bool = False
     waf_type: Optional[str] = None
     waf_name: str = "None"
@@ -659,13 +664,20 @@ class WAFAwareExecutor(ParallelExecutor):
                 status_diff = probe_response.status_code != baseline_status
                 length_diff = abs(len(probe_response.text) - baseline_length) > 500
 
-                if (status_diff or length_diff) and probe_response.status_code in {403, 406, 429, 503}:
+                if (status_diff or length_diff) and probe_response.status_code in {
+                    403,
+                    406,
+                    429,
+                    503,
+                }:
                     if not result.detected:
                         result.detected = True
                         result.waf_type = "generic"
                         result.waf_name = "Unknown WAF"
                         result.confidence = 0.5
-                        result.evidence.append(f"Status changed: {baseline_status} -> {probe_response.status_code}")
+                        result.evidence.append(
+                            f"Status changed: {baseline_status} -> {probe_response.status_code}"
+                        )
 
             except Exception as e:
                 logger.debug(f"WAF probe with payload failed: {e}")
@@ -675,8 +687,7 @@ class WAFAwareExecutor(ParallelExecutor):
 
         if result.detected:
             logger.info(
-                f"WAF detected: {result.waf_name} "
-                f"(confidence: {result.confidence:.0%})"
+                f"WAF detected: {result.waf_name} " f"(confidence: {result.confidence:.0%})"
             )
             # Set WAF type in payload engine
             self._payload_engine = _get_payload_engine()
@@ -705,7 +716,7 @@ class WAFAwareExecutor(ParallelExecutor):
         # Probe WAF if enabled and not already done
         if self.enhanced_config.waf_probe_first and not self._waf_probe_result:
             if requests:
-                target_url = requests[0].url.split('?')[0]
+                target_url = requests[0].url.split("?")[0]
                 await self.probe_waf(target_url)
 
         # If WAF detected, apply mutations to requests
@@ -762,8 +773,8 @@ class WAFAwareExecutor(ParallelExecutor):
         if not self._payload_engine or not self._waf_probe_result:
             return requests
 
-        from .payload_parser import ParsedPayload
         from .config import VulnerabilityType
+        from .payload_parser import ParsedPayload
 
         waf_type = self._waf_probe_result.waf_type
         mutated_requests = []
@@ -817,6 +828,7 @@ class WAFAwareExecutor(ParallelExecutor):
 
                             # Create copy of request with mutated payload
                             from dataclasses import replace
+
                             mutated_request = replace(request, payload=mutated_payload)
                             mutated_requests.append(mutated_request)
                             logger.debug(f"Applied WAF bypass: {applied_mutations}")
@@ -842,7 +854,7 @@ class WAFAwareExecutor(ParallelExecutor):
         self._waf_backoff = min(self._waf_backoff * 2, 60.0)
 
         # Add random delays
-        import random
+
         self._rate_limiter.rate = max(1.0, self._rate_limiter.rate * 0.5)
 
         logger.info(

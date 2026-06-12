@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from ..base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -83,12 +83,7 @@ class AmassScanner(BaseScanner):
         """Check if amass is installed."""
         return shutil.which("amass") is not None
 
-    async def scan(
-        self,
-        target: str,
-        domains_file: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, domains_file: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run amass scan.
 
@@ -117,7 +112,7 @@ class AmassScanner(BaseScanner):
 
             stdout, stderr = await asyncio.wait_for(
                 process.communicate(),
-                timeout=kwargs.get("timeout", 1200)  # 20 min default for amass
+                timeout=kwargs.get("timeout", 1200),  # 20 min default for amass
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -227,27 +222,31 @@ class AmassScanner(BaseScanner):
                     hostname = line.strip()
                     if hostname and hostname not in seen_names:
                         seen_names.add(hostname)
-                        findings.append(ScanFinding(
+                        findings.append(
+                            ScanFinding(
+                                title=f"Subdomain: {hostname}",
+                                severity=ScanSeverity.INFO,
+                                description=f"Discovered: {hostname}",
+                                host=hostname,
+                                scanner="amass",
+                                tags=["subdomain", "recon"],
+                            )
+                        )
+
+            except json.JSONDecodeError:
+                hostname = line.strip()
+                if hostname and hostname not in seen_names:
+                    seen_names.add(hostname)
+                    findings.append(
+                        ScanFinding(
                             title=f"Subdomain: {hostname}",
                             severity=ScanSeverity.INFO,
                             description=f"Discovered: {hostname}",
                             host=hostname,
                             scanner="amass",
                             tags=["subdomain", "recon"],
-                        ))
-
-            except json.JSONDecodeError:
-                hostname = line.strip()
-                if hostname and hostname not in seen_names:
-                    seen_names.add(hostname)
-                    findings.append(ScanFinding(
-                        title=f"Subdomain: {hostname}",
-                        severity=ScanSeverity.INFO,
-                        description=f"Discovered: {hostname}",
-                        host=hostname,
-                        scanner="amass",
-                        tags=["subdomain", "recon"],
-                    ))
+                        )
+                    )
 
         return findings
 

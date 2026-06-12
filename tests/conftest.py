@@ -5,13 +5,13 @@ AIPT v2 Test Configuration
 Pytest fixtures and configuration for all tests.
 """
 
+import asyncio
 import os
 import sys
-import asyncio
 import tempfile
 from pathlib import Path
-from typing import Generator, AsyncGenerator
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
+from typing import Generator
+from unittest.mock import AsyncMock, Mock, patch
 
 import pytest
 
@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 
 
 # ============== Async Support ==============
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -31,13 +32,20 @@ def event_loop():
 
 # ============== Environment Fixtures ==============
 
+
 @pytest.fixture
 def clean_env():
     """Provide a clean environment without AIPT variables."""
     original_env = os.environ.copy()
 
     # Remove all AIPT-related env vars
-    aipt_vars = [k for k in os.environ if k.startswith(("AIPT_", "ANTHROPIC_", "OPENAI_", "ACUNETIX_", "BURP_", "NESSUS_", "VPS_", "ZAP_"))]
+    aipt_vars = [
+        k
+        for k in os.environ
+        if k.startswith(
+            ("AIPT_", "ANTHROPIC_", "OPENAI_", "ACUNETIX_", "BURP_", "NESSUS_", "VPS_", "ZAP_")
+        )
+    ]
     for var in aipt_vars:
         os.environ.pop(var, None)
 
@@ -70,6 +78,7 @@ def mock_env():
 
 # ============== Temporary Directory Fixtures ==============
 
+
 @pytest.fixture
 def temp_dir() -> Generator[Path, None, None]:
     """Provide a temporary directory for test files."""
@@ -95,9 +104,11 @@ def temp_reports_dir(temp_dir: Path) -> Path:
 
 # ============== Mock LLM Fixtures ==============
 
+
 @pytest.fixture
 def mock_litellm_response():
     """Create a mock LiteLLM response."""
+
     def _create_response(content: str = "Test response", tool_calls: list = None):
         mock_message = Mock()
         mock_message.content = content
@@ -129,6 +140,7 @@ def mock_llm(mock_litellm_response):
 
 
 # ============== Mock HTTP Fixtures ==============
+
 
 @pytest.fixture
 def mock_httpx_client():
@@ -168,6 +180,7 @@ def mock_requests():
 
 # ============== Scanner Mock Fixtures ==============
 
+
 @pytest.fixture
 def mock_acunetix_response():
     """Create mock Acunetix API responses."""
@@ -197,6 +210,7 @@ def mock_burp_response():
 
 # ============== Database Fixtures ==============
 
+
 @pytest.fixture
 def mock_repository():
     """Create a mocked Repository instance."""
@@ -220,6 +234,7 @@ def mock_repository():
 
 
 # ============== Process/Runtime Fixtures ==============
+
 
 @pytest.fixture
 def mock_subprocess():
@@ -258,6 +273,7 @@ def mock_ssh():
 
 
 # ============== Sample Data Fixtures ==============
+
 
 @pytest.fixture
 def sample_cve_data():
@@ -302,15 +318,18 @@ def sample_scan_target():
 
 # ============== FastAPI Test Client ==============
 
+
 @pytest.fixture
 def test_client():
     """Create FastAPI test client."""
     from fastapi.testclient import TestClient
 
     # Import with mocked dependencies
-    with patch("aipt_v2.app.Repository"), \
-         patch("aipt_v2.app.ToolRAG"), \
-         patch("aipt_v2.app.CVEIntelligence"):
+    with (
+        patch("aipt_v2.app.Repository"),
+        patch("aipt_v2.app.ToolRAG"),
+        patch("aipt_v2.app.CVEIntelligence"),
+    ):
         from aipt_v2.app import app
 
         client = TestClient(app)
@@ -319,14 +338,17 @@ def test_client():
 
 # ============== Async Test Client ==============
 
+
 @pytest.fixture
 async def async_test_client():
     """Create async FastAPI test client."""
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
 
-    with patch("aipt_v2.app.Repository"), \
-         patch("aipt_v2.app.ToolRAG"), \
-         patch("aipt_v2.app.CVEIntelligence"):
+    with (
+        patch("aipt_v2.app.Repository"),
+        patch("aipt_v2.app.ToolRAG"),
+        patch("aipt_v2.app.CVEIntelligence"),
+    ):
         from aipt_v2.app import app
 
         transport = ASGITransport(app=app)
@@ -335,6 +357,7 @@ async def async_test_client():
 
 
 # ============== Utility Functions ==============
+
 
 def assert_valid_finding(finding: dict):
     """Assert that a finding has required fields."""
@@ -349,5 +372,6 @@ def assert_valid_finding(finding: dict):
 def assert_valid_cve_id(cve_id: str):
     """Assert that a CVE ID has valid format."""
     import re
+
     pattern = r"^CVE-\d{4}-\d{4,}$"
     assert re.match(pattern, cve_id), f"Invalid CVE ID format: {cve_id}"

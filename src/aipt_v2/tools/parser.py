@@ -11,13 +11,14 @@ Supports:
 """
 
 import re
-from typing import Optional
 from dataclasses import dataclass, field
+from typing import Optional
 
 
 @dataclass
 class Finding:
     """A structured finding from tool output"""
+
     type: str  # port, service, vuln, credential, host, path
     value: str
     description: str
@@ -36,63 +37,32 @@ class OutputParser:
     # Regex patterns for common tools
     PATTERNS = {
         # nmap patterns
-        "nmap_port": re.compile(
-            r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.*))?",
-            re.MULTILINE
-        ),
+        "nmap_port": re.compile(r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.*))?", re.MULTILINE),
         "nmap_host": re.compile(
-            r"Nmap scan report for\s+(\S+)(?:\s+\((\d+\.\d+\.\d+\.\d+)\))?",
-            re.MULTILINE
+            r"Nmap scan report for\s+(\S+)(?:\s+\((\d+\.\d+\.\d+\.\d+)\))?", re.MULTILINE
         ),
-
         # masscan patterns
         "masscan_port": re.compile(
-            r"Discovered open port\s+(\d+)/(tcp|udp)\s+on\s+(\S+)",
-            re.MULTILINE
+            r"Discovered open port\s+(\d+)/(tcp|udp)\s+on\s+(\S+)", re.MULTILINE
         ),
-
         # gobuster/ffuf patterns
-        "directory": re.compile(
-            r"(/\S+)\s+\(Status:\s*(\d+)\)",
-            re.MULTILINE
-        ),
-        "ffuf_result": re.compile(
-            r'"url":\s*"([^"]+)".*?"status":\s*(\d+)',
-            re.MULTILINE
-        ),
-
+        "directory": re.compile(r"(/\S+)\s+\(Status:\s*(\d+)\)", re.MULTILINE),
+        "ffuf_result": re.compile(r'"url":\s*"([^"]+)".*?"status":\s*(\d+)', re.MULTILINE),
         # nuclei patterns
         "nuclei_vuln": re.compile(
-            r"\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)",
-            re.MULTILINE
+            r"\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)", re.MULTILINE
         ),
-
         # hydra patterns
         "hydra_cred": re.compile(
-            r"\[(\d+)\]\[(\w+)\]\s+host:\s+(\S+)\s+login:\s+(\S+)\s+password:\s+(\S+)",
-            re.MULTILINE
+            r"\[(\d+)\]\[(\w+)\]\s+host:\s+(\S+)\s+login:\s+(\S+)\s+password:\s+(\S+)", re.MULTILINE
         ),
-
         # generic patterns
-        "ip_address": re.compile(
-            r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b"
-        ),
-        "domain": re.compile(
-            r"\b([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}\b"
-        ),
-        "email": re.compile(
-            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-        ),
-        "hash_md5": re.compile(
-            r"\b[a-fA-F0-9]{32}\b"
-        ),
-        "hash_sha1": re.compile(
-            r"\b[a-fA-F0-9]{40}\b"
-        ),
-        "cve": re.compile(
-            r"CVE-\d{4}-\d{4,}",
-            re.IGNORECASE
-        ),
+        "ip_address": re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b"),
+        "domain": re.compile(r"\b([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}\b"),
+        "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+        "hash_md5": re.compile(r"\b[a-fA-F0-9]{32}\b"),
+        "hash_sha1": re.compile(r"\b[a-fA-F0-9]{40}\b"),
+        "cve": re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE),
     }
 
     def __init__(self):
@@ -188,12 +158,14 @@ class OutputParser:
         for match in self.PATTERNS["nmap_host"].finditer(output):
             hostname = match.group(1)
             ip = match.group(2) or hostname
-            findings.append(Finding(
-                type="host",
-                value=ip,
-                description=f"Host discovered: {hostname} ({ip})",
-                metadata={"hostname": hostname, "ip": ip}
-            ))
+            findings.append(
+                Finding(
+                    type="host",
+                    value=ip,
+                    description=f"Host discovered: {hostname} ({ip})",
+                    metadata={"hostname": hostname, "ip": ip},
+                )
+            )
 
         # Parse ports
         for match in self.PATTERNS["nmap_port"].finditer(output):
@@ -204,17 +176,19 @@ class OutputParser:
             version = match.group(5) or ""
 
             if state == "open":
-                findings.append(Finding(
-                    type="port",
-                    value=f"{port}/{protocol}",
-                    description=f"Open port {port}/{protocol}: {service} {version}".strip(),
-                    metadata={
-                        "port": int(port),
-                        "protocol": protocol,
-                        "service": service,
-                        "version": version,
-                    }
-                ))
+                findings.append(
+                    Finding(
+                        type="port",
+                        value=f"{port}/{protocol}",
+                        description=f"Open port {port}/{protocol}: {service} {version}".strip(),
+                        metadata={
+                            "port": int(port),
+                            "protocol": protocol,
+                            "service": service,
+                            "version": version,
+                        },
+                    )
+                )
 
         return findings
 
@@ -227,12 +201,14 @@ class OutputParser:
             protocol = match.group(2)
             ip = match.group(3)
 
-            findings.append(Finding(
-                type="port",
-                value=f"{ip}:{port}/{protocol}",
-                description=f"Open port {port}/{protocol} on {ip}",
-                metadata={"ip": ip, "port": int(port), "protocol": protocol}
-            ))
+            findings.append(
+                Finding(
+                    type="port",
+                    value=f"{ip}:{port}/{protocol}",
+                    description=f"Open port {port}/{protocol} on {ip}",
+                    metadata={"ip": ip, "port": int(port), "protocol": protocol},
+                )
+            )
 
         return findings
 
@@ -251,26 +227,30 @@ class OutputParser:
             if any(kw in path.lower() for kw in ["admin", "backup", "config", "upload"]):
                 severity = "medium"
 
-            findings.append(Finding(
-                type="path",
-                value=path,
-                description=f"Directory found: {path} (Status: {status})",
-                severity=severity,
-                metadata={"status_code": int(status)}
-            ))
+            findings.append(
+                Finding(
+                    type="path",
+                    value=path,
+                    description=f"Directory found: {path} (Status: {status})",
+                    severity=severity,
+                    metadata={"status_code": int(status)},
+                )
+            )
 
         # ffuf JSON format
         for match in self.PATTERNS["ffuf_result"].finditer(output):
             url = match.group(1)
             status = match.group(2)
 
-            findings.append(Finding(
-                type="path",
-                value=url,
-                description=f"Endpoint found: {url} (Status: {status})",
-                severity="low",
-                metadata={"status_code": int(status)}
-            ))
+            findings.append(
+                Finding(
+                    type="path",
+                    value=url,
+                    description=f"Endpoint found: {url} (Status: {status})",
+                    severity="low",
+                    metadata={"status_code": int(status)},
+                )
+            )
 
         return findings
 
@@ -288,17 +268,19 @@ class OutputParser:
             if severity not in ["info", "low", "medium", "high", "critical"]:
                 severity = "info"
 
-            findings.append(Finding(
-                type="vuln",
-                value=template_id,
-                description=f"Vulnerability: {template_id} on {target}",
-                severity=severity,
-                metadata={
-                    "template": template_id,
-                    "protocol": protocol,
-                    "target": target,
-                }
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=template_id,
+                    description=f"Vulnerability: {template_id} on {target}",
+                    severity=severity,
+                    metadata={
+                        "template": template_id,
+                        "protocol": protocol,
+                        "target": target,
+                    },
+                )
+            )
 
         return findings
 
@@ -313,19 +295,21 @@ class OutputParser:
             username = match.group(4)
             password = match.group(5)
 
-            findings.append(Finding(
-                type="credential",
-                value=f"{username}:{password}",
-                description=f"Valid credentials found for {service} on {host}:{port}",
-                severity="critical",
-                metadata={
-                    "host": host,
-                    "port": int(port),
-                    "service": service,
-                    "username": username,
-                    "password": password,
-                }
-            ))
+            findings.append(
+                Finding(
+                    type="credential",
+                    value=f"{username}:{password}",
+                    description=f"Valid credentials found for {service} on {host}:{port}",
+                    severity="critical",
+                    metadata={
+                        "host": host,
+                        "port": int(port),
+                        "service": service,
+                        "username": username,
+                        "password": password,
+                    },
+                )
+            )
 
         return findings
 
@@ -336,13 +320,15 @@ class OutputParser:
         # Look for CVEs
         for match in self.PATTERNS["cve"].finditer(output):
             cve = match.group(0).upper()
-            findings.append(Finding(
-                type="vuln",
-                value=cve,
-                description=f"CVE detected: {cve}",
-                severity="high",
-                metadata={"cve": cve}
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=cve,
+                    description=f"CVE detected: {cve}",
+                    severity="high",
+                    metadata={"cve": cve},
+                )
+            )
 
         # Look for common vulnerability keywords
         vuln_keywords = [
@@ -360,12 +346,14 @@ class OutputParser:
         output_lower = output.lower()
         for keyword, severity in vuln_keywords:
             if keyword.lower() in output_lower:
-                findings.append(Finding(
-                    type="vuln",
-                    value=keyword,
-                    description=f"Potential vulnerability: {keyword}",
-                    severity=severity,
-                ))
+                findings.append(
+                    Finding(
+                        type="vuln",
+                        value=keyword,
+                        description=f"Potential vulnerability: {keyword}",
+                        severity=severity,
+                    )
+                )
 
         return findings
 
@@ -376,21 +364,25 @@ class OutputParser:
         # Extract CVEs
         for match in self.PATTERNS["cve"].finditer(output):
             cve = match.group(0).upper()
-            findings.append(Finding(
-                type="vuln",
-                value=cve,
-                description=f"CVE reference: {cve}",
-                severity="medium",
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=cve,
+                    description=f"CVE reference: {cve}",
+                    severity="medium",
+                )
+            )
 
         # Extract emails (potential targets for phishing)
         for match in self.PATTERNS["email"].finditer(output):
             email = match.group(0)
-            findings.append(Finding(
-                type="info",
-                value=email,
-                description=f"Email discovered: {email}",
-            ))
+            findings.append(
+                Finding(
+                    type="info",
+                    value=email,
+                    description=f"Email discovered: {email}",
+                )
+            )
 
         return findings
 

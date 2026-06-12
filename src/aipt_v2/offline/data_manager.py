@@ -7,16 +7,13 @@ Handles downloading, caching, and updating of security data.
 """
 
 import asyncio
-import hashlib
 import json
 import logging
-import os
-import shutil
 import zipfile
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
+from typing import Any, Callable, Dict, Optional, Union
 
 import httpx
 
@@ -301,9 +298,7 @@ class OfflineDataManager:
         return results
 
     async def download_data_source(
-        self,
-        source_key: str,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        self, source_key: str, progress_callback: Optional[Callable[[str, float], None]] = None
     ) -> bool:
         """
         Download a data source.
@@ -344,7 +339,7 @@ class OfflineDataManager:
         source_key: str,
         source: dict,
         path: Path,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> bool:
         """Run update command for a data source."""
         command = source["update_command"].format(path=path)
@@ -360,8 +355,7 @@ class OfflineDataManager:
             )
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=self.config.download_timeout
+                process.communicate(), timeout=self.config.download_timeout
             )
 
             if process.returncode == 0:
@@ -388,7 +382,7 @@ class OfflineDataManager:
         source_key: str,
         url: str,
         path: Path,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        progress_callback: Optional[Callable[[str, float], None]] = None,
     ) -> bool:
         """Download and extract a zip file."""
         zip_path = self.config.base_path / "cache" / f"{source_key}.zip"
@@ -412,7 +406,7 @@ class OfflineDataManager:
 
                             if progress_callback and total_size > 0:
                                 percent = (downloaded / total_size) * 50  # 50% for download
-                                progress_callback(f"Downloading...", percent)
+                                progress_callback("Downloading...", percent)
 
             if progress_callback:
                 progress_callback("Extracting...", 50.0)
@@ -452,8 +446,7 @@ class OfflineDataManager:
             return False
 
     async def update_all(
-        self,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        self, progress_callback: Optional[Callable[[str, float], None]] = None
     ) -> Dict[str, bool]:
         """
         Update all data sources.

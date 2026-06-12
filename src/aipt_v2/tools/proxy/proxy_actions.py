@@ -6,7 +6,6 @@ from aipt_v2.tools.registry import register_tool
 
 from .proxy_manager import get_proxy_manager
 
-
 RequestPart = Literal["request", "response"]
 
 

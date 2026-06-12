@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Optional
 
 if TYPE_CHECKING:
     from aipt_v2.agents.specialized.base_specialized import SpecializedAgent
@@ -27,18 +27,20 @@ logger = logging.getLogger(__name__)
 
 class AgentStatus(str, Enum):
     """Status of an agent in the pool."""
-    PENDING = "pending"        # Waiting to start
+
+    PENDING = "pending"  # Waiting to start
     INITIALIZING = "initializing"  # Setting up
-    RUNNING = "running"        # Actively executing
-    PAUSED = "paused"          # Temporarily paused
-    COMPLETED = "completed"    # Finished successfully
-    FAILED = "failed"          # Failed with error
-    CANCELLED = "cancelled"    # Cancelled by user/coordinator
+    RUNNING = "running"  # Actively executing
+    PAUSED = "paused"  # Temporarily paused
+    COMPLETED = "completed"  # Finished successfully
+    FAILED = "failed"  # Failed with error
+    CANCELLED = "cancelled"  # Cancelled by user/coordinator
 
 
 @dataclass
 class AgentResult:
     """Result from agent execution."""
+
     agent_id: str
     agent_name: str
     status: AgentStatus
@@ -60,6 +62,7 @@ class AgentResult:
 @dataclass
 class AgentEntry:
     """Internal entry for tracking an agent."""
+
     agent: "SpecializedAgent"
     task: Optional[asyncio.Task] = None
     status: AgentStatus = AgentStatus.PENDING
@@ -172,10 +175,7 @@ class AgentPool:
 
         try:
             if self._timeout:
-                results = await asyncio.wait_for(
-                    self._run_agents(),
-                    timeout=self._timeout
-                )
+                results = await asyncio.wait_for(self._run_agents(), timeout=self._timeout)
             else:
                 results = await self._run_agents()
         except asyncio.TimeoutError:
@@ -193,8 +193,7 @@ class AgentPool:
 
         for agent_id, entry in self._agents.items():
             task = asyncio.create_task(
-                self._run_single_agent(agent_id, entry),
-                name=f"agent_{entry.agent.name}"
+                self._run_single_agent(agent_id, entry), name=f"agent_{entry.agent.name}"
             )
             entry.task = task
             tasks.append(task)
@@ -283,14 +282,16 @@ class AgentPool:
                 results.append(entry.result)
             else:
                 # Create result for agents that didn't complete
-                results.append(AgentResult(
-                    agent_id=entry.agent.agent_id,
-                    agent_name=entry.agent.name,
-                    status=entry.status,
-                    started_at=entry.started_at,
-                    completed_at=entry.completed_at,
-                    error=entry.error,
-                ))
+                results.append(
+                    AgentResult(
+                        agent_id=entry.agent.agent_id,
+                        agent_name=entry.agent.name,
+                        status=entry.status,
+                        started_at=entry.started_at,
+                        completed_at=entry.completed_at,
+                        error=entry.error,
+                    )
+                )
         return results
 
     async def cancel_all(self) -> None:
@@ -335,7 +336,7 @@ class AgentPool:
 
     def get_status(self) -> dict:
         """Get current pool status."""
-        status_counts = {s: 0 for s in AgentStatus}
+        status_counts = dict.fromkeys(AgentStatus, 0)
         agent_statuses = {}
 
         for agent_id, entry in self._agents.items():

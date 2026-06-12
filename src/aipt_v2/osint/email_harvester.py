@@ -95,16 +95,39 @@ class EmailHarvester:
 
     # Common email patterns
     ROLE_BASED_PREFIXES = {
-        "admin", "administrator", "info", "contact", "support", "sales",
-        "webmaster", "postmaster", "hostmaster", "abuse", "noreply",
-        "no-reply", "mail", "help", "security", "privacy", "legal",
-        "billing", "accounts", "hr", "jobs", "careers", "press",
+        "admin",
+        "administrator",
+        "info",
+        "contact",
+        "support",
+        "sales",
+        "webmaster",
+        "postmaster",
+        "hostmaster",
+        "abuse",
+        "noreply",
+        "no-reply",
+        "mail",
+        "help",
+        "security",
+        "privacy",
+        "legal",
+        "billing",
+        "accounts",
+        "hr",
+        "jobs",
+        "careers",
+        "press",
     }
 
     # Disposable email domains
     DISPOSABLE_DOMAINS = {
-        "tempmail.com", "throwaway.email", "guerrillamail.com",
-        "10minutemail.com", "mailinator.com", "temp-mail.org",
+        "tempmail.com",
+        "throwaway.email",
+        "guerrillamail.com",
+        "10minutemail.com",
+        "mailinator.com",
+        "temp-mail.org",
     }
 
     USER_AGENTS = [
@@ -240,9 +263,7 @@ class EmailHarvester:
                 if headers:
                     default_headers.update(headers)
 
-                async with self._session.get(
-                    url, headers=default_headers, ssl=False
-                ) as resp:
+                async with self._session.get(url, headers=default_headers, ssl=False) as resp:
                     if resp.status == 200:
                         return await resp.text()
                     logger.debug(f"HTTP {resp.status} for {url}")
@@ -265,20 +286,22 @@ class EmailHarvester:
 
         dork_patterns = [
             f'"@{domain}"',
-            f'site:{domain} email',
-            f'intext:@{domain}',
+            f"site:{domain} email",
+            f"intext:@{domain}",
         ]
 
         # Simulate common role-based emails
         common_emails = ["contact", "info", "support", "admin", "sales"]
         for prefix in common_emails:
             email = f"{prefix}@{domain}"
-            results.append(EmailResult(
-                address=email,
-                source="google",
-                confidence=6,
-                metadata={"method": "role_pattern"},
-            ))
+            results.append(
+                EmailResult(
+                    address=email,
+                    source="google",
+                    confidence=6,
+                    metadata={"method": "role_pattern"},
+                )
+            )
 
         return results
 
@@ -306,12 +329,14 @@ class EmailHarvester:
         if content:
             emails = self._extract_emails(content, domain)
             for email in emails:
-                results.append(EmailResult(
-                    address=email,
-                    source="pgp_mit",
-                    confidence=9,  # High confidence for PGP
-                    metadata={"server": "pgp.mit.edu"},
-                ))
+                results.append(
+                    EmailResult(
+                        address=email,
+                        source="pgp_mit",
+                        confidence=9,  # High confidence for PGP
+                        metadata={"server": "pgp.mit.edu"},
+                    )
+                )
 
         return results
 
@@ -323,8 +348,7 @@ class EmailHarvester:
         github_api = f"https://api.github.com/search/code?q=@{domain}+in:file"
 
         content = await self._fetch(
-            github_api,
-            headers={"Accept": "application/vnd.github.v3+json"}
+            github_api, headers={"Accept": "application/vnd.github.v3+json"}
         )
 
         if content:
@@ -357,12 +381,14 @@ class EmailHarvester:
                         if "@" in name and domain in name:
                             if name not in seen_names:
                                 seen_names.add(name)
-                                results.append(EmailResult(
-                                    address=name,
-                                    source="crtsh",
-                                    confidence=8,
-                                    metadata={"cert_id": cert.get("id")},
-                                ))
+                                results.append(
+                                    EmailResult(
+                                        address=name,
+                                        source="crtsh",
+                                        confidence=8,
+                                        metadata={"cert_id": cert.get("id")},
+                                    )
+                                )
             except json.JSONDecodeError:
                 pass
 
@@ -373,20 +399,39 @@ class EmailHarvester:
         results = []
 
         patterns = [
-            "admin", "administrator", "info", "contact", "support",
-            "sales", "webmaster", "postmaster", "security", "help",
-            "billing", "accounts", "hr", "jobs", "careers", "press",
-            "media", "marketing", "team", "hello", "office",
+            "admin",
+            "administrator",
+            "info",
+            "contact",
+            "support",
+            "sales",
+            "webmaster",
+            "postmaster",
+            "security",
+            "help",
+            "billing",
+            "accounts",
+            "hr",
+            "jobs",
+            "careers",
+            "press",
+            "media",
+            "marketing",
+            "team",
+            "hello",
+            "office",
         ]
 
         for pattern in patterns:
             email = f"{pattern}@{domain}"
-            results.append(EmailResult(
-                address=email,
-                source="common_pattern",
-                confidence=4,  # Lower confidence for patterns
-                metadata={"pattern": pattern},
-            ))
+            results.append(
+                EmailResult(
+                    address=email,
+                    source="common_pattern",
+                    confidence=4,  # Lower confidence for patterns
+                    metadata={"pattern": pattern},
+                )
+            )
 
         return results
 

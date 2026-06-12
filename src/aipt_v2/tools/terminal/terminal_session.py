@@ -10,7 +10,6 @@ from typing import Any
 
 import libtmux
 
-
 logger = logging.getLogger(__name__)
 
 

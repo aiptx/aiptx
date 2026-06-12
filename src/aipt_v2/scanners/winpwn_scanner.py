@@ -24,28 +24,24 @@ Usage:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import platform
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.scanners.base import (
     BaseScanner,
-    ScanResult,
     ScanFinding,
     ScanSeverity,
 )
 from aipt_v2.tools.winpwn import (
-    WinPwnConfig,
-    WinPwnModule,
-    WinPwnExecutionMode,
-    WinPwnAttacks,
-    WinPwnResult,
-    WinPwnFinding,
     FindingSeverity,
+    WinPwnAttacks,
+    WinPwnConfig,
+    WinPwnFinding,
+    WinPwnModule,
+    WinPwnResult,
     get_winpwn_config,
 )
 
@@ -55,6 +51,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WinPwnScanConfig:
     """Configuration for WinPwn scanner."""
+
     # Target
     domain: str = ""
     dc_ip: str = ""
@@ -70,10 +67,12 @@ class WinPwnScanConfig:
     repo_url: str = ""
 
     # Modules to run
-    modules: List[str] = field(default_factory=lambda: [
-        "localrecon",
-        "privesc",
-    ])
+    modules: List[str] = field(
+        default_factory=lambda: [
+            "localrecon",
+            "privesc",
+        ]
+    )
 
     # Options
     run_domain_recon: bool = True
@@ -93,6 +92,7 @@ class WinPwnScanConfig:
 @dataclass
 class WinPwnScanResult:
     """Result from WinPwn scan."""
+
     scanner: str = "winpwn"
     target: str = ""
     domain: str = ""
@@ -173,6 +173,7 @@ class WinPwnScanner(BaseScanner):
 
         # Check for pwsh on non-Windows
         import shutil
+
         return shutil.which("pwsh") is not None
 
     def _get_winpwn_config(self) -> WinPwnConfig:
@@ -321,9 +322,7 @@ class WinPwnScanner(BaseScanner):
         finally:
             result.end_time = datetime.now(timezone.utc)
             if result.start_time and result.end_time:
-                result.duration_seconds = (
-                    result.end_time - result.start_time
-                ).total_seconds()
+                result.duration_seconds = (result.end_time - result.start_time).total_seconds()
 
             # Cleanup
             if self._attacks:
@@ -360,10 +359,7 @@ class WinPwnScanner(BaseScanner):
             WinPwnScanResult with domain findings
         """
         if not self.config.domain or not self.config.username:
-            result = WinPwnScanResult(
-                target=self.config.dc_ip,
-                status="failed"
-            )
+            result = WinPwnScanResult(target=self.config.dc_ip, status="failed")
             result.errors.append("Domain credentials required for domain assessment")
             return result
 
@@ -417,7 +413,7 @@ async def scan_windows(
     password: str = "",
     script_path: str = "",
     modules: List[str] = None,
-    **kwargs
+    **kwargs,
 ) -> WinPwnScanResult:
     """
     Quick Windows security scan.
@@ -443,7 +439,7 @@ async def scan_windows(
         password=password,
         script_path=script_path,
         modules=modules or ["localrecon", "privesc"],
-        **kwargs
+        **kwargs,
     )
 
     scanner = WinPwnScanner(config)
@@ -457,7 +453,7 @@ async def scan_ad_with_winpwn(
     password: str,
     script_path: str = "",
     full_assessment: bool = False,
-    **kwargs
+    **kwargs,
 ) -> WinPwnScanResult:
     """
     Active Directory security assessment using WinPwn.
@@ -489,7 +485,7 @@ async def scan_ad_with_winpwn(
         run_kerberoasting=True,
         run_bloodhound=full_assessment,
         run_credential_extraction=full_assessment,
-        **kwargs
+        **kwargs,
     )
 
     scanner = WinPwnScanner(config)

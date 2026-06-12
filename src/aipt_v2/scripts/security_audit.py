@@ -18,9 +18,9 @@ Checks:
 """
 
 import argparse
+import re
 import subprocess
 import sys
-import re
 from pathlib import Path
 from typing import List, Tuple
 
@@ -54,12 +54,7 @@ def print_warning(message: str):
 def run_command(cmd: List[str], timeout: int = 120) -> Tuple[int, str, str]:
     """Run a command and return exit code, stdout, stderr."""
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=timeout
-        )
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=timeout)
         return result.returncode, result.stdout, result.stderr
     except subprocess.TimeoutExpired:
         return -1, "", "Command timed out"
@@ -71,19 +66,27 @@ def check_bandit(verbose: bool = False) -> Tuple[bool, int, int, int]:
     """Run Bandit security scanner."""
     print_header("Bandit SAST Scan")
 
-    code, stdout, stderr = run_command([
-        "python3", "-m", "bandit",
-        "-r", ".",
-        "--exclude", "./htmlcov,./venv,./.venv,./tests",
-        "-f", "custom",
-        "--msg-template", "{severity}: {test_id} at {relpath}:{line} - {msg}"
-    ])
+    code, stdout, stderr = run_command(
+        [
+            "python3",
+            "-m",
+            "bandit",
+            "-r",
+            ".",
+            "--exclude",
+            "./htmlcov,./venv,./.venv,./tests",
+            "-f",
+            "custom",
+            "--msg-template",
+            "{severity}: {test_id} at {relpath}:{line} - {msg}",
+        ]
+    )
 
     high = stdout.count("HIGH:")
     medium = stdout.count("MEDIUM:")
     low = stdout.count("LOW:")
 
-    print_result(high == 0, f"No HIGH severity issues")
+    print_result(high == 0, "No HIGH severity issues")
     print_result(medium <= 5, f"Medium severity issues: {medium}")
     print_result(True, f"Low severity issues: {low}")
 
@@ -100,7 +103,10 @@ def check_secrets() -> bool:
     # Patterns for actual hardcoded secrets (not variable names or field definitions)
     patterns = [
         # Look for actual string assignments that look like secrets
-        (r'(?:password|passwd|pwd)\s*=\s*["\'](?![\'"]\s*$)[a-zA-Z0-9!@#$%^&*]{8,}["\']', "password"),
+        (
+            r'(?:password|passwd|pwd)\s*=\s*["\'](?![\'"]\s*$)[a-zA-Z0-9!@#$%^&*]{8,}["\']',
+            "password",
+        ),
         (r'(?:api_key|apikey)\s*=\s*["\'](?![\'"]\s*$)[a-zA-Z0-9_-]{20,}["\']', "api_key"),
         (r'(?:secret|secret_key)\s*=\s*["\'](?![\'"]\s*$)[a-zA-Z0-9_-]{16,}["\']', "secret"),
         (r'(?:auth_token|bearer_token)\s*=\s*["\'](?![\'"]\s*$)[a-zA-Z0-9._-]{20,}["\']', "token"),
@@ -144,7 +150,14 @@ def check_secrets() -> bool:
             continue
 
     passed = len(found_secrets) == 0
-    print_result(passed, f"No hardcoded secrets found" if passed else f"Found {len(found_secrets)} potential secrets")
+    print_result(
+        passed,
+        (
+            "No hardcoded secrets found"
+            if passed
+            else f"Found {len(found_secrets)} potential secrets"
+        ),
+    )
 
     if found_secrets:
         for file, line_num, name, value in found_secrets[:5]:
@@ -158,11 +171,9 @@ def check_shell_commands() -> bool:
     print_header("Shell Command Security Check")
 
     # Look for actual shell=True in subprocess calls (not comments about it)
-    code, stdout, stderr = run_command([
-        "grep", "-rn", "--include=*.py",
-        r"subprocess.*shell=True\|create_subprocess_shell",
-        "."
-    ])
+    code, stdout, stderr = run_command(
+        ["grep", "-rn", "--include=*.py", r"subprocess.*shell=True\|create_subprocess_shell", "."]
+    )
 
     # Filter out comments and safe patterns
     issues = []
@@ -170,7 +181,13 @@ def check_shell_commands() -> bool:
         if not line:
             continue
         # Skip tests, htmlcov, scripts, and virtual environments
-        if "tests/" in line or "htmlcov/" in line or "scripts/" in line or ".venv/" in line or "venv/" in line:
+        if (
+            "tests/" in line
+            or "htmlcov/" in line
+            or "scripts/" in line
+            or ".venv/" in line
+            or "venv/" in line
+        ):
             continue
         # Skip comments (lines where # appears before the pattern)
         file_content = line.split(":", 2)
@@ -188,7 +205,10 @@ def check_shell_commands() -> bool:
                 pass  # Don't flag as issue, this is intentional
 
     passed = len(issues) == 0
-    print_result(passed, f"No unsafe shell=True patterns" if passed else f"Found {len(issues)} shell=True usages")
+    print_result(
+        passed,
+        "No unsafe shell=True patterns" if passed else f"Found {len(issues)} shell=True usages",
+    )
 
     if issues:
         for issue in issues[:5]:
@@ -215,16 +235,23 @@ def check_request_timeouts() -> bool:
 
             for i, line in enumerate(lines, 1):
                 # Look for requests.get/post/put/delete calls
-                if re.search(r'requests\.(get|post|put|delete|patch)\s*\(', line):
+                if re.search(r"requests\.(get|post|put|delete|patch)\s*\(", line):
                     # Check if timeout is specified (in same line or next few lines for multiline)
-                    context = "\n".join(lines[max(0, i-1):min(len(lines), i+5)])
+                    context = "\n".join(lines[max(0, i - 1) : min(len(lines), i + 5)])
                     if "timeout" not in context:
                         issues.append(f"{py_file}:{i}: {line.strip()[:60]}")
         except Exception:
             continue
 
     passed = len(issues) == 0
-    print_result(passed, f"All HTTP requests have timeouts" if passed else f"Found {len(issues)} requests without timeout")
+    print_result(
+        passed,
+        (
+            "All HTTP requests have timeouts"
+            if passed
+            else f"Found {len(issues)} requests without timeout"
+        ),
+    )
 
     if issues:
         for issue in issues[:5]:
@@ -260,9 +287,9 @@ def check_dependencies() -> Tuple[bool, int]:
     print_result(outdated < threshold, f"Outdated packages: {outdated}")
 
     # Check for vulnerable packages using safety within the environment
-    code, stdout, stderr = run_command([
-        python_cmd, "-m", "safety", "check", "--short-report"
-    ], timeout=60)
+    code, stdout, stderr = run_command(
+        [python_cmd, "-m", "safety", "check", "--short-report"], timeout=60
+    )
 
     if code == 0:
         print_result(True, "No known vulnerabilities in dependencies")
@@ -285,10 +312,14 @@ def check_dependencies() -> Tuple[bool, int]:
         # Count vulnerabilities - exclude system paths from count
         vuln_lines = [l for l in stdout.split("\n") if "Vulnerability found" in l]
         # Filter out system Python vulnerabilities (only count project deps)
-        project_vulns = [l for l in vuln_lines
-                        if "/Library/Developer/" not in l
-                        and "/usr/lib/" not in l
-                        and "site-packages" not in l or ".venv" in l]
+        project_vulns = [
+            l
+            for l in vuln_lines
+            if "/Library/Developer/" not in l
+            and "/usr/lib/" not in l
+            and "site-packages" not in l
+            or ".venv" in l
+        ]
         vuln_count = len(project_vulns)
 
         if vuln_count == 0 and len(vuln_lines) > 0:
@@ -321,7 +352,9 @@ def check_domain_validation() -> bool:
 def main():
     parser = argparse.ArgumentParser(description="AIPT v2 Security Audit")
     parser.add_argument("--verbose", "-v", action="store_true", help="Verbose output")
-    parser.add_argument("--fix", action="store_true", help="Attempt to fix issues (not implemented)")
+    parser.add_argument(
+        "--fix", action="store_true", help="Attempt to fix issues (not implemented)"
+    )
     args = parser.parse_args()
 
     print(f"\n{BOLD}{'='*60}{RESET}")

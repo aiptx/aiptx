@@ -3,13 +3,12 @@ AIPT Nikto Scanner Integration
 
 Web server vulnerability scanning using Nikto.
 """
+
 from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
 
 from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
@@ -152,42 +151,66 @@ class NiktoScanner(BaseScanner):
             return ScanSeverity.CRITICAL
 
         # High
-        if any(kw in desc_lower for kw in [
-            "sql injection", "sqli",
-            "command injection",
-            "file inclusion", "lfi", "rfi",
-            "authentication bypass",
-            "default password",
-            "admin access",
-        ]):
+        if any(
+            kw in desc_lower
+            for kw in [
+                "sql injection",
+                "sqli",
+                "command injection",
+                "file inclusion",
+                "lfi",
+                "rfi",
+                "authentication bypass",
+                "default password",
+                "admin access",
+            ]
+        ):
             return ScanSeverity.HIGH
 
         # Medium
-        if any(kw in desc_lower for kw in [
-            "xss", "cross-site",
-            "information disclosure",
-            "directory listing",
-            "source code",
-            "backup file",
-            "config file",
-            "outdated",
-        ]):
+        if any(
+            kw in desc_lower
+            for kw in [
+                "xss",
+                "cross-site",
+                "information disclosure",
+                "directory listing",
+                "source code",
+                "backup file",
+                "config file",
+                "outdated",
+            ]
+        ):
             return ScanSeverity.MEDIUM
 
         # Path-based severity
-        if any(p in path_lower for p in [
-            "/admin", "/manager", "/phpmyadmin",
-            ".bak", ".old", ".sql", ".zip",
-            "phpinfo", "test.php",
-        ]):
+        if any(
+            p in path_lower
+            for p in [
+                "/admin",
+                "/manager",
+                "/phpmyadmin",
+                ".bak",
+                ".old",
+                ".sql",
+                ".zip",
+                "phpinfo",
+                "test.php",
+            ]
+        ):
             return ScanSeverity.MEDIUM
 
         # Low
-        if any(kw in desc_lower for kw in [
-            "cookie", "header",
-            "version", "banner",
-            "allowed method",
-        ]):
+        if any(
+            kw in desc_lower
+            for kw in [
+                "cookie",
+                "header",
+                "version",
+                "banner",
+                "allowed method",
+            ]
+        ):
             return ScanSeverity.LOW
 
         return ScanSeverity.INFO

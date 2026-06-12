@@ -10,21 +10,20 @@ Features:
 - Working directory management
 - Cross-platform support (Windows, Linux, macOS)
 """
+
 from __future__ import annotations
 
-import subprocess
-import shlex
-import os
-import signal
-import time
 import asyncio
+import os
 import platform
+import signal
+import subprocess
 import threading
-from queue import Queue, Empty
-from typing import Optional, Callable, Dict, Any
+import time
 from dataclasses import dataclass
 from pathlib import Path
-
+from queue import Empty, Queue
+from typing import Any, Callable, Dict, Optional
 
 # Platform detection
 IS_WINDOWS = platform.system() == "Windows"
@@ -33,6 +32,7 @@ IS_WINDOWS = platform.system() == "Windows"
 @dataclass
 class ExecutionResult:
     """Result of command execution"""
+
     command: str
     output: str
     error: Optional[str]
@@ -91,7 +91,9 @@ class Terminal:
         # Ensure working directory exists
         Path(self.working_dir).mkdir(parents=True, exist_ok=True)
 
-    def _get_popen_kwargs(self, cwd: str, full_env: Dict[str, str], capture_stderr: bool = True) -> Dict[str, Any]:
+    def _get_popen_kwargs(
+        self, cwd: str, full_env: Dict[str, str], capture_stderr: bool = True
+    ) -> Dict[str, Any]:
         """
         Get platform-specific Popen kwargs.
 
@@ -129,7 +131,7 @@ class Terminal:
                 subprocess.run(
                     ["taskkill", "/F", "/T", "/PID", str(process.pid)],
                     capture_output=True,
-                    timeout=5
+                    timeout=5,
                 )
             else:
                 # Unix: Kill process group
@@ -215,24 +217,13 @@ class Terminal:
             )
 
     async def execute_async(
-        self,
-        command: str,
-        timeout: Optional[int] = None,
-        **kwargs
+        self, command: str, timeout: Optional[int] = None, **kwargs
     ) -> ExecutionResult:
         """Async version of execute"""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self.execute(command, timeout, **kwargs)
-        )
+        return await loop.run_in_executor(None, lambda: self.execute(command, timeout, **kwargs))
 
-    def _stream_reader_thread(
-        self,
-        pipe,
-        queue: Queue,
-        stop_event: threading.Event
-    ) -> None:
+    def _stream_reader_thread(self, pipe, queue: Queue, stop_event: threading.Event) -> None:
         """
         Thread function to read from pipe and put lines in queue.
         Used for Windows compatibility where select() doesn't work on pipes.
@@ -306,14 +297,10 @@ class Terminal:
 
             if IS_WINDOWS:
                 # Windows: Use threading-based approach
-                output_lines = self._streaming_windows(
-                    process, callback, timeout, start_time, cwd
-                )
+                output_lines = self._streaming_windows(process, callback, timeout, start_time, cwd)
             else:
                 # Unix: Use select-based approach
-                output_lines = self._streaming_unix(
-                    process, callback, timeout, start_time, cwd
-                )
+                output_lines = self._streaming_unix(process, callback, timeout, start_time, cwd)
 
             # Check for timeout result (returned as ExecutionResult)
             if isinstance(output_lines, ExecutionResult):
@@ -324,7 +311,7 @@ class Terminal:
 
             return ExecutionResult(
                 command=command,
-                output=output[:self.max_output],
+                output=output[: self.max_output],
                 error=None if process.returncode == 0 else f"Exit code: {process.returncode}",
                 return_code=process.returncode,
                 timed_out=False,
@@ -370,9 +357,7 @@ class Terminal:
 
         # Start reader thread
         reader_thread = threading.Thread(
-            target=self._stream_reader_thread,
-            args=(process.stdout, queue, stop_event),
-            daemon=True
+            target=self._stream_reader_thread, args=(process.stdout, queue, stop_event), daemon=True
         )
         reader_thread.start()
 
@@ -511,8 +496,7 @@ class Terminal:
 
         if IS_WINDOWS:
             popen_kwargs["creationflags"] = (
-                subprocess.CREATE_NEW_PROCESS_GROUP |
-                subprocess.DETACHED_PROCESS
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.DETACHED_PROCESS
             )
         else:
             popen_kwargs["executable"] = self.shell
@@ -529,7 +513,9 @@ class Terminal:
             decoded = str(data)
 
         if len(decoded) > self.max_output:
-            decoded = decoded[:self.max_output] + f"\n\n[Output truncated at {self.max_output} chars]"
+            decoded = (
+                decoded[: self.max_output] + f"\n\n[Output truncated at {self.max_output} chars]"
+            )
 
         return decoded
 

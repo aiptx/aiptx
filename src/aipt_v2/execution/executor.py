@@ -7,27 +7,30 @@ Provides a unified interface for command execution with:
 - Automatic mode selection
 - Result parsing integration
 """
+
 from __future__ import annotations
 
-from typing import Optional, List, Dict, Any, Callable
+import asyncio
 from dataclasses import dataclass
 from enum import Enum
-import asyncio
+from typing import Any, Callable, Dict, List, Optional
 
-from .terminal import Terminal, ExecutionResult
-from .parser import OutputParser, Finding
+from .parser import OutputParser
+from .terminal import ExecutionResult, Terminal
 
 
 class ExecutionMode(str, Enum):
     """Execution mode"""
-    LOCAL = "local"          # Direct local execution
-    DOCKER = "docker"        # Docker sandbox
-    AUTO = "auto"            # Auto-select based on tool/risk
+
+    LOCAL = "local"  # Direct local execution
+    DOCKER = "docker"  # Docker sandbox
+    AUTO = "auto"  # Auto-select based on tool/risk
 
 
 @dataclass
 class ExecutionConfig:
     """Configuration for execution engine"""
+
     mode: ExecutionMode = ExecutionMode.AUTO
     default_timeout: int = 300
     max_output: int = 50000
@@ -60,16 +63,34 @@ class ExecutionEngine:
 
     # Tools that should run in sandbox by default
     SANDBOX_TOOLS = {
-        "metasploit", "msfconsole", "msfvenom",
-        "sqlmap", "hydra", "john", "hashcat",
-        "exploitdb", "searchsploit",
+        "metasploit",
+        "msfconsole",
+        "msfvenom",
+        "sqlmap",
+        "hydra",
+        "john",
+        "hashcat",
+        "exploitdb",
+        "searchsploit",
     }
 
     # Tools safe to run locally
     LOCAL_TOOLS = {
-        "nmap", "masscan", "ping", "whois", "dig", "host",
-        "curl", "wget", "httpx", "nuclei", "nikto",
-        "gobuster", "ffuf", "dirb", "subfinder",
+        "nmap",
+        "masscan",
+        "ping",
+        "whois",
+        "dig",
+        "host",
+        "curl",
+        "wget",
+        "httpx",
+        "nuclei",
+        "nikto",
+        "gobuster",
+        "ffuf",
+        "dirb",
+        "subfinder",
     }
 
     def __init__(
@@ -92,9 +113,8 @@ class ExecutionEngine:
         if self._sandbox is None:
             try:
                 from ..docker import DockerSandbox, SandboxConfig
-                self._sandbox = DockerSandbox(
-                    SandboxConfig(image=self.config.sandbox_image)
-                )
+
+                self._sandbox = DockerSandbox(SandboxConfig(image=self.config.sandbox_image))
             except ImportError:
                 self._sandbox = False  # Mark as unavailable
         return self._sandbox if self._sandbox is not False else None
@@ -107,7 +127,7 @@ class ExecutionEngine:
         tool_name: Optional[str] = None,
         parse: Optional[bool] = None,
         callback: Optional[Callable[[str], None]] = None,
-        **kwargs
+        **kwargs,
     ) -> Dict[str, Any]:
         """
         Execute a command with automatic mode selection.
@@ -154,23 +174,13 @@ class ExecutionEngine:
             "tool": tool_name or self._detect_tool(command),
         }
 
-    async def execute_async(
-        self,
-        command: str,
-        **kwargs
-    ) -> Dict[str, Any]:
+    async def execute_async(self, command: str, **kwargs) -> Dict[str, Any]:
         """Async version of execute"""
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(
-            None,
-            lambda: self.execute(command, **kwargs)
-        )
+        return await loop.run_in_executor(None, lambda: self.execute(command, **kwargs))
 
     def execute_batch(
-        self,
-        commands: List[str],
-        parallel: bool = False,
-        **kwargs
+        self, commands: List[str], parallel: bool = False, **kwargs
     ) -> List[Dict[str, Any]]:
         """
         Execute multiple commands.
@@ -188,21 +198,13 @@ class ExecutionEngine:
 
         return [self.execute(cmd, **kwargs) for cmd in commands]
 
-    async def _execute_batch_async(
-        self,
-        commands: List[str],
-        **kwargs
-    ) -> List[Dict[str, Any]]:
+    async def _execute_batch_async(self, commands: List[str], **kwargs) -> List[Dict[str, Any]]:
         """Execute commands in parallel"""
         tasks = [self.execute_async(cmd, **kwargs) for cmd in commands]
         return await asyncio.gather(*tasks)
 
     def _execute_local(
-        self,
-        command: str,
-        timeout: int,
-        callback: Optional[Callable] = None,
-        **kwargs
+        self, command: str, timeout: int, callback: Optional[Callable] = None, **kwargs
     ) -> ExecutionResult:
         """Execute command locally"""
         if callback:
@@ -210,11 +212,7 @@ class ExecutionEngine:
         return self.terminal.execute(command, timeout, **kwargs)
 
     def _execute_docker(
-        self,
-        command: str,
-        timeout: int,
-        callback: Optional[Callable] = None,
-        **kwargs
+        self, command: str, timeout: int, callback: Optional[Callable] = None, **kwargs
     ) -> ExecutionResult:
         """Execute command in Docker sandbox"""
         if not self.sandbox:
@@ -232,7 +230,9 @@ class ExecutionEngine:
             output=result.output,
             error=result.error,
             return_code=result.return_code,
-            timed_out=result.error and "timed out" in result.error.lower() if result.error else False,
+            timed_out=(
+                result.error and "timed out" in result.error.lower() if result.error else False
+            ),
             duration=result.duration,
         )
 
@@ -248,8 +248,13 @@ class ExecutionEngine:
 
         # Check for dangerous patterns
         dangerous_patterns = [
-            "rm -rf", "mkfs", "dd if=", "> /dev/",
-            "chmod 777", "wget -O - | sh", "curl | bash",
+            "rm -rf",
+            "mkfs",
+            "dd if=",
+            "> /dev/",
+            "chmod 777",
+            "wget -O - | sh",
+            "curl | bash",
         ]
         for pattern in dangerous_patterns:
             if pattern in command:
@@ -286,8 +291,7 @@ class ExecutionEngine:
             "available": available,
             "version": version,
             "recommended_mode": (
-                ExecutionMode.DOCKER if tool_name in self.SANDBOX_TOOLS
-                else ExecutionMode.LOCAL
+                ExecutionMode.DOCKER if tool_name in self.SANDBOX_TOOLS else ExecutionMode.LOCAL
             ),
         }
 

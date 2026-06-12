@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -81,12 +81,7 @@ class DalfoxScanner(BaseScanner):
         """Check if dalfox is installed."""
         return shutil.which("dalfox") is not None
 
-    async def scan(
-        self,
-        target: str,
-        targets_file: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, targets_file: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run dalfox scan.
 
@@ -114,8 +109,7 @@ class DalfoxScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")

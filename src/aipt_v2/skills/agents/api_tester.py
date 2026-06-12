@@ -11,9 +11,8 @@ Tests APIs for:
 """
 
 import json
-import time
 from typing import Any, Dict, List, Optional
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 
 import structlog
 
@@ -21,12 +20,8 @@ from aipt_v2.skills.agents.base import (
     AgentConfig,
     AgentResult,
     BaseSecurityAgent,
-    Finding,
-    Severity,
-    VulnCategory,
     register_tool,
 )
-from aipt_v2.skills.prompts import SkillPrompts
 
 logger = structlog.get_logger()
 
@@ -39,10 +34,9 @@ def get_http_client():
     global _http_client
     if _http_client is None:
         import httpx
+
         _http_client = httpx.AsyncClient(
-            timeout=30.0,
-            follow_redirects=True,
-            verify=False  # Allow self-signed certs for testing
+            timeout=30.0, follow_redirects=True, verify=False  # Allow self-signed certs for testing
         )
     return _http_client
 
@@ -56,16 +50,16 @@ def get_http_client():
         "url": {"type": "string", "description": "Full URL to request"},
         "headers": {"type": "object", "description": "Optional headers dict"},
         "body": {"type": "string", "description": "Optional request body (JSON string)"},
-        "params": {"type": "object", "description": "Optional query parameters"}
+        "params": {"type": "object", "description": "Optional query parameters"},
     },
-    category="api_test"
+    category="api_test",
 )
 async def http_request(
     method: str,
     url: str,
     headers: Optional[Dict[str, str]] = None,
     body: Optional[str] = None,
-    params: Optional[Dict[str, str]] = None
+    params: Optional[Dict[str, str]] = None,
 ) -> str:
     """Send an HTTP request."""
     try:
@@ -85,7 +79,7 @@ async def http_request(
             headers=headers,
             json=json_body if json_body else None,
             content=body if body and not json_body else None,
-            params=params
+            params=params,
         )
 
         # Build response summary
@@ -106,9 +100,12 @@ Response Body:
     name="parse_openapi",
     description="Parse an OpenAPI/Swagger specification to discover endpoints",
     parameters={
-        "spec_url_or_content": {"type": "string", "description": "URL to OpenAPI spec or the spec content itself"}
+        "spec_url_or_content": {
+            "type": "string",
+            "description": "URL to OpenAPI spec or the spec content itself",
+        }
     },
-    category="api_test"
+    category="api_test",
 )
 async def parse_openapi(spec_url_or_content: str) -> str:
     """Parse OpenAPI specification."""
@@ -116,7 +113,7 @@ async def parse_openapi(spec_url_or_content: str) -> str:
         import yaml
 
         # Try to fetch if URL
-        if spec_url_or_content.startswith(('http://', 'https://')):
+        if spec_url_or_content.startswith(("http://", "https://")):
             client = get_http_client()
             response = await client.get(spec_url_or_content)
             content = response.text
@@ -131,21 +128,21 @@ async def parse_openapi(spec_url_or_content: str) -> str:
 
         # Extract endpoints
         endpoints = []
-        paths = spec.get('paths', {})
+        paths = spec.get("paths", {})
 
         for path, methods in paths.items():
             for method, details in methods.items():
-                if method in ['get', 'post', 'put', 'delete', 'patch']:
+                if method in ["get", "post", "put", "delete", "patch"]:
                     params = []
-                    for param in details.get('parameters', []):
+                    for param in details.get("parameters", []):
                         params.append(f"{param.get('name')} ({param.get('in', 'query')})")
 
                     endpoint = {
-                        'path': path,
-                        'method': method.upper(),
-                        'summary': details.get('summary', ''),
-                        'parameters': params,
-                        'security': details.get('security', [])
+                        "path": path,
+                        "method": method.upper(),
+                        "summary": details.get("summary", ""),
+                        "parameters": params,
+                        "security": details.get("security", []),
                     }
                     endpoints.append(endpoint)
 
@@ -157,11 +154,11 @@ async def parse_openapi(spec_url_or_content: str) -> str:
 
         for ep in endpoints:
             output += f"\n{ep['method']} {ep['path']}"
-            if ep['summary']:
+            if ep["summary"]:
                 output += f" - {ep['summary']}"
-            if ep['parameters']:
+            if ep["parameters"]:
                 output += f"\n  Parameters: {', '.join(ep['parameters'])}"
-            if ep['security']:
+            if ep["security"]:
                 output += f"\n  Security: {ep['security']}"
 
         return output
@@ -179,9 +176,9 @@ async def parse_openapi(spec_url_or_content: str) -> str:
         "param_name": {"type": "string", "description": "Parameter name to fuzz"},
         "param_location": {"type": "string", "description": "Location: query, body, header, path"},
         "payloads": {"type": "array", "description": "List of payloads to test"},
-        "headers": {"type": "object", "description": "Optional headers"}
+        "headers": {"type": "object", "description": "Optional headers"},
     },
-    category="api_test"
+    category="api_test",
 )
 async def fuzz_parameter(
     base_url: str,
@@ -189,7 +186,7 @@ async def fuzz_parameter(
     param_name: str,
     param_location: str,
     payloads: List[str],
-    headers: Optional[Dict[str, str]] = None
+    headers: Optional[Dict[str, str]] = None,
 ) -> str:
     """Fuzz a parameter with various payloads."""
     try:
@@ -214,11 +211,7 @@ async def fuzz_parameter(
                     url = base_url.replace(f"{{{param_name}}}", payload)
 
                 response = await client.request(
-                    method=method.upper(),
-                    url=url,
-                    headers=req_headers,
-                    content=body,
-                    params=params
+                    method=method.upper(), url=url, headers=req_headers, content=body, params=params
                 )
 
                 # Check for interesting responses
@@ -239,23 +232,22 @@ async def fuzz_parameter(
                     interesting = True
                     indicators.append("SQL-related")
 
-                results.append({
-                    "payload": payload,
-                    "status": response.status_code,
-                    "length": len(response.text),
-                    "interesting": interesting,
-                    "indicators": indicators,
-                    "response_preview": response.text[:200] if interesting else ""
-                })
+                results.append(
+                    {
+                        "payload": payload,
+                        "status": response.status_code,
+                        "length": len(response.text),
+                        "interesting": interesting,
+                        "indicators": indicators,
+                        "response_preview": response.text[:200] if interesting else "",
+                    }
+                )
 
                 # Small delay between requests
                 await asyncio.sleep(0.1)
 
             except Exception as e:
-                results.append({
-                    "payload": payload,
-                    "error": str(e)
-                })
+                results.append({"payload": payload, "error": str(e)})
 
         # Format results
         output = f"Fuzzing {param_name} ({param_location}) on {method} {base_url}\n\n"
@@ -267,15 +259,17 @@ async def fuzz_parameter(
                 output += f"\nPayload: {r['payload']}\n"
                 output += f"Status: {r['status']}, Length: {r['length']}\n"
                 output += f"Indicators: {', '.join(r['indicators'])}\n"
-                if r.get('response_preview'):
+                if r.get("response_preview"):
                     output += f"Preview: {r['response_preview']}\n"
 
         output += f"\n=== ALL RESULTS ({len(results)} payloads) ===\n"
         for r in results:
-            if 'error' in r:
+            if "error" in r:
                 output += f"Payload: {r['payload']} - Error: {r['error']}\n"
             else:
-                output += f"Payload: {r['payload']} - Status: {r['status']}, Length: {r['length']}\n"
+                output += (
+                    f"Payload: {r['payload']} - Status: {r['status']}, Length: {r['length']}\n"
+                )
 
         return output
 
@@ -291,15 +285,19 @@ import asyncio
     description="Test API authentication mechanisms",
     parameters={
         "base_url": {"type": "string", "description": "API base URL"},
-        "auth_endpoint": {"type": "string", "description": "Authentication endpoint (e.g., /auth/login)"},
-        "test_credentials": {"type": "array", "description": "List of username:password pairs to test"}
+        "auth_endpoint": {
+            "type": "string",
+            "description": "Authentication endpoint (e.g., /auth/login)",
+        },
+        "test_credentials": {
+            "type": "array",
+            "description": "List of username:password pairs to test",
+        },
     },
-    category="api_test"
+    category="api_test",
 )
 async def test_authentication(
-    base_url: str,
-    auth_endpoint: str,
-    test_credentials: List[str]
+    base_url: str, auth_endpoint: str, test_credentials: List[str]
 ) -> str:
     """Test authentication mechanisms."""
     try:
@@ -327,13 +325,15 @@ async def test_authentication(
                     is_success = any(ind in response.text.lower() for ind in success_indicators)
                     is_success = is_success or response.status_code == 200
 
-                    results.append({
-                        "credential": cred,
-                        "payload_format": list(payload.keys()),
-                        "status": response.status_code,
-                        "success": is_success,
-                        "response_preview": response.text[:300]
-                    })
+                    results.append(
+                        {
+                            "credential": cred,
+                            "payload_format": list(payload.keys()),
+                            "status": response.status_code,
+                            "success": is_success,
+                            "response_preview": response.text[:300],
+                        }
+                    )
 
                     if is_success:
                         break
@@ -355,10 +355,10 @@ async def test_authentication(
 
         output += f"\n=== ALL RESULTS ({len(results)} attempts) ===\n"
         for r in results:
-            if 'error' in r:
+            if "error" in r:
                 output += f"{r['credential']}: Error - {r['error']}\n"
             else:
-                status = "SUCCESS" if r['success'] else "FAILED"
+                status = "SUCCESS" if r["success"] else "FAILED"
                 output += f"{r['credential']}: {status} (HTTP {r['status']})\n"
 
         return output
@@ -373,15 +373,11 @@ async def test_authentication(
     parameters={
         "url": {"type": "string", "description": "URL with object ID to test"},
         "auth_header": {"type": "string", "description": "Authorization header value"},
-        "test_ids": {"type": "array", "description": "List of IDs to test access to"}
+        "test_ids": {"type": "array", "description": "List of IDs to test access to"},
     },
-    category="api_test"
+    category="api_test",
 )
-async def test_authorization(
-    url: str,
-    auth_header: str,
-    test_ids: List[str]
-) -> str:
+async def test_authorization(url: str, auth_header: str, test_ids: List[str]) -> str:
     """Test for authorization bypass."""
     try:
         client = get_http_client()
@@ -396,14 +392,18 @@ async def test_authorization(
 
                 response = await client.get(test_url, headers=headers)
 
-                results.append({
-                    "id": test_id,
-                    "url": test_url,
-                    "status": response.status_code,
-                    "length": len(response.text),
-                    "accessible": response.status_code == 200,
-                    "response_preview": response.text[:200] if response.status_code == 200 else ""
-                })
+                results.append(
+                    {
+                        "id": test_id,
+                        "url": test_url,
+                        "status": response.status_code,
+                        "length": len(response.text),
+                        "accessible": response.status_code == 200,
+                        "response_preview": (
+                            response.text[:200] if response.status_code == 200 else ""
+                        ),
+                    }
+                )
 
                 await asyncio.sleep(0.1)
 
@@ -421,15 +421,15 @@ async def test_authorization(
         output += f"=== ACCESSIBLE RESOURCES ({len(accessible)}) ===\n"
         for r in accessible:
             output += f"ID: {r['id']} - Length: {r['length']}\n"
-            if r.get('response_preview'):
+            if r.get("response_preview"):
                 output += f"Preview: {r['response_preview']}\n\n"
 
         output += f"\n=== ALL RESULTS ({len(results)} IDs tested) ===\n"
         for r in results:
-            if 'error' in r:
+            if "error" in r:
                 output += f"ID {r['id']}: Error - {r['error']}\n"
             else:
-                status = "ACCESSIBLE" if r['accessible'] else "DENIED"
+                status = "ACCESSIBLE" if r["accessible"] else "DENIED"
                 output += f"ID {r['id']}: {status} (HTTP {r['status']})\n"
 
         return output
@@ -449,9 +449,9 @@ async def test_authorization(
         "description": {"type": "string", "description": "Detailed description"},
         "request": {"type": "string", "description": "Example malicious request"},
         "response": {"type": "string", "description": "Response showing vulnerability"},
-        "remediation": {"type": "string", "description": "How to fix"}
+        "remediation": {"type": "string", "description": "How to fix"},
     },
-    category="api_test"
+    category="api_test",
 )
 async def report_api_finding(
     title: str,
@@ -461,7 +461,7 @@ async def report_api_finding(
     description: str,
     request: str,
     response: str,
-    remediation: str
+    remediation: str,
 ) -> str:
     """Report an API security finding."""
     return f"""API Security Finding Recorded:
@@ -570,7 +570,7 @@ class APITestAgent(BaseSecurityAgent):
         config: Optional[AgentConfig] = None,
         openapi_spec: Optional[str] = None,
         auth_token: Optional[str] = None,
-        headers: Optional[Dict[str, str]] = None
+        headers: Optional[Dict[str, str]] = None,
     ):
         """
         Initialize the API testing agent.
@@ -583,7 +583,7 @@ class APITestAgent(BaseSecurityAgent):
             headers: Additional headers to include in requests
         """
         super().__init__(config)
-        self.base_url = base_url.rstrip('/')
+        self.base_url = base_url.rstrip("/")
         self.openapi_spec = openapi_spec
         self.auth_token = auth_token
         self.headers = headers or {}
@@ -606,17 +606,20 @@ class APITestAgent(BaseSecurityAgent):
                     "url": {"type": "string", "description": "Full URL"},
                     "headers": {"type": "object", "description": "Optional headers"},
                     "body": {"type": "string", "description": "Optional JSON body"},
-                    "params": {"type": "object", "description": "Query parameters"}
+                    "params": {"type": "object", "description": "Query parameters"},
                 },
-                "required": ["method", "url"]
+                "required": ["method", "url"],
             },
             {
                 "name": "parse_openapi",
                 "description": "Parse OpenAPI/Swagger specification",
                 "parameters": {
-                    "spec_url_or_content": {"type": "string", "description": "URL or content of spec"}
+                    "spec_url_or_content": {
+                        "type": "string",
+                        "description": "URL or content of spec",
+                    }
                 },
-                "required": ["spec_url_or_content"]
+                "required": ["spec_url_or_content"],
             },
             {
                 "name": "fuzz_parameter",
@@ -627,9 +630,9 @@ class APITestAgent(BaseSecurityAgent):
                     "param_name": {"type": "string"},
                     "param_location": {"type": "string"},
                     "payloads": {"type": "array"},
-                    "headers": {"type": "object"}
+                    "headers": {"type": "object"},
                 },
-                "required": ["base_url", "method", "param_name", "param_location", "payloads"]
+                "required": ["base_url", "method", "param_name", "param_location", "payloads"],
             },
             {
                 "name": "test_authentication",
@@ -637,9 +640,9 @@ class APITestAgent(BaseSecurityAgent):
                 "parameters": {
                     "base_url": {"type": "string"},
                     "auth_endpoint": {"type": "string"},
-                    "test_credentials": {"type": "array"}
+                    "test_credentials": {"type": "array"},
                 },
-                "required": ["base_url", "auth_endpoint", "test_credentials"]
+                "required": ["base_url", "auth_endpoint", "test_credentials"],
             },
             {
                 "name": "test_authorization",
@@ -647,9 +650,9 @@ class APITestAgent(BaseSecurityAgent):
                 "parameters": {
                     "url": {"type": "string"},
                     "auth_header": {"type": "string"},
-                    "test_ids": {"type": "array"}
+                    "test_ids": {"type": "array"},
                 },
-                "required": ["url", "auth_header", "test_ids"]
+                "required": ["url", "auth_header", "test_ids"],
             },
             {
                 "name": "report_api_finding",
@@ -662,10 +665,19 @@ class APITestAgent(BaseSecurityAgent):
                     "description": {"type": "string"},
                     "request": {"type": "string"},
                     "response": {"type": "string"},
-                    "remediation": {"type": "string"}
+                    "remediation": {"type": "string"},
                 },
-                "required": ["title", "severity", "endpoint", "method", "description", "request", "response", "remediation"]
-            }
+                "required": [
+                    "title",
+                    "severity",
+                    "endpoint",
+                    "method",
+                    "description",
+                    "request",
+                    "response",
+                    "remediation",
+                ],
+            },
         ]
 
     async def run(self, initial_message: Optional[str] = None) -> AgentResult:
@@ -687,7 +699,9 @@ class APITestAgent(BaseSecurityAgent):
             message += "No OpenAPI spec provided. Start by discovering endpoints through common paths and responses.\n\n"
 
         if self.headers:
-            message += f"Use these headers for authenticated requests: {json.dumps(self.headers)}\n\n"
+            message += (
+                f"Use these headers for authenticated requests: {json.dumps(self.headers)}\n\n"
+            )
 
         message += """Testing priorities:
 1. Map all endpoints and parameters

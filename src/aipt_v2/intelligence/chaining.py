@@ -13,25 +13,26 @@ Example Chains:
 This module helps pentesters demonstrate real-world attack impact
 by showing how multiple "medium" findings can combine into "critical" risks.
 """
+
 from __future__ import annotations
 
+import hashlib
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any
-import hashlib
 
 # Import canonical VulnerabilityType from models to ensure consistency
 # across the entire application. This prevents enum mismatch errors.
 from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
-
 
 logger = logging.getLogger(__name__)
 
 
 class ChainType(Enum):
     """Types of vulnerability chains"""
+
     DATA_EXFILTRATION = "data_exfiltration"
     ACCOUNT_TAKEOVER = "account_takeover"
     PRIVILEGE_ESCALATION = "privilege_escalation"
@@ -44,16 +45,18 @@ class ChainType(Enum):
 
 class ChainImpact(Enum):
     """Business impact levels"""
+
     CATASTROPHIC = "catastrophic"  # Full compromise, data breach
-    SEVERE = "severe"              # Significant access, major data exposure
-    SIGNIFICANT = "significant"    # Limited access, some data exposure
-    MODERATE = "moderate"          # Potential for escalation
-    MINIMAL = "minimal"            # Low impact chain
+    SEVERE = "severe"  # Significant access, major data exposure
+    SIGNIFICANT = "significant"  # Limited access, some data exposure
+    MODERATE = "moderate"  # Potential for escalation
+    MINIMAL = "minimal"  # Low impact chain
 
 
 @dataclass
 class ChainLink:
     """A single step in an attack chain"""
+
     finding: Finding
     step_number: int
     action: str  # What the attacker does at this step
@@ -75,6 +78,7 @@ class ChainLink:
 @dataclass
 class AttackChain:
     """A complete attack chain combining multiple vulnerabilities"""
+
     chain_id: str
     name: str
     chain_type: ChainType
@@ -113,9 +117,7 @@ class AttackChain:
         if not self.links:
             return 1.0
 
-        individual_max = max(
-            (l.finding.cvss_score or 0) for l in self.links
-        )
+        individual_max = max((l.finding.cvss_score or 0) for l in self.links)
 
         # Chain severity bonus based on type
         chain_bonus = {
@@ -156,142 +158,159 @@ class AttackChain:
 CHAIN_RULES: dict[VulnerabilityType, list[tuple[VulnerabilityType, str, str]]] = {
     # SSRF can lead to...
     VulnerabilityType.SSRF: [
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Use SSRF to access internal endpoints",
-         "Read internal service data"),
-        (VulnerabilityType.RCE,
-         "SSRF to internal admin panel with RCE",
-         "Execute commands on internal systems"),
-        (VulnerabilityType.SQL_INJECTION,
-         "SSRF to internal database interface",
-         "Query internal databases"),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Use SSRF to access internal endpoints",
+            "Read internal service data",
+        ),
+        (
+            VulnerabilityType.RCE,
+            "SSRF to internal admin panel with RCE",
+            "Execute commands on internal systems",
+        ),
+        (
+            VulnerabilityType.SQL_INJECTION,
+            "SSRF to internal database interface",
+            "Query internal databases",
+        ),
     ],
-
     # SQL Injection can lead to...
     VulnerabilityType.SQL_INJECTION: [
-        (VulnerabilityType.AUTH_BYPASS,
-         "Extract credentials from database",
-         "Authenticate as any user"),
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Dump database tables",
-         "Access all stored data"),
-        (VulnerabilityType.RCE,
-         "SQL injection to xp_cmdshell or file write",
-         "Execute system commands"),
-        (VulnerabilityType.PRIVILEGE_ESCALATION,
-         "Modify user roles in database",
-         "Elevate to admin privileges"),
+        (
+            VulnerabilityType.AUTH_BYPASS,
+            "Extract credentials from database",
+            "Authenticate as any user",
+        ),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Dump database tables",
+            "Access all stored data",
+        ),
+        (
+            VulnerabilityType.RCE,
+            "SQL injection to xp_cmdshell or file write",
+            "Execute system commands",
+        ),
+        (
+            VulnerabilityType.PRIVILEGE_ESCALATION,
+            "Modify user roles in database",
+            "Elevate to admin privileges",
+        ),
     ],
-
     # XSS can lead to...
     VulnerabilityType.XSS_STORED: [
-        (VulnerabilityType.AUTH_BYPASS,
-         "Steal session cookies via XSS",
-         "Hijack user sessions"),
-        (VulnerabilityType.CSRF,
-         "Use XSS to perform actions as victim",
-         "Execute privileged actions"),
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Exfiltrate page data via XSS",
-         "Steal sensitive displayed information"),
+        (VulnerabilityType.AUTH_BYPASS, "Steal session cookies via XSS", "Hijack user sessions"),
+        (
+            VulnerabilityType.CSRF,
+            "Use XSS to perform actions as victim",
+            "Execute privileged actions",
+        ),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Exfiltrate page data via XSS",
+            "Steal sensitive displayed information",
+        ),
     ],
     VulnerabilityType.XSS_REFLECTED: [
-        (VulnerabilityType.AUTH_BYPASS,
-         "Phish credentials via reflected XSS",
-         "Capture user credentials"),
+        (
+            VulnerabilityType.AUTH_BYPASS,
+            "Phish credentials via reflected XSS",
+            "Capture user credentials",
+        ),
     ],
-
     # File Upload can lead to...
     VulnerabilityType.FILE_UPLOAD: [
-        (VulnerabilityType.RCE,
-         "Upload web shell",
-         "Execute arbitrary code"),
-        (VulnerabilityType.FILE_INCLUSION,
-         "Upload malicious include file",
-         "Include and execute uploaded code"),
+        (VulnerabilityType.RCE, "Upload web shell", "Execute arbitrary code"),
+        (
+            VulnerabilityType.FILE_INCLUSION,
+            "Upload malicious include file",
+            "Include and execute uploaded code",
+        ),
     ],
-
     # File Inclusion can lead to...
     VulnerabilityType.FILE_INCLUSION: [
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Read sensitive configuration files",
-         "Access credentials and secrets"),
-        (VulnerabilityType.RCE,
-         "Include remote file or log poisoning",
-         "Execute arbitrary code"),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Read sensitive configuration files",
+            "Access credentials and secrets",
+        ),
+        (VulnerabilityType.RCE, "Include remote file or log poisoning", "Execute arbitrary code"),
     ],
-
     # Auth Bypass can lead to...
     VulnerabilityType.AUTH_BYPASS: [
-        (VulnerabilityType.PRIVILEGE_ESCALATION,
-         "Access admin functionality",
-         "Perform administrative actions"),
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Access protected user data",
-         "View all user information"),
-        (VulnerabilityType.IDOR,
-         "Access other users' resources",
-         "Modify or steal user data"),
+        (
+            VulnerabilityType.PRIVILEGE_ESCALATION,
+            "Access admin functionality",
+            "Perform administrative actions",
+        ),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Access protected user data",
+            "View all user information",
+        ),
+        (VulnerabilityType.IDOR, "Access other users' resources", "Modify or steal user data"),
     ],
-
     # IDOR can lead to...
     VulnerabilityType.IDOR: [
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Enumerate and access all records",
-         "Mass data extraction"),
-        (VulnerabilityType.PRIVILEGE_ESCALATION,
-         "Modify own role/permissions",
-         "Elevate account privileges"),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Enumerate and access all records",
+            "Mass data extraction",
+        ),
+        (
+            VulnerabilityType.PRIVILEGE_ESCALATION,
+            "Modify own role/permissions",
+            "Elevate account privileges",
+        ),
     ],
-
     # Open Redirect can lead to...
     VulnerabilityType.OPEN_REDIRECT: [
-        (VulnerabilityType.AUTH_BYPASS,
-         "Redirect OAuth flow to attacker",
-         "Steal authentication tokens"),
-        (VulnerabilityType.XSS_REFLECTED,
-         "Chain with XSS via redirect",
-         "Execute JavaScript in context"),
+        (
+            VulnerabilityType.AUTH_BYPASS,
+            "Redirect OAuth flow to attacker",
+            "Steal authentication tokens",
+        ),
+        (
+            VulnerabilityType.XSS_REFLECTED,
+            "Chain with XSS via redirect",
+            "Execute JavaScript in context",
+        ),
     ],
-
     # XXE can lead to...
     VulnerabilityType.XXE: [
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Read local files via XXE",
-         "Access server files"),
-        (VulnerabilityType.SSRF,
-         "XXE to make server-side requests",
-         "Access internal network"),
-        (VulnerabilityType.RCE,
-         "XXE with expect:// wrapper",
-         "Execute system commands"),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Read local files via XXE",
+            "Access server files",
+        ),
+        (VulnerabilityType.SSRF, "XXE to make server-side requests", "Access internal network"),
+        (VulnerabilityType.RCE, "XXE with expect:// wrapper", "Execute system commands"),
     ],
-
     # Command Injection leads to RCE
     VulnerabilityType.COMMAND_INJECTION: [
-        (VulnerabilityType.RCE,
-         "Execute arbitrary commands",
-         "Full system compromise"),
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Read files and environment",
-         "Access secrets and configuration"),
+        (VulnerabilityType.RCE, "Execute arbitrary commands", "Full system compromise"),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Read files and environment",
+            "Access secrets and configuration",
+        ),
     ],
-
     # Weak Crypto can lead to...
     VulnerabilityType.WEAK_CRYPTO: [
-        (VulnerabilityType.AUTH_BYPASS,
-         "Crack or forge authentication tokens",
-         "Authenticate as any user"),
-        (VulnerabilityType.INFORMATION_DISCLOSURE,
-         "Decrypt sensitive data",
-         "Access protected information"),
+        (
+            VulnerabilityType.AUTH_BYPASS,
+            "Crack or forge authentication tokens",
+            "Authenticate as any user",
+        ),
+        (
+            VulnerabilityType.INFORMATION_DISCLOSURE,
+            "Decrypt sensitive data",
+            "Access protected information",
+        ),
     ],
-
     # Insecure Deserialization
     VulnerabilityType.INSECURE_DESERIALIZATION: [
-        (VulnerabilityType.RCE,
-         "Craft malicious serialized object",
-         "Execute arbitrary code"),
+        (VulnerabilityType.RCE, "Craft malicious serialized object", "Execute arbitrary code"),
     ],
 }
 
@@ -392,9 +411,7 @@ class VulnerabilityChainer:
                 # Check if findings are related (same host/path)
                 if self._findings_related(start, next_finding):
                     # Recurse to find longer chains
-                    deeper_chains = self._find_chains_from(
-                        next_finding, by_type, current_path
-                    )
+                    deeper_chains = self._find_chains_from(next_finding, by_type, current_path)
                     chains.extend(deeper_chains)
 
             # Even without a matching finding, if we have 2+ steps, record the chain
@@ -410,6 +427,7 @@ class VulnerabilityChainer:
         # Same host
         try:
             from urllib.parse import urlparse
+
             host1 = urlparse(f1.url).netloc
             host2 = urlparse(f2.url).netloc
             if host1 and host2 and host1 == host2:
@@ -440,8 +458,7 @@ class VulnerabilityChainer:
         for i, finding in enumerate(findings):
             # Get action/outcome from chain rules
             action, outcome = self._get_step_details(
-                finding,
-                findings[i + 1] if i + 1 < len(findings) else None
+                finding, findings[i + 1] if i + 1 < len(findings) else None
             )
 
             link = ChainLink(
@@ -493,16 +510,24 @@ class VulnerabilityChainer:
         # Default based on vulnerability type
         defaults = {
             VulnerabilityType.SQL_INJECTION: ("Execute SQL injection", "Access database"),
-            VulnerabilityType.XSS_STORED: ("Inject stored XSS payload", "Execute JavaScript in user browsers"),
+            VulnerabilityType.XSS_STORED: (
+                "Inject stored XSS payload",
+                "Execute JavaScript in user browsers",
+            ),
             VulnerabilityType.SSRF: ("Exploit SSRF vulnerability", "Make server-side requests"),
             VulnerabilityType.RCE: ("Execute remote code", "Full system access"),
-            VulnerabilityType.AUTH_BYPASS: ("Bypass authentication", "Access as authenticated user"),
-            VulnerabilityType.IDOR: ("Access unauthorized resources", "View/modify other users' data"),
+            VulnerabilityType.AUTH_BYPASS: (
+                "Bypass authentication",
+                "Access as authenticated user",
+            ),
+            VulnerabilityType.IDOR: (
+                "Access unauthorized resources",
+                "View/modify other users' data",
+            ),
         }
 
         return defaults.get(
-            current.vuln_type,
-            (f"Exploit {current.vuln_type.value}", "Advance attack")
+            current.vuln_type, (f"Exploit {current.vuln_type.value}", "Advance attack")
         )
 
     def _classify_chain_type(self, findings: list[Finding]) -> ChainType:
@@ -514,7 +539,10 @@ class VulnerabilityChainer:
             return ChainType.REMOTE_CODE_EXECUTION
 
         # Check for data exfiltration
-        if VulnerabilityType.SQL_INJECTION in types and VulnerabilityType.INFORMATION_DISCLOSURE in types:
+        if (
+            VulnerabilityType.SQL_INJECTION in types
+            and VulnerabilityType.INFORMATION_DISCLOSURE in types
+        ):
             return ChainType.DATA_EXFILTRATION
 
         # Check for account takeover
@@ -586,7 +614,13 @@ class VulnerabilityChainer:
         ]
 
         if chain_type in escalation_types:
-            severity_order = [Severity.INFO, Severity.LOW, Severity.MEDIUM, Severity.HIGH, Severity.CRITICAL]
+            severity_order = [
+                Severity.INFO,
+                Severity.LOW,
+                Severity.MEDIUM,
+                Severity.HIGH,
+                Severity.CRITICAL,
+            ]
             current_idx = severity_order.index(max_severity)
             escalated_idx = min(current_idx + 1, len(severity_order) - 1)
             return severity_order[escalated_idx]
@@ -662,30 +696,36 @@ class VulnerabilityChainer:
     ) -> str:
         """Describe the business impact of the chain"""
         descriptions = {
-            (ChainType.REMOTE_CODE_EXECUTION, ChainImpact.CATASTROPHIC):
-                "Complete server compromise. Attacker can access all data, install backdoors, "
-                "pivot to internal networks, and cause widespread damage.",
-
-            (ChainType.DATA_EXFILTRATION, ChainImpact.SEVERE):
-                "Mass data breach potential. Sensitive customer data, credentials, and "
-                "proprietary information could be extracted.",
-
-            (ChainType.ACCOUNT_TAKEOVER, ChainImpact.SEVERE):
-                "Any user account can be compromised. Attackers could access admin accounts, "
-                "steal user data, or perform actions as victims.",
-
-            (ChainType.PRIVILEGE_ESCALATION, ChainImpact.SIGNIFICANT):
-                "Unauthorized access to privileged functionality. Attackers could modify "
-                "configurations, access restricted data, or compromise other users.",
-
-            (ChainType.INTERNAL_NETWORK_ACCESS, ChainImpact.SEVERE):
-                "Access to internal network services. Attackers could reach databases, "
-                "admin panels, and other sensitive internal resources.",
+            (
+                ChainType.REMOTE_CODE_EXECUTION,
+                ChainImpact.CATASTROPHIC,
+            ): "Complete server compromise. Attacker can access all data, install backdoors, "
+            "pivot to internal networks, and cause widespread damage.",
+            (
+                ChainType.DATA_EXFILTRATION,
+                ChainImpact.SEVERE,
+            ): "Mass data breach potential. Sensitive customer data, credentials, and "
+            "proprietary information could be extracted.",
+            (
+                ChainType.ACCOUNT_TAKEOVER,
+                ChainImpact.SEVERE,
+            ): "Any user account can be compromised. Attackers could access admin accounts, "
+            "steal user data, or perform actions as victims.",
+            (
+                ChainType.PRIVILEGE_ESCALATION,
+                ChainImpact.SIGNIFICANT,
+            ): "Unauthorized access to privileged functionality. Attackers could modify "
+            "configurations, access restricted data, or compromise other users.",
+            (
+                ChainType.INTERNAL_NETWORK_ACCESS,
+                ChainImpact.SEVERE,
+            ): "Access to internal network services. Attackers could reach databases, "
+            "admin panels, and other sensitive internal resources.",
         }
 
         return descriptions.get(
             (chain_type, impact),
-            f"Potential for {impact.value} impact through {chain_type.value} attack."
+            f"Potential for {impact.value} impact through {chain_type.value} attack.",
         )
 
     def _suggest_remediation(self, links: list[ChainLink]) -> str:

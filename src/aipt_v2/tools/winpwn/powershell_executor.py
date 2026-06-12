@@ -26,7 +26,7 @@ import tempfile
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional, Callable
+from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PowerShellResult:
     """Result of PowerShell execution."""
+
     success: bool
     exit_code: int
     stdout: str
@@ -68,7 +69,7 @@ class PowerShellExecutor:
         use_pwsh_core: bool = False,
         execution_policy: str = "Bypass",
         encoding: str = "utf-8",
-        working_dir: Optional[str] = None
+        working_dir: Optional[str] = None,
     ):
         """
         Initialize PowerShell executor.
@@ -87,23 +88,14 @@ class PowerShellExecutor:
         self._temp_scripts: List[str] = []
         self._running_processes: List[asyncio.subprocess.Process] = []
 
-    def _detect_powershell(
-        self,
-        custom_path: Optional[str],
-        use_pwsh_core: bool
-    ) -> str:
+    def _detect_powershell(self, custom_path: Optional[str], use_pwsh_core: bool) -> str:
         """Detect available PowerShell executable."""
         if custom_path and Path(custom_path).exists():
             return custom_path
 
         # Check for PowerShell Core first if preferred
         if use_pwsh_core:
-            pwsh_paths = [
-                "/usr/bin/pwsh",
-                "/usr/local/bin/pwsh",
-                "pwsh",
-                "pwsh.exe"
-            ]
+            pwsh_paths = ["/usr/bin/pwsh", "/usr/local/bin/pwsh", "pwsh", "pwsh.exe"]
             for path in pwsh_paths:
                 if self._command_exists(path):
                     return path
@@ -119,27 +111,21 @@ class PowerShellExecutor:
     def _command_exists(cmd: str) -> bool:
         """Check if command exists on system."""
         try:
-            subprocess.run(
-                [cmd, "-Version"],
-                capture_output=True,
-                timeout=5
-            )
+            subprocess.run([cmd, "-Version"], capture_output=True, timeout=5)
             return True
         except (subprocess.SubprocessError, FileNotFoundError, OSError):
             return False
 
     def _build_command(
-        self,
-        script: str,
-        script_file: bool = False,
-        additional_args: List[str] = None
+        self, script: str, script_file: bool = False, additional_args: List[str] = None
     ) -> List[str]:
         """Build PowerShell command line."""
         cmd = [
             self.powershell_path,
             "-NoProfile",
             "-NonInteractive",
-            "-ExecutionPolicy", self.execution_policy
+            "-ExecutionPolicy",
+            self.execution_policy,
         ]
 
         if additional_args:
@@ -153,10 +139,7 @@ class PowerShellExecutor:
         return cmd
 
     async def execute_command(
-        self,
-        command: str,
-        timeout: int = 120,
-        env: Dict[str, str] = None
+        self, command: str, timeout: int = 120, env: Dict[str, str] = None
     ) -> PowerShellResult:
         """
         Execute a PowerShell command.
@@ -183,15 +166,12 @@ class PowerShellExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.working_dir,
-                env=exec_env
+                env=exec_env,
             )
             self._running_processes.append(process)
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout
-                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
                 execution_time = asyncio.get_event_loop().time() - start_time
 
@@ -201,7 +181,7 @@ class PowerShellExecutor:
                     stdout=stdout.decode(self.encoding, errors="replace"),
                     stderr=stderr.decode(self.encoding, errors="replace"),
                     execution_time=execution_time,
-                    command=command
+                    command=command,
                 )
 
             except asyncio.TimeoutError:
@@ -216,7 +196,7 @@ class PowerShellExecutor:
                     stderr=f"Timeout after {timeout} seconds",
                     execution_time=execution_time,
                     command=command,
-                    metadata={"timeout": True}
+                    metadata={"timeout": True},
                 )
 
             finally:
@@ -230,7 +210,7 @@ class PowerShellExecutor:
                 stdout="",
                 stderr=f"PowerShell not found: {self.powershell_path}",
                 execution_time=0,
-                command=command
+                command=command,
             )
         except Exception as e:
             logger.exception(f"PowerShell execution error: {e}")
@@ -240,7 +220,7 @@ class PowerShellExecutor:
                 stdout="",
                 stderr=str(e),
                 execution_time=asyncio.get_event_loop().time() - start_time,
-                command=command
+                command=command,
             )
 
     async def execute_script(
@@ -248,7 +228,7 @@ class PowerShellExecutor:
         script_content: str,
         timeout: int = 300,
         env: Dict[str, str] = None,
-        cleanup: bool = True
+        cleanup: bool = True,
     ) -> PowerShellResult:
         """
         Execute a PowerShell script from content.
@@ -266,21 +246,14 @@ class PowerShellExecutor:
         """
         # Create temp script file
         with tempfile.NamedTemporaryFile(
-            mode="w",
-            suffix=".ps1",
-            delete=False,
-            encoding=self.encoding
+            mode="w", suffix=".ps1", delete=False, encoding=self.encoding
         ) as f:
             f.write(script_content)
             script_path = f.name
             self._temp_scripts.append(script_path)
 
         try:
-            result = await self.execute_script_file(
-                script_path,
-                timeout=timeout,
-                env=env
-            )
+            result = await self.execute_script_file(script_path, timeout=timeout, env=env)
             result.script_path = script_path
             return result
 
@@ -293,7 +266,7 @@ class PowerShellExecutor:
         script_path: str,
         timeout: int = 300,
         arguments: List[str] = None,
-        env: Dict[str, str] = None
+        env: Dict[str, str] = None,
     ) -> PowerShellResult:
         """
         Execute a PowerShell script file.
@@ -314,7 +287,7 @@ class PowerShellExecutor:
                 stdout="",
                 stderr=f"Script not found: {script_path}",
                 execution_time=0,
-                script_path=script_path
+                script_path=script_path,
             )
 
         start_time = asyncio.get_event_loop().time()
@@ -334,15 +307,12 @@ class PowerShellExecutor:
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
                 cwd=self.working_dir,
-                env=exec_env
+                env=exec_env,
             )
             self._running_processes.append(process)
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout
-                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
 
                 execution_time = asyncio.get_event_loop().time() - start_time
 
@@ -352,7 +322,7 @@ class PowerShellExecutor:
                     stdout=stdout.decode(self.encoding, errors="replace"),
                     stderr=stderr.decode(self.encoding, errors="replace"),
                     execution_time=execution_time,
-                    script_path=script_path
+                    script_path=script_path,
                 )
 
             except asyncio.TimeoutError:
@@ -367,7 +337,7 @@ class PowerShellExecutor:
                     stderr=f"Script timeout after {timeout} seconds",
                     execution_time=execution_time,
                     script_path=script_path,
-                    metadata={"timeout": True}
+                    metadata={"timeout": True},
                 )
 
             finally:
@@ -382,7 +352,7 @@ class PowerShellExecutor:
                 stdout="",
                 stderr=str(e),
                 execution_time=asyncio.get_event_loop().time() - start_time,
-                script_path=script_path
+                script_path=script_path,
             )
 
     async def execute_with_loader(
@@ -390,7 +360,7 @@ class PowerShellExecutor:
         loader_command: str,
         function_call: str,
         timeout: int = 300,
-        env: Dict[str, str] = None
+        env: Dict[str, str] = None,
     ) -> PowerShellResult:
         """
         Execute with a script loader (IEX pattern).
@@ -451,7 +421,7 @@ class WinRMExecutor:
         password: str,
         domain: str = "",
         ssl: bool = False,
-        port: int = 5985
+        port: int = 5985,
     ):
         """
         Initialize WinRM executor.
@@ -478,11 +448,7 @@ class WinRMExecutor:
         protocol = "https" if self.ssl else "http"
         return f"{protocol}://{self.target}:{self.port}/wsman"
 
-    async def execute_command(
-        self,
-        command: str,
-        timeout: int = 120
-    ) -> PowerShellResult:
+    async def execute_command(self, command: str, timeout: int = 120) -> PowerShellResult:
         """
         Execute command on remote host via WinRM.
 
@@ -506,19 +472,14 @@ class WinRMExecutor:
                 stdout="",
                 stderr="pywinrm package not installed. Install with: pip install pywinrm",
                 execution_time=0,
-                command=command
+                command=command,
             )
 
         try:
             # Run in thread pool to not block async loop
             loop = asyncio.get_event_loop()
             result = await asyncio.wait_for(
-                loop.run_in_executor(
-                    None,
-                    self._execute_winrm,
-                    command
-                ),
-                timeout=timeout
+                loop.run_in_executor(None, self._execute_winrm, command), timeout=timeout
             )
 
             execution_time = asyncio.get_event_loop().time() - start_time
@@ -529,7 +490,7 @@ class WinRMExecutor:
                 stderr=result.std_err.decode("utf-8", errors="replace"),
                 execution_time=execution_time,
                 command=command,
-                metadata={"remote": True, "target": self.target}
+                metadata={"remote": True, "target": self.target},
             )
 
         except asyncio.TimeoutError:
@@ -540,7 +501,7 @@ class WinRMExecutor:
                 stderr=f"WinRM timeout after {timeout} seconds",
                 execution_time=asyncio.get_event_loop().time() - start_time,
                 command=command,
-                metadata={"timeout": True, "target": self.target}
+                metadata={"timeout": True, "target": self.target},
             )
         except Exception as e:
             return PowerShellResult(
@@ -550,7 +511,7 @@ class WinRMExecutor:
                 stderr=str(e),
                 execution_time=asyncio.get_event_loop().time() - start_time,
                 command=command,
-                metadata={"target": self.target}
+                metadata={"target": self.target},
             )
 
     def _execute_winrm(self, command: str):
@@ -565,7 +526,7 @@ class WinRMExecutor:
         session = winrm.Session(
             self._get_connection_url(),
             auth=(user, self.password),
-            server_cert_validation="ignore" if self.ssl else "validate"
+            server_cert_validation="ignore" if self.ssl else "validate",
         )
 
         return session.run_ps(command)

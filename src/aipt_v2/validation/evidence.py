@@ -28,19 +28,21 @@ logger = logging.getLogger(__name__)
 
 class EvidenceType(str, Enum):
     """Types of evidence that can be collected."""
-    HTTP_EXCHANGE = "http_exchange"      # Request/response pair
-    SCREENSHOT = "screenshot"             # Visual proof
-    DATA_EXTRACTION = "data_extraction"   # Extracted sensitive data
-    TIMING = "timing"                     # Time-based evidence
-    ERROR_MESSAGE = "error_message"       # Error/stack trace
-    CALLBACK = "callback"                 # Out-of-band callback
-    FILE_CONTENT = "file_content"         # Retrieved file content
-    COMMAND_OUTPUT = "command_output"     # RCE command output
+
+    HTTP_EXCHANGE = "http_exchange"  # Request/response pair
+    SCREENSHOT = "screenshot"  # Visual proof
+    DATA_EXTRACTION = "data_extraction"  # Extracted sensitive data
+    TIMING = "timing"  # Time-based evidence
+    ERROR_MESSAGE = "error_message"  # Error/stack trace
+    CALLBACK = "callback"  # Out-of-band callback
+    FILE_CONTENT = "file_content"  # Retrieved file content
+    COMMAND_OUTPUT = "command_output"  # RCE command output
 
 
 @dataclass
 class HTTPExchange:
     """HTTP request/response pair as evidence."""
+
     request_method: str
     request_url: str
     request_headers: dict = field(default_factory=dict)
@@ -91,7 +93,8 @@ class HTTPExchange:
 @dataclass
 class Screenshot:
     """Screenshot evidence."""
-    data: bytes                           # PNG image data
+
+    data: bytes  # PNG image data
     filename: str = ""
     description: str = ""
     timestamp: datetime = field(default_factory=datetime.now)
@@ -121,6 +124,7 @@ class Evidence:
     Captures all proof needed to demonstrate a vulnerability
     is real and exploitable.
     """
+
     id: str = ""
     evidence_type: EvidenceType = EvidenceType.HTTP_EXCHANGE
     description: str = ""

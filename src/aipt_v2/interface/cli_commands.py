@@ -20,15 +20,14 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
 
@@ -39,6 +38,7 @@ console = Console()
 # ============================================================================
 # Scan Command
 # ============================================================================
+
 
 def add_scan_parser(subparsers: argparse._SubParsersAction) -> None:
     """Add the 'scan' subcommand parser."""
@@ -139,7 +139,8 @@ Examples:
 
     # Output
     scan_parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=str,
         help="Output directory for results (default: ./aiptx_results/<timestamp>)",
     )
@@ -169,14 +170,16 @@ Examples:
 
     # Verbosity
     scan_parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="count",
         default=0,
         help="Increase verbosity (-v, -vv, -vvv)",
     )
 
     scan_parser.add_argument(
-        "--quiet", "-q",
+        "--quiet",
+        "-q",
         action="store_true",
         help="Suppress non-essential output",
     )
@@ -187,14 +190,12 @@ Examples:
 async def run_scan_command(args: argparse.Namespace) -> int:
     """Execute the scan command."""
     from aipt_v2.execution.phase_runner import (
-        PhaseRunner,
         PhaseConfig,
+        PhaseRunner,
         PipelineConfig,
-        run_quick_scan,
-        run_full_scan,
     )
-    from aipt_v2.execution.tool_registry import ToolPhase, ToolRegistry, get_registry
     from aipt_v2.execution.result_collector import ResultCollector
+    from aipt_v2.execution.tool_registry import ToolPhase, get_registry
 
     # Setup output directory
     if args.output:
@@ -253,12 +254,14 @@ async def run_scan_command(args: argparse.Namespace) -> int:
             console.print(f"[yellow]Warning: No tools available for {phase.value} phase[/]")
             continue
 
-        phase_configs.append(PhaseConfig(
-            name=phase.value,
-            phase=phase,
-            tools=tools,
-            timeout=args.timeout,
-        ))
+        phase_configs.append(
+            PhaseConfig(
+                name=phase.value,
+                phase=phase,
+                tools=tools,
+                timeout=args.timeout,
+            )
+        )
 
     if not phase_configs:
         console.print("[red]Error: No phases could be configured (no tools available)[/]")
@@ -331,6 +334,7 @@ async def run_scan_command(args: argparse.Namespace) -> int:
         console.print(f"\n[red]Scan failed: {e}[/]")
         if args.verbose:
             import traceback
+
             console.print(traceback.format_exc())
         return 1
 
@@ -425,11 +429,11 @@ def _display_scan_summary(
 
     # Attack paths
     if paths:
-        summary_text.append(f"\n⚡ Attack Chains Detected: ", style="magenta")
+        summary_text.append("\n⚡ Attack Chains Detected: ", style="magenta")
         summary_text.append(f"{len(paths)}\n", style="bold magenta")
 
     # Output location
-    summary_text.append(f"\n📁 Results saved to: ", style="cyan")
+    summary_text.append("\n📁 Results saved to: ", style="cyan")
     summary_text.append(str(output_dir), style="bold white")
 
     panel = Panel(
@@ -461,6 +465,7 @@ def _generate_reports(
 # ============================================================================
 # Verify Command
 # ============================================================================
+
 
 def add_verify_parser(subparsers: argparse._SubParsersAction) -> None:
     """Add the 'verify' subcommand parser."""
@@ -515,7 +520,7 @@ Examples:
 
 async def run_verify_command(args: argparse.Namespace) -> int:
     """Execute the verify command."""
-    from aipt_v2.execution.tool_registry import get_registry, ToolPhase
+    from aipt_v2.execution.tool_registry import get_registry
     from aipt_v2.offline.readiness import OfflineReadinessChecker
 
     results = {
@@ -610,7 +615,11 @@ def _display_tool_status(tool_status: Dict) -> None:
         else:
             status_str = "[red]✗ Missing[/]"
 
-        version = status.version[:40] + "..." if status.version and len(status.version) > 40 else (status.version or "-")
+        version = (
+            status.version[:40] + "..."
+            if status.version and len(status.version) > 40
+            else (status.version or "-")
+        )
         path = status.path or "-"
 
         table.add_row(name, status_str, version, path)
@@ -682,7 +691,9 @@ def _display_ollama_status(ollama_status: Dict) -> None:
         else:
             console.print("  [yellow]No models installed. Run: ollama pull mistral:7b[/]")
     else:
-        console.print(f"  [red]✗[/] Ollama not available: {ollama_status.get('error', 'Unknown error')}")
+        console.print(
+            f"  [red]✗[/] Ollama not available: {ollama_status.get('error', 'Unknown error')}"
+        )
         console.print("    Start Ollama with: ollama serve")
 
 
@@ -736,6 +747,7 @@ async def _fix_offline_components(missing: List[str]) -> None:
 # Tools Command
 # ============================================================================
 
+
 def add_tools_parser(subparsers: argparse._SubParsersAction) -> None:
     """Add the 'tools' subcommand parser."""
     tools_parser = subparsers.add_parser(
@@ -776,10 +788,10 @@ def add_tools_parser(subparsers: argparse._SubParsersAction) -> None:
 async def run_tools_command(args: argparse.Namespace) -> int:
     """Execute the tools command."""
     from aipt_v2.execution.tool_registry import (
-        get_registry,
-        ToolPhase,
-        ToolCapability,
         TOOL_REGISTRY,
+        ToolCapability,
+        ToolPhase,
+        get_registry,
     )
 
     registry = get_registry()
@@ -802,13 +814,15 @@ async def run_tools_command(args: argparse.Namespace) -> int:
         output = []
         for tool in tools:
             status = registry.get_status(tool.name)
-            output.append({
-                "name": tool.name,
-                "binary": tool.binary,
-                "phase": tool.phase.value,
-                "capabilities": [c.value for c in tool.capabilities],
-                "available": status.available if status else False,
-            })
+            output.append(
+                {
+                    "name": tool.name,
+                    "binary": tool.binary,
+                    "phase": tool.phase.value,
+                    "capabilities": [c.value for c in tool.capabilities],
+                    "available": status.available if status else False,
+                }
+            )
         print(json.dumps(output, indent=2))
     else:
         _display_tools_table(tools, registry)
@@ -846,6 +860,7 @@ def _display_tools_table(tools: List, registry) -> None:
 # ============================================================================
 # Setup Command
 # ============================================================================
+
 
 def add_setup_parser(subparsers: argparse._SubParsersAction) -> None:
     """Add the 'setup' subcommand parser."""
@@ -891,7 +906,6 @@ def add_setup_parser(subparsers: argparse._SubParsersAction) -> None:
 async def run_setup_command(args: argparse.Namespace) -> int:
     """Execute the setup command."""
     from aipt_v2.offline.data_manager import OfflineDataManager
-    from aipt_v2.offline.wordlists import WordlistManager
 
     data_dir = Path(args.data_dir) if args.data_dir else Path.home() / ".aiptx" / "data"
     data_dir.mkdir(parents=True, exist_ok=True)
@@ -938,6 +952,7 @@ async def run_setup_command(args: argparse.Namespace) -> int:
 # ============================================================================
 # Main CLI Entry
 # ============================================================================
+
 
 def create_parser() -> argparse.ArgumentParser:
     """Create the main argument parser with subcommands."""
