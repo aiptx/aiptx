@@ -45,11 +45,11 @@ jobs:
         id: scan
         with:
           target: '.'
-          mode: \${{ github.event.inputs.scan-mode || 'standard' }}
+          mode: ${{ github.event.inputs.scan-mode || 'standard' }}
           fail-on-severity: 'high'
           upload-sarif: 'true'
           create-pr-comment: 'true'
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Upload scan artifacts
         if: always()
@@ -64,7 +64,7 @@ jobs:
       - name: Check scan results
         if: steps.scan.outputs.scan-status == 'failed'
         run: |
-          echo "::error::Security scan failed with \${{ steps.scan.outputs.findings-count }} findings"
-          echo "Critical: \${{ steps.scan.outputs.critical-count }}"
-          echo "High: \${{ steps.scan.outputs.high-count }}"
+          echo "::error::Security scan failed with ${{ steps.scan.outputs.findings-count }} findings"
+          echo "Critical: ${{ steps.scan.outputs.critical-count }}"
+          echo "High: ${{ steps.scan.outputs.high-count }}"
           exit 1
