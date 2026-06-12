@@ -3,6 +3,7 @@ AIPT Web Scanner
 
 Built-in web vulnerability scanner for common issues.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class WebScanConfig:
     """Web scanner configuration"""
+
     # Checks to perform
     check_headers: bool = True
     check_ssl: bool = True
@@ -41,17 +43,44 @@ class WebScanConfig:
     headers: dict[str, str] = field(default_factory=dict)
 
     # Directory enumeration
-    common_dirs: list[str] = field(default_factory=lambda: [
-        "admin", "administrator", "wp-admin", "login", "dashboard",
-        "api", "api/v1", "api/v2", "graphql",
-        "backup", "backups", "db", "database",
-        "config", "configuration", "settings",
-        "test", "testing", "dev", "development", "staging",
-        "uploads", "upload", "files", "media",
-        ".git", ".svn", ".env", ".htaccess",
-        "phpinfo.php", "info.php", "test.php",
-        "server-status", "server-info",
-    ])
+    common_dirs: list[str] = field(
+        default_factory=lambda: [
+            "admin",
+            "administrator",
+            "wp-admin",
+            "login",
+            "dashboard",
+            "api",
+            "api/v1",
+            "api/v2",
+            "graphql",
+            "backup",
+            "backups",
+            "db",
+            "database",
+            "config",
+            "configuration",
+            "settings",
+            "test",
+            "testing",
+            "dev",
+            "development",
+            "staging",
+            "uploads",
+            "upload",
+            "files",
+            "media",
+            ".git",
+            ".svn",
+            ".env",
+            ".htaccess",
+            "phpinfo.php",
+            "info.php",
+            "test.php",
+            "server-status",
+            "server-info",
+        ]
+    )
 
 
 class WebScanner(BaseScanner):
@@ -202,29 +231,33 @@ class WebScanner(BaseScanner):
 
             for header, info in security_headers.items():
                 if header.lower() not in [h.lower() for h in response.headers.keys()]:
-                    findings.append(ScanFinding(
-                        title=f"Missing Security Header: {header}",
-                        severity=info["severity"],
-                        description=info["description"],
-                        url=url,
-                        scanner="web_scanner",
-                        tags=["header", "security"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title=f"Missing Security Header: {header}",
+                            severity=info["severity"],
+                            description=info["description"],
+                            url=url,
+                            scanner="web_scanner",
+                            tags=["header", "security"],
+                        )
+                    )
 
             # Check for information disclosure in headers
             sensitive_headers = ["X-Powered-By", "Server", "X-AspNet-Version"]
             for header in sensitive_headers:
                 if header.lower() in [h.lower() for h in response.headers.keys()]:
                     value = response.headers.get(header, "")
-                    findings.append(ScanFinding(
-                        title=f"Information Disclosure: {header}",
-                        severity=ScanSeverity.LOW,
-                        description=f"Header reveals: {value}",
-                        url=url,
-                        evidence=f"{header}: {value}",
-                        scanner="web_scanner",
-                        tags=["header", "disclosure"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title=f"Information Disclosure: {header}",
+                            severity=ScanSeverity.LOW,
+                            description=f"Header reveals: {value}",
+                            url=url,
+                            evidence=f"{header}: {value}",
+                            scanner="web_scanner",
+                            tags=["header", "disclosure"],
+                        )
+                    )
 
         except Exception as e:
             logger.debug(f"Header check error: {e}")
@@ -237,20 +270,22 @@ class WebScanner(BaseScanner):
 
         parsed = urlparse(url)
         if parsed.scheme != "https":
-            findings.append(ScanFinding(
-                title="Site Not Using HTTPS",
-                severity=ScanSeverity.HIGH,
-                description="Site is not using HTTPS. All traffic is unencrypted.",
-                url=url,
-                scanner="web_scanner",
-                tags=["ssl", "encryption"],
-            ))
+            findings.append(
+                ScanFinding(
+                    title="Site Not Using HTTPS",
+                    severity=ScanSeverity.HIGH,
+                    description="Site is not using HTTPS. All traffic is unencrypted.",
+                    url=url,
+                    scanner="web_scanner",
+                    tags=["ssl", "encryption"],
+                )
+            )
             return findings
 
         # Check for SSL issues
         try:
-            import ssl
             import socket
+            import ssl
 
             hostname = parsed.netloc.split(":")[0]
             port = int(parsed.port) if parsed.port else 443
@@ -262,27 +297,32 @@ class WebScanner(BaseScanner):
 
                     # Check expiry
                     from datetime import datetime
+
                     not_after = datetime.strptime(cert["notAfter"], "%b %d %H:%M:%S %Y %Z")
                     days_until_expiry = (not_after - datetime.utcnow()).days
 
                     if days_until_expiry < 0:
-                        findings.append(ScanFinding(
-                            title="SSL Certificate Expired",
-                            severity=ScanSeverity.HIGH,
-                            description=f"Certificate expired {abs(days_until_expiry)} days ago",
-                            url=url,
-                            scanner="web_scanner",
-                            tags=["ssl", "certificate"],
-                        ))
+                        findings.append(
+                            ScanFinding(
+                                title="SSL Certificate Expired",
+                                severity=ScanSeverity.HIGH,
+                                description=f"Certificate expired {abs(days_until_expiry)} days ago",
+                                url=url,
+                                scanner="web_scanner",
+                                tags=["ssl", "certificate"],
+                            )
+                        )
                     elif days_until_expiry < 30:
-                        findings.append(ScanFinding(
-                            title="SSL Certificate Expiring Soon",
-                            severity=ScanSeverity.MEDIUM,
-                            description=f"Certificate expires in {days_until_expiry} days",
-                            url=url,
-                            scanner="web_scanner",
-                            tags=["ssl", "certificate"],
-                        ))
+                        findings.append(
+                            ScanFinding(
+                                title="SSL Certificate Expiring Soon",
+                                severity=ScanSeverity.MEDIUM,
+                                description=f"Certificate expires in {days_until_expiry} days",
+                                url=url,
+                                scanner="web_scanner",
+                                tags=["ssl", "certificate"],
+                            )
+                        )
 
         except Exception as e:
             logger.debug(f"SSL check error: {e}")
@@ -301,28 +341,32 @@ class WebScanner(BaseScanner):
 
             for method in dangerous_methods:
                 if method in allowed.upper():
-                    findings.append(ScanFinding(
-                        title=f"Dangerous HTTP Method Allowed: {method}",
-                        severity=ScanSeverity.MEDIUM,
-                        description=f"HTTP {method} method is enabled on the server",
-                        url=url,
-                        evidence=f"Allow: {allowed}",
-                        scanner="web_scanner",
-                        tags=["method", "configuration"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title=f"Dangerous HTTP Method Allowed: {method}",
+                            severity=ScanSeverity.MEDIUM,
+                            description=f"HTTP {method} method is enabled on the server",
+                            url=url,
+                            evidence=f"Allow: {allowed}",
+                            scanner="web_scanner",
+                            tags=["method", "configuration"],
+                        )
+                    )
 
             # Check TRACE specifically
             try:
                 response = await self._client.request("TRACE", url)
                 if response.status_code == 200:
-                    findings.append(ScanFinding(
-                        title="HTTP TRACE Method Enabled",
-                        severity=ScanSeverity.MEDIUM,
-                        description="TRACE method is enabled, potential XST vulnerability",
-                        url=url,
-                        scanner="web_scanner",
-                        tags=["method", "xst"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title="HTTP TRACE Method Enabled",
+                            severity=ScanSeverity.MEDIUM,
+                            description="TRACE method is enabled, potential XST vulnerability",
+                            url=url,
+                            scanner="web_scanner",
+                            tags=["method", "xst"],
+                        )
+                    )
             except Exception:
                 pass
 
@@ -359,15 +403,17 @@ class WebScanner(BaseScanner):
                     found_paths.extend(matches)
 
                 if found_paths:
-                    findings.append(ScanFinding(
-                        title="Sensitive Paths in robots.txt",
-                        severity=ScanSeverity.LOW,
-                        description="robots.txt reveals potentially sensitive paths",
-                        url=robots_url,
-                        evidence="\n".join(found_paths[:10]),
-                        scanner="web_scanner",
-                        tags=["robots", "disclosure"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title="Sensitive Paths in robots.txt",
+                            severity=ScanSeverity.LOW,
+                            description="robots.txt reveals potentially sensitive paths",
+                            url=robots_url,
+                            evidence="\n".join(found_paths[:10]),
+                            scanner="web_scanner",
+                            tags=["robots", "disclosure"],
+                        )
+                    )
 
         except Exception as e:
             logger.debug(f"robots.txt check error: {e}")
@@ -393,14 +439,16 @@ class WebScanner(BaseScanner):
                     break
 
             if not found:
-                findings.append(ScanFinding(
-                    title="Missing security.txt",
-                    severity=ScanSeverity.INFO,
-                    description="No security.txt found. Consider adding one for vulnerability disclosure.",
-                    url=url,
-                    scanner="web_scanner",
-                    tags=["security.txt", "best-practice"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title="Missing security.txt",
+                        severity=ScanSeverity.INFO,
+                        description="No security.txt found. Consider adding one for vulnerability disclosure.",
+                        url=url,
+                        scanner="web_scanner",
+                        tags=["security.txt", "best-practice"],
+                    )
+                )
 
         except Exception as e:
             logger.debug(f"security.txt check error: {e}")

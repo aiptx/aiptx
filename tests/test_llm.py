@@ -5,12 +5,12 @@ Unit Tests for AIPT v2 LLM Module
 Tests for llm/ - Universal LLM interface via litellm.
 """
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
-import asyncio
+from unittest.mock import AsyncMock, Mock, patch
 
+import pytest
 
 # ============== LLMConfig Tests ==============
+
 
 class TestLLMConfig:
     """Tests for LLMConfig class."""
@@ -19,12 +19,14 @@ class TestLLMConfig:
         """Test model defaults from environment."""
         with patch.dict("os.environ", {"AIPT_LLM": "anthropic/claude-3-opus"}):
             from aipt_v2.llm.config import LLMConfig
+
             config = LLMConfig()
             assert config.model_name == "anthropic/claude-3-opus"
 
     def test_explicit_model_name(self):
         """Test explicit model name overrides env."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="openai/gpt-4")
         assert config.model_name == "openai/gpt-4"
 
@@ -33,9 +35,11 @@ class TestLLMConfig:
         with patch.dict("os.environ", {}, clear=True):
             # Remove AIPT_LLM if present
             import os
+
             os.environ.pop("AIPT_LLM", None)
 
             from aipt_v2.llm.config import LLMConfig
+
             config = LLMConfig()
             # Should default to "openai/gpt-4"
             assert config.model_name == "openai/gpt-4"
@@ -43,12 +47,14 @@ class TestLLMConfig:
     def test_prompt_caching_default(self):
         """Test prompt caching is enabled by default."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="test-model")
         assert config.enable_prompt_caching is True
 
     def test_prompt_caching_disabled(self):
         """Test prompt caching can be disabled."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="test-model", enable_prompt_caching=False)
         assert config.enable_prompt_caching is False
 
@@ -56,6 +62,7 @@ class TestLLMConfig:
         """Test timeout from environment variable."""
         with patch.dict("os.environ", {"LLM_TIMEOUT": "600"}):
             from aipt_v2.llm.config import LLMConfig
+
             config = LLMConfig(model_name="test-model")
             assert config.timeout == 600
 
@@ -63,21 +70,25 @@ class TestLLMConfig:
         """Test default timeout."""
         with patch.dict("os.environ", {}, clear=True):
             import os
+
             os.environ.pop("LLM_TIMEOUT", None)
 
             from aipt_v2.llm.config import LLMConfig
+
             config = LLMConfig(model_name="test-model")
             assert config.timeout == 300  # Default
 
     def test_prompt_modules_default(self):
         """Test prompt modules default to empty list."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="test-model")
         assert config.prompt_modules == []
 
     def test_prompt_modules_custom(self):
         """Test custom prompt modules."""
         from aipt_v2.llm.config import LLMConfig
+
         modules = ["recon", "exploit"]
         config = LLMConfig(model_name="test-model", prompt_modules=modules)
         assert config.prompt_modules == modules
@@ -85,62 +96,73 @@ class TestLLMConfig:
 
 # ============== Model Name Utilities Tests ==============
 
+
 class TestModelNameUtilities:
     """Tests for model name normalization and matching."""
 
     def test_normalize_basic_name(self):
         """Test basic model name normalization."""
         from aipt_v2.llm.llm import normalize_model_name
+
         assert normalize_model_name("GPT-4") == "gpt-4"
         assert normalize_model_name("Claude-3-Opus") == "claude-3-opus"
 
     def test_normalize_with_provider(self):
         """Test normalization strips provider prefix."""
         from aipt_v2.llm.llm import normalize_model_name
+
         assert normalize_model_name("openai/gpt-4") == "gpt-4"
         assert normalize_model_name("anthropic/claude-3-opus") == "claude-3-opus"
 
     def test_normalize_with_version(self):
         """Test normalization handles version suffixes."""
         from aipt_v2.llm.llm import normalize_model_name
+
         assert normalize_model_name("ollama/llama3:latest") == "llama3"
 
     def test_normalize_gguf_suffix(self):
         """Test normalization removes GGUF suffix."""
         from aipt_v2.llm.llm import normalize_model_name
+
         assert normalize_model_name("model-name-gguf") == "model-name"
 
     def test_normalize_whitespace(self):
         """Test normalization handles whitespace."""
         from aipt_v2.llm.llm import normalize_model_name
+
         assert normalize_model_name("  gpt-4  ") == "gpt-4"
 
     def test_model_matches_exact(self):
         """Test exact model matching."""
         from aipt_v2.llm.llm import model_matches
+
         assert model_matches("o1", ["o1"]) is True
         assert model_matches("gpt-4", ["gpt-4"]) is True
 
     def test_model_matches_wildcard(self):
         """Test wildcard model matching."""
         from aipt_v2.llm.llm import model_matches
+
         assert model_matches("o1-2024-12-17", ["o1*"]) is True
         assert model_matches("gpt-5-turbo", ["gpt-5*"]) is True
 
     def test_model_matches_with_provider(self):
         """Test model matching with provider prefix."""
         from aipt_v2.llm.llm import model_matches
+
         assert model_matches("openai/gpt-4", ["openai/gpt-4"]) is True
         assert model_matches("openai/gpt-4", ["gpt-4"]) is True
 
     def test_model_matches_case_insensitive(self):
         """Test case insensitive matching."""
         from aipt_v2.llm.llm import model_matches
+
         assert model_matches("GPT-4", ["gpt-4"]) is True
         assert model_matches("gpt-4", ["GPT-4"]) is True
 
 
 # ============== RequestStats Tests ==============
+
 
 class TestRequestStats:
     """Tests for RequestStats dataclass."""
@@ -148,6 +170,7 @@ class TestRequestStats:
     def test_default_values(self):
         """Test default RequestStats values."""
         from aipt_v2.llm.llm import RequestStats
+
         stats = RequestStats()
         assert stats.input_tokens == 0
         assert stats.output_tokens == 0
@@ -160,6 +183,7 @@ class TestRequestStats:
     def test_custom_values(self):
         """Test RequestStats with custom values."""
         from aipt_v2.llm.llm import RequestStats
+
         stats = RequestStats(
             input_tokens=100,
             output_tokens=50,
@@ -176,6 +200,7 @@ class TestRequestStats:
     def test_to_dict(self):
         """Test RequestStats serialization."""
         from aipt_v2.llm.llm import RequestStats
+
         stats = RequestStats(
             input_tokens=100,
             output_tokens=50,
@@ -192,12 +217,14 @@ class TestRequestStats:
 
 # ============== LLMResponse Tests ==============
 
+
 class TestLLMResponse:
     """Tests for LLMResponse dataclass."""
 
     def test_default_values(self):
         """Test default LLMResponse values."""
         from aipt_v2.llm.llm import LLMResponse, StepRole
+
         response = LLMResponse(content="Test response")
 
         assert response.content == "Test response"
@@ -209,6 +236,7 @@ class TestLLMResponse:
     def test_with_tool_invocations(self):
         """Test LLMResponse with tool invocations."""
         from aipt_v2.llm.llm import LLMResponse
+
         tools = [{"name": "nmap", "args": {"target": "example.com"}}]
         response = LLMResponse(
             content="Running nmap scan",
@@ -220,6 +248,7 @@ class TestLLMResponse:
     def test_with_scan_context(self):
         """Test LLMResponse with scan context."""
         from aipt_v2.llm.llm import LLMResponse
+
         response = LLMResponse(
             content="Test",
             scan_id="scan-123",
@@ -231,6 +260,7 @@ class TestLLMResponse:
 
 
 # ============== LLM Class Tests ==============
+
 
 class TestLLMClass:
     """Tests for LLM class."""
@@ -247,6 +277,7 @@ class TestLLMClass:
     def mock_config(self):
         """Create a mock LLM config."""
         from aipt_v2.llm.config import LLMConfig
+
         return LLMConfig(
             model_name="anthropic/claude-3-opus",
             enable_prompt_caching=True,
@@ -257,6 +288,7 @@ class TestLLMClass:
         """Test LLM initialization without agent."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             assert llm.config == mock_config
@@ -267,6 +299,7 @@ class TestLLMClass:
         """Test LLM with agent identity."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             llm.set_agent_identity("recon_agent", "agent-123")
@@ -278,6 +311,7 @@ class TestLLMClass:
         """Test Anthropic model detection."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             assert llm._is_anthropic_model() is True
@@ -285,10 +319,12 @@ class TestLLMClass:
     def test_is_not_anthropic_model(self, mock_litellm):
         """Test non-Anthropic model detection."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="openai/gpt-4")
 
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             assert llm._is_anthropic_model() is False
@@ -297,6 +333,7 @@ class TestLLMClass:
         """Test usage stats property."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             stats = llm.usage_stats
@@ -307,9 +344,12 @@ class TestLLMClass:
 
     def test_get_cache_config(self, mock_litellm, mock_config):
         """Test cache config retrieval."""
-        with patch("aipt_v2.llm.llm.MemoryCompressor"), \
-             patch("aipt_v2.llm.llm.supports_prompt_caching", return_value=True):
+        with (
+            patch("aipt_v2.llm.llm.MemoryCompressor"),
+            patch("aipt_v2.llm.llm.supports_prompt_caching", return_value=True),
+        ):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             cache_config = llm.get_cache_config()
@@ -321,6 +361,7 @@ class TestLLMClass:
         """Test stop parameter inclusion logic."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             # Anthropic models should include stop param
@@ -329,10 +370,12 @@ class TestLLMClass:
     def test_should_not_include_stop_for_o1(self, mock_litellm):
         """Test stop param excluded for o1 models."""
         from aipt_v2.llm.config import LLMConfig
+
         config = LLMConfig(model_name="openai/o1-preview")
 
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             assert llm._should_include_stop_param() is False
@@ -341,6 +384,7 @@ class TestLLMClass:
         """Test cache interval calculation."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             # Small conversation
@@ -357,6 +401,7 @@ class TestLLMClass:
         """Test identity message building."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config, agent_name="test_agent", agent_id="agent-456")
 
             msg = llm._build_identity_message()
@@ -370,6 +415,7 @@ class TestLLMClass:
         """Test identity message returns None without agent."""
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=mock_config)
 
             msg = llm._build_identity_message()
@@ -379,6 +425,7 @@ class TestLLMClass:
 
 # ============== Memory Compressor Tests ==============
 
+
 class TestMemoryCompressor:
     """Tests for MemoryCompressor class."""
 
@@ -386,6 +433,7 @@ class TestMemoryCompressor:
         """Test MemoryCompressor initialization."""
         with patch.dict("os.environ", {"AIPT_LLM": "test-model"}):
             from aipt_v2.llm.memory import MemoryCompressor
+
             compressor = MemoryCompressor(model_name="test-model")
 
             assert compressor.max_images == 3
@@ -396,6 +444,7 @@ class TestMemoryCompressor:
         """Test MemoryCompressor with custom parameters."""
         with patch.dict("os.environ", {"AIPT_LLM": "test-model"}):
             from aipt_v2.llm.memory import MemoryCompressor
+
             compressor = MemoryCompressor(
                 max_images=5,
                 model_name="custom-model",
@@ -410,6 +459,7 @@ class TestMemoryCompressor:
         """Test compression of empty history."""
         with patch.dict("os.environ", {"AIPT_LLM": "test-model"}):
             from aipt_v2.llm.memory import MemoryCompressor
+
             compressor = MemoryCompressor(model_name="test-model")
 
             result = compressor.compress_history([])
@@ -418,9 +468,12 @@ class TestMemoryCompressor:
 
     def test_compress_short_history(self):
         """Test compression preserves short history."""
-        with patch.dict("os.environ", {"AIPT_LLM": "test-model"}), \
-             patch("aipt_v2.llm.memory._get_message_tokens", return_value=10):
+        with (
+            patch.dict("os.environ", {"AIPT_LLM": "test-model"}),
+            patch("aipt_v2.llm.memory._get_message_tokens", return_value=10),
+        ):
             from aipt_v2.llm.memory import MemoryCompressor
+
             compressor = MemoryCompressor(model_name="test-model")
 
             messages = [
@@ -435,6 +488,7 @@ class TestMemoryCompressor:
 
 
 # ============== Helper Functions Tests ==============
+
 
 class TestMemoryHelperFunctions:
     """Tests for memory module helper functions."""
@@ -469,7 +523,7 @@ class TestMemoryHelperFunctions:
                 {"type": "text", "text": "Hello"},
                 {"type": "image_url", "image_url": {"url": "data:..."}},
                 {"type": "text", "text": "World"},
-            ]
+            ],
         }
         result = _extract_message_text(msg)
 
@@ -497,7 +551,7 @@ class TestMemoryHelperFunctions:
                 "content": [
                     {"type": "text", "text": "Hello"},
                     {"type": "text", "text": "World"},
-                ]
+                ],
             }
             tokens = _get_message_tokens(msg, "test-model")
 
@@ -506,6 +560,7 @@ class TestMemoryHelperFunctions:
 
 # ============== Request Queue Tests ==============
 
+
 class TestLLMRequestQueue:
     """Tests for LLMRequestQueue class."""
 
@@ -513,10 +568,12 @@ class TestLLMRequestQueue:
         """Test queue initialization with defaults."""
         with patch.dict("os.environ", {}, clear=True):
             import os
+
             os.environ.pop("LLM_RATE_LIMIT_DELAY", None)
             os.environ.pop("LLM_RATE_LIMIT_CONCURRENT", None)
 
             from aipt_v2.llm.request_queue import LLMRequestQueue
+
             queue = LLMRequestQueue()
 
             assert queue.max_concurrent == 1
@@ -524,11 +581,15 @@ class TestLLMRequestQueue:
 
     def test_initialization_from_env(self):
         """Test queue initialization from environment."""
-        with patch.dict("os.environ", {
-            "LLM_RATE_LIMIT_DELAY": "2.0",
-            "LLM_RATE_LIMIT_CONCURRENT": "3",
-        }):
+        with patch.dict(
+            "os.environ",
+            {
+                "LLM_RATE_LIMIT_DELAY": "2.0",
+                "LLM_RATE_LIMIT_CONCURRENT": "3",
+            },
+        ):
             from aipt_v2.llm.request_queue import LLMRequestQueue
+
             queue = LLMRequestQueue()
 
             assert queue.max_concurrent == 3
@@ -538,10 +599,12 @@ class TestLLMRequestQueue:
         """Test queue initialization with custom parameters."""
         with patch.dict("os.environ", {}, clear=True):
             import os
+
             os.environ.pop("LLM_RATE_LIMIT_DELAY", None)
             os.environ.pop("LLM_RATE_LIMIT_CONCURRENT", None)
 
             from aipt_v2.llm.request_queue import LLMRequestQueue
+
             queue = LLMRequestQueue(max_concurrent=5, delay_between_requests=1.0)
 
             assert queue.max_concurrent == 5
@@ -549,10 +612,10 @@ class TestLLMRequestQueue:
 
     def test_get_global_queue_singleton(self):
         """Test global queue is a singleton."""
-        from aipt_v2.llm.request_queue import get_global_queue, _global_queue
-
         # Reset global queue
         import aipt_v2.llm.request_queue as rq
+        from aipt_v2.llm.request_queue import get_global_queue
+
         rq._global_queue = None
 
         queue1 = get_global_queue()
@@ -562,6 +625,7 @@ class TestLLMRequestQueue:
 
 
 # ============== Retry Logic Tests ==============
+
 
 class TestRetryLogic:
     """Tests for retry logic in request queue."""
@@ -608,6 +672,7 @@ class TestRetryLogic:
 
 # ============== LLMRequestFailedError Tests ==============
 
+
 class TestLLMRequestFailedError:
     """Tests for LLMRequestFailedError exception."""
 
@@ -636,6 +701,7 @@ class TestLLMRequestFailedError:
 
 # ============== Async Generation Tests ==============
 
+
 class TestAsyncGeneration:
     """Tests for async LLM generation."""
 
@@ -658,13 +724,16 @@ class TestAsyncGeneration:
 
         config = LLMConfig(model_name="test-model")
 
-        with patch("aipt_v2.llm.llm.MemoryCompressor") as mock_compressor, \
-             patch("aipt_v2.llm.llm.get_global_queue") as mock_queue:
+        with (
+            patch("aipt_v2.llm.llm.MemoryCompressor") as mock_compressor,
+            patch("aipt_v2.llm.llm.get_global_queue") as mock_queue,
+        ):
 
             mock_compressor.return_value.compress_history.return_value = []
             mock_queue.return_value.make_request = AsyncMock(return_value=mock_response)
 
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             response = await llm.generate(
@@ -683,18 +752,19 @@ class TestAsyncGeneration:
         from aipt_v2.llm.config import LLMConfig
 
         config = LLMConfig(model_name="test-model")
-        mock_response.choices[0].message.content = (
-            "Running scan <function>nmap</function>"
-        )
+        mock_response.choices[0].message.content = "Running scan <function>nmap</function>"
 
-        with patch("aipt_v2.llm.llm.MemoryCompressor") as mock_compressor, \
-             patch("aipt_v2.llm.llm.get_global_queue") as mock_queue, \
-             patch("aipt_v2.llm.llm.parse_tool_invocations", return_value=[{"name": "nmap"}]):
+        with (
+            patch("aipt_v2.llm.llm.MemoryCompressor") as mock_compressor,
+            patch("aipt_v2.llm.llm.get_global_queue") as mock_queue,
+            patch("aipt_v2.llm.llm.parse_tool_invocations", return_value=[{"name": "nmap"}]),
+        ):
 
             mock_compressor.return_value.compress_history.return_value = []
             mock_queue.return_value.make_request = AsyncMock(return_value=mock_response)
 
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             response = await llm.generate(
@@ -707,6 +777,7 @@ class TestAsyncGeneration:
 
 # ============== Image Filtering Tests ==============
 
+
 class TestImageFiltering:
     """Tests for image filtering in messages."""
 
@@ -718,6 +789,7 @@ class TestImageFiltering:
 
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             messages = [
@@ -738,6 +810,7 @@ class TestImageFiltering:
 
         with patch("aipt_v2.llm.llm.MemoryCompressor"):
             from aipt_v2.llm.llm import LLM
+
             llm = LLM(config=config)
 
             messages = [
@@ -746,7 +819,7 @@ class TestImageFiltering:
                     "content": [
                         {"type": "text", "text": "Look at this:"},
                         {"type": "image_url", "image_url": {"url": "data:..."}},
-                    ]
+                    ],
                 }
             ]
 

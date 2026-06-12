@@ -6,7 +6,6 @@ import logging
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Optional
 
-
 if TYPE_CHECKING:
     from aipt_v2.telemetry import Tracer
 
@@ -21,7 +20,6 @@ from aipt_v2.llm.utils import clean_content
 from aipt_v2.tools.tool_processing import process_tool_invocations
 
 from .state import AgentState
-
 
 logger = logging.getLogger(__name__)
 
@@ -436,7 +434,10 @@ class BaseAgent(metaclass=AgentMeta):
 
     def _check_agent_messages(self, state: AgentState) -> None:  # noqa: PLR0912
         try:
-            from aipt_v2.tools.agents_graph.agents_graph_actions import _agent_graph, _agent_messages
+            from aipt_v2.tools.agents_graph.agents_graph_actions import (
+                _agent_graph,
+                _agent_messages,
+            )
 
             agent_id = state.agent_id
             if not agent_id or agent_id not in _agent_messages:

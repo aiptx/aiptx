@@ -12,24 +12,25 @@ Features:
 - Export to multiple formats (JSON, compact, markdown)
 """
 
-import json
 import hashlib
+import json
 import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any, Dict, List, Optional, Set
 
-from .tool_registry import ToolPhase
-from .local_tool_executor import ToolExecution, ExecutionBatch
+from .local_tool_executor import ExecutionBatch, ToolExecution
 from .parser import Finding
+from .tool_registry import ToolPhase
 
 logger = logging.getLogger(__name__)
 
 
 class FindingSeverity(str, Enum):
     """Normalized severity levels."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -42,6 +43,7 @@ class NormalizedFinding:
     """
     A normalized finding that can be compared across tools.
     """
+
     id: str
     type: str  # port, service, vuln, credential, host, path, info
     value: str
@@ -90,6 +92,7 @@ class NormalizedFinding:
 @dataclass
 class PhaseResults:
     """Results from a single phase."""
+
     phase: ToolPhase
     findings: List[NormalizedFinding] = field(default_factory=list)
     tools_run: List[str] = field(default_factory=list)
@@ -118,6 +121,7 @@ class AttackPath:
     """
     Represents a potential attack path through correlated findings.
     """
+
     id: str
     name: str
     description: str
@@ -216,9 +220,7 @@ class ResultCollector:
         )
 
         if batch.start_time and batch.end_time:
-            phase_results.duration_seconds = (
-                batch.end_time - batch.start_time
-            ).total_seconds()
+            phase_results.duration_seconds = (batch.end_time - batch.start_time).total_seconds()
 
         for execution in batch.executions:
             phase_results.tools_run.append(execution.tool.name)
@@ -229,17 +231,13 @@ class ResultCollector:
 
             # Normalize and add findings
             for finding in execution.findings:
-                normalized = self._normalize_finding(
-                    finding, phase, execution.tool.name
-                )
+                normalized = self._normalize_finding(finding, phase, execution.tool.name)
                 if normalized:
                     phase_results.findings.append(normalized)
 
         self._phases[phase] = phase_results
 
-        logger.info(
-            f"Added {len(phase_results.findings)} findings from {phase.value} phase"
-        )
+        logger.info(f"Added {len(phase_results.findings)} findings from {phase.value} phase")
 
         return phase_results
 
@@ -272,9 +270,7 @@ class ResultCollector:
 
         count = 0
         for finding in execution.findings:
-            normalized = self._normalize_finding(
-                finding, actual_phase, execution.tool.name
-            )
+            normalized = self._normalize_finding(finding, actual_phase, execution.tool.name)
             if normalized:
                 phase_results.findings.append(normalized)
                 count += 1
@@ -302,8 +298,7 @@ class ResultCollector:
             "info": FindingSeverity.INFO,
         }
         severity = severity_map.get(
-            finding.severity.lower() if finding.severity else "info",
-            FindingSeverity.INFO
+            finding.severity.lower() if finding.severity else "info", FindingSeverity.INFO
         )
 
         # Create normalized finding
@@ -445,37 +440,45 @@ class ResultCollector:
                     related_vulns.append(vuln)
 
             if related_vulns:
-                paths.append(AttackPath(
-                    id=f"path_{len(paths)+1:03d}",
-                    name=f"Service Exploit: {service}",
-                    description=f"Exploit {service} on port {port_num}",
-                    findings=[port_finding] + related_vulns,
-                    confidence=0.7,
-                    impact="high" if any(v.severity_score >= 4 for v in related_vulns) else "medium",
-                    steps=[
-                        f"Identify {service} on port {port_num}",
-                        f"Exploit vulnerability: {related_vulns[0].value[:50]}",
-                        "Gain access to system",
-                    ],
-                ))
+                paths.append(
+                    AttackPath(
+                        id=f"path_{len(paths)+1:03d}",
+                        name=f"Service Exploit: {service}",
+                        description=f"Exploit {service} on port {port_num}",
+                        findings=[port_finding] + related_vulns,
+                        confidence=0.7,
+                        impact=(
+                            "high"
+                            if any(v.severity_score >= 4 for v in related_vulns)
+                            else "medium"
+                        ),
+                        steps=[
+                            f"Identify {service} on port {port_num}",
+                            f"Exploit vulnerability: {related_vulns[0].value[:50]}",
+                            "Gain access to system",
+                        ],
+                    )
+                )
 
         # Pattern 2: Credential findings -> Lateral movement
         creds = list(self._by_type.get("credential", set()))
         if creds:
             cred_findings = [self._all_findings[c] for c in creds]
-            paths.append(AttackPath(
-                id=f"path_{len(paths)+1:03d}",
-                name="Credential Reuse",
-                description="Use discovered credentials for lateral movement",
-                findings=cred_findings,
-                confidence=0.8,
-                impact="critical",
-                steps=[
-                    f"Collect {len(creds)} credentials",
-                    "Test credential reuse on other services",
-                    "Achieve lateral movement",
-                ],
-            ))
+            paths.append(
+                AttackPath(
+                    id=f"path_{len(paths)+1:03d}",
+                    name="Credential Reuse",
+                    description="Use discovered credentials for lateral movement",
+                    findings=cred_findings,
+                    confidence=0.8,
+                    impact="critical",
+                    steps=[
+                        f"Collect {len(creds)} credentials",
+                        "Test credential reuse on other services",
+                        "Achieve lateral movement",
+                    ],
+                )
+            )
 
         # Pattern 3: SQL injection -> Data exfiltration
         sqli_findings = [
@@ -484,20 +487,22 @@ class ResultCollector:
             if "sql" in self._all_findings[fid].value.lower()
         ]
         if sqli_findings:
-            paths.append(AttackPath(
-                id=f"path_{len(paths)+1:03d}",
-                name="SQL Injection Chain",
-                description="Exploit SQL injection for data exfiltration",
-                findings=sqli_findings,
-                confidence=0.9,
-                impact="critical",
-                steps=[
-                    f"Exploit {len(sqli_findings)} SQL injection points",
-                    "Enumerate database structure",
-                    "Extract sensitive data",
-                    "Potentially escalate to RCE",
-                ],
-            ))
+            paths.append(
+                AttackPath(
+                    id=f"path_{len(paths)+1:03d}",
+                    name="SQL Injection Chain",
+                    description="Exploit SQL injection for data exfiltration",
+                    findings=sqli_findings,
+                    confidence=0.9,
+                    impact="critical",
+                    steps=[
+                        f"Exploit {len(sqli_findings)} SQL injection points",
+                        "Enumerate database structure",
+                        "Extract sensitive data",
+                        "Potentially escalate to RCE",
+                    ],
+                )
+            )
 
         return paths
 
@@ -520,12 +525,16 @@ class ResultCollector:
         lines.append("")
 
         # Group by severity
-        for severity in [FindingSeverity.CRITICAL, FindingSeverity.HIGH,
-                         FindingSeverity.MEDIUM, FindingSeverity.LOW]:
+        for severity in [
+            FindingSeverity.CRITICAL,
+            FindingSeverity.HIGH,
+            FindingSeverity.MEDIUM,
+            FindingSeverity.LOW,
+        ]:
             findings = self.get_findings_by_severity(severity)
             if findings:
                 lines.append(f"[{severity.value.upper()}] x{len(findings)}")
-                for f in findings[:max_findings // 4]:
+                for f in findings[: max_findings // 4]:
                     lines.append(f"  {f.to_compact()}")
 
         # Add attack paths
@@ -554,14 +563,8 @@ class ResultCollector:
             },
             "summary": {
                 "total_findings": len(self._all_findings),
-                "by_severity": {
-                    sev.value: len(ids)
-                    for sev, ids in self._by_severity.items()
-                },
-                "by_type": {
-                    t: len(ids)
-                    for t, ids in self._by_type.items()
-                },
+                "by_severity": {sev.value: len(ids) for sev, ids in self._by_severity.items()},
+                "by_type": {t: len(ids) for t, ids in self._by_type.items()},
             },
             "findings": [
                 {
@@ -575,10 +578,7 @@ class ResultCollector:
                 }
                 for f in self.get_all_findings()
             ],
-            "attack_paths": [
-                path.to_dict()
-                for path in self.detect_attack_paths()
-            ],
+            "attack_paths": [path.to_dict() for path in self.detect_attack_paths()],
         }
 
     def to_json(self, indent: int = 2) -> str:
@@ -619,7 +619,9 @@ class ResultCollector:
             lines.extend(["## Potential Attack Paths", ""])
             for path in paths:
                 lines.append(f"### {path.name}")
-                lines.append(f"**Impact:** {path.impact.title()} | **Confidence:** {path.confidence:.0%}")
+                lines.append(
+                    f"**Impact:** {path.impact.title()} | **Confidence:** {path.confidence:.0%}"
+                )
                 lines.append("")
                 lines.append("**Steps:**")
                 for i, step in enumerate(path.steps, 1):
@@ -639,13 +641,9 @@ class ResultCollector:
             "total_findings": len(self._all_findings),
             "phases_completed": len(self._phases),
             "severity_distribution": {
-                sev.value: len(ids)
-                for sev, ids in self._by_severity.items()
+                sev.value: len(ids) for sev, ids in self._by_severity.items()
             },
-            "type_distribution": {
-                t: len(ids)
-                for t, ids in self._by_type.items()
-            },
+            "type_distribution": {t: len(ids) for t, ids in self._by_type.items()},
             "tools_summary": {
                 phase.value: {
                     "run": len(results.tools_run),

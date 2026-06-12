@@ -7,21 +7,21 @@ Provides isolated execution environment for security tools:
 - Timeout enforcement
 - Output capture and streaming
 """
+
 from __future__ import annotations
 
-import subprocess
-import json
-import os
-import time
 import asyncio
+import json
+import subprocess
+import time
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any, Callable
-from pathlib import Path
+from typing import Callable, Dict, List, Optional
 
 
 @dataclass
 class SandboxResult:
     """Result from sandbox execution"""
+
     output: str
     return_code: int
     duration: float
@@ -33,6 +33,7 @@ class SandboxResult:
 @dataclass
 class SandboxConfig:
     """Docker sandbox configuration"""
+
     image: str = "kalilinux/kali-rolling"
     memory_limit: str = "512m"
     cpu_limit: float = 1.0
@@ -206,17 +207,12 @@ class DockerSandbox:
             )
 
     async def execute_async(
-        self,
-        command: str,
-        timeout: Optional[int] = None,
-        image: Optional[str] = None,
-        **kwargs
+        self, command: str, timeout: Optional[int] = None, image: Optional[str] = None, **kwargs
     ) -> SandboxResult:
         """Async version of execute"""
         loop = asyncio.get_event_loop()
         return await loop.run_in_executor(
-            None,
-            lambda: self.execute(command, timeout, image, **kwargs)
+            None, lambda: self.execute(command, timeout, image, **kwargs)
         )
 
     def execute_streaming(
@@ -305,11 +301,16 @@ class DockerSandbox:
     ) -> List[str]:
         """Build docker run command"""
         docker_cmd = [
-            "docker", "run",
-            "--memory", self.config.memory_limit,
-            "--cpus", str(self.config.cpu_limit),
-            "--network", network or self.config.network_mode,
-            "-w", self.config.working_dir,
+            "docker",
+            "run",
+            "--memory",
+            self.config.memory_limit,
+            "--cpus",
+            str(self.config.cpu_limit),
+            "--network",
+            network or self.config.network_mode,
+            "-w",
+            self.config.working_dir,
         ]
 
         if self.config.remove_after:

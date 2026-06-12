@@ -1,9 +1,9 @@
 """AIPT LLM Configuration"""
 
 from __future__ import annotations
-import os
-from typing import Optional, List
 
+import os
+from typing import List, Optional
 
 # Providers that require explicit prefix for litellm routing
 PROVIDERS_REQUIRING_PREFIX = {
@@ -25,8 +25,8 @@ PROVIDERS_REQUIRING_PREFIX = {
 # Providers where model names are auto-detected or commonly used without prefix
 PROVIDERS_AUTO_DETECTED = {
     "anthropic",  # claude-* models auto-detected
-    "openai",     # gpt-* models auto-detected
-    "deepseek",   # deepseek-* models
+    "openai",  # gpt-* models auto-detected
+    "deepseek",  # deepseek-* models
 }
 
 
@@ -60,7 +60,9 @@ def _build_model_name_for_litellm(provider: str, model: str) -> str:
     if provider_lower == "anthropic" and not model.startswith("claude"):
         return f"anthropic/{model}"
 
-    if provider_lower == "openai" and not model.startswith(("gpt", "o1", "o3", "o4", "text-", "davinci")):
+    if provider_lower == "openai" and not model.startswith(
+        ("gpt", "o1", "o3", "o4", "text-", "davinci")
+    ):
         return f"openai/{model}"
 
     # For deepseek with custom models

@@ -21,8 +21,7 @@ from aipt_v2.llm.config import LLMConfig
 from aipt_v2.llm.memory import MemoryCompressor
 from aipt_v2.llm.request_queue import get_global_queue
 from aipt_v2.llm.utils import _truncate_to_first_function, parse_tool_invocations
-from aipt_v2.prompts import load_prompt_modules, get_tools_prompt
-
+from aipt_v2.prompts import get_tools_prompt, load_prompt_modules
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +35,7 @@ _LLM_API_BASE = (
     or os.getenv("LITELLM_BASE_URL")
     or os.getenv("OLLAMA_API_BASE")
     or os.getenv("AIPT_LLM__OLLAMA_BASE_URL")  # From setup wizard
-    or os.getenv("AIPT_LLM__API_BASE")          # Generic AIPT config
+    or os.getenv("AIPT_LLM__API_BASE")  # Generic AIPT config
 )
 
 
@@ -242,7 +241,9 @@ class LLM:
                     truncated = content[:8000] if len(content) > 8000 else content
                     skill_blocks.append(f"<!-- Skill: {name} -->\n{truncated}")
 
-                skills_section = "\n\n## Loaded Vulnerability Skills\n\n" + "\n\n".join(skill_blocks)
+                skills_section = "\n\n## Loaded Vulnerability Skills\n\n" + "\n\n".join(
+                    skill_blocks
+                )
                 self.system_prompt += skills_section
                 logger.info(f"Injected {len(skills)} skills into system prompt")
 
@@ -467,9 +468,7 @@ class LLM:
         except Exception:  # noqa: BLE001
             return False
 
-    def _filter_images_from_messages(
-        self, messages: list[dict[str, Any]]
-    ) -> list[dict[str, Any]]:
+    def _filter_images_from_messages(self, messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
         filtered_messages = []
         for msg in messages:
             content = msg.get("content")
@@ -478,11 +477,13 @@ class LLM:
                 for item in content:
                     if isinstance(item, dict):
                         if item.get("type") == "image_url":
-                            filtered_content.append({
-                                "type": "text",
-                                "text": "[Screenshot removed - model does not support vision. "
-                                "Use view_source or execute_js to interact with the page instead.]",
-                            })
+                            filtered_content.append(
+                                {
+                                    "type": "text",
+                                    "text": "[Screenshot removed - model does not support vision. "
+                                    "Use view_source or execute_js to interact with the page instead.]",
+                                }
+                            )
                         else:
                             filtered_content.append(item)
                     else:
@@ -492,7 +493,10 @@ class LLM:
                         item.get("text", "") if isinstance(item, dict) else str(item)
                         for item in filtered_content
                     ]
-                    if all(isinstance(item, dict) and item.get("type") == "text" for item in filtered_content):
+                    if all(
+                        isinstance(item, dict) and item.get("type") == "text"
+                        for item in filtered_content
+                    ):
                         msg = {**msg, "content": "\n".join(text_parts)}
                     else:
                         msg = {**msg, "content": filtered_content}

@@ -6,11 +6,10 @@ Specialized Ollama client for AI checkpoint operations.
 Optimized for local LLM inference with streaming support.
 """
 
-import asyncio
 import json
 import logging
-from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from dataclasses import dataclass
+from typing import AsyncIterator, Callable, List, Optional
 
 import httpx
 

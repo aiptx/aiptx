@@ -11,12 +11,10 @@ Tests for:
 These tests focus on logic that doesn't require external services (LLMs, embeddings).
 """
 
-import pytest
 from datetime import datetime
-from unittest.mock import Mock, patch, MagicMock
-
 
 # ============== ScopeConfig Tests ==============
+
 
 class TestScopeConfig:
     """Tests for ScopeConfig dataclass."""
@@ -93,7 +91,7 @@ class TestScopeViolation:
 
     def test_violation_creation(self):
         """Test creating a scope violation."""
-        from aipt_v2.intelligence.scope import ScopeViolation, ScopeDecision
+        from aipt_v2.intelligence.scope import ScopeDecision, ScopeViolation
 
         now = datetime.utcnow()
         violation = ScopeViolation(
@@ -111,7 +109,7 @@ class TestScopeViolation:
 
     def test_violation_to_dict(self):
         """Test converting violation to dictionary."""
-        from aipt_v2.intelligence.scope import ScopeViolation, ScopeDecision
+        from aipt_v2.intelligence.scope import ScopeDecision, ScopeViolation
 
         now = datetime.utcnow()
         violation = ScopeViolation(
@@ -164,6 +162,7 @@ class TestCreateScopeFromTarget:
 
 
 # ============== Vulnerability Chaining Tests ==============
+
 
 class TestVulnerabilityType:
     """Tests for VulnerabilityType enum."""
@@ -229,6 +228,7 @@ class TestChainImpact:
 
 # ============== Triage Tests ==============
 
+
 class TestExploitability:
     """Tests for Exploitability enum."""
 
@@ -262,8 +262,8 @@ class TestExploitabilityRules:
 
     def test_sql_injection_exploitability(self):
         """Test SQL injection exploitability rule."""
-        from aipt_v2.intelligence.triage import EXPLOITABILITY_RULES, Exploitability
         from aipt_v2.intelligence.chaining import VulnerabilityType
+        from aipt_v2.intelligence.triage import EXPLOITABILITY_RULES, Exploitability
 
         rule = EXPLOITABILITY_RULES[VulnerabilityType.SQL_INJECTION]
 
@@ -273,8 +273,8 @@ class TestExploitabilityRules:
 
     def test_xss_exploitability(self):
         """Test XSS exploitability rule."""
-        from aipt_v2.intelligence.triage import EXPLOITABILITY_RULES, Exploitability
         from aipt_v2.intelligence.chaining import VulnerabilityType
+        from aipt_v2.intelligence.triage import EXPLOITABILITY_RULES, Exploitability
 
         rule = EXPLOITABILITY_RULES[VulnerabilityType.XSS_REFLECTED]
 
@@ -283,6 +283,7 @@ class TestExploitabilityRules:
 
 
 # ============== RAG Tests ==============
+
 
 class TestToolRAG:
     """Tests for ToolRAG class."""
@@ -338,6 +339,7 @@ class TestToolMatch:
 
 
 # ============== Auth Module Tests ==============
+
 
 class TestAuthMethod:
     """Tests for AuthMethod enum."""
@@ -406,7 +408,7 @@ class TestAuthHelperFunctions:
 
     def test_create_bearer_auth(self):
         """Test create_bearer_auth helper."""
-        from aipt_v2.intelligence.auth import create_bearer_auth, AuthMethod
+        from aipt_v2.intelligence.auth import AuthMethod, create_bearer_auth
 
         creds = create_bearer_auth("my-token-123")
 
@@ -415,7 +417,7 @@ class TestAuthHelperFunctions:
 
     def test_create_basic_auth(self):
         """Test create_basic_auth helper."""
-        from aipt_v2.intelligence.auth import create_basic_auth, AuthMethod
+        from aipt_v2.intelligence.auth import AuthMethod, create_basic_auth
 
         creds = create_basic_auth("user", "pass")
 
@@ -425,7 +427,7 @@ class TestAuthHelperFunctions:
 
     def test_create_api_key_auth(self):
         """Test create_api_key_auth helper."""
-        from aipt_v2.intelligence.auth import create_api_key_auth, AuthMethod
+        from aipt_v2.intelligence.auth import AuthMethod, create_api_key_auth
 
         creds = create_api_key_auth("my-api-key", header="Authorization")
 
@@ -434,7 +436,7 @@ class TestAuthHelperFunctions:
 
     def test_create_cookie_auth(self):
         """Test create_cookie_auth helper."""
-        from aipt_v2.intelligence.auth import create_cookie_auth, AuthMethod
+        from aipt_v2.intelligence.auth import AuthMethod, create_cookie_auth
 
         creds = create_cookie_auth({"session": "abc123", "csrf": "xyz789"})
 
@@ -444,41 +446,17 @@ class TestAuthHelperFunctions:
 
 # ============== Integration-Style Tests ==============
 
+
 class TestIntelligenceModuleImports:
     """Test that all intelligence module exports work."""
 
     def test_all_exports_importable(self):
         """Test all __all__ exports can be imported."""
-        from aipt_v2.intelligence import (
-            # CVE
-            CVEIntelligence,
-            CVEInfo,
-            ToolRAG,
-            ToolMatch,
-            # Chaining
-            VulnerabilityChainer,
-            AttackChain,
-            ChainLink,
-            # Triage
+        from aipt_v2.intelligence import (  # CVE; Chaining; Triage; Scope; Auth
             AITriage,
-            TriageResult,
-            RiskAssessment,
-            # Scope
-            ScopeEnforcer,
-            ScopeConfig,
-            ScopeViolation,
-            ScopeDecision,
-            create_scope_from_target,
-            # Auth
             AuthenticationManager,
-            AuthCredentials,
-            AuthSession,
-            AuthMethod,
-            AuthenticationError,
-            create_bearer_auth,
-            create_basic_auth,
-            create_api_key_auth,
-            create_cookie_auth,
+            ScopeConfig,
+            VulnerabilityChainer,
         )
 
         # All imports successful

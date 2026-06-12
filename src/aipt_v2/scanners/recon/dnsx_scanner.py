@@ -10,11 +10,11 @@ import asyncio
 import json
 import logging
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from ..base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from ..base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -84,7 +84,7 @@ class DnsxScanner(BaseScanner):
         target: str,
         targets_file: Optional[str] = None,
         wordlist: Optional[str] = None,
-        **kwargs
+        **kwargs,
     ) -> ScanResult:
         """
         Run dnsx scan.
@@ -114,8 +114,7 @@ class DnsxScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 300)
+                process.communicate(), timeout=kwargs.get("timeout", 300)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -138,10 +137,7 @@ class DnsxScanner(BaseScanner):
         return result
 
     def _build_command(
-        self,
-        target: str,
-        targets_file: Optional[str] = None,
-        wordlist: Optional[str] = None
+        self, target: str, targets_file: Optional[str] = None, wordlist: Optional[str] = None
     ) -> List[str]:
         """Build dnsx command."""
         cmd = ["dnsx"]

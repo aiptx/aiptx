@@ -20,22 +20,21 @@ Usage:
 """
 
 import asyncio
-import json
 import csv
+import json
 import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
-
-from aipt_v2.tools.cloud.cloud_config import CloudConfig, get_cloud_config
 
 
 @dataclass
 class ProwlerConfig:
     """Prowler configuration."""
+
     provider: str = "aws"  # aws, azure, gcp
 
     # AWS options
@@ -62,6 +61,7 @@ class ProwlerConfig:
 @dataclass
 class ProwlerFinding:
     """Individual Prowler finding."""
+
     check_id: str
     check_title: str
     service: str
@@ -80,6 +80,7 @@ class ProwlerFinding:
 @dataclass
 class ProwlerResult:
     """Result of a Prowler scan."""
+
     provider: str
     status: str
     started_at: str
@@ -124,9 +125,10 @@ class ProwlerTool:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "prowler", "--version",
+                "prowler",
+                "--version",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             stdout, _ = await process.communicate()
             self._installed = process.returncode == 0
@@ -210,17 +212,11 @@ class ProwlerTool:
         env = os.environ.copy()
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
             raise TimeoutError(f"Prowler scan timed out after {timeout}s")
@@ -264,8 +260,8 @@ class ProwlerTool:
                 "command": cmd_display,
                 "return_code": process.returncode,
                 "version": self._version,
-                "stderr": stderr.decode() if process.returncode != 0 else ""
-            }
+                "stderr": stderr.decode() if process.returncode != 0 else "",
+            },
         )
 
     def _find_latest_report(self) -> Optional[Path]:
@@ -315,17 +311,17 @@ class ProwlerTool:
         findings = []
 
         try:
-            with open(json_file, 'r') as f:
+            with open(json_file, "r") as f:
                 # Prowler JSON can be JSONL (one JSON per line) or array
                 content = f.read().strip()
 
-                if content.startswith('['):
+                if content.startswith("["):
                     # JSON array
                     data = json.loads(content)
                 else:
                     # JSONL format
                     data = []
-                    for line in content.split('\n'):
+                    for line in content.split("\n"):
                         if line.strip():
                             data.append(json.loads(line))
 
@@ -341,9 +337,11 @@ class ProwlerTool:
                         resource_arn=item.get("ResourceArn", item.get("resource_arn", "")),
                         description=item.get("StatusExtended", item.get("description", "")),
                         risk=item.get("Risk", item.get("risk", "")),
-                        remediation=item.get("Remediation", {}).get("Recommendation", {}).get("Text", ""),
+                        remediation=item.get("Remediation", {})
+                        .get("Recommendation", {})
+                        .get("Text", ""),
                         compliance=item.get("Compliance", []),
-                        timestamp=item.get("Timestamp", item.get("timestamp", ""))
+                        timestamp=item.get("Timestamp", item.get("timestamp", "")),
                     )
                     findings.append(finding)
 
@@ -357,7 +355,7 @@ class ProwlerTool:
         findings = []
 
         try:
-            with open(csv_file, 'r', newline='') as f:
+            with open(csv_file, "r", newline="") as f:
                 reader = csv.DictReader(f)
                 for row in reader:
                     finding = ProwlerFinding(
@@ -373,7 +371,7 @@ class ProwlerTool:
                         risk=row.get("RISK", row.get("risk", "")),
                         remediation=row.get("REMEDIATION", row.get("remediation", "")),
                         compliance=[],
-                        timestamp=row.get("TIMESTAMP", row.get("timestamp", ""))
+                        timestamp=row.get("TIMESTAMP", row.get("timestamp", "")),
                     )
                     findings.append(finding)
 
@@ -427,21 +425,21 @@ async def list_available_checks(provider: str = "aws") -> List[Dict[str, str]]:
     """
     try:
         process = await asyncio.create_subprocess_exec(
-            "prowler", provider, "--list-checks", "--no-banner",
+            "prowler",
+            provider,
+            "--list-checks",
+            "--no-banner",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await process.communicate()
 
         checks = []
-        for line in stdout.decode().split('\n'):
-            if line.strip() and not line.startswith(('-', '=')):
-                parts = line.split(' - ', 1)
+        for line in stdout.decode().split("\n"):
+            if line.strip() and not line.startswith(("-", "=")):
+                parts = line.split(" - ", 1)
                 if len(parts) == 2:
-                    checks.append({
-                        "id": parts[0].strip(),
-                        "title": parts[1].strip()
-                    })
+                    checks.append({"id": parts[0].strip(), "title": parts[1].strip()})
 
         return checks
     except Exception as e:
@@ -461,16 +459,19 @@ async def list_compliance_frameworks(provider: str = "aws") -> List[str]:
     """
     try:
         process = await asyncio.create_subprocess_exec(
-            "prowler", provider, "--list-compliance", "--no-banner",
+            "prowler",
+            provider,
+            "--list-compliance",
+            "--no-banner",
             stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            stderr=asyncio.subprocess.PIPE,
         )
         stdout, _ = await process.communicate()
 
         frameworks = []
-        for line in stdout.decode().split('\n'):
+        for line in stdout.decode().split("\n"):
             line = line.strip()
-            if line and not line.startswith(('-', '=', 'Available')):
+            if line and not line.startswith(("-", "=", "Available")):
                 frameworks.append(line)
 
         return frameworks
@@ -484,7 +485,7 @@ async def list_compliance_frameworks(provider: str = "aws") -> List[str]:
             "hipaa_aws",
             "gdpr_aws",
             "aws_well_architected_framework",
-            "nist_800_53_revision_5_aws"
+            "nist_800_53_revision_5_aws",
         ]
 
 
@@ -496,7 +497,7 @@ async def run_prowler(
     services: Optional[List[str]] = None,
     severity: Optional[List[str]] = None,
     output_dir: str = "./prowler_results",
-    timeout: int = 3600
+    timeout: int = 3600,
 ) -> ProwlerResult:
     """
     Run Prowler AWS security scan.
@@ -520,7 +521,7 @@ async def run_prowler(
         compliance=compliance or [],
         services=services or [],
         severity=severity or ["critical", "high", "medium", "low"],
-        output_dir=output_dir
+        output_dir=output_dir,
     )
 
     tool = ProwlerTool(config)
@@ -530,22 +531,14 @@ async def run_prowler(
 # Quick check functions
 async def quick_iam_check(profile: str = "default") -> ProwlerResult:
     """Quick IAM security check."""
-    config = ProwlerConfig(
-        aws_profile=profile,
-        services=["iam"],
-        severity=["critical", "high"]
-    )
+    config = ProwlerConfig(aws_profile=profile, services=["iam"], severity=["critical", "high"])
     tool = ProwlerTool(config)
     return await tool.scan(timeout=600)
 
 
 async def quick_s3_check(profile: str = "default") -> ProwlerResult:
     """Quick S3 security check."""
-    config = ProwlerConfig(
-        aws_profile=profile,
-        services=["s3"],
-        severity=["critical", "high"]
-    )
+    config = ProwlerConfig(aws_profile=profile, services=["s3"], severity=["critical", "high"])
     tool = ProwlerTool(config)
     return await tool.scan(timeout=600)
 
@@ -553,22 +546,16 @@ async def quick_s3_check(profile: str = "default") -> ProwlerResult:
 async def quick_network_check(profile: str = "default") -> ProwlerResult:
     """Quick network/VPC security check."""
     config = ProwlerConfig(
-        aws_profile=profile,
-        services=["ec2", "vpc"],
-        severity=["critical", "high"]
+        aws_profile=profile, services=["ec2", "vpc"], severity=["critical", "high"]
     )
     tool = ProwlerTool(config)
     return await tool.scan(timeout=900)
 
 
 async def compliance_scan(
-    profile: str = "default",
-    framework: str = "cis_2.0_aws"
+    profile: str = "default", framework: str = "cis_2.0_aws"
 ) -> ProwlerResult:
     """Run compliance-focused scan."""
-    config = ProwlerConfig(
-        aws_profile=profile,
-        compliance=[framework]
-    )
+    config = ProwlerConfig(aws_profile=profile, compliance=[framework])
     tool = ProwlerTool(config)
     return await tool.scan(timeout=3600)

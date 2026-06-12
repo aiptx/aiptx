@@ -3,6 +3,7 @@ AIPT Subdomain Enumeration
 
 Subdomain discovery using multiple sources and tools.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class Subdomain:
     """Discovered subdomain"""
+
     domain: str
     ip: str = ""
     status: str = "unknown"  # alive, dead, unknown
@@ -45,6 +47,7 @@ class Subdomain:
 @dataclass
 class SubdomainConfig:
     """Subdomain enumeration configuration"""
+
     # Tools to use
     use_subfinder: bool = True
     use_amass: bool = False
@@ -58,23 +61,89 @@ class SubdomainConfig:
     concurrent_requests: int = 50
 
     # Wordlist for bruteforce
-    wordlist: list[str] = field(default_factory=lambda: [
-        "www", "mail", "ftp", "localhost", "webmail", "smtp", "pop", "ns1", "ns2",
-        "dns", "dns1", "dns2", "vpn", "gateway", "router", "admin", "administrator",
-        "api", "app", "apps", "dev", "development", "staging", "test", "testing",
-        "prod", "production", "web", "portal", "secure", "ssl", "cdn", "static",
-        "assets", "img", "images", "media", "files", "download", "downloads",
-        "blog", "forum", "shop", "store", "support", "help", "docs", "wiki",
-        "git", "svn", "repo", "repository", "jenkins", "ci", "build",
-        "monitor", "status", "health", "metrics", "grafana", "kibana",
-        "db", "database", "mysql", "postgres", "redis", "elastic", "elasticsearch",
-        "auth", "login", "sso", "oauth", "identity",
-    ])
+    wordlist: list[str] = field(
+        default_factory=lambda: [
+            "www",
+            "mail",
+            "ftp",
+            "localhost",
+            "webmail",
+            "smtp",
+            "pop",
+            "ns1",
+            "ns2",
+            "dns",
+            "dns1",
+            "dns2",
+            "vpn",
+            "gateway",
+            "router",
+            "admin",
+            "administrator",
+            "api",
+            "app",
+            "apps",
+            "dev",
+            "development",
+            "staging",
+            "test",
+            "testing",
+            "prod",
+            "production",
+            "web",
+            "portal",
+            "secure",
+            "ssl",
+            "cdn",
+            "static",
+            "assets",
+            "img",
+            "images",
+            "media",
+            "files",
+            "download",
+            "downloads",
+            "blog",
+            "forum",
+            "shop",
+            "store",
+            "support",
+            "help",
+            "docs",
+            "wiki",
+            "git",
+            "svn",
+            "repo",
+            "repository",
+            "jenkins",
+            "ci",
+            "build",
+            "monitor",
+            "status",
+            "health",
+            "metrics",
+            "grafana",
+            "kibana",
+            "db",
+            "database",
+            "mysql",
+            "postgres",
+            "redis",
+            "elastic",
+            "elasticsearch",
+            "auth",
+            "login",
+            "sso",
+            "oauth",
+            "identity",
+        ]
+    )
 
 
 @dataclass
 class SubdomainResult:
     """Subdomain enumeration results"""
+
     target: str
     subdomains: list[Subdomain] = field(default_factory=list)
     alive_count: int = 0
@@ -181,9 +250,7 @@ class SubdomainEnumerator:
         result.end_time = datetime.utcnow()
         result.duration_seconds = (result.end_time - result.start_time).total_seconds()
 
-        logger.info(
-            f"Enumeration complete: {result.total_found} found, {result.alive_count} alive"
-        )
+        logger.info(f"Enumeration complete: {result.total_found} found, {result.alive_count} alive")
 
         return result
 
@@ -193,9 +260,7 @@ class SubdomainEnumerator:
 
         try:
             async with httpx.AsyncClient(timeout=30.0) as client:
-                response = await client.get(
-                    f"https://crt.sh/?q=%.{domain}&output=json"
-                )
+                response = await client.get(f"https://crt.sh/?q=%.{domain}&output=json")
 
                 if response.status_code == 200:
                     data = response.json()
@@ -208,10 +273,12 @@ class SubdomainEnumerator:
                             # Clean wildcards
                             sub = sub.replace("*.", "")
                             if sub and sub.endswith(domain) and sub not in self._found:
-                                subdomains.append(Subdomain(
-                                    domain=sub,
-                                    source="crt.sh",
-                                ))
+                                subdomains.append(
+                                    Subdomain(
+                                        domain=sub,
+                                        source="crt.sh",
+                                    )
+                                )
 
         except Exception as e:
             logger.debug(f"crt.sh error: {e}")
@@ -224,7 +291,10 @@ class SubdomainEnumerator:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "subfinder", "-d", domain, "-silent",
+                "subfinder",
+                "-d",
+                domain,
+                "-silent",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -233,10 +303,12 @@ class SubdomainEnumerator:
             for line in stdout.decode().strip().split("\n"):
                 sub = line.strip().lower()
                 if sub and sub not in self._found:
-                    subdomains.append(Subdomain(
-                        domain=sub,
-                        source="subfinder",
-                    ))
+                    subdomains.append(
+                        Subdomain(
+                            domain=sub,
+                            source="subfinder",
+                        )
+                    )
 
         except Exception as e:
             logger.debug(f"subfinder error: {e}")
@@ -249,7 +321,11 @@ class SubdomainEnumerator:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "amass", "enum", "-passive", "-d", domain,
+                "amass",
+                "enum",
+                "-passive",
+                "-d",
+                domain,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -258,10 +334,12 @@ class SubdomainEnumerator:
             for line in stdout.decode().strip().split("\n"):
                 sub = line.strip().lower()
                 if sub and sub not in self._found:
-                    subdomains.append(Subdomain(
-                        domain=sub,
-                        source="amass",
-                    ))
+                    subdomains.append(
+                        Subdomain(
+                            domain=sub,
+                            source="amass",
+                        )
+                    )
 
         except Exception as e:
             logger.debug(f"amass error: {e}")
@@ -355,6 +433,7 @@ class SubdomainEnumerator:
     def _tool_available(self, tool: str) -> bool:
         """Check if tool is available"""
         import shutil
+
         return shutil.which(tool) is not None
 
 

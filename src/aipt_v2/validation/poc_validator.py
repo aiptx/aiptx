@@ -19,20 +19,17 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 from aipt_v2.agents.shared.finding_repository import (
     Finding,
     FindingSeverity,
     FindingStatus,
-    VulnerabilityType,
     PoCInfo,
 )
 from aipt_v2.validation.evidence import Evidence, EvidenceCollector
 from aipt_v2.validation.executor import ExploitExecutor, SandboxConfig
 from aipt_v2.validation.strategies import (
-    ValidationStrategy,
-    StrategyResult,
     get_strategy_for_vuln_type,
 )
 
@@ -41,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 class ValidationStatus(str, Enum):
     """Status of validation attempt."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     VALIDATED = "validated"
@@ -53,6 +51,7 @@ class ValidationStatus(str, Enum):
 @dataclass
 class ValidationResult:
     """Result from validating a single finding."""
+
     finding_id: str
     status: ValidationStatus = ValidationStatus.PENDING
     validated: bool = False
@@ -87,6 +86,7 @@ class ValidatedFinding:
 
     Contains the original finding plus validation results.
     """
+
     finding: Finding
     validation: ValidationResult
 
@@ -109,13 +109,14 @@ class ValidatedFinding:
 @dataclass
 class ValidatorConfig:
     """Configuration for PoC validator."""
-    max_concurrent: int = 3                # Max concurrent validations
-    timeout_per_finding: float = 60.0      # Timeout per finding (seconds)
+
+    max_concurrent: int = 3  # Max concurrent validations
+    timeout_per_finding: float = 60.0  # Timeout per finding (seconds)
     min_severity: FindingSeverity = FindingSeverity.LOW
-    skip_info: bool = True                 # Skip INFO severity
-    max_attempts: int = 5                  # Max attempts per finding
-    enable_browser: bool = False           # Enable browser for XSS validation
-    sandbox_mode: bool = False             # Use Docker sandbox
+    skip_info: bool = True  # Skip INFO severity
+    max_attempts: int = 5  # Max attempts per finding
+    enable_browser: bool = False  # Enable browser for XSS validation
+    sandbox_mode: bool = False  # Use Docker sandbox
     callback_server: Optional[str] = None  # Callback server URL
 
 
@@ -263,8 +264,7 @@ class PoCValidator:
         """
         # Filter findings that need validation
         to_validate = [
-            f for f in findings
-            if f.status in [FindingStatus.NEW, FindingStatus.PENDING_VALIDATION]
+            f for f in findings if f.status in [FindingStatus.NEW, FindingStatus.PENDING_VALIDATION]
         ]
 
         if not to_validate:
@@ -338,8 +338,7 @@ class PoCValidator:
             "confirmed": self._validated_count,
             "false_positives": self._false_positive_count,
             "confirmation_rate": (
-                self._validated_count / self._validation_count
-                if self._validation_count > 0 else 0
+                self._validated_count / self._validation_count if self._validation_count > 0 else 0
             ),
         }
 
@@ -350,12 +349,12 @@ class PoCValidator:
             "validated_findings": self._validated_count,
             "false_positives": self._false_positive_count,
             "confirmation_rate": (
-                self._validated_count / self._validation_count
-                if self._validation_count > 0 else 0
+                self._validated_count / self._validation_count if self._validation_count > 0 else 0
             ),
             "false_positive_rate": (
                 self._false_positive_count / self._validation_count
-                if self._validation_count > 0 else 0
+                if self._validation_count > 0
+                else 0
             ),
         }
 
@@ -415,7 +414,6 @@ async def validate_repository_findings(
     """
     from aipt_v2.agents.shared.finding_repository import (
         get_finding_repository,
-        FindingStatus,
     )
 
     repo = get_finding_repository()

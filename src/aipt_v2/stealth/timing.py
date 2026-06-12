@@ -19,16 +19,18 @@ logger = logging.getLogger(__name__)
 
 class TimingProfile(str, Enum):
     """Pre-defined timing profiles."""
-    AGGRESSIVE = "aggressive"   # Fast, more detectable
-    NORMAL = "normal"           # Balanced
-    CAUTIOUS = "cautious"       # Slower, less detectable
-    PARANOID = "paranoid"       # Very slow, minimal footprint
+
+    AGGRESSIVE = "aggressive"  # Fast, more detectable
+    NORMAL = "normal"  # Balanced
+    CAUTIOUS = "cautious"  # Slower, less detectable
+    PARANOID = "paranoid"  # Very slow, minimal footprint
     BUSINESS_HOURS = "business_hours"  # Mimic normal work patterns
 
 
 @dataclass
 class TimingConfig:
     """Timing configuration."""
+
     min_delay: float
     max_delay: float
     jitter_factor: float
@@ -156,7 +158,11 @@ class TimingEngine:
         """
         return {
             "is_business_hours": self.is_business_hours(),
-            "recommended_profile": TimingProfile.BUSINESS_HOURS.value if self.is_business_hours() else TimingProfile.CAUTIOUS.value,
+            "recommended_profile": (
+                TimingProfile.BUSINESS_HOURS.value
+                if self.is_business_hours()
+                else TimingProfile.CAUTIOUS.value
+            ),
             "current_profile": self.profile.value,
             "current_config": {
                 "min_delay": self.config.min_delay,

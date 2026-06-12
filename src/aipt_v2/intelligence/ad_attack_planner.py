@@ -5,6 +5,7 @@ LLM-guided attack path planning for AD penetration testing.
 Analyzes BloodHound data, enumeration results, and available
 attack techniques to generate optimal attack plans.
 """
+
 from __future__ import annotations
 
 import json
@@ -12,13 +13,14 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any
+from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class AttackObjective(Enum):
     """Attack objectives for AD testing"""
+
     DOMAIN_ADMIN = "domain_admin"
     ENTERPRISE_ADMIN = "enterprise_admin"
     SPECIFIC_USER = "specific_user"
@@ -31,6 +33,7 @@ class AttackObjective(Enum):
 
 class AttackPhase(Enum):
     """Phases of AD attack"""
+
     RECONNAISSANCE = "reconnaissance"
     INITIAL_ACCESS = "initial_access"
     CREDENTIAL_ACCESS = "credential_access"
@@ -44,6 +47,7 @@ class AttackPhase(Enum):
 @dataclass
 class AttackStep:
     """Individual step in an attack plan"""
+
     phase: AttackPhase
     action: str
     description: str
@@ -80,6 +84,7 @@ class AttackStep:
 @dataclass
 class AttackPlan:
     """Complete attack plan"""
+
     objective: AttackObjective
     target: str
     steps: list[AttackStep] = field(default_factory=list)
@@ -114,6 +119,7 @@ class AttackPlan:
 @dataclass
 class ADEnvironment:
     """AD environment context for planning"""
+
     domain: str
     dc_ip: str
     forest_level: str = ""
@@ -295,7 +301,8 @@ Return the plan as JSON with this structure:
         try:
             # Extract JSON from response
             import re
-            json_match = re.search(r'\{[\s\S]*\}', response)
+
+            json_match = re.search(r"\{[\s\S]*\}", response)
             if not json_match:
                 return None
 
@@ -415,36 +422,42 @@ Return the plan as JSON with this structure:
 
         # Kerberoasting
         if environment.kerberoastable_users:
-            steps.append(AttackStep(
-                phase=AttackPhase.CREDENTIAL_ACCESS,
-                action="Kerberoast",
-                description=f"Request TGS for {len(environment.kerberoastable_users)} accounts",
-                tool="GetUserSPNs.py",
-                produces=["tgs_hashes"],
-                risk_level="low",
-            ))
+            steps.append(
+                AttackStep(
+                    phase=AttackPhase.CREDENTIAL_ACCESS,
+                    action="Kerberoast",
+                    description=f"Request TGS for {len(environment.kerberoastable_users)} accounts",
+                    tool="GetUserSPNs.py",
+                    produces=["tgs_hashes"],
+                    risk_level="low",
+                )
+            )
 
         # AS-REP roasting
         if environment.asrep_roastable_users:
-            steps.append(AttackStep(
-                phase=AttackPhase.CREDENTIAL_ACCESS,
-                action="AS-REP Roast",
-                description=f"Request AS-REP for {len(environment.asrep_roastable_users)} accounts",
-                tool="GetNPUsers.py",
-                produces=["asrep_hashes"],
-                risk_level="low",
-            ))
+            steps.append(
+                AttackStep(
+                    phase=AttackPhase.CREDENTIAL_ACCESS,
+                    action="AS-REP Roast",
+                    description=f"Request AS-REP for {len(environment.asrep_roastable_users)} accounts",
+                    tool="GetNPUsers.py",
+                    produces=["asrep_hashes"],
+                    risk_level="low",
+                )
+            )
 
         # LSASS dump if we have admin
         if environment.admin_on:
-            steps.append(AttackStep(
-                phase=AttackPhase.CREDENTIAL_ACCESS,
-                action="LSASS Dump",
-                description=f"Dump LSASS from {len(environment.admin_on)} hosts",
-                tool="lsassy",
-                produces=["cleartext_creds", "ntlm_hashes"],
-                risk_level="medium" if stealth == "high" else "low",
-            ))
+            steps.append(
+                AttackStep(
+                    phase=AttackPhase.CREDENTIAL_ACCESS,
+                    action="LSASS Dump",
+                    description=f"Dump LSASS from {len(environment.admin_on)} hosts",
+                    tool="lsassy",
+                    produces=["cleartext_creds", "ntlm_hashes"],
+                    risk_level="medium" if stealth == "high" else "low",
+                )
+            )
 
         plan.steps = steps
         return plan
@@ -538,13 +551,15 @@ Return the plan as JSON with this structure:
         steps = []
 
         for i, path_step in enumerate(environment.paths_to_da[:5]):  # Max 5 steps
-            steps.append(AttackStep(
-                phase=AttackPhase.PRIVILEGE_ESCALATION,
-                action=path_step.get("relationship", f"Step {i+1}"),
-                description=f"From {path_step.get('source', '?')} to {path_step.get('target', '?')}",
-                tool=self._get_tool_for_relationship(path_step.get("relationship", "")),
-                risk_level="medium",
-            ))
+            steps.append(
+                AttackStep(
+                    phase=AttackPhase.PRIVILEGE_ESCALATION,
+                    action=path_step.get("relationship", f"Step {i+1}"),
+                    description=f"From {path_step.get('source', '?')} to {path_step.get('target', '?')}",
+                    tool=self._get_tool_for_relationship(path_step.get("relationship", "")),
+                    risk_level="medium",
+                )
+            )
 
         return steps
 

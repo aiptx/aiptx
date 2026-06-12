@@ -8,15 +8,15 @@ HTTP/HTTPS traffic interception and manipulation:
 - Integration with mitmproxy
 """
 
+from .history import (
+    HistoryEntry,
+    ProxyHistory,
+)
 from .interceptor import (
-    ProxyInterceptor,
-    ProxyConfig,
     InterceptedRequest,
     InterceptedResponse,
-)
-from .history import (
-    ProxyHistory,
-    HistoryEntry,
+    ProxyConfig,
+    ProxyInterceptor,
 )
 
 __all__ = [

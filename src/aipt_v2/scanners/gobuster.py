@@ -7,16 +7,15 @@ https://github.com/OJ/gobuster
 """
 
 import asyncio
-import json
 import logging
 import re
 import shutil
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -132,11 +131,7 @@ class GobusterScanner(BaseScanner):
         return None
 
     async def scan(
-        self,
-        target: str,
-        mode: Optional[str] = None,
-        wordlist: Optional[str] = None,
-        **kwargs
+        self, target: str, mode: Optional[str] = None, wordlist: Optional[str] = None, **kwargs
     ) -> ScanResult:
         """
         Run gobuster scan.
@@ -174,8 +169,7 @@ class GobusterScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -356,7 +350,9 @@ class GobusterScanner(BaseScanner):
 
             # Check for interesting paths
             path_lower = path.lower()
-            if any(p in path_lower for p in ["admin", "backup", "config", "api", "secret", "debug"]):
+            if any(
+                p in path_lower for p in ["admin", "backup", "config", "api", "secret", "debug"]
+            ):
                 severity = ScanSeverity.MEDIUM
                 tags.append("interesting")
 

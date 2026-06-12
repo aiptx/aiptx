@@ -15,7 +15,7 @@ import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PayloadFeedback:
     """Feedback data for a single payload attempt."""
+
     payload: str
     payload_type: str  # sqli, xss, cmdi, etc.
     success: bool
@@ -45,7 +46,9 @@ class PayloadFeedback:
 
     def context_hash(self) -> str:
         """Generate a hash of the context for grouping similar attempts."""
-        context_str = f"{self.target_url}:{self.endpoint}:{self.parameter}:{self.waf_detected or 'none'}"
+        context_str = (
+            f"{self.target_url}:{self.endpoint}:{self.parameter}:{self.waf_detected or 'none'}"
+        )
         return hashlib.sha256(context_str.encode()).hexdigest()[:16]
 
     def to_dict(self) -> dict[str, Any]:
@@ -97,7 +100,8 @@ class FeedbackCollector:
         """Initialize database schema."""
         cursor = self._conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS feedback (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 payload_hash TEXT NOT NULL,
@@ -119,30 +123,40 @@ class FeedbackCollector:
                 timestamp TEXT NOT NULL,
                 created_at DATETIME DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_feedback_payload_hash
             ON feedback(payload_hash)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_feedback_context_hash
             ON feedback(context_hash)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_feedback_success
             ON feedback(success)
-        """)
+        """
+        )
 
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_feedback_payload_type
             ON feedback(payload_type)
-        """)
+        """
+        )
 
         # Aggregated statistics table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS payload_stats (
                 payload_hash TEXT PRIMARY KEY,
                 payload TEXT NOT NULL,
@@ -155,7 +169,8 @@ class FeedbackCollector:
                 last_attempt TEXT,
                 waf_success_rates TEXT DEFAULT '{}'
             )
-        """)
+        """
+        )
 
         self._conn.commit()
 
@@ -168,32 +183,35 @@ class FeedbackCollector:
         """
         cursor = self._conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO feedback (
                 payload_hash, context_hash, payload, payload_type, success,
                 target_url, endpoint, parameter, http_method, status_code,
                 response_length, response_time_ms, waf_detected, mutations_applied,
                 context, error_message, timestamp
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            feedback.payload_hash(),
-            feedback.context_hash(),
-            feedback.payload,
-            feedback.payload_type,
-            1 if feedback.success else 0,
-            feedback.target_url,
-            feedback.endpoint,
-            feedback.parameter,
-            feedback.http_method,
-            feedback.status_code,
-            feedback.response_length,
-            feedback.response_time_ms,
-            feedback.waf_detected,
-            json.dumps(feedback.mutations_applied),
-            json.dumps(feedback.context),
-            feedback.error_message,
-            feedback.timestamp,
-        ))
+        """,
+            (
+                feedback.payload_hash(),
+                feedback.context_hash(),
+                feedback.payload,
+                feedback.payload_type,
+                1 if feedback.success else 0,
+                feedback.target_url,
+                feedback.endpoint,
+                feedback.parameter,
+                feedback.http_method,
+                feedback.status_code,
+                feedback.response_length,
+                feedback.response_time_ms,
+                feedback.waf_detected,
+                json.dumps(feedback.mutations_applied),
+                json.dumps(feedback.context),
+                feedback.error_message,
+                feedback.timestamp,
+            ),
+        )
 
         # Update aggregated stats
         self._update_stats(feedback)
@@ -217,10 +235,7 @@ class FeedbackCollector:
         payload_hash = feedback.payload_hash()
 
         # Get existing stats
-        cursor.execute(
-            "SELECT * FROM payload_stats WHERE payload_hash = ?",
-            (payload_hash,)
-        )
+        cursor.execute("SELECT * FROM payload_stats WHERE payload_hash = ?", (payload_hash,))
         existing = cursor.fetchone()
 
         if existing:
@@ -239,7 +254,8 @@ class FeedbackCollector:
             if feedback.success:
                 waf_rates[waf_key]["success"] += 1
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 UPDATE payload_stats SET
                     total_attempts = ?,
                     successful_attempts = ?,
@@ -249,44 +265,47 @@ class FeedbackCollector:
                     last_success = CASE WHEN ? THEN ? ELSE last_success END,
                     waf_success_rates = ?
                 WHERE payload_hash = ?
-            """, (
-                total,
-                successful,
-                success_rate,
-                avg_time,
-                feedback.timestamp,
-                feedback.success,
-                feedback.timestamp,
-                json.dumps(waf_rates),
-                payload_hash,
-            ))
+            """,
+                (
+                    total,
+                    successful,
+                    success_rate,
+                    avg_time,
+                    feedback.timestamp,
+                    feedback.success,
+                    feedback.timestamp,
+                    json.dumps(waf_rates),
+                    payload_hash,
+                ),
+            )
         else:
             # Insert new
             waf_rates = {
-                feedback.waf_detected or "none": {
-                    "total": 1,
-                    "success": 1 if feedback.success else 0
-                }
+                feedback.waf_detected
+                or "none": {"total": 1, "success": 1 if feedback.success else 0}
             }
 
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO payload_stats (
                     payload_hash, payload, payload_type, total_attempts,
                     successful_attempts, success_rate, avg_response_time,
                     last_success, last_attempt, waf_success_rates
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (
-                payload_hash,
-                feedback.payload,
-                feedback.payload_type,
-                1,
-                1 if feedback.success else 0,
-                1.0 if feedback.success else 0.0,
-                feedback.response_time_ms,
-                feedback.timestamp if feedback.success else None,
-                feedback.timestamp,
-                json.dumps(waf_rates),
-            ))
+            """,
+                (
+                    payload_hash,
+                    feedback.payload,
+                    feedback.payload_type,
+                    1,
+                    1 if feedback.success else 0,
+                    1.0 if feedback.success else 0.0,
+                    feedback.response_time_ms,
+                    feedback.timestamp if feedback.success else None,
+                    feedback.timestamp,
+                    json.dumps(waf_rates),
+                ),
+            )
 
     def get_success_rate(
         self,
@@ -310,8 +329,7 @@ class FeedbackCollector:
         if payload:
             payload_hash = hashlib.sha256(payload.encode()).hexdigest()[:16]
             cursor.execute(
-                "SELECT success_rate FROM payload_stats WHERE payload_hash = ?",
-                (payload_hash,)
+                "SELECT success_rate FROM payload_stats WHERE payload_hash = ?", (payload_hash,)
             )
             result = cursor.fetchone()
             return result[0] if result else 0.5  # Default to 50% for unknown
@@ -369,7 +387,7 @@ class FeedbackCollector:
                 payload_hash = hashlib.sha256(payload.encode()).hexdigest()[:16]
                 cursor.execute(
                     "SELECT waf_success_rates FROM payload_stats WHERE payload_hash = ?",
-                    (payload_hash,)
+                    (payload_hash,),
                 )
                 row = cursor.fetchone()
                 if row:

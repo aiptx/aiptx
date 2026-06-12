@@ -3,6 +3,7 @@ AIPT Docker Sandbox
 
 Isolated command execution in Docker containers for safety.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -21,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class SandboxConfig:
     """Docker sandbox configuration"""
+
     image: str = "python:3.11-slim"  # Base image
     network_mode: str = "bridge"  # none, bridge, host
     memory_limit: str = "512m"
@@ -113,9 +115,7 @@ class DockerSandbox:
 
         # Workspace mount
         if self.config.mount_workspace:
-            cmd_parts.extend([
-                "-v", f"{self._temp_dir}:{self.config.workspace_path}:rw"
-            ])
+            cmd_parts.extend(["-v", f"{self._temp_dir}:{self.config.workspace_path}:rw"])
             cmd_parts.extend(["-w", self.config.workspace_path])
 
         # Auto-remove
@@ -154,7 +154,11 @@ class DockerSandbox:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "stop", "-t", "5", self._container_id,
+                "docker",
+                "stop",
+                "-t",
+                "5",
+                self._container_id,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -166,6 +170,7 @@ class DockerSandbox:
             # Cleanup temp dir
             if self._temp_dir and os.path.exists(self._temp_dir):
                 import shutil
+
                 shutil.rmtree(self._temp_dir, ignore_errors=True)
                 self._temp_dir = None
 
@@ -210,10 +215,14 @@ class DockerSandbox:
         try:
             # Docker exec command
             exec_cmd = [
-                "docker", "exec",
-                "-u", user,
+                "docker",
+                "exec",
+                "-u",
+                user,
                 self._container_id,
-                "sh", "-c", command,
+                "sh",
+                "-c",
+                command,
             ]
 
             process = await asyncio.create_subprocess_exec(
@@ -230,9 +239,7 @@ class DockerSandbox:
 
                 result.exit_code = process.returncode
                 result.status = (
-                    ExecutionStatus.SUCCESS
-                    if process.returncode == 0
-                    else ExecutionStatus.FAILED
+                    ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILED
                 )
                 result.stdout = stdout.decode("utf-8", errors="replace")
                 result.stderr = stderr.decode("utf-8", errors="replace")
@@ -259,7 +266,10 @@ class DockerSandbox:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "cp", local_path, f"{self._container_id}:{container_path}",
+                "docker",
+                "cp",
+                local_path,
+                f"{self._container_id}:{container_path}",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -275,7 +285,10 @@ class DockerSandbox:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "cp", f"{self._container_id}:{container_path}", local_path,
+                "docker",
+                "cp",
+                f"{self._container_id}:{container_path}",
+                local_path,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -297,7 +310,8 @@ class DockerSandbox:
         """Check if Docker is available"""
         try:
             process = await asyncio.create_subprocess_exec(
-                "docker", "info",
+                "docker",
+                "info",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -318,33 +332,39 @@ class DockerSandbox:
 # Security-focused sandbox presets
 def create_network_scanner_sandbox() -> DockerSandbox:
     """Sandbox configured for network scanning tools"""
-    return DockerSandbox(SandboxConfig(
-        image="instrumentisto/nmap:latest",
-        network_mode="host",  # Need host networking for scanning
-        memory_limit="1g",
-        timeout=600.0,
-        add_capabilities=["NET_RAW", "NET_ADMIN"],
-    ))
+    return DockerSandbox(
+        SandboxConfig(
+            image="instrumentisto/nmap:latest",
+            network_mode="host",  # Need host networking for scanning
+            memory_limit="1g",
+            timeout=600.0,
+            add_capabilities=["NET_RAW", "NET_ADMIN"],
+        )
+    )
 
 
 def create_web_scanner_sandbox() -> DockerSandbox:
     """Sandbox configured for web scanning"""
-    return DockerSandbox(SandboxConfig(
-        image="python:3.11-slim",
-        network_mode="bridge",
-        memory_limit="512m",
-        timeout=300.0,
-    ))
+    return DockerSandbox(
+        SandboxConfig(
+            image="python:3.11-slim",
+            network_mode="bridge",
+            memory_limit="512m",
+            timeout=300.0,
+        )
+    )
 
 
 def create_exploit_sandbox() -> DockerSandbox:
     """Highly isolated sandbox for running exploits"""
-    return DockerSandbox(SandboxConfig(
-        image="python:3.11-slim",
-        network_mode="none",  # No network access
-        memory_limit="256m",
-        cpu_limit=0.5,
-        timeout=60.0,
-        read_only_root=True,
-        drop_capabilities=["ALL"],
-    ))
+    return DockerSandbox(
+        SandboxConfig(
+            image="python:3.11-slim",
+            network_mode="none",  # No network access
+            memory_limit="256m",
+            cpu_limit=0.5,
+            timeout=60.0,
+            read_only_root=True,
+            drop_capabilities=["ALL"],
+        )
+    )

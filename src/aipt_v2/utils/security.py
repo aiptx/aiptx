@@ -6,13 +6,12 @@ Provides functions for handling sensitive data safely in logs and outputs:
 - Error message sanitization
 - API key redaction
 """
+
 from __future__ import annotations
 
-import os
 import re
 from pathlib import Path
 from typing import Any
-
 
 # Patterns that indicate sensitive file paths
 SENSITIVE_PATH_PATTERNS = [
@@ -170,12 +169,14 @@ def sanitize_error_message(
 
     # Truncate if too long
     if len(message) > max_length:
-        message = message[:max_length - 3] + "..."
+        message = message[: max_length - 3] + "..."
 
     return message.strip()
 
 
-def redact_dict_secrets(data: dict[str, Any], keys_to_redact: list[str] | None = None) -> dict[str, Any]:
+def redact_dict_secrets(
+    data: dict[str, Any], keys_to_redact: list[str] | None = None
+) -> dict[str, Any]:
     """
     Create a copy of a dict with sensitive values redacted.
 
@@ -188,8 +189,16 @@ def redact_dict_secrets(data: dict[str, Any], keys_to_redact: list[str] | None =
     """
     if keys_to_redact is None:
         keys_to_redact = [
-            "key", "token", "secret", "password", "credential",
-            "auth", "api_key", "apikey", "access_key", "private",
+            "key",
+            "token",
+            "secret",
+            "password",
+            "credential",
+            "auth",
+            "api_key",
+            "apikey",
+            "access_key",
+            "private",
         ]
 
     result = {}

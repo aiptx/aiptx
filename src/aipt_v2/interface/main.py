@@ -12,7 +12,6 @@ Uses EventLoopManager for proper asyncio lifecycle management.
 """
 
 import argparse
-import asyncio
 import logging
 import os
 import shutil
@@ -27,9 +26,9 @@ from rich.panel import Panel
 from rich.text import Text
 from tenacity import (
     retry,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
 from aipt_v2.core.event_loop_manager import EventLoopManager, run_async
@@ -49,7 +48,6 @@ from aipt_v2.interface.utils import (
 )
 from aipt_v2.runtime.docker_runtime import AIPT_IMAGE
 from aipt_v2.telemetry.tracer import get_global_tracer
-
 
 logging.getLogger().setLevel(logging.ERROR)
 
@@ -213,8 +211,7 @@ def _validate_api_base(api_base: str | None) -> str | None:
     api_base = api_base.strip()
     if not api_base.startswith(("http://", "https://")):
         raise ValueError(
-            f"Invalid API base URL: '{api_base}'. "
-            "URL must start with 'http://' or 'https://'"
+            f"Invalid API base URL: '{api_base}'. " "URL must start with 'http://' or 'https://'"
         )
     return api_base
 
@@ -222,7 +219,9 @@ def _validate_api_base(api_base: str | None) -> str | None:
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=2, max=10),
-    retry=retry_if_exception_type((litellm.APIConnectionError, litellm.Timeout, LLMConnectionError)),
+    retry=retry_if_exception_type(
+        (litellm.APIConnectionError, litellm.Timeout, LLMConnectionError)
+    ),
     reraise=True,
 )
 async def _attempt_llm_connection(completion_kwargs: dict[str, Any]) -> Any:

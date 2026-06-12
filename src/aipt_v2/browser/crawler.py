@@ -3,6 +3,7 @@ AIPT Web Crawler
 
 Intelligent web crawling for security assessment.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -22,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class CrawlConfig:
     """Web crawler configuration"""
+
     max_depth: int = 3
     max_pages: int = 100
     max_concurrent: int = 5
@@ -31,12 +33,14 @@ class CrawlConfig:
     # Scope
     stay_in_scope: bool = True
     allowed_domains: list[str] = field(default_factory=list)
-    excluded_patterns: list[str] = field(default_factory=lambda: [
-        r"\.(jpg|jpeg|png|gif|svg|ico|css|js|woff|woff2|ttf|eot)$",
-        r"/logout",
-        r"/signout",
-        r"#",
-    ])
+    excluded_patterns: list[str] = field(
+        default_factory=lambda: [
+            r"\.(jpg|jpeg|png|gif|svg|ico|css|js|woff|woff2|ttf|eot)$",
+            r"/logout",
+            r"/signout",
+            r"#",
+        ]
+    )
 
     # Authentication
     cookies: dict[str, str] = field(default_factory=dict)
@@ -54,6 +58,7 @@ class CrawlConfig:
 @dataclass
 class CrawledPage:
     """Information about a crawled page"""
+
     url: str
     status_code: int
     content_type: str = ""
@@ -71,6 +76,7 @@ class CrawledPage:
 @dataclass
 class CrawlResult:
     """Complete crawl results"""
+
     target: str
     pages: list[CrawledPage] = field(default_factory=list)
     total_urls_found: int = 0
@@ -205,10 +211,7 @@ class WebCrawler:
                     break
 
                 # Crawl batch concurrently
-                tasks = [
-                    self._crawl_page(url, depth, parent)
-                    for url, depth, parent in batch
-                ]
+                tasks = [self._crawl_page(url, depth, parent) for url, depth, parent in batch]
                 await asyncio.gather(*tasks)
 
                 # Rate limiting
@@ -322,7 +325,7 @@ class WebCrawler:
     def _extract_forms(self, html: str, base_url: str) -> list[dict]:
         """Extract forms from HTML"""
         forms = []
-        form_pattern = r'<form[^>]*>(.*?)</form>'
+        form_pattern = r"<form[^>]*>(.*?)</form>"
 
         for form_match in re.finditer(form_pattern, html, re.IGNORECASE | re.DOTALL):
             form_html = form_match.group(0)
@@ -336,7 +339,7 @@ class WebCrawler:
 
             # Extract inputs
             inputs = []
-            input_pattern = r'<input[^>]*>'
+            input_pattern = r"<input[^>]*>"
             for input_match in re.finditer(input_pattern, form_html, re.IGNORECASE):
                 input_tag = input_match.group(0)
 
@@ -344,35 +347,43 @@ class WebCrawler:
                 type_match = re.search(r'type=["\']([^"\']*)["\']', input_tag, re.IGNORECASE)
                 value_match = re.search(r'value=["\']([^"\']*)["\']', input_tag, re.IGNORECASE)
 
-                inputs.append({
-                    "name": name_match.group(1) if name_match else "",
-                    "type": type_match.group(1) if type_match else "text",
-                    "value": value_match.group(1) if value_match else "",
-                })
+                inputs.append(
+                    {
+                        "name": name_match.group(1) if name_match else "",
+                        "type": type_match.group(1) if type_match else "text",
+                        "value": value_match.group(1) if value_match else "",
+                    }
+                )
 
             # Extract textareas
             textarea_pattern = r'<textarea[^>]*name=["\']([^"\']*)["\'][^>]*>'
             for ta_match in re.finditer(textarea_pattern, form_html, re.IGNORECASE):
-                inputs.append({
-                    "name": ta_match.group(1),
-                    "type": "textarea",
-                    "value": "",
-                })
+                inputs.append(
+                    {
+                        "name": ta_match.group(1),
+                        "type": "textarea",
+                        "value": "",
+                    }
+                )
 
             # Extract selects
             select_pattern = r'<select[^>]*name=["\']([^"\']*)["\'][^>]*>'
             for sel_match in re.finditer(select_pattern, form_html, re.IGNORECASE):
-                inputs.append({
-                    "name": sel_match.group(1),
-                    "type": "select",
-                    "value": "",
-                })
+                inputs.append(
+                    {
+                        "name": sel_match.group(1),
+                        "type": "select",
+                        "value": "",
+                    }
+                )
 
-            forms.append({
-                "action": urljoin(base_url, action) if action else base_url,
-                "method": method,
-                "inputs": inputs,
-            })
+            forms.append(
+                {
+                    "action": urljoin(base_url, action) if action else base_url,
+                    "method": method,
+                    "inputs": inputs,
+                }
+            )
 
         return forms
 
@@ -394,12 +405,14 @@ class WebCrawler:
         for form in forms:
             for inp in form.get("inputs", []):
                 if inp.get("name"):
-                    params.append({
-                        "name": inp["name"],
-                        "type": inp["type"],
-                        "method": form["method"],
-                        "location": form["action"],
-                    })
+                    params.append(
+                        {
+                            "name": inp["name"],
+                            "type": inp["type"],
+                            "method": form["method"],
+                            "location": form["action"],
+                        }
+                    )
         return params
 
     def _extract_url_params(self, url: str) -> list[dict]:
@@ -410,12 +423,14 @@ class WebCrawler:
             for pair in parsed.query.split("&"):
                 if "=" in pair:
                     name, _ = pair.split("=", 1)
-                    params.append({
-                        "name": name,
-                        "type": "url",
-                        "method": "GET",
-                        "location": url,
-                    })
+                    params.append(
+                        {
+                            "name": name,
+                            "type": "url",
+                            "method": "GET",
+                            "location": url,
+                        }
+                    )
         return params
 
     def _should_crawl(self, url: str) -> bool:

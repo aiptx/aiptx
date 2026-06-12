@@ -7,12 +7,11 @@ It uses the BaseAgent infrastructure with security-focused tools and prompts.
 
 import asyncio
 import logging
-from typing import Any, Optional, Dict
+from typing import Any, Dict, Optional
 
 from aipt_v2.agents.base import BaseAgent
-from aipt_v2.agents.ptt import PTT, TaskStatus
+from aipt_v2.agents.ptt import PTT
 from aipt_v2.llm.config import LLMConfig
-
 
 logger = logging.getLogger(__name__)
 
@@ -184,13 +183,16 @@ Begin your security assessment now. Start with reconnaissance to understand the 
         self.vulnerabilities.append(vulnerability)
 
         # Also add as finding
-        self.add_finding({
-            **vulnerability,
-            "type": "vulnerability",
-        })
+        self.add_finding(
+            {
+                **vulnerability,
+                "type": "vulnerability",
+            }
+        )
 
         # Notify tracer if available
         from aipt_v2.telemetry.tracer import get_global_tracer
+
         tracer = get_global_tracer()
         if tracer and hasattr(tracer, "report_vulnerability"):
             tracer.report_vulnerability(

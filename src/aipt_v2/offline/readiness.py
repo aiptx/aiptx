@@ -6,7 +6,6 @@ Verifies that the system is ready for fully offline operation.
 Checks all required data sources, tools, and configurations.
 """
 
-import asyncio
 import logging
 import shutil
 from dataclasses import dataclass, field
@@ -152,7 +151,9 @@ class OfflineReadinessChecker:
         },
     }
 
-    def __init__(self, data_path: Optional[Path] = None, ollama_url: str = "http://localhost:11434"):
+    def __init__(
+        self, data_path: Optional[Path] = None, ollama_url: str = "http://localhost:11434"
+    ):
         """
         Initialize the readiness checker.
 
@@ -186,12 +187,8 @@ class OfflineReadinessChecker:
         checks.append(config_check)
 
         # Determine overall readiness
-        critical_failures = [
-            c.message for c in checks if not c.passed and c.critical
-        ]
-        warnings = [
-            c.message for c in checks if not c.passed and not c.critical
-        ]
+        critical_failures = [c.message for c in checks if not c.passed and c.critical]
+        warnings = [c.message for c in checks if not c.passed and not c.critical]
 
         ready = len(critical_failures) == 0
 
@@ -210,13 +207,15 @@ class OfflineReadinessChecker:
             path = self.data_path / source_info["path"]
 
             if not path.exists():
-                results.append(CheckResult(
-                    name=f"data_{source_key}",
-                    passed=False,
-                    critical=source_info["critical"],
-                    message=f"Missing {source_info['description']}: {path}",
-                    details={"path": str(path), "exists": False},
-                ))
+                results.append(
+                    CheckResult(
+                        name=f"data_{source_key}",
+                        passed=False,
+                        critical=source_info["critical"],
+                        message=f"Missing {source_info['description']}: {path}",
+                        details={"path": str(path), "exists": False},
+                    )
+                )
                 continue
 
             # Count files
@@ -225,29 +224,39 @@ class OfflineReadinessChecker:
                 min_files = source_info["min_files"]
 
                 if file_count >= min_files:
-                    results.append(CheckResult(
-                        name=f"data_{source_key}",
-                        passed=True,
-                        critical=source_info["critical"],
-                        message=f"{source_info['description']}: OK ({file_count} files)",
-                        details={"path": str(path), "file_count": file_count},
-                    ))
+                    results.append(
+                        CheckResult(
+                            name=f"data_{source_key}",
+                            passed=True,
+                            critical=source_info["critical"],
+                            message=f"{source_info['description']}: OK ({file_count} files)",
+                            details={"path": str(path), "file_count": file_count},
+                        )
+                    )
                 else:
-                    results.append(CheckResult(
+                    results.append(
+                        CheckResult(
+                            name=f"data_{source_key}",
+                            passed=False,
+                            critical=source_info["critical"],
+                            message=f"{source_info['description']}: Incomplete ({file_count}/{min_files} files)",
+                            details={
+                                "path": str(path),
+                                "file_count": file_count,
+                                "min_required": min_files,
+                            },
+                        )
+                    )
+            except Exception as e:
+                results.append(
+                    CheckResult(
                         name=f"data_{source_key}",
                         passed=False,
                         critical=source_info["critical"],
-                        message=f"{source_info['description']}: Incomplete ({file_count}/{min_files} files)",
-                        details={"path": str(path), "file_count": file_count, "min_required": min_files},
-                    ))
-            except Exception as e:
-                results.append(CheckResult(
-                    name=f"data_{source_key}",
-                    passed=False,
-                    critical=source_info["critical"],
-                    message=f"Error checking {source_info['description']}: {e}",
-                    details={"error": str(e)},
-                ))
+                        message=f"Error checking {source_info['description']}: {e}",
+                        details={"error": str(e)},
+                    )
+                )
 
         return results
 
@@ -266,21 +275,25 @@ class OfflineReadinessChecker:
                     missing.append(tool)
 
             if not missing:
-                results.append(CheckResult(
-                    name=f"tools_{group_key}",
-                    passed=True,
-                    critical=group_info["critical"],
-                    message=f"{group_info['description']}: All installed",
-                    details={"available": available},
-                ))
+                results.append(
+                    CheckResult(
+                        name=f"tools_{group_key}",
+                        passed=True,
+                        critical=group_info["critical"],
+                        message=f"{group_info['description']}: All installed",
+                        details={"available": available},
+                    )
+                )
             else:
-                results.append(CheckResult(
-                    name=f"tools_{group_key}",
-                    passed=False,
-                    critical=group_info["critical"],
-                    message=f"{group_info['description']}: Missing {', '.join(missing)}",
-                    details={"available": available, "missing": missing},
-                ))
+                results.append(
+                    CheckResult(
+                        name=f"tools_{group_key}",
+                        passed=False,
+                        critical=group_info["critical"],
+                        message=f"{group_info['description']}: Missing {', '.join(missing)}",
+                        details={"available": available, "missing": missing},
+                    )
+                )
 
         return results
 
@@ -311,8 +324,7 @@ class OfflineReadinessChecker:
                 # Check for recommended models
                 recommended = ["mistral", "llama", "deepseek", "codellama", "phi"]
                 has_recommended = any(
-                    any(rec in name.lower() for rec in recommended)
-                    for name in model_names
+                    any(rec in name.lower() for rec in recommended) for name in model_names
                 )
 
                 if has_recommended:
@@ -329,7 +341,11 @@ class OfflineReadinessChecker:
                         passed=True,
                         critical=True,
                         message=f"Ollama running but no recommended models ({', '.join(recommended[:3])}...)",
-                        details={"running": True, "models": model_names, "warning": "No recommended models"},
+                        details={
+                            "running": True,
+                            "models": model_names,
+                            "warning": "No recommended models",
+                        },
                     )
 
         except httpx.ConnectError:
@@ -423,6 +439,7 @@ class OfflineReadinessChecker:
         # Check Ollama
         try:
             import httpx
+
             async with httpx.AsyncClient(timeout=2) as client:
                 response = await client.get(f"{self.ollama_url}/api/tags")
                 if response.status_code != 200:

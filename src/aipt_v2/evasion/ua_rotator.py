@@ -16,12 +16,13 @@ Usage:
 
 import random
 from dataclasses import dataclass
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
 
 
 class UACategory(Enum):
     """User-Agent categories."""
+
     CHROME = "chrome"
     FIREFOX = "firefox"
     SAFARI = "safari"
@@ -33,6 +34,7 @@ class UACategory(Enum):
 @dataclass
 class UserAgent:
     """User-Agent information."""
+
     string: str
     browser: str
     version: str
@@ -118,8 +120,7 @@ class UARotator:
     def __init__(self):
         """Initialize UA rotator."""
         self.all_uas = (
-            self.CHROME_UA + self.FIREFOX_UA +
-            self.SAFARI_UA + self.EDGE_UA + self.MOBILE_UA
+            self.CHROME_UA + self.FIREFOX_UA + self.SAFARI_UA + self.EDGE_UA + self.MOBILE_UA
         )
         self._current_index = 0
 
@@ -240,18 +241,11 @@ class UARotator:
             category = "mobile"
 
         return UserAgent(
-            string=ua_string,
-            browser=browser,
-            version=version,
-            os=os,
-            category=category
+            string=ua_string, browser=browser, version=version, os=os, category=category
         )
 
     def generate_custom(
-        self,
-        browser: str = "Chrome",
-        version: str = "120.0.0.0",
-        os: str = "Windows"
+        self, browser: str = "Chrome", version: str = "120.0.0.0", os: str = "Windows"
     ) -> str:
         """
         Generate custom user agent string.
@@ -269,7 +263,7 @@ class UARotator:
             "Mac": "Macintosh; Intel Mac OS X 10_15_7",
             "Linux": "X11; Linux x86_64",
             "iOS": "iPhone; CPU iPhone OS 17_0 like Mac OS X",
-            "Android": "Linux; Android 14; Pixel 8"
+            "Android": "Linux; Android 14; Pixel 8",
         }
 
         os_str = os_strings.get(os, os_strings["Windows"])

@@ -21,6 +21,7 @@ Usage:
     async with EventLoopManager.managed_loop() as loop:
         await my_coroutine()
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -199,9 +200,7 @@ class EventLoopManager:
                 task.cancel()
 
             # Wait for cancellation to complete
-            cls._loop.run_until_complete(
-                asyncio.gather(*pending, return_exceptions=True)
-            )
+            cls._loop.run_until_complete(asyncio.gather(*pending, return_exceptions=True))
         except Exception as e:
             logger.warning(f"Error during task cleanup: {e}")
 
@@ -289,9 +288,7 @@ class EventLoopManager:
         return loop.create_task(coro)
 
     @classmethod
-    def run_coroutine_threadsafe(
-        cls, coro: Coroutine[Any, Any, T]
-    ) -> asyncio.Future[T]:
+    def run_coroutine_threadsafe(cls, coro: Coroutine[Any, Any, T]) -> asyncio.Future[T]:
         """
         Schedule a coroutine to run on the event loop from another thread.
 
@@ -359,4 +356,5 @@ def current_time() -> float:
     except RuntimeError:
         # Fall back to time.time() if no loop is running
         import time
+
         return time.time()

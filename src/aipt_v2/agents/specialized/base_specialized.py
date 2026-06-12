@@ -18,20 +18,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Callable, Coroutine
+from typing import Any, Coroutine, Optional
 
-from aipt_v2.agents.shared.message_bus import (
-    MessageBus,
-    AgentMessage,
-    MessageType,
-    MessagePriority,
-    get_message_bus,
-)
 from aipt_v2.agents.shared.finding_repository import (
-    FindingRepository,
     Finding,
-    FindingSeverity,
+    FindingRepository,
     get_finding_repository,
+)
+from aipt_v2.agents.shared.message_bus import (
+    AgentMessage,
+    MessageBus,
+    MessagePriority,
+    MessageType,
+    get_message_bus,
 )
 
 logger = logging.getLogger(__name__)
@@ -39,6 +38,7 @@ logger = logging.getLogger(__name__)
 
 class AgentCapability(str, Enum):
     """Capabilities that agents can have."""
+
     # Reconnaissance
     SUBDOMAIN_ENUM = "subdomain_enumeration"
     PORT_SCAN = "port_scanning"
@@ -80,6 +80,7 @@ class AgentCapability(str, Enum):
 @dataclass
 class AgentConfig:
     """Configuration for specialized agents."""
+
     target: str
     timeout: int = 300
     max_findings: int = 1000
@@ -94,6 +95,7 @@ class AgentConfig:
 @dataclass
 class AgentProgress:
     """Progress tracking for agent execution."""
+
     agent_id: str
     agent_name: str
     status: str
@@ -260,10 +262,7 @@ class SpecializedAgent(ABC):
             self._findings_count += 1
             self._progress.findings_count = self._findings_count
 
-            logger.info(
-                f"Agent {self.name} found: {finding.title} "
-                f"({finding.severity.value})"
-            )
+            logger.info(f"Agent {self.name} found: {finding.title} " f"({finding.severity.value})")
 
         return finding_id or finding.id
 
@@ -365,10 +364,7 @@ class SpecializedAgent(ABC):
         while not task.done():
             self.check_cancelled()
             try:
-                return await asyncio.wait_for(
-                    asyncio.shield(task),
-                    timeout=check_interval
-                )
+                return await asyncio.wait_for(asyncio.shield(task), timeout=check_interval)
             except asyncio.TimeoutError:
                 continue
 

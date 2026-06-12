@@ -10,11 +10,12 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Optional
 
 
 class Language(str, Enum):
     """Supported programming languages."""
+
     PYTHON = "python"
     JAVASCRIPT = "javascript"
     TYPESCRIPT = "typescript"
@@ -26,6 +27,7 @@ class Language(str, Enum):
 @dataclass
 class CodeLocation:
     """Location in source code."""
+
     file_path: str
     line: int
     column: int = 0
@@ -48,6 +50,7 @@ class CodeLocation:
 @dataclass
 class ParsedImport:
     """Parsed import statement."""
+
     module: str
     names: list[str] = field(default_factory=list)
     alias: Optional[str] = None
@@ -58,6 +61,7 @@ class ParsedImport:
 @dataclass
 class ParsedVariable:
     """Parsed variable/assignment."""
+
     name: str
     value: Optional[str] = None
     type_hint: Optional[str] = None
@@ -69,6 +73,7 @@ class ParsedVariable:
 @dataclass
 class ParsedParameter:
     """Function/method parameter."""
+
     name: str
     type_hint: Optional[str] = None
     default_value: Optional[str] = None
@@ -78,6 +83,7 @@ class ParsedParameter:
 @dataclass
 class ParsedFunction:
     """Parsed function/method."""
+
     name: str
     parameters: list[ParsedParameter] = field(default_factory=list)
     return_type: Optional[str] = None
@@ -99,6 +105,7 @@ class ParsedFunction:
 @dataclass
 class ParsedClass:
     """Parsed class definition."""
+
     name: str
     base_classes: list[str] = field(default_factory=list)
     methods: list[ParsedFunction] = field(default_factory=list)
@@ -111,6 +118,7 @@ class ParsedClass:
 @dataclass
 class DataFlow:
     """Data flow from source to sink."""
+
     source: str  # Where data originates (user input, file, etc.)
     source_location: CodeLocation
     sink: str  # Where data goes (SQL query, command, response)
@@ -123,6 +131,7 @@ class DataFlow:
 @dataclass
 class SecurityPattern:
     """Pattern found during parsing that may be security-relevant."""
+
     pattern_type: str  # sql_query, command_exec, file_read, etc.
     code: str
     location: CodeLocation
@@ -132,6 +141,7 @@ class SecurityPattern:
 @dataclass
 class ParsedFile:
     """Complete parsed file representation."""
+
     file_path: str
     language: Language
     imports: list[ParsedImport] = field(default_factory=list)
@@ -158,7 +168,7 @@ class ParsedFile:
         """Get lines around a specific line for context."""
         start = max(1, line - context_lines)
         end = min(len(self.lines), line + context_lines)
-        return self.lines[start - 1:end]
+        return self.lines[start - 1 : end]
 
 
 class BaseParser(ABC):
@@ -231,14 +241,12 @@ class BaseParser(ABC):
                 strings.append((match.group()[1:-1], i))
 
             # Template literals (JS)
-            for match in re.finditer(r'`([^`\\]|\\.)*`', line):
+            for match in re.finditer(r"`([^`\\]|\\.)*`", line):
                 strings.append((match.group()[1:-1], i))
 
         return strings
 
-    def _find_security_patterns(
-        self, content: str, file_path: str
-    ) -> list[SecurityPattern]:
+    def _find_security_patterns(self, content: str, file_path: str) -> list[SecurityPattern]:
         """
         Find common security-relevant patterns.
 
@@ -250,30 +258,30 @@ class BaseParser(ABC):
         # Common patterns across languages
         security_indicators = {
             "sql_query": [
-                r'(?i)(SELECT|INSERT|UPDATE|DELETE|DROP)\s+',
-                r'(?i)execute\s*\(',
-                r'(?i)raw\s*\(',
+                r"(?i)(SELECT|INSERT|UPDATE|DELETE|DROP)\s+",
+                r"(?i)execute\s*\(",
+                r"(?i)raw\s*\(",
             ],
             "command_exec": [
-                r'(?i)(exec|system|popen|spawn|shell)',
-                r'(?i)subprocess',
-                r'(?i)os\.system',
+                r"(?i)(exec|system|popen|spawn|shell)",
+                r"(?i)subprocess",
+                r"(?i)os\.system",
             ],
             "file_operation": [
-                r'(?i)(open|read|write|fopen|fread|fwrite)',
-                r'(?i)file_get_contents',
+                r"(?i)(open|read|write|fopen|fread|fwrite)",
+                r"(?i)file_get_contents",
             ],
             "crypto": [
-                r'(?i)(md5|sha1|encrypt|decrypt|hash)',
-                r'(?i)(AES|DES|RSA)',
+                r"(?i)(md5|sha1|encrypt|decrypt|hash)",
+                r"(?i)(AES|DES|RSA)",
             ],
             "auth": [
-                r'(?i)(password|passwd|secret|token|api_key|apikey)',
-                r'(?i)(authenticate|authorize|login)',
+                r"(?i)(password|passwd|secret|token|api_key|apikey)",
+                r"(?i)(authenticate|authorize|login)",
             ],
             "network": [
-                r'(?i)(http|https|ftp|socket|request)',
-                r'(?i)(curl|fetch|ajax)',
+                r"(?i)(http|https|ftp|socket|request)",
+                r"(?i)(curl|fetch|ajax)",
             ],
         }
 

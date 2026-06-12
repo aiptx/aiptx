@@ -10,11 +10,11 @@ import asyncio
 import json
 import logging
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +82,7 @@ class TrivyScanner(BaseScanner):
         """Check if trivy is installed."""
         return shutil.which("trivy") is not None
 
-    async def scan(
-        self,
-        target: str,
-        scan_type: Optional[str] = None,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, scan_type: Optional[str] = None, **kwargs) -> ScanResult:
         """
         Run trivy scan.
 
@@ -117,8 +112,7 @@ class TrivyScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -261,7 +255,9 @@ class TrivyScanner(BaseScanner):
         if fixed_version:
             desc_parts.append(f"Fixed in: {fixed_version}")
 
-        tags = ["trivy", "vulnerability", pkg_type.lower()] if pkg_type else ["trivy", "vulnerability"]
+        tags = (
+            ["trivy", "vulnerability", pkg_type.lower()] if pkg_type else ["trivy", "vulnerability"]
+        )
 
         # Check if it's a CVE
         cwe = None

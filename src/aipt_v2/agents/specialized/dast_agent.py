@@ -14,19 +14,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urljoin, urlparse
 
-from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
-    AgentCapability,
-    AgentConfig,
-)
 from aipt_v2.agents.shared.finding_repository import (
+    Evidence,
     Finding,
     FindingSeverity,
     VulnerabilityType,
-    Evidence,
+)
+from aipt_v2.agents.specialized.base_specialized import (
+    AgentCapability,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -133,6 +132,7 @@ class DASTAgent(SpecializedAgent):
         # Check for endpoints shared by ReconAgent
         try:
             from aipt_v2.agents.shared.message_bus import get_message_bus
+
             bus = get_message_bus()
             history = await bus.get_history(topic="coordination.*", limit=100)
 
@@ -140,20 +140,24 @@ class DASTAgent(SpecializedAgent):
                 if msg.content and isinstance(msg.content, dict):
                     if "directories" in msg.content:
                         for path in msg.content.get("directories", [])[:50]:
-                            endpoints.append({
-                                "url": urljoin(base_url, path),
-                                "method": "GET",
-                                "params": [],
-                            })
+                            endpoints.append(
+                                {
+                                    "url": urljoin(base_url, path),
+                                    "method": "GET",
+                                    "params": [],
+                                }
+                            )
         except Exception:
             pass
 
         # Add base endpoint
-        endpoints.append({
-            "url": base_url,
-            "method": "GET",
-            "params": [],
-        })
+        endpoints.append(
+            {
+                "url": base_url,
+                "method": "GET",
+                "params": [],
+            }
+        )
 
         # Try to crawl for more
         try:
@@ -195,11 +199,13 @@ class DASTAgent(SpecializedAgent):
             if action:
                 url = urljoin(base_url, action)
                 if urlparse(url).netloc == parsed_base.netloc:
-                    endpoints.append({
-                        "url": url,
-                        "method": "POST",
-                        "params": self._extract_form_params(html, action),
-                    })
+                    endpoints.append(
+                        {
+                            "url": url,
+                            "method": "POST",
+                            "params": self._extract_form_params(html, action),
+                        }
+                    )
 
         # Find links with parameters
         link_pattern = r'href=["\']([^"\']*\?[^"\']*)["\']'
@@ -207,26 +213,31 @@ class DASTAgent(SpecializedAgent):
             url = urljoin(base_url, match.group(1))
             if urlparse(url).netloc == parsed_base.netloc:
                 params = self._extract_url_params(url)
-                endpoints.append({
-                    "url": url.split("?")[0],
-                    "method": "GET",
-                    "params": params,
-                })
+                endpoints.append(
+                    {
+                        "url": url.split("?")[0],
+                        "method": "GET",
+                        "params": params,
+                    }
+                )
 
         return endpoints
 
     def _extract_form_params(self, html: str, form_action: str) -> list[dict]:
         """Extract form parameters."""
         import re
+
         params = []
 
         # Find input fields
         input_pattern = r'<input[^>]*name=["\']([^"\']*)["\'][^>]*'
         for match in re.finditer(input_pattern, html, re.IGNORECASE):
-            params.append({
-                "name": match.group(1),
-                "type": "input",
-            })
+            params.append(
+                {
+                    "name": match.group(1),
+                    "type": "input",
+                }
+            )
 
         return params
 
@@ -239,11 +250,13 @@ class DASTAgent(SpecializedAgent):
         query_params = parse_qs(parsed.query)
 
         for name, values in query_params.items():
-            params.append({
-                "name": name,
-                "type": "query",
-                "value": values[0] if values else "",
-            })
+            params.append(
+                {
+                    "name": name,
+                    "type": "query",
+                    "value": values[0] if values else "",
+                }
+            )
 
         return params
 
@@ -251,7 +264,7 @@ class DASTAgent(SpecializedAgent):
         """Test endpoints for SQL injection."""
         sqli_payloads = [
             ("'", "Single quote"),
-            ("\"", "Double quote"),
+            ('"', "Double quote"),
             ("' OR '1'='1", "Boolean-based"),
             ("1' AND '1'='1", "Boolean-based AND"),
             ("1' WAITFOR DELAY '0:0:5'--", "Time-based MSSQL"),
@@ -278,8 +291,9 @@ class DASTAgent(SpecializedAgent):
             r"Unclosed quotation mark",
         ]
 
-        import aiohttp
         import re
+
+        import aiohttp
 
         async with aiohttp.ClientSession() as session:
             for endpoint in endpoints:
@@ -407,8 +421,19 @@ class DASTAgent(SpecializedAgent):
             ("file:///etc/passwd", "File protocol"),
         ]
 
-        url_params = ["url", "uri", "link", "redirect", "return", "next",
-                      "callback", "fetch", "load", "src", "href"]
+        url_params = [
+            "url",
+            "uri",
+            "link",
+            "redirect",
+            "return",
+            "next",
+            "callback",
+            "fetch",
+            "load",
+            "src",
+            "href",
+        ]
 
         import aiohttp
 
@@ -436,7 +461,8 @@ class DASTAgent(SpecializedAgent):
 
                                 # Check for SSRF indicators
                                 ssrf_indicators = [
-                                    "ami-id", "instance-id",  # AWS
+                                    "ami-id",
+                                    "instance-id",  # AWS
                                     "computeMetadata",  # GCP
                                     "root:x:0:0",  # /etc/passwd
                                     "SSH-2.0",  # SSH banner
@@ -495,8 +521,10 @@ class DASTAgent(SpecializedAgent):
                                 body = await resp.text()
 
                                 # Check if we actually got admin content
-                                if any(word in body.lower() for word in
-                                       ["admin", "dashboard", "management", "settings"]):
+                                if any(
+                                    word in body.lower()
+                                    for word in ["admin", "dashboard", "management", "settings"]
+                                ):
                                     finding = Finding(
                                         vuln_type=VulnerabilityType.AUTH_BYPASS,
                                         title=f"Authentication bypass via {header_name}",
@@ -518,27 +546,25 @@ class DASTAgent(SpecializedAgent):
         """Run external DAST tools like Nuclei, Nikto."""
         try:
             from aipt_v2.execution.tool_registry import get_registry
+
             registry = get_registry()
 
             # Run Nuclei
             if await registry.is_tool_available("nuclei"):
-                result = await self._run_tool("nuclei", [
-                    "-u", self.target,
-                    "-severity", "critical,high,medium",
-                    "-json",
-                    "-silent"
-                ], timeout=300)
+                result = await self._run_tool(
+                    "nuclei",
+                    ["-u", self.target, "-severity", "critical,high,medium", "-json", "-silent"],
+                    timeout=300,
+                )
 
                 if result.get("output"):
                     await self._parse_nuclei_output(result["output"])
 
             # Run Nikto
             if await registry.is_tool_available("nikto"):
-                result = await self._run_tool("nikto", [
-                    "-h", self.target,
-                    "-Format", "json",
-                    "-o", "-"
-                ], timeout=300)
+                result = await self._run_tool(
+                    "nikto", ["-h", self.target, "-Format", "json", "-o", "-"], timeout=300
+                )
 
                 if result.get("output"):
                     await self._parse_nikto_output(result["output"])
@@ -568,8 +594,7 @@ class DASTAgent(SpecializedAgent):
                     title=data.get("info", {}).get("name", "Nuclei Finding"),
                     description=data.get("info", {}).get("description", ""),
                     severity=severity_map.get(
-                        data.get("info", {}).get("severity", "info"),
-                        FindingSeverity.INFO
+                        data.get("info", {}).get("severity", "info"), FindingSeverity.INFO
                     ),
                     target=self.target,
                     url=data.get("matched-at", self.target),
@@ -609,6 +634,7 @@ class DASTAgent(SpecializedAgent):
         """Run a DAST tool."""
         try:
             from aipt_v2.execution.tool_runner import ToolRunner
+
             runner = ToolRunner()
             return await runner.run(
                 tool_name=tool_name,

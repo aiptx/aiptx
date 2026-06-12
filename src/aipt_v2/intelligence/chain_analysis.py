@@ -19,10 +19,10 @@ actionable attack narratives for penetration testers.
 
 import json
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
-from collections import defaultdict
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -31,8 +31,10 @@ logger = logging.getLogger(__name__)
 # MITRE ATT&CK Technique Mapping
 # ============================================================================
 
+
 class MitreTactic(str, Enum):
     """MITRE ATT&CK Tactics (Enterprise)."""
+
     RECONNAISSANCE = "reconnaissance"
     RESOURCE_DEV = "resource-development"
     INITIAL_ACCESS = "initial-access"
@@ -52,6 +54,7 @@ class MitreTactic(str, Enum):
 @dataclass
 class MitreTechnique:
     """MITRE ATT&CK Technique reference."""
+
     id: str  # e.g., "T1190"
     name: str
     tactic: MitreTactic
@@ -66,46 +69,86 @@ class MitreTechnique:
 # Common technique mappings
 TECHNIQUE_MAP = {
     # Initial Access
-    "sqli": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                           "SQL injection to gain initial access"),
-    "rce": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                          "Remote code execution vulnerability"),
-    "default_creds": MitreTechnique("T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS,
-                                    "Default or weak credentials"),
-    "xss": MitreTechnique("T1189", "Drive-by Compromise", MitreTactic.INITIAL_ACCESS,
-                          "Cross-site scripting for session hijacking"),
-
+    "sqli": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "SQL injection to gain initial access",
+    ),
+    "rce": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Remote code execution vulnerability",
+    ),
+    "default_creds": MitreTechnique(
+        "T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS, "Default or weak credentials"
+    ),
+    "xss": MitreTechnique(
+        "T1189",
+        "Drive-by Compromise",
+        MitreTactic.INITIAL_ACCESS,
+        "Cross-site scripting for session hijacking",
+    ),
     # Credential Access
-    "credential_dump": MitreTechnique("T1003", "OS Credential Dumping", MitreTactic.CREDENTIAL_ACCESS,
-                                      "Dumping credentials from database or memory"),
-    "brute_force": MitreTechnique("T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS,
-                                  "Password guessing or cracking"),
-    "password_spray": MitreTechnique("T1110.003", "Password Spraying", MitreTactic.CREDENTIAL_ACCESS,
-                                     "Single password against many accounts"),
-
+    "credential_dump": MitreTechnique(
+        "T1003",
+        "OS Credential Dumping",
+        MitreTactic.CREDENTIAL_ACCESS,
+        "Dumping credentials from database or memory",
+    ),
+    "brute_force": MitreTechnique(
+        "T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS, "Password guessing or cracking"
+    ),
+    "password_spray": MitreTechnique(
+        "T1110.003",
+        "Password Spraying",
+        MitreTactic.CREDENTIAL_ACCESS,
+        "Single password against many accounts",
+    ),
     # Privilege Escalation
-    "priv_esc": MitreTechnique("T1068", "Exploitation for Privilege Escalation", MitreTactic.PRIVILEGE_ESC,
-                               "Escalating privileges through vulnerability"),
-    "sudo_abuse": MitreTechnique("T1548.003", "Sudo and Sudo Caching", MitreTactic.PRIVILEGE_ESC,
-                                 "Abusing sudo misconfigurations"),
-
+    "priv_esc": MitreTechnique(
+        "T1068",
+        "Exploitation for Privilege Escalation",
+        MitreTactic.PRIVILEGE_ESC,
+        "Escalating privileges through vulnerability",
+    ),
+    "sudo_abuse": MitreTechnique(
+        "T1548.003",
+        "Sudo and Sudo Caching",
+        MitreTactic.PRIVILEGE_ESC,
+        "Abusing sudo misconfigurations",
+    ),
     # Lateral Movement
-    "lateral_ssh": MitreTechnique("T1021.004", "SSH", MitreTactic.LATERAL_MOVEMENT,
-                                  "Using SSH for lateral movement"),
-    "lateral_smb": MitreTechnique("T1021.002", "SMB/Windows Admin Shares", MitreTactic.LATERAL_MOVEMENT,
-                                  "Using SMB for lateral movement"),
-    "pass_the_hash": MitreTechnique("T1550.002", "Pass the Hash", MitreTactic.LATERAL_MOVEMENT,
-                                    "Using password hashes for authentication"),
-
+    "lateral_ssh": MitreTechnique(
+        "T1021.004", "SSH", MitreTactic.LATERAL_MOVEMENT, "Using SSH for lateral movement"
+    ),
+    "lateral_smb": MitreTechnique(
+        "T1021.002",
+        "SMB/Windows Admin Shares",
+        MitreTactic.LATERAL_MOVEMENT,
+        "Using SMB for lateral movement",
+    ),
+    "pass_the_hash": MitreTechnique(
+        "T1550.002",
+        "Pass the Hash",
+        MitreTactic.LATERAL_MOVEMENT,
+        "Using password hashes for authentication",
+    ),
     # Exfiltration
-    "data_exfil": MitreTechnique("T1567", "Exfiltration Over Web Service", MitreTactic.EXFILTRATION,
-                                 "Exfiltrating data via web channels"),
-
+    "data_exfil": MitreTechnique(
+        "T1567",
+        "Exfiltration Over Web Service",
+        MitreTactic.EXFILTRATION,
+        "Exfiltrating data via web channels",
+    ),
     # Discovery
-    "network_scan": MitreTechnique("T1046", "Network Service Discovery", MitreTactic.DISCOVERY,
-                                   "Scanning for network services"),
-    "subdomain_enum": MitreTechnique("T1596.001", "DNS/Passive DNS", MitreTactic.RECONNAISSANCE,
-                                     "Subdomain enumeration"),
+    "network_scan": MitreTechnique(
+        "T1046", "Network Service Discovery", MitreTactic.DISCOVERY, "Scanning for network services"
+    ),
+    "subdomain_enum": MitreTechnique(
+        "T1596.001", "DNS/Passive DNS", MitreTactic.RECONNAISSANCE, "Subdomain enumeration"
+    ),
 }
 
 
@@ -113,21 +156,24 @@ TECHNIQUE_MAP = {
 # Chain Analysis Data Structures
 # ============================================================================
 
+
 class ChainConfidence(str, Enum):
     """Confidence level in attack chain viability."""
+
     CONFIRMED = "confirmed"  # Verified through exploitation
-    HIGH = "high"            # Strong evidence, likely exploitable
-    MEDIUM = "medium"        # Moderate evidence, possible
-    LOW = "low"              # Weak evidence, speculative
+    HIGH = "high"  # Strong evidence, likely exploitable
+    MEDIUM = "medium"  # Moderate evidence, possible
+    LOW = "low"  # Weak evidence, speculative
     THEORETICAL = "theoretical"  # Possible but no direct evidence
 
 
 class ChainImpact(str, Enum):
     """Impact level of successful attack chain."""
-    CRITICAL = "critical"    # Full system compromise, data breach
-    HIGH = "high"            # Significant access or data exposure
-    MEDIUM = "medium"        # Limited access or information disclosure
-    LOW = "low"              # Minimal impact
+
+    CRITICAL = "critical"  # Full system compromise, data breach
+    HIGH = "high"  # Significant access or data exposure
+    MEDIUM = "medium"  # Limited access or information disclosure
+    LOW = "low"  # Minimal impact
 
 
 @dataclass
@@ -135,6 +181,7 @@ class ChainNode:
     """
     A single node in an attack chain representing one step.
     """
+
     id: str
     finding_id: str
     technique: Optional[MitreTechnique]
@@ -149,6 +196,7 @@ class AttackChain:
     """
     A complete attack chain from initial access to impact.
     """
+
     id: str
     name: str
     description: str
@@ -192,7 +240,9 @@ class AttackChain:
         mult = confidence_mult.get(self.confidence, 0.5)
 
         # Evidence from nodes
-        avg_evidence = sum(n.evidence_strength for n in self.nodes) / len(self.nodes) if self.nodes else 0.5
+        avg_evidence = (
+            sum(n.evidence_strength for n in self.nodes) / len(self.nodes) if self.nodes else 0.5
+        )
 
         score = base_score * mult * (1 + avg_evidence)
         return min(100, max(0, score))
@@ -247,11 +297,13 @@ class AttackChain:
 # Chain Patterns - Attack Path Templates
 # ============================================================================
 
+
 @dataclass
 class ChainPattern:
     """
     A template for detecting attack chains.
     """
+
     id: str
     name: str
     description: str
@@ -382,6 +434,7 @@ CHAIN_PATTERNS = [
 # Chain Analysis Engine
 # ============================================================================
 
+
 class ChainAnalyzer:
     """
     Analyzes findings to detect attack chains and prioritize exploitation paths.
@@ -430,11 +483,18 @@ class ChainAnalyzer:
         # Load patterns - optionally include extended patterns
         if use_extended_patterns:
             try:
-                from .attack_patterns import EXTENDED_CHAIN_PATTERNS, EXTENDED_TECHNIQUE_MAP, ATTACK_TOOL_RECOMMENDATIONS
+                from .attack_patterns import (
+                    ATTACK_TOOL_RECOMMENDATIONS,
+                    EXTENDED_CHAIN_PATTERNS,
+                    EXTENDED_TECHNIQUE_MAP,
+                )
+
                 self.patterns = CHAIN_PATTERNS + EXTENDED_CHAIN_PATTERNS
                 self._extended_techniques = EXTENDED_TECHNIQUE_MAP
                 self._extended_tools = ATTACK_TOOL_RECOMMENDATIONS
-                logger.info(f"Loaded {len(self.patterns)} attack chain patterns (including extended)")
+                logger.info(
+                    f"Loaded {len(self.patterns)} attack chain patterns (including extended)"
+                )
             except ImportError:
                 logger.warning("Extended patterns not available, using base patterns only")
                 self.patterns = CHAIN_PATTERNS
@@ -560,26 +620,30 @@ class ChainAnalyzer:
             related = self._find_related_findings(entry_id, pattern.intermediate_types)
             for i, rel_id in enumerate(related[:2]):
                 rel = self.findings[rel_id]
-                nodes.append(ChainNode(
-                    id=f"node_{pattern.id}_{i+2}",
-                    finding_id=rel_id,
-                    technique=None,
-                    action=f"Leverage {getattr(rel, 'type', 'finding')}",
-                    result=getattr(rel, 'value', '')[:50],
-                    prerequisites=[nodes[-1].id],
-                    evidence_strength=evidence * 0.8,
-                ))
+                nodes.append(
+                    ChainNode(
+                        id=f"node_{pattern.id}_{i+2}",
+                        finding_id=rel_id,
+                        technique=None,
+                        action=f"Leverage {getattr(rel, 'type', 'finding')}",
+                        result=getattr(rel, "value", "")[:50],
+                        prerequisites=[nodes[-1].id],
+                        evidence_strength=evidence * 0.8,
+                    )
+                )
 
             # Add exit node
-            nodes.append(ChainNode(
-                id=f"node_{pattern.id}_exit",
-                finding_id=entry_id,
-                technique=self._get_technique_for_exit(pattern.exit_types),
-                action=f"Achieve {list(pattern.exit_types)[0]}",
-                result=pattern.description,
-                prerequisites=[nodes[-1].id],
-                evidence_strength=evidence * 0.7,
-            ))
+            nodes.append(
+                ChainNode(
+                    id=f"node_{pattern.id}_exit",
+                    finding_id=entry_id,
+                    technique=self._get_technique_for_exit(pattern.exit_types),
+                    action=f"Achieve {list(pattern.exit_types)[0]}",
+                    result=pattern.description,
+                    prerequisites=[nodes[-1].id],
+                    evidence_strength=evidence * 0.7,
+                )
+            )
 
             # Create chain
             chain = AttackChain(
@@ -622,8 +686,7 @@ class ChainAnalyzer:
 
         # Related findings bonus
         related = self._find_related_findings(
-            getattr(finding, "id", str(id(finding))),
-            pattern.intermediate_types
+            getattr(finding, "id", str(id(finding))), pattern.intermediate_types
         )
         score += min(0.2, len(related) * 0.05)
 
@@ -751,7 +814,7 @@ class ChainAnalyzer:
         key = mapping.get(pattern_id) or extended_mapping.get(pattern_id)
 
         # First check extended techniques, then fall back to base
-        if key and hasattr(self, '_extended_techniques') and key in self._extended_techniques:
+        if key and hasattr(self, "_extended_techniques") and key in self._extended_techniques:
             return self._extended_techniques[key]
         return TECHNIQUE_MAP.get(key)
 
@@ -865,8 +928,18 @@ class ChainAnalyzer:
             return extended_tools[pattern_id]
 
         # Try to get from extended tool recommendations by pattern type
-        if hasattr(self, '_extended_tools'):
-            for key in ["sqli", "xss", "ssrf", "xxe", "ssti", "jwt", "api", "container", "kubernetes"]:
+        if hasattr(self, "_extended_tools"):
+            for key in [
+                "sqli",
+                "xss",
+                "ssrf",
+                "xxe",
+                "ssti",
+                "jwt",
+                "api",
+                "container",
+                "kubernetes",
+            ]:
                 if key in pattern_id.lower():
                     return self._extended_tools.get(key, [])
 
@@ -883,23 +956,19 @@ class ChainAnalyzer:
         if cred_findings and port_findings:
             # Look for SSH/RDP ports that could be accessed with found creds
             ssh_ports = [
-                fid for fid in port_findings
+                fid
+                for fid in port_findings
                 if self.findings[fid].metadata.get("port") in [22, 2222]
             ]
             rdp_ports = [
-                fid for fid in port_findings
-                if self.findings[fid].metadata.get("port") == 3389
+                fid for fid in port_findings if self.findings[fid].metadata.get("port") == 3389
             ]
 
             if ssh_ports:
-                chains.append(self._build_lateral_chain(
-                    cred_findings[0], ssh_ports[0], "SSH"
-                ))
+                chains.append(self._build_lateral_chain(cred_findings[0], ssh_ports[0], "SSH"))
 
             if rdp_ports:
-                chains.append(self._build_lateral_chain(
-                    cred_findings[0], rdp_ports[0], "RDP"
-                ))
+                chains.append(self._build_lateral_chain(cred_findings[0], rdp_ports[0], "RDP"))
 
         return chains
 
@@ -949,10 +1018,13 @@ class ChainAnalyzer:
 
         vulns = self.findings_by_type.get("vuln", [])
         critical_vulns = [
-            fid for fid in vulns
+            fid
+            for fid in vulns
             if self.findings[fid].severity in ["critical", "CRITICAL"]
-            or (hasattr(self.findings[fid].severity, "value")
-                and self.findings[fid].severity.value == "critical")
+            or (
+                hasattr(self.findings[fid].severity, "value")
+                and self.findings[fid].severity.value == "critical"
+            )
         ]
 
         # Chain critical vulns on same host
@@ -976,15 +1048,17 @@ class ChainAnalyzer:
         nodes = []
         for i, fid in enumerate(finding_ids[:4]):
             finding = self.findings[fid]
-            nodes.append(ChainNode(
-                id=f"node_vuln_{i}",
-                finding_id=fid,
-                technique=TECHNIQUE_MAP.get("rce"),
-                action=f"Exploit {getattr(finding, 'type', 'vuln')}",
-                result=getattr(finding, "value", "")[:50],
-                prerequisites=[f"node_vuln_{i-1}"] if i > 0 else [],
-                evidence_strength=0.9,
-            ))
+            nodes.append(
+                ChainNode(
+                    id=f"node_vuln_{i}",
+                    finding_id=fid,
+                    technique=TECHNIQUE_MAP.get("rce"),
+                    action=f"Exploit {getattr(finding, 'type', 'vuln')}",
+                    result=getattr(finding, "value", "")[:50],
+                    prerequisites=[f"node_vuln_{i-1}"] if i > 0 else [],
+                    evidence_strength=0.9,
+                )
+            )
 
         return AttackChain(
             id=f"chain_multi_vuln_{host[:8]}",
@@ -993,7 +1067,11 @@ class ChainAnalyzer:
             nodes=nodes,
             confidence=ChainConfidence.HIGH,
             impact=ChainImpact.CRITICAL,
-            mitre_tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.EXECUTION, MitreTactic.PRIVILEGE_ESC],
+            mitre_tactics=[
+                MitreTactic.INITIAL_ACCESS,
+                MitreTactic.EXECUTION,
+                MitreTactic.PRIVILEGE_ESC,
+            ],
             target_assets=[host],
             recommended_tools=["metasploit", "burp"],
         )
@@ -1029,9 +1107,9 @@ class ChainAnalyzer:
         top_chains = self.detected_chains[:max_chains]
 
         return {
-            "target_count": len(set(
-                asset for chain in top_chains for asset in chain.target_assets
-            )),
+            "target_count": len(
+                set(asset for chain in top_chains for asset in chain.target_assets)
+            ),
             "total_chains": len(self.detected_chains),
             "prioritized_chains": [
                 {
@@ -1045,9 +1123,7 @@ class ChainAnalyzer:
                 }
                 for i, chain in enumerate(top_chains)
             ],
-            "immediate_actions": [
-                chain.nodes[0].action for chain in top_chains if chain.nodes
-            ],
+            "immediate_actions": [chain.nodes[0].action for chain in top_chains if chain.nodes],
         }
 
     def to_llm_context(self, max_chains: int = 10, max_tokens: int = 2000) -> str:
@@ -1092,7 +1168,7 @@ class ChainAnalyzer:
 
         # Truncate if needed
         if len(result) > max_tokens * 4:  # Rough char to token estimate
-            result = result[:max_tokens * 4] + "\n... (truncated)"
+            result = result[: max_tokens * 4] + "\n... (truncated)"
 
         return result
 
@@ -1101,22 +1177,27 @@ class ChainAnalyzer:
         if not self.detected_chains:
             self.analyze()
 
-        return json.dumps({
-            "analysis_summary": {
-                "total_findings": len(self.findings),
-                "total_chains": len(self.detected_chains),
-                "by_impact": {
-                    impact.value: len([c for c in self.detected_chains if c.impact == impact])
-                    for impact in ChainImpact
+        return json.dumps(
+            {
+                "analysis_summary": {
+                    "total_findings": len(self.findings),
+                    "total_chains": len(self.detected_chains),
+                    "by_impact": {
+                        impact.value: len([c for c in self.detected_chains if c.impact == impact])
+                        for impact in ChainImpact
+                    },
                 },
+                "chains": [chain.to_dict() for chain in self.detected_chains],
             },
-            "chains": [chain.to_dict() for chain in self.detected_chains],
-        }, indent=indent, default=str)
+            indent=indent,
+            default=str,
+        )
 
 
 # ============================================================================
 # Convenience Functions
 # ============================================================================
+
 
 def analyze_findings(findings: List[Any]) -> List[AttackChain]:
     """

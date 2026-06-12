@@ -26,8 +26,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from .transport import MCPTransport, StdioTransport
 from .tools import create_mcp_tool
+from .transport import MCPTransport, StdioTransport
 
 logger = logging.getLogger(__name__)
 
@@ -300,9 +300,7 @@ class MCPManager:
             )
 
             # Send initialized notification
-            await transport.send(
-                {"jsonrpc": "2.0", "method": "notifications/initialized"}
-            )
+            await transport.send({"jsonrpc": "2.0", "method": "notifications/initialized"})
 
             # Get available tools
             tools_response = await transport.send(

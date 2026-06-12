@@ -10,7 +10,6 @@ from typing import Any, cast
 
 from playwright.async_api import Browser, BrowserContext, Page, Playwright, async_playwright
 
-
 logger = logging.getLogger(__name__)
 
 MAX_PAGE_SOURCE_LENGTH = 20_000

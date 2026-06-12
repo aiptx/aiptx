@@ -14,19 +14,18 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from typing import Any, Optional
-from urllib.parse import urljoin, urlparse
+from typing import Any
+from urllib.parse import urlparse
 
-from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
-    AgentCapability,
-    AgentConfig,
-)
 from aipt_v2.agents.shared.finding_repository import (
+    Evidence,
     Finding,
     FindingSeverity,
     VulnerabilityType,
-    Evidence,
+)
+from aipt_v2.agents.specialized.base_specialized import (
+    AgentCapability,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -162,9 +161,10 @@ class WebSocketAgent(SpecializedAgent):
 
                     # Look for WebSocket URLs in the page
                     import re
+
                     ws_pattern = r'["\']wss?://[^"\']+["\']'
                     for match in re.finditer(ws_pattern, html):
-                        url = match.group().strip('"\'')
+                        url = match.group().strip("\"'")
                         if url not in endpoints:
                             endpoints.append(url)
 
@@ -211,11 +211,13 @@ class WebSocketAgent(SpecializedAgent):
                             async for message in asyncio.wait_for(
                                 self._receive_messages(ws), timeout=10
                             ):
-                                messages.append({
-                                    "endpoint": endpoint,
-                                    "direction": "recv",
-                                    "data": message,
-                                })
+                                messages.append(
+                                    {
+                                        "endpoint": endpoint,
+                                        "direction": "recv",
+                                        "data": message,
+                                    }
+                                )
                         except asyncio.TimeoutError:
                             pass
 
@@ -247,9 +249,7 @@ class WebSocketAgent(SpecializedAgent):
                 try:
                     # Try to connect without authentication
                     async with websockets.connect(
-                        endpoint,
-                        close_timeout=5,
-                        extra_headers={}  # No auth headers
+                        endpoint, close_timeout=5, extra_headers={}  # No auth headers
                     ) as ws:
                         # If we can connect and send/receive, auth might be missing
                         await ws.send('{"type": "ping"}')
@@ -332,9 +332,14 @@ class WebSocketAgent(SpecializedAgent):
 
                                     # Check for error responses that indicate injection
                                     error_indicators = [
-                                        "syntax", "error", "exception",
-                                        "mysql", "postgres", "mongo",
-                                        "command", "shell"
+                                        "syntax",
+                                        "error",
+                                        "exception",
+                                        "mysql",
+                                        "postgres",
+                                        "mongo",
+                                        "command",
+                                        "shell",
                                     ]
 
                                     if any(ind in response.lower() for ind in error_indicators):
@@ -370,10 +375,14 @@ class WebSocketAgent(SpecializedAgent):
                                                 response = await asyncio.wait_for(
                                                     ws.recv(), timeout=3
                                                 )
-                                                if any(ind in response.lower()
-                                                       for ind in error_indicators):
+                                                if any(
+                                                    ind in response.lower()
+                                                    for ind in error_indicators
+                                                ):
                                                     finding = Finding(
-                                                        vuln_type=self._map_injection_type(injection_type),
+                                                        vuln_type=self._map_injection_type(
+                                                            injection_type
+                                                        ),
                                                         title=f"WebSocket JSON {injection_type} injection",
                                                         description="Injection in JSON message parameter",
                                                         severity=FindingSeverity.HIGH,
@@ -487,9 +496,7 @@ class WebSocketAgent(SpecializedAgent):
                     async with websockets.connect(
                         endpoint,
                         close_timeout=5,
-                        extra_headers={
-                            "Origin": "https://evil.example.com"
-                        }
+                        extra_headers={"Origin": "https://evil.example.com"},
                     ) as ws:
                         # If connection succeeds with foreign origin, vulnerable
                         await ws.send('{"type": "test"}')
@@ -557,8 +564,12 @@ class WebSocketAgent(SpecializedAgent):
 
                                 # Check for interesting responses
                                 error_indicators = [
-                                    "exception", "traceback", "internal error",
-                                    "stack trace", "debug", "path"
+                                    "exception",
+                                    "traceback",
+                                    "internal error",
+                                    "stack trace",
+                                    "debug",
+                                    "path",
                                 ]
 
                                 if any(ind in response.lower() for ind in error_indicators):

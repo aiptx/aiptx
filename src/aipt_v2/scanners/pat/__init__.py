@@ -40,24 +40,84 @@ Quick scan:
     )
 """
 
-# Configuration
-from .config import (
-    PATScanConfig,
-    EnhancedPATScanConfig,
-    VulnerabilityType,
-    InjectionPoint,
-    PayloadTechnique,
-    DetectionMethod,
-    ExecutorConfig,
-    AnalyzerConfig,
-    PayloadConfig,
-    SecurityError,
-    ScopeViolation,
-    AuthorizationError,
+# Analysis
+from .analyzer import (
+    AnalysisResult,
+    BaselineData,
+    EnhancedResponseAnalyzer,
+    ResponseAnalyzer,
+    analyze_results,
 )
 
-# Payload management
-from .payload_parser import ParsedPayload, PayloadParser
+# Browser validation
+from .browser_validator import (
+    BrowserValidationResult,
+    PATBrowserValidator,
+    validate_prototype_pollution_in_browser,
+    validate_xss_in_browser,
+)
+
+# Configuration
+from .config import (
+    AnalyzerConfig,
+    AuthorizationError,
+    DetectionMethod,
+    EnhancedPATScanConfig,
+    ExecutorConfig,
+    InjectionPoint,
+    PATScanConfig,
+    PayloadConfig,
+    PayloadTechnique,
+    ScopeViolation,
+    SecurityError,
+    VulnerabilityType,
+)
+
+# Custom payload loading
+from .custom_payloads import (
+    CustomPayloadFile,
+    CustomPayloadLoader,
+    PayloadTemplate,
+    PayloadTemplateEngine,
+    create_payload_file,
+    load_custom_payloads,
+    load_payloads_directory,
+)
+
+# Detection patterns
+from .detection_patterns import (
+    DetectionPattern,
+    get_compiled_patterns,
+    get_detection_patterns,
+    match_any_pattern,
+)
+
+# Execution
+from .executor import (
+    ExecutionResult,
+    ParallelExecutor,
+    RateLimiter,
+    ScopeEnforcer,
+    WAFAwareExecutor,
+    WAFDetector,
+    WAFProbeResult,
+    execute_requests,
+)
+
+# Main scanner
+from .pat_scanner import (
+    BrowserValidatingPATScanner,
+    ChainEnrichedFinding,
+    ChainEscalatingPATScanner,
+    EnhancedPATScanner,
+    OOBEnabledPATScanner,
+    PATScanner,
+    PATScanResult,
+    ValidatedScanFinding,
+    ValidatingPATScanner,
+    scan_url,
+    update_payloads,
+)
 from .payload_database import (
     PayloadDatabase,
     PayloadStats,
@@ -65,86 +125,25 @@ from .payload_database import (
     get_payloads_for_vuln,
 )
 
-# Request generation
-from .request_generator import (
-    RequestGenerator,
-    EnhancedRequestGenerator,
-    InjectionRequest,
-)
-
-# Execution
-from .executor import (
-    ParallelExecutor,
-    WAFAwareExecutor,
-    ExecutionResult,
-    WAFProbeResult,
-    RateLimiter,
-    WAFDetector,
-    ScopeEnforcer,
-    execute_requests,
-)
-
-# Analysis
-from .analyzer import (
-    ResponseAnalyzer,
-    EnhancedResponseAnalyzer,
-    AnalysisResult,
-    BaselineData,
-    analyze_results,
-)
-
-# Detection patterns
-from .detection_patterns import (
-    DetectionPattern,
-    get_detection_patterns,
-    get_compiled_patterns,
-    match_any_pattern,
-)
+# Payload management
+from .payload_parser import ParsedPayload, PayloadParser
 
 # Reporting pipeline
 from .reporters import (
-    PATReportPipeline,
-    PATReportConfig,
-    generate_pat_sarif,
-    generate_pat_html,
-    PAT_CWE_MAPPINGS,
     OWASP_TOP_10_MAPPINGS,
+    PAT_CWE_MAPPINGS,
+    PATReportConfig,
+    PATReportPipeline,
+    generate_pat_html,
+    generate_pat_sarif,
 )
 
-# Main scanner
-from .pat_scanner import (
-    PATScanner,
-    EnhancedPATScanner,
-    ValidatingPATScanner,
-    ChainEscalatingPATScanner,
-    OOBEnabledPATScanner,
-    BrowserValidatingPATScanner,
-    PATScanResult,
-    ValidatedScanFinding,
-    ChainEnrichedFinding,
-    scan_url,
-    update_payloads,
+# Request generation
+from .request_generator import (
+    EnhancedRequestGenerator,
+    InjectionRequest,
+    RequestGenerator,
 )
-
-# Browser validation
-from .browser_validator import (
-    PATBrowserValidator,
-    BrowserValidationResult,
-    validate_xss_in_browser,
-    validate_prototype_pollution_in_browser,
-)
-
-# Custom payload loading
-from .custom_payloads import (
-    CustomPayloadLoader,
-    CustomPayloadFile,
-    PayloadTemplate,
-    PayloadTemplateEngine,
-    load_custom_payloads,
-    load_payloads_directory,
-    create_payload_file,
-)
-
 
 __all__ = [
     # Main scanner
@@ -158,17 +157,14 @@ __all__ = [
     "PATScanResult",
     "ValidatedScanFinding",
     "ChainEnrichedFinding",
-
     # Browser validation
     "PATBrowserValidator",
     "BrowserValidationResult",
     "validate_xss_in_browser",
     "validate_prototype_pollution_in_browser",
-
     # Enhanced scanner
     "EnhancedPATScanConfig",
     "EnhancedRequestGenerator",
-
     # Configuration
     "VulnerabilityType",
     "InjectionPoint",
@@ -177,12 +173,10 @@ __all__ = [
     "ExecutorConfig",
     "AnalyzerConfig",
     "PayloadConfig",
-
     # Exceptions
     "SecurityError",
     "ScopeViolation",
     "AuthorizationError",
-
     # Payloads
     "ParsedPayload",
     "PayloadParser",
@@ -190,12 +184,10 @@ __all__ = [
     "PayloadStats",
     "get_payload_database",
     "get_payloads_for_vuln",
-
     # Request generation
     "RequestGenerator",
     "EnhancedRequestGenerator",
     "InjectionRequest",
-
     # Execution
     "ParallelExecutor",
     "WAFAwareExecutor",
@@ -205,20 +197,17 @@ __all__ = [
     "WAFDetector",
     "ScopeEnforcer",
     "execute_requests",
-
     # Analysis
     "ResponseAnalyzer",
     "EnhancedResponseAnalyzer",
     "AnalysisResult",
     "BaselineData",
     "analyze_results",
-
     # Detection
     "DetectionPattern",
     "get_detection_patterns",
     "get_compiled_patterns",
     "match_any_pattern",
-
     # Reporting
     "PATReportPipeline",
     "PATReportConfig",
@@ -226,11 +215,9 @@ __all__ = [
     "generate_pat_html",
     "PAT_CWE_MAPPINGS",
     "OWASP_TOP_10_MAPPINGS",
-
     # Convenience functions
     "scan_url",
     "update_payloads",
-
     # Custom payload loading
     "CustomPayloadLoader",
     "CustomPayloadFile",

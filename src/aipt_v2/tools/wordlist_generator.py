@@ -69,14 +69,62 @@ class WordlistGenerator:
     """
 
     COMMON_SUFFIXES = [
-        "1", "12", "123", "1234", "12345",
-        "01", "02", "03", "04", "05", "06", "07", "08", "09", "10",
-        "11", "12", "13", "14", "15", "16", "17", "18", "19", "20",
-        "00", "99", "88", "77", "66", "55", "44", "33", "22",
-        "007", "666", "777", "888", "999", "000",
-        "!", "!!", "@", "#", "$", "%", "&", "*",
-        "2023", "2024", "2025", "2026",
-        "23", "24", "25", "26",
+        "1",
+        "12",
+        "123",
+        "1234",
+        "12345",
+        "01",
+        "02",
+        "03",
+        "04",
+        "05",
+        "06",
+        "07",
+        "08",
+        "09",
+        "10",
+        "11",
+        "12",
+        "13",
+        "14",
+        "15",
+        "16",
+        "17",
+        "18",
+        "19",
+        "20",
+        "00",
+        "99",
+        "88",
+        "77",
+        "66",
+        "55",
+        "44",
+        "33",
+        "22",
+        "007",
+        "666",
+        "777",
+        "888",
+        "999",
+        "000",
+        "!",
+        "!!",
+        "@",
+        "#",
+        "$",
+        "%",
+        "&",
+        "*",
+        "2023",
+        "2024",
+        "2025",
+        "2026",
+        "23",
+        "24",
+        "25",
+        "26",
     ]
 
     COMMON_PREFIXES = ["", "The", "My", "Mr", "Ms", "Dr", "Admin", "User", "Test"]
@@ -86,10 +134,30 @@ class WordlistGenerator:
     SEASONS = ["Spring", "Summer", "Fall", "Autumn", "Winter"]
 
     MONTHS = [
-        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-        "January", "February", "March", "April", "May", "June",
-        "July", "August", "September", "October", "November", "December",
+        "Jan",
+        "Feb",
+        "Mar",
+        "Apr",
+        "May",
+        "Jun",
+        "Jul",
+        "Aug",
+        "Sep",
+        "Oct",
+        "Nov",
+        "Dec",
+        "January",
+        "February",
+        "March",
+        "April",
+        "May",
+        "June",
+        "July",
+        "August",
+        "September",
+        "October",
+        "November",
+        "December",
     ]
 
     LEET_SPEAK = {
@@ -105,14 +173,46 @@ class WordlistGenerator:
     }
 
     COMMON_BASES = [
-        "password", "123456", "12345678", "qwerty", "abc123",
-        "monkey", "letmein", "dragon", "111111", "baseball",
-        "iloveyou", "trustno1", "sunshine", "princess", "admin",
-        "welcome", "shadow", "ashley", "football", "jesus",
-        "michael", "ninja", "mustang", "password1", "123456789",
-        "adobe123", "admin123", "root", "toor", "guest",
-        "default", "changeme", "p@ssw0rd", "Passw0rd", "Password1",
-        "P@ssword", "Qwerty123", "Welcome1", "Summer2024", "Winter2024",
+        "password",
+        "123456",
+        "12345678",
+        "qwerty",
+        "abc123",
+        "monkey",
+        "letmein",
+        "dragon",
+        "111111",
+        "baseball",
+        "iloveyou",
+        "trustno1",
+        "sunshine",
+        "princess",
+        "admin",
+        "welcome",
+        "shadow",
+        "ashley",
+        "football",
+        "jesus",
+        "michael",
+        "ninja",
+        "mustang",
+        "password1",
+        "123456789",
+        "adobe123",
+        "admin123",
+        "root",
+        "toor",
+        "guest",
+        "default",
+        "changeme",
+        "p@ssw0rd",
+        "Passw0rd",
+        "Password1",
+        "P@ssword",
+        "Qwerty123",
+        "Welcome1",
+        "Summer2024",
+        "Winter2024",
     ]
 
     def __init__(self, config: Optional[WordlistConfig] = None):
@@ -187,16 +287,12 @@ class WordlistGenerator:
 
         # Filter by length
         filtered = {
-            w for w in all_words
-            if self.config.min_length <= len(w) <= self.config.max_length
+            w for w in all_words if self.config.min_length <= len(w) <= self.config.max_length
         }
 
         return sorted(list(filtered))
 
-    def generate_targeted_wordlist(
-        self,
-        target_info: Dict[str, Any]
-    ) -> List[str]:
+    def generate_targeted_wordlist(self, target_info: Dict[str, Any]) -> List[str]:
         """
         Generate wordlist from target information.
 
@@ -231,18 +327,20 @@ class WordlistGenerator:
             parts = bd.split("-")
             if len(parts) == 3:
                 year, month, day = parts
-                keywords.extend([
-                    bd.replace("-", ""),           # 19900515
-                    bd.replace("-", "")[2:],       # 900515
-                    bd.replace("-", "/"),          # 1990/05/15
-                    f"{month}{day}{year}",         # 05151990
-                    f"{month}{day}{year[2:]}",     # 051590
-                    f"{day}{month}{year}",         # 15051990
-                    f"{day}{month}",               # 1505
-                    f"{month}{day}",               # 0515
-                    year,                          # 1990
-                    year[2:],                      # 90
-                ])
+                keywords.extend(
+                    [
+                        bd.replace("-", ""),  # 19900515
+                        bd.replace("-", "")[2:],  # 900515
+                        bd.replace("-", "/"),  # 1990/05/15
+                        f"{month}{day}{year}",  # 05151990
+                        f"{month}{day}{year[2:]}",  # 051590
+                        f"{day}{month}{year}",  # 15051990
+                        f"{day}{month}",  # 1505
+                        f"{month}{day}",  # 0515
+                        year,  # 1990
+                        year[2:],  # 90
+                    ]
+                )
 
         # Pet names
         if "pet_names" in target_info:
@@ -297,17 +395,12 @@ class WordlistGenerator:
 
         # Filter by length
         filtered = {
-            w for w in all_words
-            if self.config.min_length <= len(w) <= self.config.max_length
+            w for w in all_words if self.config.min_length <= len(w) <= self.config.max_length
         }
 
         return sorted(list(filtered))
 
-    def generate_pattern_wordlist(
-        self,
-        pattern: str,
-        values: Dict[str, List[str]]
-    ) -> List[str]:
+    def generate_pattern_wordlist(self, pattern: str, values: Dict[str, List[str]]) -> List[str]:
         """
         Generate wordlist from pattern.
 
@@ -392,11 +485,14 @@ class WordlistGenerator:
 
         # Common substitutions
         substitutions = [
-            ("a", "@"), ("a", "4"),
+            ("a", "@"),
+            ("a", "4"),
             ("e", "3"),
-            ("i", "1"), ("i", "!"),
+            ("i", "1"),
+            ("i", "!"),
             ("o", "0"),
-            ("s", "$"), ("s", "5"),
+            ("s", "$"),
+            ("s", "5"),
             ("t", "7"),
         ]
 

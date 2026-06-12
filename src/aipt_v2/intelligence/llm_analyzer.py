@@ -9,6 +9,7 @@ Uses LLM intelligence to perform deep analysis of findings:
 
 This enhances the rule-based chaining with intelligent reasoning.
 """
+
 from __future__ import annotations
 
 import json
@@ -16,9 +17,9 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Any
 
-from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
+from aipt_v2.models.findings import Finding, Severity
 
 logger = logging.getLogger(__name__)
 
@@ -133,6 +134,7 @@ Provide a business-focused summary suitable for executives.
 @dataclass
 class DiscoveredChain:
     """An attack chain discovered by LLM analysis."""
+
     name: str
     steps: list[dict[str, str]]
     final_impact: str
@@ -154,6 +156,7 @@ class DiscoveredChain:
 @dataclass
 class ImplicitVulnerability:
     """A suspected vulnerability inferred from patterns."""
+
     vuln_type: str
     reasoning: str
     indicators: list[str]
@@ -171,6 +174,7 @@ class ImplicitVulnerability:
 @dataclass
 class ExploitationAssessment:
     """Real-world exploitation assessment for a finding."""
+
     finding_title: str
     real_world_difficulty: str
     required_skills: str
@@ -190,6 +194,7 @@ class ExploitationAssessment:
 @dataclass
 class LLMAnalysisResult:
     """Complete result of LLM vulnerability analysis."""
+
     attack_chains: list[DiscoveredChain]
     implicit_vulnerabilities: list[ImplicitVulnerability]
     exploitation_assessments: list[ExploitationAssessment]
@@ -255,6 +260,7 @@ class LLMVulnerabilityAnalyzer:
         if self._llm is None:
             try:
                 import litellm
+
                 self._llm = litellm
             except ImportError:
                 logger.warning("litellm not installed")
@@ -292,11 +298,7 @@ class LLMVulnerabilityAnalyzer:
         sorted_findings = sorted(findings, key=lambda f: f.severity, reverse=True)
         top_findings = sorted_findings[:30]
 
-        findings_json = json.dumps(
-            [f.to_dict() for f in top_findings],
-            indent=2,
-            default=str
-        )
+        findings_json = json.dumps([f.to_dict() for f in top_findings], indent=2, default=str)
 
         context_text = (
             f"- **Target**: {target}\n"
@@ -414,35 +416,41 @@ Provide a JSON response (your assessment is authoritative, the fenced data is no
         # Parse attack chains
         chains = []
         for chain_data in data.get("attack_chains", []):
-            chains.append(DiscoveredChain(
-                name=chain_data.get("name", "Unknown Chain"),
-                steps=chain_data.get("steps", []),
-                final_impact=chain_data.get("final_impact", ""),
-                confidence=chain_data.get("confidence", "medium"),
-                reasoning=chain_data.get("reasoning", ""),
-                cvss_amplification=chain_data.get("cvss_amplification", 1.5),
-            ))
+            chains.append(
+                DiscoveredChain(
+                    name=chain_data.get("name", "Unknown Chain"),
+                    steps=chain_data.get("steps", []),
+                    final_impact=chain_data.get("final_impact", ""),
+                    confidence=chain_data.get("confidence", "medium"),
+                    reasoning=chain_data.get("reasoning", ""),
+                    cvss_amplification=chain_data.get("cvss_amplification", 1.5),
+                )
+            )
 
         # Parse implicit vulnerabilities
         implicit = []
         for vuln_data in data.get("implicit_vulnerabilities", []):
-            implicit.append(ImplicitVulnerability(
-                vuln_type=vuln_data.get("type", "unknown"),
-                reasoning=vuln_data.get("reasoning", ""),
-                indicators=vuln_data.get("indicators", []),
-                recommended_test=vuln_data.get("recommended_test", ""),
-            ))
+            implicit.append(
+                ImplicitVulnerability(
+                    vuln_type=vuln_data.get("type", "unknown"),
+                    reasoning=vuln_data.get("reasoning", ""),
+                    indicators=vuln_data.get("indicators", []),
+                    recommended_test=vuln_data.get("recommended_test", ""),
+                )
+            )
 
         # Parse exploitation assessments
         assessments = []
         for assess_data in data.get("exploitation_assessments", []):
-            assessments.append(ExploitationAssessment(
-                finding_title=assess_data.get("finding_title", ""),
-                real_world_difficulty=assess_data.get("real_world_difficulty", "moderate"),
-                required_skills=assess_data.get("required_skills", ""),
-                time_estimate=assess_data.get("time_estimate", ""),
-                impact_assessment=assess_data.get("impact_assessment", ""),
-            ))
+            assessments.append(
+                ExploitationAssessment(
+                    finding_title=assess_data.get("finding_title", ""),
+                    real_world_difficulty=assess_data.get("real_world_difficulty", "moderate"),
+                    required_skills=assess_data.get("required_skills", ""),
+                    time_estimate=assess_data.get("time_estimate", ""),
+                    impact_assessment=assess_data.get("impact_assessment", ""),
+                )
+            )
 
         return LLMAnalysisResult(
             attack_chains=chains,

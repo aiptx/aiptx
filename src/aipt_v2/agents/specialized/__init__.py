@@ -11,21 +11,21 @@ Domain-specific agents for different testing aspects:
 """
 
 from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
     AgentCapability,
     AgentConfig,
+    SpecializedAgent,
 )
-from aipt_v2.agents.specialized.recon_agent import ReconAgent
-from aipt_v2.agents.specialized.sast_agent import SASTAgent
-from aipt_v2.agents.specialized.dast_agent import DASTAgent
 from aipt_v2.agents.specialized.business_logic_agent import BusinessLogicAgent
-from aipt_v2.agents.specialized.websocket_agent import WebSocketAgent
+from aipt_v2.agents.specialized.dast_agent import DASTAgent
 from aipt_v2.agents.specialized.pat_agent import (
     DistributedPATAgent,
     PATAgentConfig,
     PATCoordinator,
     create_pat_agent,
 )
+from aipt_v2.agents.specialized.recon_agent import ReconAgent
+from aipt_v2.agents.specialized.sast_agent import SASTAgent
+from aipt_v2.agents.specialized.websocket_agent import WebSocketAgent
 
 __all__ = [
     # Base

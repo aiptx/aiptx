@@ -3,6 +3,7 @@ AIPT Nmap Scanner Integration
 
 Network scanning and service detection using Nmap.
 """
+
 from __future__ import annotations
 
 import logging
@@ -20,6 +21,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NmapConfig:
     """Nmap scanner configuration"""
+
     # Scan types
     syn_scan: bool = True  # -sS (requires root)
     version_scan: bool = True  # -sV
@@ -50,6 +52,7 @@ class NmapConfig:
 @dataclass
 class NmapHost:
     """Parsed Nmap host result"""
+
     address: str
     hostname: str = ""
     state: str = "unknown"
@@ -248,18 +251,22 @@ class NmapScanner(BaseScanner):
 
             # Port-level scripts
             for script_elem in port_elem.findall("script"):
-                host.scripts.append({
-                    "id": script_elem.get("id", ""),
-                    "output": script_elem.get("output", ""),
-                    "port": port_info["port"],
-                })
+                host.scripts.append(
+                    {
+                        "id": script_elem.get("id", ""),
+                        "output": script_elem.get("output", ""),
+                        "port": port_info["port"],
+                    }
+                )
 
         # Host-level scripts
         for script_elem in host_elem.findall(".//hostscript/script"):
-            host.scripts.append({
-                "id": script_elem.get("id", ""),
-                "output": script_elem.get("output", ""),
-            })
+            host.scripts.append(
+                {
+                    "id": script_elem.get("id", ""),
+                    "output": script_elem.get("output", ""),
+                }
+            )
 
         return host
 

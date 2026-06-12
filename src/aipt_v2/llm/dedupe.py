@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from typing import Any, Optional
+from typing import Any
 
 import litellm
 
@@ -391,6 +391,7 @@ def quick_hash_check(
     Returns:
         Match result if exact duplicate found, None to proceed with LLM check
     """
+
     # Create a signature from key fields
     def create_signature(report: dict[str, Any]) -> str:
         parts = [
@@ -409,7 +410,7 @@ def quick_hash_check(
                 "is_duplicate": True,
                 "duplicate_id": existing.get("id", ""),
                 "confidence": 1.0,
-                "reason": f"Exact match: same endpoint, parameter, and vulnerability type",
+                "reason": "Exact match: same endpoint, parameter, and vulnerability type",
             }
 
     return None  # No quick match, proceed with LLM check

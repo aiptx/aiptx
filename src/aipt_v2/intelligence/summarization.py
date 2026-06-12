@@ -12,17 +12,18 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Dict, List, Optional, Type
+from typing import Dict, List, Optional, Type
 
 logger = logging.getLogger(__name__)
 
 
 class SummarizationLevel(Enum):
     """Summarization levels for different context budgets."""
-    MINIMAL = "minimal"     # <500 tokens - just critical findings
-    COMPACT = "compact"     # <1500 tokens - key findings with context
-    STANDARD = "standard"   # <3000 tokens - full findings, trimmed evidence
-    VERBOSE = "verbose"     # <6000 tokens - detailed findings
+
+    MINIMAL = "minimal"  # <500 tokens - just critical findings
+    COMPACT = "compact"  # <1500 tokens - key findings with context
+    STANDARD = "standard"  # <3000 tokens - full findings, trimmed evidence
+    VERBOSE = "verbose"  # <6000 tokens - detailed findings
 
 
 @dataclass
@@ -33,11 +34,12 @@ class CompactFinding:
     Designed for maximum information density within token limits.
     Each finding compresses to ~20-50 tokens.
     """
-    id: str           # "F001", "F002", etc.
-    type: str         # "sqli", "xss", "open_port", etc.
-    target: str       # URL or host:port
-    severity: str     # "C", "H", "M", "L", "I" (Critical, High, Medium, Low, Info)
-    key_detail: str   # One-line summary (<100 chars)
+
+    id: str  # "F001", "F002", etc.
+    type: str  # "sqli", "xss", "open_port", etc.
+    target: str  # URL or host:port
+    severity: str  # "C", "H", "M", "L", "I" (Critical, High, Medium, Low, Info)
+    key_detail: str  # One-line summary (<100 chars)
     chain_potential: List[str] = field(default_factory=list)  # ["auth_bypass", "rce"]
 
     def to_compact_string(self) -> str:
@@ -54,11 +56,7 @@ class ToolOutputSummarizer(ABC):
     TOOL_NAME: str = "unknown"
 
     @abstractmethod
-    def summarize(
-        self,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
-    ) -> str:
+    def summarize(self, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT) -> str:
         """Summarize tool output to specified level."""
         pass
 
@@ -83,11 +81,7 @@ class NmapSummarizer(ToolOutputSummarizer):
     OS_PATTERN = re.compile(r"OS details:\s*(.+)", re.IGNORECASE)
     SCRIPT_PATTERN = re.compile(r"\|_?\s*([^:]+):\s*(.+)")
 
-    def summarize(
-        self,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
-    ) -> str:
+    def summarize(self, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT) -> str:
         """Summarize nmap output."""
         findings = self.extract_findings(output)
 
@@ -133,14 +127,16 @@ class NmapSummarizer(ToolOutputSummarizer):
                 severity = self._port_severity(port, service)
                 chain = self._port_chain_potential(port, service)
 
-                findings.append(CompactFinding(
-                    id=f"P{finding_id:03d}",
-                    type="port",
-                    target=f"{port}/{proto}",
-                    severity=severity,
-                    key_detail=f"{port}/{proto} {service.strip()[:40]}",
-                    chain_potential=chain,
-                ))
+                findings.append(
+                    CompactFinding(
+                        id=f"P{finding_id:03d}",
+                        type="port",
+                        target=f"{port}/{proto}",
+                        severity=severity,
+                        key_detail=f"{port}/{proto} {service.strip()[:40]}",
+                        chain_potential=chain,
+                    )
+                )
                 finding_id += 1
 
         # Extract script findings (vulnerabilities)
@@ -150,14 +146,16 @@ class NmapSummarizer(ToolOutputSummarizer):
                     cve_match = re.search(r"(CVE-\d{4}-\d+)", line)
                     cve = cve_match.group(1) if cve_match else ""
 
-                    findings.append(CompactFinding(
-                        id=f"V{finding_id:03d}",
-                        type="vuln",
-                        target=cve or "nse_script",
-                        severity="H" if cve else "M",
-                        key_detail=line.strip()[:80],
-                        chain_potential=["exploit", "rce"] if cve else [],
-                    ))
+                    findings.append(
+                        CompactFinding(
+                            id=f"V{finding_id:03d}",
+                            type="vuln",
+                            target=cve or "nse_script",
+                            severity="H" if cve else "M",
+                            key_detail=line.strip()[:80],
+                            chain_potential=["exploit", "rce"] if cve else [],
+                        )
+                    )
                     finding_id += 1
 
         return findings
@@ -202,19 +200,16 @@ class NucleiSummarizer(ToolOutputSummarizer):
 
     TOOL_NAME = "nuclei"
 
-    def summarize(
-        self,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
-    ) -> str:
+    def summarize(self, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT) -> str:
         """Summarize nuclei output."""
         findings = self.extract_findings(output)
 
         if level == SummarizationLevel.MINIMAL:
             # Just critical/high
             critical = [f for f in findings if f.severity in ["C", "H"]]
-            return f"Critical/High: {len(critical)}, Total: {len(findings)}\n" + \
-                   "\n".join(f.to_compact_string() for f in critical[:5])
+            return f"Critical/High: {len(critical)}, Total: {len(findings)}\n" + "\n".join(
+                f.to_compact_string() for f in critical[:5]
+            )
 
         elif level == SummarizationLevel.COMPACT:
             # Group by severity
@@ -253,14 +248,16 @@ class NucleiSummarizer(ToolOutputSummarizer):
 
                     sev_map = {"critical": "C", "high": "H", "medium": "M", "low": "L", "info": "I"}
 
-                    findings.append(CompactFinding(
-                        id=f"N{finding_id:03d}",
-                        type="nuclei",
-                        target=matched[:60],
-                        severity=sev_map.get(severity.lower(), "I"),
-                        key_detail=f"{template_id} @ {matched[:40]}",
-                        chain_potential=self._template_chain(template_id),
-                    ))
+                    findings.append(
+                        CompactFinding(
+                            id=f"N{finding_id:03d}",
+                            type="nuclei",
+                            target=matched[:60],
+                            severity=sev_map.get(severity.lower(), "I"),
+                            key_detail=f"{template_id} @ {matched[:40]}",
+                            chain_potential=self._template_chain(template_id),
+                        )
+                    )
                     finding_id += 1
 
                 # Parse text format: [template-id] [severity] url
@@ -270,16 +267,24 @@ class NucleiSummarizer(ToolOutputSummarizer):
                         template_id = parts[0]
                         severity = parts[1] if len(parts) > 1 else "info"
 
-                        sev_map = {"critical": "C", "high": "H", "medium": "M", "low": "L", "info": "I"}
+                        sev_map = {
+                            "critical": "C",
+                            "high": "H",
+                            "medium": "M",
+                            "low": "L",
+                            "info": "I",
+                        }
 
-                        findings.append(CompactFinding(
-                            id=f"N{finding_id:03d}",
-                            type="nuclei",
-                            target=line.split("]")[-1].strip()[:50],
-                            severity=sev_map.get(severity.lower(), "I"),
-                            key_detail=f"{template_id}",
-                            chain_potential=self._template_chain(template_id),
-                        ))
+                        findings.append(
+                            CompactFinding(
+                                id=f"N{finding_id:03d}",
+                                type="nuclei",
+                                target=line.split("]")[-1].strip()[:50],
+                                severity=sev_map.get(severity.lower(), "I"),
+                                key_detail=f"{template_id}",
+                                chain_potential=self._template_chain(template_id),
+                            )
+                        )
                         finding_id += 1
 
             except (json.JSONDecodeError, KeyError):
@@ -318,11 +323,7 @@ class SqlmapSummarizer(ToolOutputSummarizer):
 
     TOOL_NAME = "sqlmap"
 
-    def summarize(
-        self,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
-    ) -> str:
+    def summarize(self, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT) -> str:
         """Summarize sqlmap output."""
         findings = self.extract_findings(output)
 
@@ -356,36 +357,46 @@ class SqlmapSummarizer(ToolOutputSummarizer):
 
             if param and injection_type:
                 # Determine severity based on injection type
-                severity = "C" if any(x in injection_type.lower() for x in ["stacked", "union"]) else "H"
+                severity = (
+                    "C" if any(x in injection_type.lower() for x in ["stacked", "union"]) else "H"
+                )
 
                 chains = ["data_exfil"]
                 if "stacked" in injection_type.lower():
                     chains.extend(["rce", "file_read"])
 
-                findings.append(CompactFinding(
-                    id=f"S{finding_id:03d}",
-                    type="sqli",
-                    target=param[:40],
-                    severity=severity,
-                    key_detail=f"{param[:30]}: {injection_type[:40]}",
-                    chain_potential=chains,
-                ))
+                findings.append(
+                    CompactFinding(
+                        id=f"S{finding_id:03d}",
+                        type="sqli",
+                        target=param[:40],
+                        severity=severity,
+                        key_detail=f"{param[:30]}: {injection_type[:40]}",
+                        chain_potential=chains,
+                    )
+                )
                 finding_id += 1
 
         # Extract enumerated data
         if "available databases" in output.lower():
-            db_match = re.search(r"available databases.*?:\n(.*?)(?:\n\n|\[|$)", output, re.DOTALL | re.IGNORECASE)
+            db_match = re.search(
+                r"available databases.*?:\n(.*?)(?:\n\n|\[|$)", output, re.DOTALL | re.IGNORECASE
+            )
             if db_match:
-                dbs = [db.strip().strip("[]* ") for db in db_match.group(1).split("\n") if db.strip()]
+                dbs = [
+                    db.strip().strip("[]* ") for db in db_match.group(1).split("\n") if db.strip()
+                ]
                 if dbs:
-                    findings.append(CompactFinding(
-                        id=f"S{finding_id:03d}",
-                        type="sqli_enum",
-                        target="databases",
-                        severity="H",
-                        key_detail=f"DBs: {', '.join(dbs[:5])}",
-                        chain_potential=["data_exfil", "priv_esc"],
-                    ))
+                    findings.append(
+                        CompactFinding(
+                            id=f"S{finding_id:03d}",
+                            type="sqli_enum",
+                            target="databases",
+                            severity="H",
+                            key_detail=f"DBs: {', '.join(dbs[:5])}",
+                            chain_potential=["data_exfil", "priv_esc"],
+                        )
+                    )
 
         return findings
 
@@ -400,11 +411,7 @@ class HttpxSummarizer(ToolOutputSummarizer):
 
     TOOL_NAME = "httpx"
 
-    def summarize(
-        self,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
-    ) -> str:
+    def summarize(self, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT) -> str:
         """Summarize httpx output."""
         findings = self.extract_findings(output)
 
@@ -450,24 +457,28 @@ class HttpxSummarizer(ToolOutputSummarizer):
                     if tech:
                         detail += f" | {','.join(tech[:3])}"
 
-                    findings.append(CompactFinding(
-                        id=f"H{finding_id:03d}",
-                        type="http",
-                        target=url[:60],
-                        severity=severity,
-                        key_detail=detail[:80],
-                        chain_potential=self._tech_chain(tech),
-                    ))
+                    findings.append(
+                        CompactFinding(
+                            id=f"H{finding_id:03d}",
+                            type="http",
+                            target=url[:60],
+                            severity=severity,
+                            key_detail=detail[:80],
+                            chain_potential=self._tech_chain(tech),
+                        )
+                    )
                     finding_id += 1
                 else:
                     # Plain URL
-                    findings.append(CompactFinding(
-                        id=f"H{finding_id:03d}",
-                        type="http",
-                        target=line.strip()[:60],
-                        severity="I",
-                        key_detail=line.strip()[:60],
-                    ))
+                    findings.append(
+                        CompactFinding(
+                            id=f"H{finding_id:03d}",
+                            type="http",
+                            target=line.strip()[:60],
+                            severity="I",
+                            key_detail=line.strip()[:60],
+                        )
+                    )
                     finding_id += 1
 
             except json.JSONDecodeError:
@@ -520,10 +531,7 @@ class SummarizationManager:
         return self._instances[tool]
 
     def summarize(
-        self,
-        tool: str,
-        output: str,
-        level: SummarizationLevel = SummarizationLevel.COMPACT
+        self, tool: str, output: str, level: SummarizationLevel = SummarizationLevel.COMPACT
     ) -> str:
         """Summarize tool output."""
         summarizer = self.get_summarizer(tool)
@@ -539,12 +547,9 @@ class SummarizationManager:
                 SummarizationLevel.STANDARD: 30,
                 SummarizationLevel.VERBOSE: 60,
             }
-            return "\n".join(lines[:max_lines.get(level, 15)])
+            return "\n".join(lines[: max_lines.get(level, 15)])
 
-    def extract_all_findings(
-        self,
-        results: Dict[str, str]
-    ) -> List[CompactFinding]:
+    def extract_all_findings(self, results: Dict[str, str]) -> List[CompactFinding]:
         """
         Extract findings from multiple tool outputs.
 
@@ -568,11 +573,7 @@ class SummarizationManager:
 
         return all_findings
 
-    def generate_compact_report(
-        self,
-        results: Dict[str, str],
-        max_tokens: int = 2000
-    ) -> str:
+    def generate_compact_report(self, results: Dict[str, str], max_tokens: int = 2000) -> str:
         """
         Generate compact report for LLM consumption.
 
@@ -623,7 +624,9 @@ class SummarizationManager:
         if has_ssrf:
             internal_ports = [f for f in findings if f.type == "port" and f.severity in ["H", "M"]]
             if internal_ports:
-                chains.append(f"SSRF -> INTERNAL_SCAN ({len(internal_ports)} targets) (confidence: 0.7)")
+                chains.append(
+                    f"SSRF -> INTERNAL_SCAN ({len(internal_ports)} targets) (confidence: 0.7)"
+                )
 
         if has_lfi:
             chains.append("LFI -> CONFIG_LEAK -> CRED_HARVEST (confidence: 0.6)")

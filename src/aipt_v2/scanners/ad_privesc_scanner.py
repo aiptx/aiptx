@@ -4,22 +4,23 @@ AIPT Active Directory Privilege Escalation Scanner
 Identifies privileged accounts, dangerous configurations, and
 potential privilege escalation paths in Active Directory.
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional
 
-from .base import ScanFinding, ScanResult, ScanSeverity
+from .base import ScanFinding, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
 
 class ADFindingType(Enum):
     """Types of AD security findings"""
+
     # Privileged Groups
     DOMAIN_ADMIN = "domain_admin"
     ENTERPRISE_ADMIN = "enterprise_admin"
@@ -67,6 +68,7 @@ class ADFindingType(Enum):
 @dataclass
 class ADPrivilegedAccount:
     """Privileged AD account or group"""
+
     name: str
     sam_account_name: str
     object_type: str  # user, group, computer
@@ -105,6 +107,7 @@ class ADPrivilegedAccount:
 @dataclass
 class ADPrivescConfig:
     """AD privilege escalation scanner configuration"""
+
     # What to scan for
     scan_privileged_groups: bool = True
     scan_dangerous_flags: bool = True
@@ -131,6 +134,7 @@ class ADPrivescConfig:
 @dataclass
 class ADPrivescResult:
     """AD privilege escalation scan results"""
+
     target_domain: str
     dc_ip: str
 
@@ -168,10 +172,16 @@ class ADPrivescResult:
         self.enterprise_admins_count = len(self.get_by_type(ADFindingType.ENTERPRISE_ADMIN))
         self.kerberoastable_count = len(self.get_by_type(ADFindingType.KERBEROASTABLE))
         self.asrep_roastable_count = len(self.get_by_type(ADFindingType.ASREP_ROASTABLE))
-        self.unconstrained_delegation_count = len(self.get_by_type(ADFindingType.UNCONSTRAINED_DELEGATION))
-        self.constrained_delegation_count = len(self.get_by_type(ADFindingType.CONSTRAINED_DELEGATION))
+        self.unconstrained_delegation_count = len(
+            self.get_by_type(ADFindingType.UNCONSTRAINED_DELEGATION)
+        )
+        self.constrained_delegation_count = len(
+            self.get_by_type(ADFindingType.CONSTRAINED_DELEGATION)
+        )
 
-        self.critical_findings = sum(1 for f in self.findings if f.severity == ScanSeverity.CRITICAL)
+        self.critical_findings = sum(
+            1 for f in self.findings if f.severity == ScanSeverity.CRITICAL
+        )
         self.high_findings = sum(1 for f in self.findings if f.severity == ScanSeverity.HIGH)
         self.total_risk_score = sum(a.risk_score for a in self.privileged_accounts)
 
@@ -312,17 +322,29 @@ class ADPrivescScanner:
     async def _connect_ldap(self, domain: str, dc_ip: str):
         """Connect to LDAP server"""
         try:
-            from ldap3 import Server, Connection, ALL, SIMPLE, NTLM
+            from ldap3 import ALL, NTLM, SIMPLE, Connection, Server
 
             server = Server(dc_ip, port=389, get_info=ALL, connect_timeout=self.config.ldap_timeout)
 
             if self.config.username and self.config.password:
-                user = f"{self.config.domain}\\{self.config.username}" if self.config.domain else self.config.username
-                conn = Connection(server, user=user, password=self.config.password, authentication=NTLM)
+                user = (
+                    f"{self.config.domain}\\{self.config.username}"
+                    if self.config.domain
+                    else self.config.username
+                )
+                conn = Connection(
+                    server, user=user, password=self.config.password, authentication=NTLM
+                )
             elif self.config.username and self.config.ntlm_hash:
                 # NTLM hash auth requires special handling
-                user = f"{self.config.domain}\\{self.config.username}" if self.config.domain else self.config.username
-                conn = Connection(server, user=user, password=self.config.ntlm_hash, authentication=NTLM)
+                user = (
+                    f"{self.config.domain}\\{self.config.username}"
+                    if self.config.domain
+                    else self.config.username
+                )
+                conn = Connection(
+                    server, user=user, password=self.config.ntlm_hash, authentication=NTLM
+                )
             else:
                 # Anonymous bind
                 conn = Connection(server)
@@ -369,7 +391,11 @@ class ADPrivescScanner:
 
             for entry in conn.entries:
                 if hasattr(entry, "member"):
-                    members = entry.member.values if hasattr(entry.member, "values") else [str(entry.member)]
+                    members = (
+                        entry.member.values
+                        if hasattr(entry.member, "values")
+                        else [str(entry.member)]
+                    )
 
                     for member_dn in members:
                         if not member_dn:
@@ -380,15 +406,28 @@ class ADPrivescScanner:
                             search_base=str(member_dn),
                             search_filter="(objectClass=*)",
                             search_scope="BASE",
-                            attributes=["sAMAccountName", "objectClass", "objectSid", "userAccountControl"],
+                            attributes=[
+                                "sAMAccountName",
+                                "objectClass",
+                                "objectSid",
+                                "userAccountControl",
+                            ],
                         )
 
                         if conn.entries:
                             member_entry = conn.entries[0]
-                            sam_name = str(member_entry.sAMAccountName) if hasattr(member_entry, "sAMAccountName") else ""
+                            sam_name = (
+                                str(member_entry.sAMAccountName)
+                                if hasattr(member_entry, "sAMAccountName")
+                                else ""
+                            )
 
                             # Determine object type
-                            obj_class = member_entry.objectClass.values if hasattr(member_entry.objectClass, "values") else []
+                            obj_class = (
+                                member_entry.objectClass.values
+                                if hasattr(member_entry.objectClass, "values")
+                                else []
+                            )
                             if "user" in obj_class:
                                 obj_type = "user"
                             elif "group" in obj_class:
@@ -399,7 +438,10 @@ class ADPrivescScanner:
                                 obj_type = "unknown"
 
                             # Create or update account record
-                            existing = next((a for a in result.privileged_accounts if a.dn == str(member_dn)), None)
+                            existing = next(
+                                (a for a in result.privileged_accounts if a.dn == str(member_dn)),
+                                None,
+                            )
 
                             if existing:
                                 if finding_type not in existing.finding_types:
@@ -407,11 +449,16 @@ class ADPrivescScanner:
                                 existing.groups.append(group_name)
                             else:
                                 account = ADPrivilegedAccount(
-                                    name=sam_name or str(member_dn).split(",")[0].replace("CN=", ""),
+                                    name=sam_name
+                                    or str(member_dn).split(",")[0].replace("CN=", ""),
                                     sam_account_name=sam_name,
                                     object_type=obj_type,
                                     dn=str(member_dn),
-                                    sid=str(member_entry.objectSid) if hasattr(member_entry, "objectSid") else "",
+                                    sid=(
+                                        str(member_entry.objectSid)
+                                        if hasattr(member_entry, "objectSid")
+                                        else ""
+                                    ),
                                     finding_types=[finding_type],
                                     groups=[group_name],
                                     risk_score=self._calculate_risk_score([finding_type]),
@@ -420,14 +467,16 @@ class ADPrivescScanner:
 
                             # Create finding
                             severity = self._get_finding_severity(finding_type)
-                            result.findings.append(ScanFinding(
-                                title=f"Member of {group_name}: {sam_name}",
-                                severity=severity,
-                                description=f"User/Group '{sam_name}' is a member of the privileged group '{group_name}'",
-                                host=result.dc_ip,
-                                scanner="ad_privesc_scanner",
-                                tags=[finding_type.value, "privileged_group"],
-                            ))
+                            result.findings.append(
+                                ScanFinding(
+                                    title=f"Member of {group_name}: {sam_name}",
+                                    severity=severity,
+                                    description=f"User/Group '{sam_name}' is a member of the privileged group '{group_name}'",
+                                    host=result.dc_ip,
+                                    scanner="ad_privesc_scanner",
+                                    tags=[finding_type.value, "privileged_group"],
+                                )
+                            )
 
     async def _scan_dangerous_flags(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Find users with dangerous UAC flags"""
@@ -446,7 +495,9 @@ class ADPrivescScanner:
         for entry in conn.entries:
             sam_name = str(entry.sAMAccountName)
 
-            existing = next((a for a in result.privileged_accounts if a.sam_account_name == sam_name), None)
+            existing = next(
+                (a for a in result.privileged_accounts if a.sam_account_name == sam_name), None
+            )
 
             if existing:
                 if ADFindingType.ASREP_ROASTABLE not in existing.finding_types:
@@ -465,14 +516,16 @@ class ADPrivescScanner:
                 )
                 result.privileged_accounts.append(account)
 
-            result.findings.append(ScanFinding(
-                title=f"AS-REP Roastable User: {sam_name}",
-                severity=ScanSeverity.HIGH,
-                description=f"User '{sam_name}' has DONT_REQ_PREAUTH flag set. Can request AS-REP without pre-authentication and crack offline.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["asrep_roastable", "kerberos", "credential_access"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"AS-REP Roastable User: {sam_name}",
+                    severity=ScanSeverity.HIGH,
+                    description=f"User '{sam_name}' has DONT_REQ_PREAUTH flag set. Can request AS-REP without pre-authentication and crack offline.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["asrep_roastable", "kerberos", "credential_access"],
+                )
+            )
 
         # Find users with password not required
         search_filter = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=32))"
@@ -487,14 +540,16 @@ class ADPrivescScanner:
         for entry in conn.entries:
             sam_name = str(entry.sAMAccountName)
 
-            result.findings.append(ScanFinding(
-                title=f"Password Not Required: {sam_name}",
-                severity=ScanSeverity.HIGH,
-                description=f"User '{sam_name}' has PASSWD_NOTREQD flag. Account may have blank password.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["password_not_required", "misconfiguration"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Password Not Required: {sam_name}",
+                    severity=ScanSeverity.HIGH,
+                    description=f"User '{sam_name}' has PASSWD_NOTREQD flag. Account may have blank password.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["password_not_required", "misconfiguration"],
+                )
+            )
 
         # Find users with password never expires
         search_filter = "(&(objectCategory=person)(objectClass=user)(userAccountControl:1.2.840.113556.1.4.803:=65536))"
@@ -509,14 +564,16 @@ class ADPrivescScanner:
         for entry in conn.entries:
             sam_name = str(entry.sAMAccountName)
 
-            result.findings.append(ScanFinding(
-                title=f"Password Never Expires: {sam_name}",
-                severity=ScanSeverity.LOW,
-                description=f"User '{sam_name}' has password set to never expire.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["password_never_expires", "policy"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Password Never Expires: {sam_name}",
+                    severity=ScanSeverity.LOW,
+                    description=f"User '{sam_name}' has password set to never expire.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["password_never_expires", "policy"],
+                )
+            )
 
     async def _scan_kerberoastable(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Find Kerberoastable users (users with SPNs)"""
@@ -529,14 +586,26 @@ class ADPrivescScanner:
             search_base=base_dn,
             search_filter=search_filter,
             search_scope=SUBTREE,
-            attributes=["sAMAccountName", "distinguishedName", "objectSid", "servicePrincipalName", "adminCount"],
+            attributes=[
+                "sAMAccountName",
+                "distinguishedName",
+                "objectSid",
+                "servicePrincipalName",
+                "adminCount",
+            ],
         )
 
         for entry in conn.entries:
             sam_name = str(entry.sAMAccountName)
-            spns = entry.servicePrincipalName.values if hasattr(entry.servicePrincipalName, "values") else []
+            spns = (
+                entry.servicePrincipalName.values
+                if hasattr(entry.servicePrincipalName, "values")
+                else []
+            )
 
-            existing = next((a for a in result.privileged_accounts if a.sam_account_name == sam_name), None)
+            existing = next(
+                (a for a in result.privileged_accounts if a.sam_account_name == sam_name), None
+            )
 
             admin_count = False
             if hasattr(entry, "adminCount"):
@@ -565,21 +634,26 @@ class ADPrivescScanner:
                 result.privileged_accounts.append(account)
 
             severity = ScanSeverity.HIGH if admin_count else ScanSeverity.MEDIUM
-            result.findings.append(ScanFinding(
-                title=f"Kerberoastable User: {sam_name}",
-                severity=severity,
-                description=f"User '{sam_name}' has SPNs: {', '.join(spns[:3])}{'...' if len(spns) > 3 else ''}. Can request TGS and crack offline.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["kerberoastable", "kerberos", "credential_access"] + (["admincount"] if admin_count else []),
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Kerberoastable User: {sam_name}",
+                    severity=severity,
+                    description=f"User '{sam_name}' has SPNs: {', '.join(spns[:3])}{'...' if len(spns) > 3 else ''}. Can request TGS and crack offline.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["kerberoastable", "kerberos", "credential_access"]
+                    + (["admincount"] if admin_count else []),
+                )
+            )
 
     async def _scan_delegation(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Find delegation misconfigurations"""
         from ldap3 import SUBTREE
 
         # Unconstrained delegation (computers)
-        search_filter = "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))"
+        search_filter = (
+            "(&(objectCategory=computer)(userAccountControl:1.2.840.113556.1.4.803:=524288))"
+        )
 
         conn.search(
             search_base=base_dn,
@@ -606,14 +680,16 @@ class ADPrivescScanner:
             )
             result.privileged_accounts.append(account)
 
-            result.findings.append(ScanFinding(
-                title=f"Unconstrained Delegation: {dns_name}",
-                severity=ScanSeverity.CRITICAL,
-                description=f"Computer '{dns_name}' has unconstrained delegation. Can capture TGTs of connecting users.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["unconstrained_delegation", "kerberos", "lateral_movement"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Unconstrained Delegation: {dns_name}",
+                    severity=ScanSeverity.CRITICAL,
+                    description=f"Computer '{dns_name}' has unconstrained delegation. Can capture TGTs of connecting users.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["unconstrained_delegation", "kerberos", "lateral_movement"],
+                )
+            )
 
         # Constrained delegation (msDS-AllowedToDelegateTo)
         search_filter = "(msDS-AllowedToDelegateTo=*)"
@@ -622,7 +698,12 @@ class ADPrivescScanner:
             search_base=base_dn,
             search_filter=search_filter,
             search_scope=SUBTREE,
-            attributes=["sAMAccountName", "distinguishedName", "objectClass", "msDS-AllowedToDelegateTo"],
+            attributes=[
+                "sAMAccountName",
+                "distinguishedName",
+                "objectClass",
+                "msDS-AllowedToDelegateTo",
+            ],
         )
 
         for entry in conn.entries:
@@ -633,9 +714,13 @@ class ADPrivescScanner:
             delegation_targets = []
             if hasattr(entry, "msDS-AllowedToDelegateTo"):
                 targets = entry["msDS-AllowedToDelegateTo"]
-                delegation_targets = targets.values if hasattr(targets, "values") else [str(targets)]
+                delegation_targets = (
+                    targets.values if hasattr(targets, "values") else [str(targets)]
+                )
 
-            existing = next((a for a in result.privileged_accounts if a.sam_account_name == sam_name), None)
+            existing = next(
+                (a for a in result.privileged_accounts if a.sam_account_name == sam_name), None
+            )
 
             if existing:
                 if ADFindingType.CONSTRAINED_DELEGATION not in existing.finding_types:
@@ -655,14 +740,16 @@ class ADPrivescScanner:
                 )
                 result.privileged_accounts.append(account)
 
-            result.findings.append(ScanFinding(
-                title=f"Constrained Delegation: {sam_name}",
-                severity=ScanSeverity.HIGH,
-                description=f"{obj_type.title()} '{sam_name}' has constrained delegation to: {', '.join(delegation_targets[:3])}",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["constrained_delegation", "kerberos", "lateral_movement"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Constrained Delegation: {sam_name}",
+                    severity=ScanSeverity.HIGH,
+                    description=f"{obj_type.title()} '{sam_name}' has constrained delegation to: {', '.join(delegation_targets[:3])}",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["constrained_delegation", "kerberos", "lateral_movement"],
+                )
+            )
 
         # Resource-Based Constrained Delegation (msDS-AllowedToActOnBehalfOfOtherIdentity)
         search_filter = "(msDS-AllowedToActOnBehalfOfOtherIdentity=*)"
@@ -677,14 +764,16 @@ class ADPrivescScanner:
         for entry in conn.entries:
             sam_name = str(entry.sAMAccountName)
 
-            result.findings.append(ScanFinding(
-                title=f"RBCD Configured: {sam_name}",
-                severity=ScanSeverity.MEDIUM,
-                description=f"Object '{sam_name}' has RBCD configured. May be attack target or indicator of compromise.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["rbcd", "kerberos", "lateral_movement"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"RBCD Configured: {sam_name}",
+                    severity=ScanSeverity.MEDIUM,
+                    description=f"Object '{sam_name}' has RBCD configured. May be attack target or indicator of compromise.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["rbcd", "kerberos", "lateral_movement"],
+                )
+            )
 
     async def _scan_acl_abuse(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Scan for ACL abuse opportunities"""
@@ -697,14 +786,16 @@ class ADPrivescScanner:
         # This would require parsing nTSecurityDescriptor which is complex
         # Recommend using BloodHound instead
 
-        result.findings.append(ScanFinding(
-            title="ACL Analysis Recommended",
-            severity=ScanSeverity.INFO,
-            description="For comprehensive ACL abuse path analysis, run BloodHound collector and analyze in BloodHound GUI.",
-            host=result.dc_ip,
-            scanner="ad_privesc_scanner",
-            tags=["acl", "recommendation"],
-        ))
+        result.findings.append(
+            ScanFinding(
+                title="ACL Analysis Recommended",
+                severity=ScanSeverity.INFO,
+                description="For comprehensive ACL abuse path analysis, run BloodHound collector and analyze in BloodHound GUI.",
+                host=result.dc_ip,
+                scanner="ad_privesc_scanner",
+                tags=["acl", "recommendation"],
+            )
+        )
 
     async def _scan_laps(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Scan for LAPS configuration and readers"""
@@ -725,14 +816,16 @@ class ADPrivescScanner:
             for entry in conn.entries:
                 sam_name = str(entry.sAMAccountName)
                 # Don't log the actual password
-                result.findings.append(ScanFinding(
-                    title=f"LAPS Password Readable: {sam_name}",
-                    severity=ScanSeverity.CRITICAL,
-                    description=f"Current user can read LAPS password for computer '{sam_name}'",
-                    host=result.dc_ip,
-                    scanner="ad_privesc_scanner",
-                    tags=["laps", "credential_access", "local_admin"],
-                ))
+                result.findings.append(
+                    ScanFinding(
+                        title=f"LAPS Password Readable: {sam_name}",
+                        severity=ScanSeverity.CRITICAL,
+                        description=f"Current user can read LAPS password for computer '{sam_name}'",
+                        host=result.dc_ip,
+                        scanner="ad_privesc_scanner",
+                        tags=["laps", "credential_access", "local_admin"],
+                    )
+                )
         else:
             # Check if LAPS is deployed at all
             search_filter = "(objectClass=computer)"
@@ -745,14 +838,16 @@ class ADPrivescScanner:
             )
 
             if not conn.entries:
-                result.findings.append(ScanFinding(
-                    title="LAPS Not Deployed",
-                    severity=ScanSeverity.MEDIUM,
-                    description="LAPS does not appear to be deployed in this domain.",
-                    host=result.dc_ip,
-                    scanner="ad_privesc_scanner",
-                    tags=["laps", "missing_control"],
-                ))
+                result.findings.append(
+                    ScanFinding(
+                        title="LAPS Not Deployed",
+                        severity=ScanSeverity.MEDIUM,
+                        description="LAPS does not appear to be deployed in this domain.",
+                        host=result.dc_ip,
+                        scanner="ad_privesc_scanner",
+                        tags=["laps", "missing_control"],
+                    )
+                )
 
     async def _scan_service_accounts(self, conn, base_dn: str, result: ADPrivescResult) -> None:
         """Scan for gMSA and other service accounts"""
@@ -781,14 +876,16 @@ class ADPrivescScanner:
             )
             result.privileged_accounts.append(account)
 
-            result.findings.append(ScanFinding(
-                title=f"Group Managed Service Account: {sam_name}",
-                severity=ScanSeverity.INFO,
-                description=f"gMSA '{sam_name}' found. Check who can retrieve the password.",
-                host=result.dc_ip,
-                scanner="ad_privesc_scanner",
-                tags=["gmsa", "service_account"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"Group Managed Service Account: {sam_name}",
+                    severity=ScanSeverity.INFO,
+                    description=f"gMSA '{sam_name}' found. Check who can retrieve the password.",
+                    host=result.dc_ip,
+                    scanner="ad_privesc_scanner",
+                    tags=["gmsa", "service_account"],
+                )
+            )
 
     def _calculate_risk_score(self, finding_types: list[ADFindingType]) -> int:
         """Calculate risk score based on finding types"""

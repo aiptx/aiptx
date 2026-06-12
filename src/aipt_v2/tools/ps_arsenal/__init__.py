@@ -62,7 +62,6 @@ _LAZY_IMPORTS = {
     "RequiredPrivilege": ".ps_config",
     "get_ps_config": ".ps_config",
     "validate_ps_config": ".ps_config",
-
     # Metadata
     "ScriptMetadata": ".ps_metadata",
     "ScriptCategory": ".ps_metadata",
@@ -75,7 +74,6 @@ _LAZY_IMPORTS = {
     "get_admin_scripts": ".ps_metadata",
     "get_all_script_names": ".ps_metadata",
     "get_category_counts": ".ps_metadata",
-
     # Executor
     "PSArsenalExecutor": ".ps_executor",
     "PSExecutionError": ".ps_executor",
@@ -84,18 +82,15 @@ _LAZY_IMPORTS = {
     "PrivilegeError": ".ps_executor",
     "AMSI_BYPASS_TECHNIQUES": ".ps_executor",
     "create_executor_from_config": ".ps_executor",
-
     # Parsers
     "PSArsenalParser": ".ps_parsers",
     "PSFinding": ".ps_parsers",
     "PSCredential": ".ps_parsers",
     "PSFindingCategory": ".ps_parsers",
     "PSFindingSeverity": ".ps_parsers",
-
     # Attacks
     "PSArsenalAttacks": ".ps_attacks",
     "AttackResult": ".ps_attacks",
-
     # Scanner
     "PSArsenalScanner": ".ps_scanner",
     "ScanResult": ".ps_scanner",
@@ -109,6 +104,7 @@ def __getattr__(name: str):
     if name in _LAZY_IMPORTS:
         module_path = _LAZY_IMPORTS[name]
         import importlib
+
         module = importlib.import_module(module_path, package=__name__)
         return getattr(module, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
@@ -126,9 +122,20 @@ __author__ = "AIPTX"
 # Script count for quick reference
 TOTAL_SCRIPTS = 86
 SCRIPT_CATEGORIES = [
-    "Gather", "Shells", "Utility", "Backdoors", "Client",
-    "Escalation", "Execution", "Scan", "Pivot", "MITM",
-    "ActiveDirectory", "Bypass", "Misc", "Prasadhak"
+    "Gather",
+    "Shells",
+    "Utility",
+    "Backdoors",
+    "Client",
+    "Escalation",
+    "Execution",
+    "Scan",
+    "Pivot",
+    "MITM",
+    "ActiveDirectory",
+    "Bypass",
+    "Misc",
+    "Prasadhak",
 ]
 
 
@@ -140,17 +147,11 @@ def list_scripts() -> dict:
     Returns:
         Dict mapping category names to script lists
     """
-    from .ps_metadata import (
-        SCRIPT_METADATA,
-        ScriptCategory
-    )
+    from .ps_metadata import SCRIPT_METADATA, ScriptCategory
 
     result = {}
     for category in ScriptCategory:
-        scripts = [
-            s.name for s in SCRIPT_METADATA.values()
-            if s.category == category
-        ]
+        scripts = [s.name for s in SCRIPT_METADATA.values() if s.category == category]
         if scripts:
             result[category.value] = sorted(scripts)
     return result
@@ -192,7 +193,6 @@ __all__ = [
     "__version__",
     "TOTAL_SCRIPTS",
     "SCRIPT_CATEGORIES",
-
     # Configuration
     "PSArsenalConfig",
     "PSCredentials",
@@ -202,7 +202,6 @@ __all__ = [
     "RequiredPrivilege",
     "get_ps_config",
     "validate_ps_config",
-
     # Metadata
     "ScriptMetadata",
     "ScriptCategory",
@@ -215,7 +214,6 @@ __all__ = [
     "get_admin_scripts",
     "get_all_script_names",
     "get_category_counts",
-
     # Executor
     "PSArsenalExecutor",
     "PSExecutionError",
@@ -224,24 +222,20 @@ __all__ = [
     "PrivilegeError",
     "AMSI_BYPASS_TECHNIQUES",
     "create_executor_from_config",
-
     # Parsers
     "PSArsenalParser",
     "PSFinding",
     "PSCredential",
     "PSFindingCategory",
     "PSFindingSeverity",
-
     # Attacks
     "PSArsenalAttacks",
     "AttackResult",
-
     # Scanner
     "PSArsenalScanner",
     "ScanResult",
     "ScanFinding",
     "create_ps_scanner",
-
     # Convenience
     "list_scripts",
     "get_script_info",

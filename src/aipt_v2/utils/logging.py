@@ -11,13 +11,14 @@ Provides:
 
 import logging
 import os
-import sys
 import re
-from typing import Any, Optional
+import sys
 from functools import lru_cache
+from typing import Any, Optional
 
 try:
     import structlog
+
     STRUCTLOG_AVAILABLE = True
 except ImportError:
     STRUCTLOG_AVAILABLE = False

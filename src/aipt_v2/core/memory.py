@@ -4,20 +4,22 @@ AIPT Memory Manager - Context compression and management
 Prevents context overflow in long pentest sessions.
 Inspired by: Strix's memory compression (100K limit, 15 recent, 90% compress)
 """
+
 from __future__ import annotations
 
-from typing import Optional, Any
-from dataclasses import dataclass, field
 import json
+from dataclasses import dataclass
 from datetime import datetime
+from typing import Any, Optional
 
 
 @dataclass
 class MemoryConfig:
     """Memory configuration"""
-    max_tokens: int = 32000      # Context window limit
-    compress_at: float = 0.8     # Compress when 80% full
-    recent_keep: int = 10        # Always keep last N messages
+
+    max_tokens: int = 32000  # Context window limit
+    compress_at: float = 0.8  # Compress when 80% full
+    recent_keep: int = 10  # Always keep last N messages
     summary_max_tokens: int = 500  # Max tokens for summary
 
 
@@ -83,11 +85,13 @@ class MemoryManager:
 
     def _add_message(self, role: str, content: str) -> None:
         """Add message and check for compression"""
-        self.messages.append({
-            "role": role,
-            "content": content,
-            "timestamp": datetime.now().isoformat(),
-        })
+        self.messages.append(
+            {
+                "role": role,
+                "content": content,
+                "timestamp": datetime.now().isoformat(),
+            }
+        )
         self._total_tokens += self._count_tokens(content)
 
         # Check if compression needed
@@ -135,10 +139,12 @@ class MemoryManager:
         if summary or self.compressed_summary:
             combined_summary = f"{self.compressed_summary}\n\n{summary}".strip()
             self.compressed_summary = combined_summary[-4000:]  # Keep last 4000 chars
-            self.messages.append({
-                "role": "user",
-                "content": f"[Previous Session Summary]\n{self.compressed_summary}"
-            })
+            self.messages.append(
+                {
+                    "role": "user",
+                    "content": f"[Previous Session Summary]\n{self.compressed_summary}",
+                }
+            )
 
         # Add recent messages
         self.messages.extend(recent_messages)
@@ -156,22 +162,16 @@ class MemoryManager:
             return self._simple_summarize(messages)
 
         # Format messages for summarization
-        formatted = "\n".join([
-            f"{m['role'].upper()}: {m['content'][:500]}"
-            for m in messages
-        ])
+        formatted = "\n".join([f"{m['role'].upper()}: {m['content'][:500]}" for m in messages])
 
         summary_prompt = [
             {
                 "role": "system",
                 "content": "Summarize the following pentest session concisely. "
-                          "Focus on: discovered hosts, open ports, vulnerabilities found, "
-                          "credentials obtained, and actions taken. Be brief but complete."
+                "Focus on: discovered hosts, open ports, vulnerabilities found, "
+                "credentials obtained, and actions taken. Be brief but complete.",
             },
-            {
-                "role": "user",
-                "content": f"Summarize this session:\n\n{formatted[:8000]}"
-            }
+            {"role": "user", "content": f"Summarize this session:\n\n{formatted[:8000]}"},
         ]
 
         try:
@@ -203,19 +203,19 @@ class MemoryManager:
         if actions:
             summary_parts.append(f"Actions ({len(actions)}): " + "; ".join(actions[:5]))
 
-        return " | ".join(summary_parts) if summary_parts else f"[{len(messages)} messages compressed]"
+        return (
+            " | ".join(summary_parts) if summary_parts else f"[{len(messages)} messages compressed]"
+        )
 
     def _count_tokens(self, text: str) -> int:
         """Count tokens in text"""
-        if self.llm and hasattr(self.llm, 'count_tokens'):
+        if self.llm and hasattr(self.llm, "count_tokens"):
             return self.llm.count_tokens(text)
         return len(text) // 4  # Approximate
 
     def _recalculate_tokens(self) -> None:
         """Recalculate total tokens"""
-        self._total_tokens = sum(
-            self._count_tokens(m.get("content", "")) for m in self.messages
-        )
+        self._total_tokens = sum(self._count_tokens(m.get("content", "")) for m in self.messages)
 
     def get_messages(self, include_timestamps: bool = False) -> list[dict]:
         """Get current message list for LLM"""
@@ -223,10 +223,7 @@ class MemoryManager:
             return self.messages.copy()
 
         # Strip timestamps for LLM calls
-        return [
-            {"role": m["role"], "content": m["content"]}
-            for m in self.messages
-        ]
+        return [{"role": m["role"], "content": m["content"]} for m in self.messages]
 
     def get_context_for_prompt(self) -> str:
         """Get formatted context string"""

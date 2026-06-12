@@ -15,35 +15,31 @@ Usage:
     report = mapper.map_findings(findings, frameworks=["owasp", "pci"])
 """
 
+from aipt_v2.compliance.compliance_report import (
+    ComplianceReport,
+    ComplianceReportGenerator,
+    generate_compliance_report,
+)
 from aipt_v2.compliance.framework_mapper import (
     ComplianceMapper,
     ComplianceMapping,
     FrameworkCategory,
     map_to_frameworks,
 )
-
-from aipt_v2.compliance.owasp_mapping import (
-    OWASPMapper,
-    OWASP_TOP_10,
-    get_owasp_category,
-)
-
-from aipt_v2.compliance.pci_mapping import (
-    PCIMapper,
-    PCI_DSS_REQUIREMENTS,
-    get_pci_requirement,
-)
-
 from aipt_v2.compliance.nist_mapping import (
-    NISTMapper,
     NIST_CONTROLS,
+    NISTMapper,
     get_nist_control,
 )
-
-from aipt_v2.compliance.compliance_report import (
-    ComplianceReport,
-    generate_compliance_report,
-    ComplianceReportGenerator,
+from aipt_v2.compliance.owasp_mapping import (
+    OWASP_TOP_10,
+    OWASPMapper,
+    get_owasp_category,
+)
+from aipt_v2.compliance.pci_mapping import (
+    PCI_DSS_REQUIREMENTS,
+    PCIMapper,
+    get_pci_requirement,
 )
 
 __all__ = [

@@ -1,23 +1,22 @@
 # from github_searcher import GithubSearcher
 # from google_searcher import GoogleSearcher
-import tiktoken
-from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
-from aipt_v2.utils.doc_handler import DocHandler
-from llama_index.llms.openai import OpenAI
-from llama_index.llms.langchain import LangChainLLM
-from llama_index.llms.huggingface import HuggingFaceLLM
-from llama_index.llms.huggingface_api import HuggingFaceInferenceAPI
-from llama_index.core import Settings
-import subprocess
-import shlex
 import os
-import openai
-from transformers import AutoModelForCausalLM, AutoTokenizer
-import torch
+import re
+import subprocess
+
 import pandas as pd
+import tiktoken
+from llama_index.core import Settings
+from llama_index.core.callbacks import CallbackManager, TokenCountingHandler
+from llama_index.llms.langchain import LangChainLLM
+from llama_index.llms.openai import OpenAI
+from transformers import AutoModelForCausalLM, AutoTokenizer
+
+from aipt_v2.utils.doc_handler import DocHandler
 
 # Security: CVE ID validation pattern (CWE-78 prevention)
 CVE_PATTERN = re.compile(r"^CVE-\d{4}-\d{4,7}$", re.IGNORECASE)
+
 
 def _validate_cve_id(cve: str) -> str:
     """
@@ -37,6 +36,7 @@ def _validate_cve_id(cve: str) -> str:
         raise ValueError(f"Invalid CVE ID format: {cve}. Expected format: CVE-YYYY-NNNNN")
     return cve.upper()
 
+
 def _sanitize_product_name(product: str) -> str:
     """
     Sanitize product name to prevent command injection.
@@ -48,34 +48,57 @@ def _sanitize_product_name(product: str) -> str:
         Sanitized product name
     """
     # Remove dangerous characters that could enable shell injection
-    dangerous_chars = [";", "&", "|", "$", "`", "\n", "\r", "\\", "'", '"', "(", ")", "{", "}", "[", "]", "<", ">"]
+    dangerous_chars = [
+        ";",
+        "&",
+        "|",
+        "$",
+        "`",
+        "\n",
+        "\r",
+        "\\",
+        "'",
+        '"',
+        "(",
+        ")",
+        "{",
+        "}",
+        "[",
+        "]",
+        "<",
+        ">",
+    ]
     sanitized = product
     for char in dangerous_chars:
         sanitized = sanitized.replace(char, "")
     return sanitized.strip()[:200]  # Limit length
 
-from sklearn.metrics import confusion_matrix, cohen_kappa_score
-from sklearn.preprocessing import MinMaxScaler, StandardScaler, RobustScaler
-import seaborn as sns
-import matplotlib.pyplot as plt
-from scipy.stats import pearsonr, spearmanr
-from itertools import combinations
-import numpy as np
+
 import json
 import logging
 import time
-from tqdm import tqdm
-from aipt_v2.utils.searchers.search_once import compose
-import re
+from itertools import combinations
+
+import matplotlib.pyplot as plt
+import numpy as np
+import seaborn as sns
 import yaml
+from scipy.stats import pearsonr, spearmanr
+from sklearn.metrics import cohen_kappa_score, confusion_matrix
+from sklearn.preprocessing import MinMaxScaler, StandardScaler
+from tqdm import tqdm
+
 from aipt_v2.utils.model_manager import get_model
+from aipt_v2.utils.searchers.search_once import compose
+
 logger = logging.getLogger(__name__)
 
-config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'configs', 'config.yaml')
-with open(config_path, 'r', encoding='utf-8') as f:
+config_path = os.path.join(os.path.dirname(os.path.dirname(__file__)), "configs", "config.yaml")
+with open(config_path, "r", encoding="utf-8") as f:
     config = yaml.safe_load(f)
-planning_config = config['runtime']['planning']
-model_name_for_token = config['models']['openai']['model']
+planning_config = config["runtime"]["planning"]
+model_name_for_token = config["models"]["openai"]["model"]
+
 
 def cvemap_search(cve, info_dir):
     """
@@ -95,7 +118,7 @@ def cvemap_search(cve, info_dir):
             capture_output=True,
             text=True,
             timeout=50,
-            check=False  # Handle errors ourselves
+            check=False,  # Handle errors ourselves
         )
 
         if result.returncode != 0:
@@ -103,7 +126,7 @@ def cvemap_search(cve, info_dir):
             return None
 
         # Write output to file
-        with open(cvemap_json_path, 'w') as f:
+        with open(cvemap_json_path, "w") as f:
             f.write(result.stdout)
 
         json_data = json.loads(result.stdout)
@@ -121,6 +144,7 @@ def cvemap_search(cve, info_dir):
     except FileNotFoundError:
         logging.error("cvemap command not found. Please install cvemap.")
         return None
+
 
 def searchsploit_search(cve):
     """
@@ -142,11 +166,11 @@ def searchsploit_search(cve):
             capture_output=True,
             text=True,
             timeout=50,
-            check=False
+            check=False,
         )
 
         # Write output to file
-        with open(searchsploit_json_path, 'w') as f:
+        with open(searchsploit_json_path, "w") as f:
             f.write(result.stdout)
 
         json_data = json.loads(result.stdout)
@@ -161,7 +185,7 @@ def searchsploit_search(cve):
     except FileNotFoundError:
         logging.error("searchsploit command not found. Please install exploitdb.")
         return None
-    
+
 
 def categorize_cvss(cvss_score):
     if not (0.0 <= cvss_score <= 10.0):
@@ -173,7 +197,8 @@ def categorize_cvss(cvss_score):
         return "medium"
     else:
         return "easy"
-    
+
+
 def categorize_epss(epss_score):
     if not (0.0 <= epss_score <= 1.0):
         return "value not in range"
@@ -184,26 +209,28 @@ def categorize_epss(epss_score):
         return "medium"
     else:
         return "easy"
-    
+
+
 def count_cwe(cve_lst):
-    
+
     cwe_dict = {}
     for cve in cve_lst:
         info_dir = f"resources/{cve}/info"
         cvemap_json_path = f"{info_dir}/cvemap.json"
         with open(cvemap_json_path) as f:
             cvemap_json = json.load(f)[0]
-            cwe_lst = cvemap_json.get('weaknesses', [])
+            cwe_lst = cvemap_json.get("weaknesses", [])
             for cwe in cwe_lst:
-                cwe_id = cwe['cwe_id']
+                cwe_id = cwe["cwe_id"]
                 if cwe_id in cwe_dict:
                     cwe_dict[cwe_id] += 1
                 else:
                     cwe_dict[cwe_id] = 1
     return cwe_dict
 
+
 def calculate_score(features, trending_score):
-    weights = config['cve_scoring']['weights']
+    weights = config["cve_scoring"]["weights"]
 
     scores = {}
     max_score_github = 0
@@ -220,30 +247,36 @@ def calculate_score(features, trending_score):
     code_results = None
     doc_results = None
 
-    if features['code'].get('GitHub') or features['code'].get('ExploitDB'):
+    if features["code"].get("GitHub") or features["code"].get("ExploitDB"):
         for source in code_sources:
-            if not features['code'].get(source):
+            if not features["code"].get(source):
                 continue  # if not have data from source, skip
 
             has_code = True
-            for repo, vul_type in features['code'][source]["vul_type"].items():
+            for repo, vul_type in features["code"][source]["vul_type"].items():
                 score = 0
-                
+
                 # Calculate scores for each field
                 score += weights["vul_type"].get(vul_type, 0)
-                score += weights["isRemote"].get(features['code'][source]["isRemote"].get(repo, ""), 0)
-                
+                score += weights["isRemote"].get(
+                    features["code"][source]["isRemote"].get(repo, ""), 0
+                )
+
                 # Attack complexity fields
-                attack_complexity = features['code'][source]["attack_complexity"].get(repo, {})
+                attack_complexity = features["code"][source]["attack_complexity"].get(repo, {})
                 for field, value in attack_complexity.items():
                     score += 1 * weights["attack_complexity"].get(field, {}).get(value, 0)
-                
+
                 if repo == "Code_File":
                     score = score / 2
 
-                score *= weights["exp_maturity"].get(features['code'][source]["exp_maturity"].get(repo, ""), 0)
+                score *= weights["exp_maturity"].get(
+                    features["code"][source]["exp_maturity"].get(repo, ""), 0
+                )
 
-                score *= weights["lang_class"].get(features['code'][source]["lang_class"].get(repo, ""), 1)
+                score *= weights["lang_class"].get(
+                    features["code"][source]["lang_class"].get(repo, ""), 1
+                )
 
                 if source == "GitHub":
                     score *= weights["source_weights"]["gthb"]
@@ -278,23 +311,28 @@ def calculate_score(features, trending_score):
                 trending_score_expdb = weights["expdb_default_score"]
             else:
                 trending_score_github = trending_score
-                if features['code'].get('ExploitDB'):
+                if features["code"].get("ExploitDB"):
                     trending_score_expdb = weights["expdb_default_score"]
-                else: trending_score_expdb = 0
+                else:
+                    trending_score_expdb = 0
 
             # Add weighted trending score to the max score
             trend_score_weighted_expdb = trending_score_expdb * weights["trending_score"]
             trend_score_weighted_github = trending_score_github * weights["trending_score"]
-    
+
             # Handle cases where one source has no scores
-            final_expdb = (max_score_expdb + trend_score_weighted_expdb) if max_score_expdb > 0 else 0
-            final_github = (max_score_github + trend_score_weighted_github) if max_score_github > 0 else 0
+            final_expdb = (
+                (max_score_expdb + trend_score_weighted_expdb) if max_score_expdb > 0 else 0
+            )
+            final_github = (
+                (max_score_github + trend_score_weighted_github) if max_score_github > 0 else 0
+            )
 
             final_score = max(final_expdb, final_github)
 
             code_results = (sorted_scores, max_score_repo, max_score, final_score, has_code)
-    
-    if features['doc']:
+
+    if features["doc"]:
         doc_score = 0
         doc_score += weights["vul_type"].get(features["doc"]["vul_type"], 0)
         doc_score += weights["isRemote"].get(features["doc"]["isRemote"], 0)
@@ -304,7 +342,7 @@ def calculate_score(features, trending_score):
             doc_score += weights["attack_complexity"].get(field, {}).get(value, 0)
 
         doc_score *= weights["source_weights"]["gg"]
-        
+
         scores["doc"] = doc_score
 
         # Check if 'doc' has the max score
@@ -314,16 +352,18 @@ def calculate_score(features, trending_score):
             final_score = doc_score
 
         doc_results = (scores, max_score_repo, max_score, max_score, has_code)
-    
+
     if code_results and doc_results:
-        code_sorted_scores, code_max_repo, code_max_score, code_final_score, code_has_code = code_results
+        code_sorted_scores, code_max_repo, code_max_score, code_final_score, code_has_code = (
+            code_results
+        )
         doc_scores, doc_max_repo, doc_max_score, doc_final_score, doc_has_code = doc_results
-        
+
         # merge scores
         all_scores = dict(code_sorted_scores)
         all_scores.update(doc_scores)
         sorted_all_scores = sorted(all_scores.items(), key=lambda item: item[1], reverse=True)
-        
+
         # final max score and response repo
         if doc_max_score > code_max_score:
             final_max_score = doc_max_score
@@ -333,21 +373,22 @@ def calculate_score(features, trending_score):
             final_max_score = code_max_score
             final_max_repo = code_max_repo
             final_score = code_final_score
-            
+
         return sorted_all_scores, final_max_repo, final_max_score, final_score, has_code or True
-        
+
     elif code_results:
         return code_results
     elif doc_results:
         return doc_results
     else:
         return None, None, max_score, final_score, has_code
-    
+
+
 def calculate_match_stats(values1, values2):
     total = len(values1)
     exact_matches = sum(v1 == v2 for v1, v2 in zip(values1, values2))
     near_matches = sum(
-        abs(['easy', 'medium', 'hard'].index(v1) - ['easy', 'medium', 'hard'].index(v2)) == 1
+        abs(["easy", "medium", "hard"].index(v1) - ["easy", "medium", "hard"].index(v2)) == 1
         for v1, v2 in zip(values1, values2)
     )
     mismatches = total - exact_matches - near_matches
@@ -357,33 +398,36 @@ def calculate_match_stats(values1, values2):
         "Mismatch (%)": (mismatches / total) * 100,
     }
 
+
 def create_df(cvss_data, epss_data, pentestasst_data):
     all_keys = sorted(set(cvss_data.keys()).union(epss_data.keys(), pentestasst_data.keys()))
     data = {
-        'CVSS': [cvss_data.get(key, np.nan) for key in all_keys],
-        'EPSS': [epss_data.get(key, np.nan) for key in all_keys],
-        'EEAS': [pentestasst_data.get(key, np.nan) for key in all_keys],
+        "CVSS": [cvss_data.get(key, np.nan) for key in all_keys],
+        "EPSS": [epss_data.get(key, np.nan) for key in all_keys],
+        "EEAS": [pentestasst_data.get(key, np.nan) for key in all_keys],
     }
     df = pd.DataFrame(data, index=all_keys)
     return df
 
+
 def normalize_data(df):
     if len(df) == 1:
         # for the case of a single value, directly return 0.5 or keep the original value
-        df[['EEAS']] = 0.5  # or df[['EEAS']]
+        df[["EEAS"]] = 0.5  # or df[['EEAS']]
     else:
         scaler = StandardScaler()
         minmax_scaler = MinMaxScaler()
-        df[['EEAS']] = minmax_scaler.fit_transform(scaler.fit_transform(df[['EEAS']]))
+        df[["EEAS"]] = minmax_scaler.fit_transform(scaler.fit_transform(df[["EEAS"]]))
     normalized_df = pd.DataFrame(df, index=df.index, columns=df.columns)
     return normalized_df
-    
+
+
 def bin_agreement_analysis(df):
     pairwise_stats = {}
     for (name1, col1), (name2, col2) in combinations(df.items(), 2):
         # Calculate confusion matrix
-        cm = confusion_matrix(col1, col2, labels=['easy', 'medium', 'hard'])
-        kappa = cohen_kappa_score(col1, col2, labels=['easy', 'medium', 'hard'])
+        cm = confusion_matrix(col1, col2, labels=["easy", "medium", "hard"])
+        kappa = cohen_kappa_score(col1, col2, labels=["easy", "medium", "hard"])
         stats = calculate_match_stats(col1, col2)
 
         pairwise_stats[f"{name1} vs {name2}"] = {
@@ -403,6 +447,7 @@ def bin_agreement_analysis(df):
 
     return df
 
+
 def num_agreement_analysis(df):
     stats = {}
     for col1, col2 in combinations(df.columns, 2):
@@ -421,8 +466,10 @@ def num_agreement_analysis(df):
         rows_large_diff = df[diff_condition]
         print(f"Rows where the difference between {col1} and {col2} is larger than {threshold}:")
         print(rows_large_diff)
-        print(f"Total rows: {len(df)}, Rows with large difference: {len(rows_large_diff)}, percentage: {len(rows_large_diff)/len(df) * 100}%")
-        
+        print(
+            f"Total rows: {len(df)}, Rows with large difference: {len(rows_large_diff)}, percentage: {len(rows_large_diff)/len(df) * 100}%"
+        )
+
         values1, values2 = df[col1], df[col2]
         pearson_corr, _ = pearsonr(values1, values2)
         spearman_corr, _ = spearmanr(values1, values2)
@@ -442,9 +489,10 @@ def num_agreement_analysis(df):
 
     return df
 
+
 def visualize_num_results(df, output_dir="plots/"):
 
-    plt.rc('font', size=14) 
+    plt.rc("font", size=14)
 
     # Pairwise scatter plots
     pairplot = sns.pairplot(df, kind="reg", diag_kind="kde")
@@ -466,25 +514,40 @@ def visualize_num_results(df, output_dir="plots/"):
 
         plt.figure(figsize=(8, 6))
         plt.scatter(mean_values, diff_values, alpha=0.7)
-        plt.axhline(np.mean(diff_values), color='red', linestyle='--', label='Mean Difference')
-        plt.axhline(np.mean(diff_values) + 1.96 * np.std(diff_values), color='blue', linestyle='--', label='±1.96SD')
-        plt.axhline(np.mean(diff_values) - 1.96 * np.std(diff_values), color='blue', linestyle='--', label=None)
-        plt.title(f"Bland-Altman Plot: {col1} vs {col2}", weight='bold')
-        plt.xlabel('Mean of Two Measurements', weight='bold')
-        plt.ylabel('Difference', weight='bold')
+        plt.axhline(np.mean(diff_values), color="red", linestyle="--", label="Mean Difference")
+        plt.axhline(
+            np.mean(diff_values) + 1.96 * np.std(diff_values),
+            color="blue",
+            linestyle="--",
+            label="±1.96SD",
+        )
+        plt.axhline(
+            np.mean(diff_values) - 1.96 * np.std(diff_values),
+            color="blue",
+            linestyle="--",
+            label=None,
+        )
+        plt.title(f"Bland-Altman Plot: {col1} vs {col2}", weight="bold")
+        plt.xlabel("Mean of Two Measurements", weight="bold")
+        plt.ylabel("Difference", weight="bold")
         plt.legend()
         filename = f"bland_altman_{col1}_vs_{col2}.pdf"
         plt.savefig(os.path.join(output_dir, filename))
         plt.close()
 
+
 def visualize_bin_results(cvss_data, epss_data, pentestasst_data, output_dir):
     # Confusion Matrix Heatmap
-    for (name1, data1), (name2, data2) in combinations([("CVSS", cvss_data), ("EPSS", epss_data), ("EEAS", pentestasst_data)], 2):
-        labels = ['easy', 'medium', 'hard']
+    for (name1, data1), (name2, data2) in combinations(
+        [("CVSS", cvss_data), ("EPSS", epss_data), ("EEAS", pentestasst_data)], 2
+    ):
+        labels = ["easy", "medium", "hard"]
         confusion = confusion_matrix(list(data1.values()), list(data2.values()), labels=labels)
-        
+
         plt.figure(figsize=(6, 5))
-        sns.heatmap(confusion, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels)
+        sns.heatmap(
+            confusion, annot=True, fmt="d", cmap="Blues", xticklabels=labels, yticklabels=labels
+        )
         plt.title(f"Confusion Matrix: {name1} vs {name2}")
         plt.xlabel(f"{name2} Predictions")
         plt.ylabel(f"{name1} Predictions")
@@ -493,13 +556,13 @@ def visualize_bin_results(cvss_data, epss_data, pentestasst_data, output_dir):
 
     # Bar Chart of Class Distributions
     data = {
-        "Category": ['easy', 'medium', 'hard'],
-        "CVSS": [list(cvss_data.values()).count(c) for c in ['easy', 'medium', 'hard']],
-        "EPSS": [list(epss_data.values()).count(c) for c in ['easy', 'medium', 'hard']],
-        "EEAS": [list(pentestasst_data.values()).count(c) for c in ['easy', 'medium', 'hard']],
+        "Category": ["easy", "medium", "hard"],
+        "CVSS": [list(cvss_data.values()).count(c) for c in ["easy", "medium", "hard"]],
+        "EPSS": [list(epss_data.values()).count(c) for c in ["easy", "medium", "hard"]],
+        "EEAS": [list(pentestasst_data.values()).count(c) for c in ["easy", "medium", "hard"]],
     }
     df = pd.DataFrame(data).set_index("Category")
-    
+
     df.plot(kind="bar", figsize=(8, 6))
     plt.title("Class Distributions Across Dictionaries")
     plt.ylabel("Frequency")
@@ -510,19 +573,30 @@ def visualize_bin_results(cvss_data, epss_data, pentestasst_data, output_dir):
 
     # Pairwise Agreement Bar Chart
     pairwise_agreements = []
-    for (name1, data1), (name2, data2) in combinations([("CVSS", cvss_data), ("EPSS", epss_data), ("EEAS", pentestasst_data)], 2):
+    for (name1, data1), (name2, data2) in combinations(
+        [("CVSS", cvss_data), ("EPSS", epss_data), ("EEAS", pentestasst_data)], 2
+    ):
         total = len(data1)
         exact_matches = sum(1 for k in data1 if data1[k] == data2[k])
-        near_matches = sum(1 for k in data1 if abs(['easy', 'medium', 'hard'].index(data1[k]) -
-                                                   ['easy', 'medium', 'hard'].index(data2[k])) == 1)
+        near_matches = sum(
+            1
+            for k in data1
+            if abs(
+                ["easy", "medium", "hard"].index(data1[k])
+                - ["easy", "medium", "hard"].index(data2[k])
+            )
+            == 1
+        )
         mismatches = total - exact_matches - near_matches
 
-        pairwise_agreements.append({
-            "Pair": f"{name1} vs {name2}",
-            "Exact Matches (%)": exact_matches / total * 100,
-            "Near Matches (%)": near_matches / total * 100,
-            "Mismatches (%)": mismatches / total * 100
-        })
+        pairwise_agreements.append(
+            {
+                "Pair": f"{name1} vs {name2}",
+                "Exact Matches (%)": exact_matches / total * 100,
+                "Near Matches (%)": near_matches / total * 100,
+                "Mismatches (%)": mismatches / total * 100,
+            }
+        )
 
     pairwise_df = pd.DataFrame(pairwise_agreements).set_index("Pair")
     pairwise_df.plot(kind="bar", stacked=True, figsize=(10, 6))
@@ -533,18 +607,19 @@ def visualize_bin_results(cvss_data, epss_data, pentestasst_data, output_dir):
     plt.legend(loc="upper right")
     plt.savefig(f"{output_dir}/pairwise_agreements.pdf")
     plt.close()
-    
-def cve_classifier(cve, output_dir="resources/", mode = "specific"):
+
+
+def cve_classifier(cve, output_dir="resources/", mode="specific"):
     trending_score_path = f"{output_dir}/{cve}/Trend_Score.json"
     feature_path = f"{output_dir}/{cve}/features.json"
     cvemap_path = f"{output_dir}/{cve}/info/cvemap.json"
     result = None
-    with open(feature_path, 'r') as f:
+    with open(feature_path, "r") as f:
         result = json.load(f)
     trending_score = 0
-    if result['code'].get('GitHub'):
+    if result["code"].get("GitHub"):
         try:
-            with open(trending_score_path, 'r') as f:
+            with open(trending_score_path, "r") as f:
                 _trending_score = json.load(f)
                 # print(trending_score)
                 trending_score = min(_trending_score.get("trend_score", 0), 50)
@@ -555,11 +630,11 @@ def cve_classifier(cve, output_dir="resources/", mode = "specific"):
 
     if mode == "specific":
         cvemap_json = None
-        with open(cvemap_path, 'r') as f:
+        with open(cvemap_path, "r") as f:
             cvemap_json = json.load(f)[0]
-        cvss_score = cvemap_json.get('cvss_score', 0)
-        epss_score = cvemap_json['epss']['epss_score']
-        epss_percentile = cvemap_json['epss']['epss_percentile']
+        cvss_score = cvemap_json.get("cvss_score", 0)
+        epss_score = cvemap_json["epss"]["epss_score"]
+        epss_percentile = cvemap_json["epss"]["epss_percentile"]
     elif mode == "general":
         cvss_score = 0
         epss_score = 0
@@ -567,19 +642,20 @@ def cve_classifier(cve, output_dir="resources/", mode = "specific"):
     cvss_category = categorize_cvss(cvss_score)
     epss_category = categorize_epss(epss_percentile)
 
-    scores, max_score_repo, max_score, final_score, has_code = calculate_score(result, trending_score)
+    scores, max_score_repo, max_score, final_score, has_code = calculate_score(
+        result, trending_score
+    )
 
     exploitability = "hard"
     if final_score is not None and final_score > 0:
-        if final_score > 50:    
+        if final_score > 50:
             exploitability = "easy"
         elif final_score > 35:
             exploitability = "medium"
         else:
             exploitability = "hard"
-    
 
-    with open(f"{output_dir}/{cve}/classification.json", 'w') as f:
+    with open(f"{output_dir}/{cve}/classification.json", "w") as f:
         classification = {
             "cvss_category": cvss_category,
             "epss_category": epss_category,
@@ -588,11 +664,20 @@ def cve_classifier(cve, output_dir="resources/", mode = "specific"):
             "max_score_repo": max_score_repo,
             "max_score": max_score,
             "scores": scores,
-            "has_code": has_code
+            "has_code": has_code,
         }
         json.dump(classification, f, indent=4)
 
-    return cvss_score, cvss_category, epss_percentile, epss_category, final_score, exploitability, has_code
+    return (
+        cvss_score,
+        cvss_category,
+        epss_percentile,
+        epss_category,
+        final_score,
+        exploitability,
+        has_code,
+    )
+
 
 def cve_analysis(cve, output_dir="resources/"):
     cve_dir = f"{output_dir}/{cve}"
@@ -604,7 +689,7 @@ def cve_analysis(cve, output_dir="resources/"):
     cvemap_json = cvemap_search(cve, info_dir)
     if cvemap_json is None:
         return 0
-    cve_description = cvemap_json['cve_description']
+    cve_description = cvemap_json["cve_description"]
 
     logging.info(f"Analyzing {cve}")
     doc_handler = DocHandler()
@@ -615,16 +700,17 @@ def cve_analysis(cve, output_dir="resources/"):
     searching_time = analysis_start_time - searching_start_time
     analysis_time = analysis_end_time - analysis_start_time
     logging.info(f"Analysis time: {analysis_time} seconds")
-    
-    with open(f"{output_dir}/{cve}/features.json", 'w') as f:
-        
+
+    with open(f"{output_dir}/{cve}/features.json", "w") as f:
+
         json.dump(result, f, indent=4)
 
     return searching_time, analysis_time
 
+
 def general_analysis(keyword, output_dir="resources/"):
     searching_start_time = time.time()
-    compose(output_dir, keyword, loose_mode = True)
+    compose(output_dir, keyword, loose_mode=True)
 
     cve = keyword
 
@@ -639,21 +725,22 @@ def general_analysis(keyword, output_dir="resources/"):
     searching_time = analysis_start_time - searching_start_time
     analysis_time = analysis_end_time - analysis_start_time
     logging.info(f"Analysis time: {analysis_time} seconds")
-    
-    with open(f"{output_dir}/features.json", 'w') as f:
-        
+
+    with open(f"{output_dir}/features.json", "w") as f:
+
         json.dump(result, f, indent=4)
 
     return searching_time, analysis_time
 
+
 def cve_analysis_from_epss_csv(csv_path):
-    
+
     df = pd.read_csv(csv_path)
     # print(df.cve)
-    with tqdm(total=len(df.index), desc=f'Analyzing CVEs') as pbar:
+    with tqdm(total=len(df.index), desc="Analyzing CVEs") as pbar:
         for index, row in df.iterrows():
-            cve = row['cve']
-            if int(cve.split('-')[1]) < 2017 or int(cve.split('-')[1]) > 2022:
+            cve = row["cve"]
+            if int(cve.split("-")[1]) < 2017 or int(cve.split("-")[1]) > 2022:
                 logger.info(f"Skipping {cve}")
                 pbar.update()
                 continue
@@ -667,6 +754,7 @@ def cve_analysis_from_epss_csv(csv_path):
                 pbar.update()
                 continue
 
+
 def product_to_cve(product, output_dir):
     """
     Search for CVEs related to a product using cvemap.
@@ -674,7 +762,19 @@ def product_to_cve(product, output_dir):
     Security: Uses sanitized product name and subprocess without shell=True (CWE-78 fix).
     """
     cve_lst = []
-    product_dir_name = product.lower().replace(" ", "_").replace("/", "_").replace(":", "_").replace("\\", "_").replace("(", "_").replace(")", "_").replace('"', "").replace("'", "").replace("\n", "").replace("&", "")
+    product_dir_name = (
+        product.lower()
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace(":", "_")
+        .replace("\\", "_")
+        .replace("(", "_")
+        .replace(")", "_")
+        .replace('"', "")
+        .replace("'", "")
+        .replace("\n", "")
+        .replace("&", "")
+    )
     if os.path.exists(f"{output_dir}/{product_dir_name}"):
         with open(f"{output_dir}/{product_dir_name}/cve_lst.json") as f:
             cve_lst = json.load(f)
@@ -692,7 +792,19 @@ def product_to_cve(product, output_dir):
             logging.warning(f"Skipping empty product name after sanitization: {p}")
             continue
 
-        p_dir_name = p.lower().replace(" ", "_").replace("/", "_").replace(":", "_").replace("\\", "_").replace("(", "_").replace(")", "_").replace('"', "").replace("'", "").replace("\n", "").replace("&", "")
+        p_dir_name = (
+            p.lower()
+            .replace(" ", "_")
+            .replace("/", "_")
+            .replace(":", "_")
+            .replace("\\", "_")
+            .replace("(", "_")
+            .replace(")", "_")
+            .replace('"', "")
+            .replace("'", "")
+            .replace("\n", "")
+            .replace("&", "")
+        )
         cvemap_json_path = f"{output_dir}/{product_dir_name}/cvemap_{p_dir_name}.json"
 
         try:
@@ -703,7 +815,7 @@ def product_to_cve(product, output_dir):
                 capture_output=True,
                 text=True,
                 timeout=50,
-                check=False  # Handle errors ourselves
+                check=False,  # Handle errors ourselves
             )
 
             if result.returncode != 0:
@@ -711,12 +823,12 @@ def product_to_cve(product, output_dir):
                 continue
 
             # Write output to file (instead of shell redirection)
-            with open(cvemap_json_path, 'w') as f:
+            with open(cvemap_json_path, "w") as f:
                 f.write(result.stdout)
 
             json_data = json.loads(result.stdout)
             for cve in json_data:
-                cve_lst.append(cve['cve_id'])
+                cve_lst.append(cve["cve_id"])
 
         except subprocess.TimeoutExpired:
             logging.error(f"cvemap search timed out for product {sanitized_product}")
@@ -728,10 +840,11 @@ def product_to_cve(product, output_dir):
             logging.error("cvemap command not found. Please install cvemap.")
             break
 
-        with open(f"{output_dir}/{product_dir_name}/cve_lst.json", 'w') as f:
+        with open(f"{output_dir}/{product_dir_name}/cve_lst.json", "w") as f:
             json.dump(cve_lst, f, indent=4)
 
     return cve_lst
+
 
 def product_keyword_gen_openai(product, num):
     prompt = (
@@ -741,13 +854,17 @@ def product_keyword_gen_openai(product, num):
         "[Alternative product name 1, Alternative product name 2, Alternative product name 3, ...]"
     )
     try:
-        model_name = planning_config['model']
+        model_name = planning_config["model"]
         llm = get_model(model_name)
         from langchain_core.messages import HumanMessage
+
         response = llm.invoke([HumanMessage(content=prompt)])
-        product_lst_str = response.content.strip() if hasattr(response, 'content') else str(response)
-    except Exception as e:
+        product_lst_str = (
+            response.content.strip() if hasattr(response, "content") else str(response)
+        )
+    except Exception:
         import openai
+
         client = openai.OpenAI(api_key=os.environ.get("OPENAI_API_KEY"))
         response = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -758,15 +875,35 @@ def product_keyword_gen_openai(product, num):
         product_lst_str = str(response.choices[0].message.content)
     product_lst = product_lst_str.strip("[]").replace("'", "").split(", ")
     # print(product_lst)
-    product_lst = [product.lower().replace(" ", "_").replace("/", "_").replace(":", "_").replace("\\", "_").replace("(", "_").replace(")", "_").replace('"', "").replace("'", "").replace("\n", "").replace("&", "") for product in product_lst]
+    product_lst = [
+        product.lower()
+        .replace(" ", "_")
+        .replace("/", "_")
+        .replace(":", "_")
+        .replace("\\", "_")
+        .replace("(", "_")
+        .replace(")", "_")
+        .replace('"', "")
+        .replace("'", "")
+        .replace("\n", "")
+        .replace("&", "")
+        for product in product_lst
+    ]
 
     return product_lst
+
 
 def product_keyword_gen_huggingface(product, num):
 
     messages = [
-        {"role": "system", "content": "You're an excellent system administrator. You will be given a product name, which may not be in a standard format. Your task is to generate alternative product names to broaden the search scope."},
-        {"role": "user", "content": f"The given product name is {product}, please generate {num} alternative product names in the following format: [Alternative product name 1, Alternative product name 2, Alternative product name 3, ...]"},
+        {
+            "role": "system",
+            "content": "You're an excellent system administrator. You will be given a product name, which may not be in a standard format. Your task is to generate alternative product names to broaden the search scope.",
+        },
+        {
+            "role": "user",
+            "content": f"The given product name is {product}, please generate {num} alternative product names in the following format: [Alternative product name 1, Alternative product name 2, Alternative product name 3, ...]",
+        },
     ]
 
     # Run with Local LLM
@@ -774,10 +911,11 @@ def product_keyword_gen_huggingface(product, num):
         model_name="meta-llama/Meta-Llama-3.1-8B-Instruct",
         messages=messages,
         max_tokens=200,
-        temperature=0.0
+        temperature=0.0,
     )
 
     return product_lst
+
 
 def chat_completion_huggingface(
     model_name="meta-llama/Meta-Llama-3.1-8B-Instruct",
@@ -785,7 +923,7 @@ def chat_completion_huggingface(
     max_tokens=100,
     temperature=0.0,
     top_p=0.0,
-    revision="5206a32e0bd3067aef1ce90f5528ade7d866253f"  # Security: Pinned commit hash (CWE-494)
+    revision="5206a32e0bd3067aef1ce90f5528ade7d866253f",  # Security: Pinned commit hash (CWE-494)
 ):
     """
     Generates a chat completion using a specified Hugging Face model.
@@ -814,13 +952,13 @@ def chat_completion_huggingface(
     tokenizer = AutoTokenizer.from_pretrained(
         model_name,
         revision=pinned_revision,  # nosec B615 - revision is pinned via function default
-        trust_remote_code=False  # Security: Never execute remote code
+        trust_remote_code=False,  # Security: Never execute remote code
     )
     model = AutoModelForCausalLM.from_pretrained(
         model_name,
         device_map="auto",  # Uses GPU if available
         revision=pinned_revision,  # nosec B615 - revision is pinned via function default
-        trust_remote_code=False  # Security: Never execute remote code
+        trust_remote_code=False,  # Security: Never execute remote code
     )
 
     # Convert messages into a formatted prompt
@@ -839,16 +977,13 @@ def chat_completion_huggingface(
 
     # Generate response
     output = model.generate(
-        **inputs,
-        max_new_tokens=max_tokens,
-        temperature=temperature,
-        top_p=top_p,
-        do_sample=False
+        **inputs, max_new_tokens=max_tokens, temperature=temperature, top_p=top_p, do_sample=False
     )
 
     # Decode and return response
     response = tokenizer.decode(output[0], skip_special_tokens=True)
     return response.split("[ASSISTANT]:")[-1].strip()
+
 
 def analyze_cve_lst(cve_lst, output_dir, app_name):
     cvss_results = {}
@@ -871,7 +1006,15 @@ def analyze_cve_lst(cve_lst, output_dir, app_name):
             total_searching_time += searching_time
             total_analysis_time += analysis_time
             analysis_time_dict[cve] = analysis_time
-        cvss_score, cvss_category, epss_score, epss_category, final_score, exploitability, has_code = cve_classifier(cve, output_dir, mode = "specific")
+        (
+            cvss_score,
+            cvss_category,
+            epss_score,
+            epss_category,
+            final_score,
+            exploitability,
+            has_code,
+        ) = cve_classifier(cve, output_dir, mode="specific")
         cvss_results[cve] = cvss_category
         cvss_scores[cve] = cvss_score
         epss_results[cve] = epss_category
@@ -881,17 +1024,16 @@ def analyze_cve_lst(cve_lst, output_dir, app_name):
         if has_code:
             has_code_lst.append(cve)
 
-    with open(f"{output_dir}/analysis_time.json", 'w') as f:
+    with open(f"{output_dir}/analysis_time.json", "w") as f:
         json.dump(analysis_time_dict, f, indent=4)
 
     # bin_df = create_df(cvss_results, epss_results, pentestasst_results)
     num_df = create_df(cvss_scores, epss_scores, pentestasst_scores)
     normalized_num_df = normalize_data(num_df)
     normalized_has_code_num_df = normalized_num_df.loc[has_code_lst]
-    num_df.to_csv(f'{output_dir}/score_results.csv')
-    normalized_num_df.to_csv(f'{output_dir}/normalized_score_results.csv')
-    normalized_has_code_num_df.to_csv(f'{output_dir}/normalized_has_code_score_results.csv')
-
+    num_df.to_csv(f"{output_dir}/score_results.csv")
+    normalized_num_df.to_csv(f"{output_dir}/normalized_score_results.csv")
+    normalized_has_code_num_df.to_csv(f"{output_dir}/normalized_has_code_score_results.csv")
 
     if app_name:
         logging.info(f"Searching for general exp info for {app_name}")
@@ -899,41 +1041,53 @@ def analyze_cve_lst(cve_lst, output_dir, app_name):
         app_exp_path = app_name + "_exp"
         if not os.path.exists(f"{output_dir}/{app_exp_path}/features.json"):
             keyword = app_name + " exploit"
-            searching_time, analysis_time = general_analysis(keyword, os.path.join(output_dir, app_exp_path))
+            searching_time, analysis_time = general_analysis(
+                keyword, os.path.join(output_dir, app_exp_path)
+            )
             total_searching_time += searching_time
             total_analysis_time += analysis_time
-        cve_classifier(app_exp_path, output_dir, mode = "general")
+        cve_classifier(app_exp_path, output_dir, mode="general")
 
-    avg_searching_time = total_searching_time / ((len(cve_lst) +1) if app_name else (len(cve_lst)))
-    avg_analysis_time = total_analysis_time / ((len(cve_lst) +1) if app_name else (len(cve_lst)))
-    logging.info(f"Total searching time: {total_searching_time} seconds, average time: {avg_searching_time} seconds")
-    logging.info(f"Total analysis time: {total_analysis_time} seconds, average time: {avg_analysis_time} seconds")
+    avg_searching_time = total_searching_time / ((len(cve_lst) + 1) if app_name else (len(cve_lst)))
+    avg_analysis_time = total_analysis_time / ((len(cve_lst) + 1) if app_name else (len(cve_lst)))
+    logging.info(
+        f"Total searching time: {total_searching_time} seconds, average time: {avg_searching_time} seconds"
+    )
+    logging.info(
+        f"Total analysis time: {total_analysis_time} seconds, average time: {avg_analysis_time} seconds"
+    )
 
     return total_searching_time, total_analysis_time
 
 
-def get_exp_info(cve_lst = [], output_dir = "", app_name = ""):
-    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        filename='cve_info.log',
-                        level=logging.INFO)
-    
+def get_exp_info(cve_lst=[], output_dir="", app_name=""):
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="cve_info.log",
+        level=logging.INFO,
+    )
+
     track_tokens = True
     token_counter = None
-    model_name = planning_config['model']
+    model_name = planning_config["model"]
     if track_tokens:
         try:
-            token_counter = TokenCountingHandler(tokenizer=tiktoken.encoding_for_model(model_name_for_token).encode)
+            token_counter = TokenCountingHandler(
+                tokenizer=tiktoken.encoding_for_model(model_name_for_token).encode
+            )
             Settings.callback_manager = CallbackManager([token_counter])
         except Exception as e:
-            logger.warning(f"Tokenizer for model {model_name_for_token} not found, token counting disabled: {e}")
+            logger.warning(
+                f"Tokenizer for model {model_name_for_token} not found, token counting disabled: {e}"
+            )
             Settings.callback_manager = CallbackManager([])
-    
+
     ### Step 1: Select the LLM
 
     ## Initialize LLM from config via model manager (provider-agnostic)
     try:
-        model_name = planning_config['model']
+        model_name = planning_config["model"]
     except Exception:
         model_name = "openai"
 
@@ -947,16 +1101,15 @@ def get_exp_info(cve_lst = [], output_dir = "", app_name = ""):
         Settings.llm = LangChainLLM(llm=llm)
     except Exception:
         # Fallback to OpenAI config if available to preserve behavior
-        cve_config = config['cve']
+        cve_config = config["cve"]
         print(f"Model: {cve_config['model']}")
-        Settings.llm = OpenAI(temperature=cve_config['temperature'], model=cve_config['model'])
+        Settings.llm = OpenAI(temperature=cve_config["temperature"], model=cve_config["model"])
 
     ### Step 2: Input the CVEs to analyze
 
     if not cve_lst:
         print("CVE to be searched not set! ")
         return
-    
 
     ### Step 3: Analyze the CVEs
     if not output_dir:
@@ -968,7 +1121,6 @@ def get_exp_info(cve_lst = [], output_dir = "", app_name = ""):
     ## Scenario 2: Given a list of CVEs, analyze the CVEs
 
     total_searching_time, total_analysis_time = analyze_cve_lst(cve_lst, output_dir, app_name)
-
 
     if track_tokens:
         print(
@@ -1013,20 +1165,24 @@ def get_exp_info(cve_lst = [], output_dir = "", app_name = ""):
 
 
 def main():
-    logging.basicConfig(format='%(asctime)s %(levelname)-8s %(message)s',
-                        datefmt='%Y-%m-%d %H:%M:%S',
-                        filename='cve_info.log',
-                        level=logging.INFO)
-    
+    logging.basicConfig(
+        format="%(asctime)s %(levelname)-8s %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+        filename="cve_info.log",
+        level=logging.INFO,
+    )
+
     track_tokens = False
     token_counter = None
     if track_tokens:
-        token_counter = TokenCountingHandler(tokenizer=tiktoken.encoding_for_model("gpt-4o-mini").encode)
+        token_counter = TokenCountingHandler(
+            tokenizer=tiktoken.encoding_for_model("gpt-4o-mini").encode
+        )
         Settings.callback_manager = CallbackManager([token_counter])
-    
+
     ### Step 1: Select the LLM
 
-    ## OpenAI API 
+    ## OpenAI API
     api_key = os.environ.get("OPENAI_API_KEY")
     if api_key is None or api_key == "":
         print("OPENAI_API_KEY not set")
@@ -1044,12 +1200,11 @@ def main():
 
     ## Option 2: Read CVE list from file
     cve_lst = []
-    with open("../../target_lst/vulhub_test/xstream.txt", 'r') as f:
+    with open("../../target_lst/vulhub_test/xstream.txt", "r") as f:
         cve_lst = f.read().splitlines()
 
     ## Option 3: Hard-coded CVE list
     # cve_lst = ['CVE-XXX-XXXX', 'CVE-XXX-XXXX', 'CVE-XXX-XXXX', 'CVE-XXX-XXXX', 'CVE-XXX-XXXX']
-    
 
     ### Step 3: Analyze the CVEs
     output_dir = "resources_test/xstream"
@@ -1059,7 +1214,6 @@ def main():
 
     # analyze_cve_lst(cve_lst, output_dir)
     analyze_cve_lst(cve_lst, output_dir, "xstream")  # assume app's name is xstream
-
 
     if track_tokens:
         print(
@@ -1099,13 +1253,10 @@ def main():
         )
 
         token_counter.reset_counts()
-    
 
     # epss_csv_path = 'epss_scores-2024-08-06.csv'
     # cve_analysis_from_epss_csv(epss_csv_path)
 
- 
 
 if __name__ == "__main__":
     main()
-

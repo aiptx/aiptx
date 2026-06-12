@@ -15,16 +15,54 @@ Configuration via environment variables (see config.py):
     AIPT_BURP_URL         - Full Burp URL (optional, overrides IP+port)
 """
 
+# Acunetix Integration
+from aipt_v2.tools.scanners.acunetix_tool import (
+    AcunetixConfig,
+    AcunetixTool,
+    ScanProfile,
+)
+from aipt_v2.tools.scanners.acunetix_tool import ScanResult as AcunetixScanResult
+from aipt_v2.tools.scanners.acunetix_tool import ScanStatus as AcunetixScanStatus
+from aipt_v2.tools.scanners.acunetix_tool import Severity as AcunetixSeverity
+from aipt_v2.tools.scanners.acunetix_tool import Vulnerability as AcunetixVulnerability
+from aipt_v2.tools.scanners.acunetix_tool import (
+    acunetix_scan,
+    acunetix_status,
+    acunetix_summary,
+    acunetix_vulns,
+    get_acunetix,
+)
+
+# Burp Suite Integration
+from aipt_v2.tools.scanners.burp_tool import (
+    BurpConfig,
+    BurpTool,
+)
+from aipt_v2.tools.scanners.burp_tool import Issue as BurpIssue
+from aipt_v2.tools.scanners.burp_tool import (
+    IssueConfidence,
+    IssueSeverity,
+)
+from aipt_v2.tools.scanners.burp_tool import ScanResult as BurpScanResult
+from aipt_v2.tools.scanners.burp_tool import ScanStatus as BurpScanStatus
+from aipt_v2.tools.scanners.burp_tool import (
+    burp_issues,
+    burp_scan,
+    burp_status,
+    burp_summary,
+    get_burp,
+)
+
 # Configuration
 from aipt_v2.tools.scanners.config import (
-    SCANNER_SERVER_IP,
-    ACUNETIX_PORT,
-    BURP_PORT,
-    ACUNETIX_URL,
-    BURP_URL,
     ACUNETIX,
+    ACUNETIX_PORT,
+    ACUNETIX_URL,
     BURP,
+    BURP_PORT,
+    BURP_URL,
     SCANNER,
+    SCANNER_SERVER_IP,
     AcunetixSettings,
     BurpSettings,
     ScannerSettings,
@@ -33,59 +71,29 @@ from aipt_v2.tools.scanners.config import (
     print_config,
 )
 
-# Acunetix Integration
-from aipt_v2.tools.scanners.acunetix_tool import (
-    AcunetixTool,
-    AcunetixConfig,
-    ScanProfile,
-    ScanStatus as AcunetixScanStatus,
-    ScanResult as AcunetixScanResult,
-    Vulnerability as AcunetixVulnerability,
-    Severity as AcunetixSeverity,
-    get_acunetix,
-    acunetix_scan,
-    acunetix_status,
-    acunetix_vulns,
-    acunetix_summary,
-)
-
-# Burp Suite Integration
-from aipt_v2.tools.scanners.burp_tool import (
-    BurpTool,
-    BurpConfig,
-    ScanStatus as BurpScanStatus,
-    ScanResult as BurpScanResult,
-    Issue as BurpIssue,
-    IssueSeverity,
-    IssueConfidence,
-    get_burp,
-    burp_scan,
-    burp_status,
-    burp_issues,
-    burp_summary,
-)
-
 # Nessus Integration
 from aipt_v2.tools.scanners.nessus_tool import (
-    NessusTool,
     NessusConfig,
-    ScanResult as NessusScanResult,
-    Vulnerability as NessusVulnerability,
+    NessusTool,
+)
+from aipt_v2.tools.scanners.nessus_tool import ScanResult as NessusScanResult
+from aipt_v2.tools.scanners.nessus_tool import Vulnerability as NessusVulnerability
+from aipt_v2.tools.scanners.nessus_tool import (
     get_nessus,
     nessus_scan,
-    nessus_vulns,
     nessus_summary,
+    nessus_vulns,
 )
 
 # OWASP ZAP Integration
+from aipt_v2.tools.scanners.zap_tool import Alert as ZAPAlert
+from aipt_v2.tools.scanners.zap_tool import ScanResult as ZAPScanResult
 from aipt_v2.tools.scanners.zap_tool import (
-    ZAPTool,
     ZAPConfig,
-    ScanResult as ZAPScanResult,
-    Alert as ZAPAlert,
+    ZAPTool,
     get_zap,
-    zap_scan,
     zap_alerts,
+    zap_scan,
     zap_summary,
 )
 
@@ -161,8 +169,10 @@ __all__ = [
 
 # ==================== Unified Scanner Interface ====================
 
+
 class ScannerType:
     """Scanner type constants."""
+
     ACUNETIX = "acunetix"
     BURP = "burp"
     NESSUS = "nessus"
@@ -302,7 +312,7 @@ def test_all_connections() -> dict:
         results["acunetix"] = {
             "connected": acunetix.connect(),
             "url": acunetix.config.base_url,
-            "info": acunetix.get_info() if acunetix.is_connected() else None
+            "info": acunetix.get_info() if acunetix.is_connected() else None,
         }
     except Exception as e:
         results["acunetix"] = {"connected": False, "error": str(e)}
@@ -313,7 +323,7 @@ def test_all_connections() -> dict:
         results["burp"] = {
             "connected": burp.connect(),
             "url": burp.config.base_url,
-            "info": burp.get_info() if burp.is_connected() else None
+            "info": burp.get_info() if burp.is_connected() else None,
         }
     except Exception as e:
         results["burp"] = {"connected": False, "error": str(e)}
@@ -324,7 +334,7 @@ def test_all_connections() -> dict:
         results["nessus"] = {
             "connected": nessus.connect(),
             "url": nessus.config.base_url,
-            "info": nessus.get_info() if nessus.is_connected() else None
+            "info": nessus.get_info() if nessus.is_connected() else None,
         }
     except Exception as e:
         results["nessus"] = {"connected": False, "error": str(e)}
@@ -335,7 +345,7 @@ def test_all_connections() -> dict:
         results["zap"] = {
             "connected": zap.connect(),
             "url": zap.config.base_url,
-            "info": zap.get_info() if zap.is_connected() else None
+            "info": zap.get_info() if zap.is_connected() else None,
         }
     except Exception as e:
         results["zap"] = {"connected": False, "error": str(e)}

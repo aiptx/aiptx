@@ -3,6 +3,7 @@ AIPT Base Scanner
 
 Abstract base class for all scanner integrations.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -12,13 +13,14 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, AsyncIterator, Optional
+from typing import AsyncIterator, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class ScanSeverity(Enum):
     """Vulnerability severity levels"""
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -29,6 +31,7 @@ class ScanSeverity(Enum):
 @dataclass
 class ScanFinding:
     """Individual scan finding"""
+
     title: str
     severity: ScanSeverity
     description: str = ""
@@ -76,6 +79,7 @@ class ScanFinding:
 @dataclass
 class ScanResult:
     """Complete scan result"""
+
     scanner: str
     target: str
     status: str = "pending"  # pending, running, completed, failed
@@ -105,8 +109,7 @@ class ScanResult:
     def get_critical_and_high(self) -> list[ScanFinding]:
         """Get critical and high severity findings"""
         return [
-            f for f in self.findings
-            if f.severity in [ScanSeverity.CRITICAL, ScanSeverity.HIGH]
+            f for f in self.findings if f.severity in [ScanSeverity.CRITICAL, ScanSeverity.HIGH]
         ]
 
     def severity_counts(self) -> dict[str, int]:

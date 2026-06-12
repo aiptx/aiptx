@@ -13,30 +13,27 @@ Supports multiple authentication methods:
 This enables testing authenticated portions of applications
 (with proper authorization from the client).
 """
+
 from __future__ import annotations
 
 import asyncio
 import base64
 import hashlib
-import hmac
-import json
 import logging
 import re
-import time
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
-from typing import Any, Callable
-from urllib.parse import urlencode
+from typing import Any
 
 import httpx
-
 
 logger = logging.getLogger(__name__)
 
 
 class AuthMethod(Enum):
     """Authentication methods supported"""
+
     NONE = "none"
     COOKIE = "cookie"
     BEARER_TOKEN = "bearer_token"
@@ -51,6 +48,7 @@ class AuthMethod(Enum):
 @dataclass
 class AuthCredentials:
     """Authentication credentials"""
+
     method: AuthMethod = AuthMethod.NONE
 
     # For COOKIE method
@@ -105,6 +103,7 @@ class AuthCredentials:
 @dataclass
 class AuthSession:
     """An authenticated session"""
+
     credentials: AuthCredentials
     session_id: str
     created_at: datetime = field(default_factory=datetime.utcnow)
@@ -271,10 +270,10 @@ class AuthenticationManager:
         # Try common patterns
         patterns = [
             rf'name="{field_name}"[^>]*value="([^"]+)"',
-            rf'name=\'{field_name}\'[^>]*value=\'([^\']+)\'',
+            rf"name=\'{field_name}\'[^>]*value=\'([^\']+)\'",
             rf'value="([^"]+)"[^>]*name="{field_name}"',
-            rf'data-csrf="([^"]+)"',
-            rf'csrf[_-]?token["\']?\s*[:=]\s*["\']([^"\']+)',
+            r'data-csrf="([^"]+)"',
+            r'csrf[_-]?token["\']?\s*[:=]\s*["\']([^"\']+)',
         ]
 
         for pattern in patterns:
@@ -349,7 +348,9 @@ class AuthenticationManager:
                     self.credentials.refresh_token = new_refresh
 
                 expires_in = data.get("expires_in", 3600)
-                self.credentials.token_expires_at = datetime.utcnow() + timedelta(seconds=expires_in - 60)
+                self.credentials.token_expires_at = datetime.utcnow() + timedelta(
+                    seconds=expires_in - 60
+                )
 
                 # Update session headers
                 self._session.headers = await self._build_auth_headers()
@@ -433,12 +434,14 @@ class AuthenticationManager:
 
 class AuthenticationError(Exception):
     """Authentication failed"""
+
     pass
 
 
 # ============================================================================
 # Convenience Functions
 # ============================================================================
+
 
 def create_bearer_auth(token: str, prefix: str = "Bearer") -> AuthCredentials:
     """Create bearer token authentication"""

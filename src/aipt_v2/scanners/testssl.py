@@ -11,11 +11,11 @@ import json
 import logging
 import re
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -98,11 +98,7 @@ class TestSSLScanner(BaseScanner):
             return "testssl.sh"
         return "testssl"
 
-    async def scan(
-        self,
-        target: str,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, **kwargs) -> ScanResult:
         """
         Run testssl.sh scan.
 
@@ -133,8 +129,7 @@ class TestSSLScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -162,9 +157,13 @@ class TestSSLScanner(BaseScanner):
         cmd = [binary]
 
         # Test selection
-        if not (self.config.protocols and self.config.ciphers and
-                self.config.vulnerabilities and self.config.headers and
-                self.config.certificate):
+        if not (
+            self.config.protocols
+            and self.config.ciphers
+            and self.config.vulnerabilities
+            and self.config.headers
+            and self.config.certificate
+        ):
             # Selective testing
             if self.config.protocols:
                 cmd.append("-p")
@@ -270,8 +269,10 @@ class TestSSLScanner(BaseScanner):
             tags.append("cipher")
         elif "cert" in finding_id_lower:
             tags.append("certificate")
-        elif "vuln" in finding_id_lower or any(v in finding_id_lower for v in
-            ["heartbleed", "poodle", "beast", "freak", "logjam", "drown", "robot"]):
+        elif "vuln" in finding_id_lower or any(
+            v in finding_id_lower
+            for v in ["heartbleed", "poodle", "beast", "freak", "logjam", "drown", "robot"]
+        ):
             tags.append("vulnerability")
 
         # CWE mapping for common issues
@@ -300,7 +301,10 @@ class TestSSLScanner(BaseScanner):
 
         # Patterns for common issues
         vuln_patterns = [
-            (r"VULNERABLE.*?(heartbleed|poodle|beast|freak|logjam|drown|robot)", ScanSeverity.CRITICAL),
+            (
+                r"VULNERABLE.*?(heartbleed|poodle|beast|freak|logjam|drown|robot)",
+                ScanSeverity.CRITICAL,
+            ),
             (r"(SSLv2|SSLv3)\s+offered", ScanSeverity.HIGH),
             (r"TLS 1\.0\s+offered", ScanSeverity.MEDIUM),
             (r"(WEAK|EXPORT)\s+cipher", ScanSeverity.HIGH),
@@ -311,14 +315,16 @@ class TestSSLScanner(BaseScanner):
         for pattern, severity in vuln_patterns:
             matches = re.finditer(pattern, output, re.IGNORECASE)
             for match in matches:
-                line = output[max(0, match.start()-50):match.end()+50]
-                findings.append(ScanFinding(
-                    title=match.group(0)[:80],
-                    severity=severity,
-                    description=line.strip(),
-                    scanner="testssl",
-                    tags=["ssl", "tls"],
-                ))
+                line = output[max(0, match.start() - 50) : match.end() + 50]
+                findings.append(
+                    ScanFinding(
+                        title=match.group(0)[:80],
+                        severity=severity,
+                        description=line.strip(),
+                        scanner="testssl",
+                        tags=["ssl", "tls"],
+                    )
+                )
 
         return findings
 

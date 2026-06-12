@@ -13,18 +13,18 @@ Provides:
 """
 
 import asyncio
-import shutil
 import logging
+import shutil
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set
-from pathlib import Path
+from typing import Any, Dict, List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
 
 class ToolPhase(str, Enum):
     """Penetration testing phases."""
+
     RECON = "recon"
     SCAN = "scan"
     EXPLOIT = "exploit"
@@ -33,6 +33,7 @@ class ToolPhase(str, Enum):
 
 class ToolCapability(str, Enum):
     """Tool capabilities for smart selection."""
+
     # Recon capabilities
     SUBDOMAIN_ENUM = "subdomain_enum"
     PORT_SCAN = "port_scan"
@@ -87,6 +88,7 @@ class ToolCapability(str, Enum):
 @dataclass
 class ToolConfig:
     """Configuration template for a tool."""
+
     name: str
     binary: str  # Executable name
     description: str
@@ -135,7 +137,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="go install github.com/projectdiscovery/httpx/cmd/httpx@latest",
         docs_url="https://github.com/projectdiscovery/httpx",
     ),
-
     "dnsx": ToolConfig(
         name="dnsx",
         binary="dnsx",
@@ -149,7 +150,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-a", "-aaaa", "-cname", "-mx", "-txt"],
         install_cmd="go install github.com/projectdiscovery/dnsx/cmd/dnsx@latest",
     ),
-
     "katana": ToolConfig(
         name="katana",
         binary="katana",
@@ -163,7 +163,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-jc", "-d", "3"],
         install_cmd="go install github.com/projectdiscovery/katana/cmd/katana@latest",
     ),
-
     "subfinder": ToolConfig(
         name="subfinder",
         binary="subfinder",
@@ -176,7 +175,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         silent_flag="-silent",
         install_cmd="go install github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest",
     ),
-
     "amass": ToolConfig(
         name="amass",
         binary="amass",
@@ -190,7 +188,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="go install github.com/owasp-amass/amass/v4/...@latest",
         docs_url="https://github.com/owasp-amass/amass",
     ),
-
     "sublist3r": ToolConfig(
         name="sublist3r",
         binary="sublist3r",
@@ -203,7 +200,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip3 install sublist3r",
         docs_url="https://github.com/aboul3la/Sublist3r",
     ),
-
     "nmap": ToolConfig(
         name="nmap",
         binary="nmap",
@@ -217,7 +213,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-sV", "-sC", "--open"],
         docs_url="https://nmap.org/",
     ),
-
     "masscan": ToolConfig(
         name="masscan",
         binary="masscan",
@@ -230,7 +225,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         output_file_flag="-oJ",
         default_args=["--rate", "1000"],
     ),
-
     # ========== SCAN TOOLS ==========
     "nuclei": ToolConfig(
         name="nuclei",
@@ -245,7 +239,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-rl", "150", "-c", "25"],
         install_cmd="go install github.com/projectdiscovery/nuclei/v3/cmd/nuclei@latest",
     ),
-
     "ffuf": ToolConfig(
         name="ffuf",
         binary="ffuf",
@@ -260,7 +253,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-ac", "-mc", "200,204,301,302,307,401,403,405"],
         install_cmd="go install github.com/ffuf/ffuf/v2@latest",
     ),
-
     "dalfox": ToolConfig(
         name="dalfox",
         binary="dalfox",
@@ -274,7 +266,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["--mining-dom", "--grep"],
         install_cmd="go install github.com/hahwul/dalfox/v2@latest",
     ),
-
     "nikto": ToolConfig(
         name="nikto",
         binary="nikto",
@@ -286,7 +277,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         output_file_flag="-o",
         default_args=["-Format", "json"],
     ),
-
     "wpscan": ToolConfig(
         name="wpscan",
         binary="wpscan",
@@ -299,7 +289,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         output_file_flag="-o",
         default_args=["--enumerate", "vp,vt,u"],
     ),
-
     "trivy": ToolConfig(
         name="trivy",
         binary="trivy",
@@ -313,7 +302,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="brew install trivy || apt install trivy",
         docs_url="https://github.com/aquasecurity/trivy",
     ),
-
     "gobuster": ToolConfig(
         name="gobuster",
         binary="gobuster",
@@ -326,7 +314,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-t", "10", "--no-color"],
         install_cmd="go install github.com/OJ/gobuster/v3@latest",
     ),
-
     "testssl": ToolConfig(
         name="testssl",
         binary="testssl.sh",
@@ -339,7 +326,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["--quiet", "--warnings", "batch"],
         docs_url="https://github.com/drwetter/testssl.sh",
     ),
-
     # ========== EXPLOIT TOOLS ==========
     "sqlmap": ToolConfig(
         name="sqlmap",
@@ -352,7 +338,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,  # Prefer sandbox
         default_args=["--batch", "--answers=Y"],
     ),
-
     "hydra": ToolConfig(
         name="hydra",
         binary="hydra",
@@ -364,7 +349,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         default_args=["-f", "-V"],
     ),
-
     # ========== POST-EXPLOIT TOOLS ==========
     "linpeas": ToolConfig(
         name="linpeas",
@@ -375,7 +359,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_timeout=300,
         max_parallel=1,
     ),
-
     "crackmapexec": ToolConfig(
         name="crackmapexec",
         binary="crackmapexec",
@@ -386,16 +369,18 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         max_parallel=1,
         safe_for_local=False,
     ),
-
     # ========== ACTIVE DIRECTORY TOOLS (v5.0) ==========
-
     # --- AD Recon Tools ---
     "bloodhound-python": ToolConfig(
         name="bloodhound-python",
         binary="bloodhound-python",
         description="BloodHound data collector for AD attack path mapping",
         phase=ToolPhase.RECON,
-        capabilities={ToolCapability.AD_BLOODHOUND, ToolCapability.AD_RECON, ToolCapability.AD_LDAP_ENUM},
+        capabilities={
+            ToolCapability.AD_BLOODHOUND,
+            ToolCapability.AD_RECON,
+            ToolCapability.AD_LDAP_ENUM,
+        },
         default_timeout=600,
         max_parallel=1,
         safe_for_local=False,
@@ -403,13 +388,16 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install bloodhound",
         docs_url="https://github.com/fox-it/BloodHound.py",
     ),
-
     "kerbrute": ToolConfig(
         name="kerbrute",
         binary="kerbrute",
         description="Kerberos user enumeration and password spraying",
         phase=ToolPhase.RECON,
-        capabilities={ToolCapability.AD_USER_ENUM, ToolCapability.AD_KERBEROS, ToolCapability.CRED_SPRAY},
+        capabilities={
+            ToolCapability.AD_USER_ENUM,
+            ToolCapability.AD_KERBEROS,
+            ToolCapability.CRED_SPRAY,
+        },
         default_timeout=300,
         max_parallel=2,
         safe_for_local=False,
@@ -417,7 +405,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="go install github.com/ropnop/kerbrute@latest",
         docs_url="https://github.com/ropnop/kerbrute",
     ),
-
     "ldapsearch": ToolConfig(
         name="ldapsearch",
         binary="ldapsearch",
@@ -428,7 +415,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         max_parallel=3,
         default_args=["-x", "-H"],
     ),
-
     "windapsearch": ToolConfig(
         name="windapsearch",
         binary="windapsearch",
@@ -441,7 +427,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="go install github.com/ropnop/go-windapsearch@latest",
         docs_url="https://github.com/ropnop/go-windapsearch",
     ),
-
     "enum4linux-ng": ToolConfig(
         name="enum4linux-ng",
         binary="enum4linux-ng",
@@ -455,7 +440,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install enum4linux-ng",
         docs_url="https://github.com/cddmp/enum4linux-ng",
     ),
-
     # --- AD Scan Tools ---
     "certipy": ToolConfig(
         name="certipy",
@@ -470,7 +454,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install certipy-ad",
         docs_url="https://github.com/ly4k/Certipy",
     ),
-
     # --- AD Exploitation Tools (Impacket Suite) ---
     "secretsdump.py": ToolConfig(
         name="secretsdump.py",
@@ -485,7 +468,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install impacket",
         docs_url="https://github.com/fortra/impacket",
     ),
-
     "GetUserSPNs.py": ToolConfig(
         name="GetUserSPNs.py",
         binary="GetUserSPNs.py",
@@ -498,7 +480,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-request"],
         install_cmd="pip install impacket",
     ),
-
     "GetNPUsers.py": ToolConfig(
         name="GetNPUsers.py",
         binary="GetNPUsers.py",
@@ -511,7 +492,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["-format", "hashcat"],
         install_cmd="pip install impacket",
     ),
-
     "getST.py": ToolConfig(
         name="getST.py",
         binary="getST.py",
@@ -523,7 +503,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "rbcd.py": ToolConfig(
         name="rbcd.py",
         binary="rbcd.py",
@@ -535,7 +514,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "ntlmrelayx.py": ToolConfig(
         name="ntlmrelayx.py",
         binary="ntlmrelayx.py",
@@ -549,7 +527,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         default_args=["--no-smb-server"],
         install_cmd="pip install impacket",
     ),
-
     "PetitPotam.py": ToolConfig(
         name="PetitPotam.py",
         binary="PetitPotam.py",
@@ -562,7 +539,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="git clone https://github.com/topotam/PetitPotam",
         docs_url="https://github.com/topotam/PetitPotam",
     ),
-
     "lsassy": ToolConfig(
         name="lsassy",
         binary="lsassy",
@@ -577,7 +553,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install lsassy",
         docs_url="https://github.com/Hackndo/lsassy",
     ),
-
     # --- AD Lateral Movement Tools (Impacket Suite) ---
     "psexec.py": ToolConfig(
         name="psexec.py",
@@ -590,7 +565,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "wmiexec.py": ToolConfig(
         name="wmiexec.py",
         binary="wmiexec.py",
@@ -602,7 +576,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "smbexec.py": ToolConfig(
         name="smbexec.py",
         binary="smbexec.py",
@@ -614,7 +587,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "atexec.py": ToolConfig(
         name="atexec.py",
         binary="atexec.py",
@@ -626,7 +598,6 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "dcomexec.py": ToolConfig(
         name="dcomexec.py",
         binary="dcomexec.py",
@@ -638,20 +609,22 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         safe_for_local=False,
         install_cmd="pip install impacket",
     ),
-
     "evil-winrm": ToolConfig(
         name="evil-winrm",
         binary="evil-winrm",
         description="WinRM shell with PTH and file transfer",
         phase=ToolPhase.POST_EXPLOIT,
-        capabilities={ToolCapability.AD_EXEC, ToolCapability.LATERAL_MOVE, ToolCapability.DATA_EXFIL},
+        capabilities={
+            ToolCapability.AD_EXEC,
+            ToolCapability.LATERAL_MOVE,
+            ToolCapability.DATA_EXFIL,
+        },
         default_timeout=3600,  # Interactive shell
         max_parallel=3,
         safe_for_local=False,
         install_cmd="gem install evil-winrm",
         docs_url="https://github.com/Hackplayers/evil-winrm",
     ),
-
     "netexec": ToolConfig(
         name="netexec",
         binary="netexec",
@@ -661,7 +634,7 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
             ToolCapability.LATERAL_MOVE,
             ToolCapability.AD_EXEC,
             ToolCapability.AD_CREDENTIAL,
-            ToolCapability.CRED_SPRAY
+            ToolCapability.CRED_SPRAY,
         },
         default_timeout=600,
         max_parallel=1,
@@ -670,9 +643,7 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         install_cmd="pip install netexec",
         docs_url="https://github.com/Pennyw0rth/NetExec",
     ),
-
     # ========== POWERSHELL ARSENAL TOOLS ==========
-
     "ps-arsenal-creds": ToolConfig(
         name="ps-arsenal-creds",
         binary="pwsh",  # Requires PowerShell
@@ -681,7 +652,7 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         capabilities={
             ToolCapability.PS_CREDENTIAL_DUMP,
             ToolCapability.AD_CREDENTIAL,
-            ToolCapability.DATA_EXFIL
+            ToolCapability.DATA_EXFIL,
         },
         default_timeout=300,
         max_parallel=1,
@@ -689,21 +660,16 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         requires_root=True,  # Many scripts require admin
         docs_url="https://github.com/samratashok/nishang",
     ),
-
     "ps-arsenal-shell": ToolConfig(
         name="ps-arsenal-shell",
         binary="pwsh",
         description="PowerShell reverse/bind shells (TCP, UDP, ICMP, HTTP, WMI)",
         phase=ToolPhase.EXPLOIT,
-        capabilities={
-            ToolCapability.PS_SHELL,
-            ToolCapability.LATERAL_MOVE
-        },
+        capabilities={ToolCapability.PS_SHELL, ToolCapability.LATERAL_MOVE},
         default_timeout=60,
         max_parallel=3,
         safe_for_local=False,
     ),
-
     "ps-arsenal-recon": ToolConfig(
         name="ps-arsenal-recon",
         binary="pwsh",
@@ -712,69 +678,53 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         capabilities={
             ToolCapability.PS_RECON,
             ToolCapability.SERVICE_DETECT,
-            ToolCapability.AD_RECON
+            ToolCapability.AD_RECON,
         },
         default_timeout=120,
         max_parallel=2,
         safe_for_local=True,
     ),
-
     "ps-arsenal-persist": ToolConfig(
         name="ps-arsenal-persist",
         binary="pwsh",
         description="PowerShell persistence mechanisms (WMI, Registry, Screensaver)",
         phase=ToolPhase.POST_EXPLOIT,
-        capabilities={
-            ToolCapability.PS_PERSISTENCE,
-            ToolCapability.PRIV_ESC
-        },
+        capabilities={ToolCapability.PS_PERSISTENCE, ToolCapability.PRIV_ESC},
         default_timeout=120,
         max_parallel=1,
         safe_for_local=False,
         requires_root=True,
     ),
-
     "ps-arsenal-escalate": ToolConfig(
         name="ps-arsenal-escalate",
         binary="pwsh",
         description="PowerShell privilege escalation (UAC bypass, token manipulation)",
         phase=ToolPhase.POST_EXPLOIT,
-        capabilities={
-            ToolCapability.PS_ESCALATION,
-            ToolCapability.PRIV_ESC
-        },
+        capabilities={ToolCapability.PS_ESCALATION, ToolCapability.PRIV_ESC},
         default_timeout=120,
         max_parallel=1,
         safe_for_local=False,
     ),
-
     "ps-arsenal-client": ToolConfig(
         name="ps-arsenal-client",
         binary="pwsh",
         description="PowerShell client-side attacks (Office macros, HTA, CHM)",
         phase=ToolPhase.EXPLOIT,
-        capabilities={
-            ToolCapability.PS_CLIENT_ATTACK
-        },
+        capabilities={ToolCapability.PS_CLIENT_ATTACK},
         default_timeout=60,
         max_parallel=2,
         safe_for_local=True,
     ),
-
     "ps-arsenal-exfil": ToolConfig(
         name="ps-arsenal-exfil",
         binary="pwsh",
         description="PowerShell data exfiltration (DNS, HTTP, Pastebin)",
         phase=ToolPhase.POST_EXPLOIT,
-        capabilities={
-            ToolCapability.PS_EXFILTRATION,
-            ToolCapability.DATA_EXFIL
-        },
+        capabilities={ToolCapability.PS_EXFILTRATION, ToolCapability.DATA_EXFIL},
         default_timeout=120,
         max_parallel=1,
         safe_for_local=False,
     ),
-
     "ps-arsenal-scanner": ToolConfig(
         name="ps-arsenal-scanner",
         binary="pwsh",
@@ -783,7 +733,7 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
         capabilities={
             ToolCapability.PS_CREDENTIAL_DUMP,
             ToolCapability.PS_RECON,
-            ToolCapability.VULN_SCAN
+            ToolCapability.VULN_SCAN,
         },
         default_timeout=600,
         max_parallel=1,
@@ -795,6 +745,7 @@ TOOL_REGISTRY: Dict[str, ToolConfig] = {
 @dataclass
 class ToolStatus:
     """Runtime status of a tool."""
+
     name: str
     available: bool
     version: Optional[str] = None
@@ -865,9 +816,7 @@ class ToolRegistry:
 
         if not path:
             return ToolStatus(
-                name=name,
-                available=False,
-                error=f"Binary '{config.binary}' not found in PATH"
+                name=name, available=False, error=f"Binary '{config.binary}' not found in PATH"
             )
 
         # Try to get version
@@ -884,7 +833,8 @@ class ToolRegistry:
         """Get tool version string."""
         try:
             proc = await asyncio.create_subprocess_exec(
-                binary, "--version",
+                binary,
+                "--version",
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE,
             )
@@ -913,30 +863,26 @@ class ToolRegistry:
     def get_tools_by_phase(self, phase: ToolPhase) -> List[ToolConfig]:
         """Get all tools for a specific phase."""
         return [
-            config for config in self.tools.values()
+            config
+            for config in self.tools.values()
             if config.phase == phase and self.is_available(config.name)
         ]
 
     def get_tools_by_capability(self, capability: ToolCapability) -> List[ToolConfig]:
         """Get all tools with a specific capability."""
         return [
-            config for config in self.tools.values()
+            config
+            for config in self.tools.values()
             if capability in config.capabilities and self.is_available(config.name)
         ]
 
     def get_available_tools(self) -> List[ToolConfig]:
         """Get all available tools."""
-        return [
-            config for config in self.tools.values()
-            if self.is_available(config.name)
-        ]
+        return [config for config in self.tools.values() if self.is_available(config.name)]
 
     def get_missing_tools(self) -> List[ToolConfig]:
         """Get tools that are not available."""
-        return [
-            config for config in self.tools.values()
-            if not self.is_available(config.name)
-        ]
+        return [config for config in self.tools.values() if not self.is_available(config.name)]
 
     def get_phase_summary(self) -> Dict[ToolPhase, Dict[str, int]]:
         """Get summary of tools per phase."""
@@ -974,10 +920,7 @@ class ToolRegistry:
             phase_tools = self.get_tools_by_phase(phase)
 
             if required_capabilities:
-                phase_tools = [
-                    t for t in phase_tools
-                    if t.capabilities & required_capabilities
-                ]
+                phase_tools = [t for t in phase_tools if t.capabilities & required_capabilities]
 
             # Add core tools for each phase
             selected.extend(phase_tools)
@@ -1008,14 +951,11 @@ class ToolRegistry:
                         "available": self.is_available(name),
                         "version": self._status.get(name, ToolStatus(name, False)).version,
                         "path": self._status.get(name, ToolStatus(name, False)).path,
-                    }
+                    },
                 }
                 for name, config in self.tools.items()
             },
-            "summary": {
-                phase.value: stats
-                for phase, stats in self.get_phase_summary().items()
-            }
+            "summary": {phase.value: stats for phase, stats in self.get_phase_summary().items()},
         }
 
 

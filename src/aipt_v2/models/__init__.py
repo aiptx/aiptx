@@ -1,19 +1,19 @@
 """AIPT Data Models"""
 
-from .findings import Finding, Severity, VulnerabilityType, VerificationStatus
-from .scan_config import ScanConfig, ScanMode
-from .phase_result import PhaseResult, Phase
 from .finding_v2 import (
-    FindingV2,
     FindingCategory,
-    VerificationStatusV2,
+    FindingV2,
     ScannerType,
     SeverityV2,
-    normalize_url,
+    VerificationStatusV2,
     categorize_vuln_type,
     determine_scanner_type,
     merge_findings_v2,
+    normalize_url,
 )
+from .findings import Finding, Severity, VerificationStatus, VulnerabilityType
+from .phase_result import Phase, PhaseResult
+from .scan_config import ScanConfig, ScanMode
 
 __all__ = [
     # Legacy Finding

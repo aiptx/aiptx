@@ -8,15 +8,14 @@ and context analysis.
 
 from __future__ import annotations
 
-import hashlib
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Optional
+from typing import Any
 
+from aipt_v2.learning.context_analyzer import TargetContext
 from aipt_v2.learning.feedback_collector import FeedbackCollector, get_collector
 from aipt_v2.learning.payload_memory import PayloadMemory, get_memory
-from aipt_v2.learning.context_analyzer import TargetContext
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +23,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PredictionResult:
     """Result of success prediction."""
+
     payload: str
     predicted_success_rate: float
     confidence: float
@@ -135,7 +135,8 @@ class SuccessPredictor:
                     context_keywords.append(context.framework)
 
                 matches = sum(
-                    1 for kw in context_keywords
+                    1
+                    for kw in context_keywords
                     if any(kw.lower() in c.lower() for c in stored.contexts_successful)
                 )
                 if context_keywords:
@@ -151,17 +152,13 @@ class SuccessPredictor:
                 waf=context.waf if context else None,
             )
             if mutation_rates:
-                applied_rates = [
-                    mutation_rates.get(m, 0.5) for m in mutations_applied
-                ]
+                applied_rates = [mutation_rates.get(m, 0.5) for m in mutations_applied]
                 if applied_rates:
                     mutation_score = sum(applied_rates) / len(applied_rates)
 
                     # Recommend better mutations
                     best_mutations = sorted(
-                        mutation_rates.items(),
-                        key=lambda x: x[1],
-                        reverse=True
+                        mutation_rates.items(), key=lambda x: x[1], reverse=True
                     )[:3]
                     for mut_name, rate in best_mutations:
                         if rate > mutation_score and mut_name not in mutations_applied:
@@ -175,8 +172,9 @@ class SuccessPredictor:
         if stored and stored.last_success:
             # Newer successes are weighted higher
             from datetime import datetime, timezone
+
             try:
-                last_success = datetime.fromisoformat(stored.last_success.replace('Z', '+00:00'))
+                last_success = datetime.fromisoformat(stored.last_success.replace("Z", "+00:00"))
                 now = datetime.now(timezone.utc)
                 days_since = (now - last_success).days
 
@@ -188,10 +186,7 @@ class SuccessPredictor:
         factors["recency"] = recency_score
 
         # Calculate weighted prediction
-        prediction = sum(
-            factors[factor] * weight
-            for factor, weight in self._weights.items()
-        )
+        prediction = sum(factors[factor] * weight for factor, weight in self._weights.items())
 
         # Calculate confidence based on data availability
         data_points = 0
@@ -321,9 +316,7 @@ class SuccessPredictor:
             weight = self._weights.get(factor, 0)
             contribution = value * weight
             bar = "█" * int(value * 10) + "░" * (10 - int(value * 10))
-            explanation_parts.append(
-                f"  {factor}: {bar} {value:.0%} (weight: {weight:.0%})"
-            )
+            explanation_parts.append(f"  {factor}: {bar} {value:.0%} (weight: {weight:.0%})")
 
         if result.recommendations:
             explanation_parts.extend(["", "Recommendations:"])

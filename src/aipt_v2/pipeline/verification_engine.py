@@ -17,28 +17,26 @@ Verification results:
 - SUPPRESSED_FP: Confirmed false positive (not reportable)
 - MANUAL_REVIEW: Cannot auto-verify, needs human review
 """
+
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import logging
 import random
 import re
-import string
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional, Protocol
-from urllib.parse import urlparse, urljoin, quote
+from typing import Any, Optional
+from urllib.parse import quote, urlparse
 
 import aiohttp
 
 from aipt_v2.models.finding_v2 import (
-    FindingV2,
     FindingCategory,
+    FindingV2,
     VerificationStatusV2,
-    SeverityV2,
 )
 
 logger = logging.getLogger(__name__)
@@ -46,15 +44,17 @@ logger = logging.getLogger(__name__)
 
 class VerificationConfidence(Enum):
     """Confidence level of verification result"""
-    DEFINITIVE = "definitive"    # 100% certain (math check, signature match)
-    HIGH = "high"                # 90%+ certain
-    MEDIUM = "medium"            # 60-90% certain
-    LOW = "low"                  # <60% certain
+
+    DEFINITIVE = "definitive"  # 100% certain (math check, signature match)
+    HIGH = "high"  # 90%+ certain
+    MEDIUM = "medium"  # 60-90% certain
+    LOW = "low"  # <60% certain
 
 
 @dataclass
 class VerificationResult:
     """Result of a verification attempt"""
+
     status: VerificationStatusV2
     evidence: str = ""
     confidence: float = 0.0
@@ -160,9 +160,7 @@ class TLSVerificationPolicy(VerificationPolicy):
 
         # Check if from authoritative scanner
         source_lower = finding.source_tool.lower()
-        is_authoritative = any(
-            scanner in source_lower for scanner in self.AUTHORITATIVE_SCANNERS
-        )
+        is_authoritative = any(scanner in source_lower for scanner in self.AUTHORITATIVE_SCANNERS)
 
         if is_authoritative:
             duration = (datetime.utcnow() - start).total_seconds() * 1000
@@ -295,7 +293,7 @@ class ExposureVerificationPolicy(VerificationPolicy):
             duration = (datetime.utcnow() - start).total_seconds() * 1000
             return VerificationResult(
                 status=VerificationStatusV2.LIKELY,
-                evidence=f"URL returns 200 OK with content, but no specific patterns matched",
+                evidence="URL returns 200 OK with content, but no specific patterns matched",
                 confidence=0.6,
                 confidence_level=VerificationConfidence.MEDIUM,
                 details={"status_code": status, "body_length": len(body)},

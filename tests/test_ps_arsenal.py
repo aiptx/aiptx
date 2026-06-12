@@ -9,14 +9,14 @@ Tests for:
 - Scanner integration
 """
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime
 
+import pytest
 
 # =============================================================================
 # CONFIGURATION TESTS
 # =============================================================================
+
 
 class TestPSArsenalConfig:
     """Tests for PSArsenalConfig and related configuration classes."""
@@ -41,7 +41,7 @@ class TestPSArsenalConfig:
             scripts_path="/custom/path",
             load_mode=PSLoadMode.REMOTE_IEX,
             bypass_amsi=False,
-            timeout=600
+            timeout=600,
         )
 
         assert config.scripts_path == "/custom/path"
@@ -105,12 +105,9 @@ class TestPSArsenalConfig:
 
     def test_validate_ps_config_missing_path(self):
         """Test config validation with missing scripts path."""
-        from aipt_v2.tools.ps_arsenal import PSArsenalConfig, validate_ps_config, PSLoadMode
+        from aipt_v2.tools.ps_arsenal import PSArsenalConfig, PSLoadMode, validate_ps_config
 
-        config = PSArsenalConfig(
-            scripts_path="/nonexistent/path",
-            load_mode=PSLoadMode.LOCAL_FILE
-        )
+        config = PSArsenalConfig(scripts_path="/nonexistent/path", load_mode=PSLoadMode.LOCAL_FILE)
         result = validate_ps_config(config)
 
         assert result["valid"] is False
@@ -120,6 +117,7 @@ class TestPSArsenalConfig:
 # =============================================================================
 # METADATA TESTS
 # =============================================================================
+
 
 class TestScriptMetadata:
     """Tests for script metadata registry."""
@@ -152,7 +150,7 @@ class TestScriptMetadata:
 
     def test_get_scripts_by_category(self):
         """Test filtering scripts by category."""
-        from aipt_v2.tools.ps_arsenal import get_scripts_by_category, ScriptCategory
+        from aipt_v2.tools.ps_arsenal import ScriptCategory, get_scripts_by_category
 
         gather_scripts = get_scripts_by_category(ScriptCategory.GATHER)
 
@@ -161,7 +159,7 @@ class TestScriptMetadata:
 
     def test_get_credential_scripts(self):
         """Test getting credential-output scripts."""
-        from aipt_v2.tools.ps_arsenal import get_credential_scripts, OutputType
+        from aipt_v2.tools.ps_arsenal import OutputType, get_credential_scripts
 
         cred_scripts = get_credential_scripts()
 
@@ -174,7 +172,7 @@ class TestScriptMetadata:
 
     def test_get_shell_scripts(self):
         """Test getting shell-output scripts."""
-        from aipt_v2.tools.ps_arsenal import get_shell_scripts, OutputType
+        from aipt_v2.tools.ps_arsenal import OutputType, get_shell_scripts
 
         shell_scripts = get_shell_scripts()
 
@@ -184,16 +182,13 @@ class TestScriptMetadata:
 
     def test_get_admin_scripts(self):
         """Test getting admin-required scripts."""
-        from aipt_v2.tools.ps_arsenal import get_admin_scripts, RequiredPrivilege
+        from aipt_v2.tools.ps_arsenal import RequiredPrivilege, get_admin_scripts
 
         admin_scripts = get_admin_scripts()
 
         assert len(admin_scripts) > 0
         for script in admin_scripts:
-            assert script.required_privilege in [
-                RequiredPrivilege.ADMIN,
-                RequiredPrivilege.SYSTEM
-            ]
+            assert script.required_privilege in [RequiredPrivilege.ADMIN, RequiredPrivilege.SYSTEM]
 
     def test_get_category_counts(self):
         """Test category count summary."""
@@ -231,10 +226,7 @@ class TestScriptMetadata:
         """Test that scripts have MITRE ATT&CK mappings."""
         from aipt_v2.tools.ps_arsenal import SCRIPT_METADATA
 
-        scripts_with_mitre = [
-            s for s in SCRIPT_METADATA.values()
-            if len(s.mitre_techniques) > 0
-        ]
+        scripts_with_mitre = [s for s in SCRIPT_METADATA.values() if len(s.mitre_techniques) > 0]
 
         # Most scripts should have MITRE mappings
         assert len(scripts_with_mitre) >= 80
@@ -243,6 +235,7 @@ class TestScriptMetadata:
 # =============================================================================
 # PARSER TESTS
 # =============================================================================
+
 
 class TestPSArsenalParser:
     """Tests for output parsers."""
@@ -369,7 +362,7 @@ Logon Server: \\\\DC01
         # Test routing to Get-PassHashes parser
         findings, creds = parser.parse_all(
             "test:500:aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0:::",
-            "Get-PassHashes"
+            "Get-PassHashes",
         )
         assert len(creds) == 1
 
@@ -398,6 +391,7 @@ Password: gh_token_abc123
 # =============================================================================
 # EXECUTOR TESTS
 # =============================================================================
+
 
 class TestPSArsenalExecutor:
     """Tests for PSArsenalExecutor."""
@@ -448,13 +442,13 @@ class TestPSArsenalExecutor:
         """Test remote script URL generation."""
         from aipt_v2.tools.ps_arsenal.ps_executor import PSArsenalExecutor
 
-        executor = PSArsenalExecutor(
-            base_url="https://raw.githubusercontent.com/test/repo/master"
-        )
+        executor = PSArsenalExecutor(base_url="https://raw.githubusercontent.com/test/repo/master")
 
         url = executor._get_script_url("Gather", "Invoke-Mimikatz")
 
-        assert url == "https://raw.githubusercontent.com/test/repo/master/Gather/Invoke-Mimikatz.ps1"
+        assert (
+            url == "https://raw.githubusercontent.com/test/repo/master/Gather/Invoke-Mimikatz.ps1"
+        )
 
     def test_amsi_bypass_techniques_available(self):
         """Test AMSI bypass techniques are defined."""
@@ -473,6 +467,7 @@ class TestPSArsenalExecutor:
 # =============================================================================
 # SCANNER TESTS
 # =============================================================================
+
 
 class TestPSArsenalScanner:
     """Tests for PSArsenalScanner integration."""
@@ -500,21 +495,16 @@ class TestPSArsenalScanner:
 
     def test_scan_result_to_dict(self):
         """Test ScanResult serialization."""
-        from aipt_v2.tools.ps_arsenal.ps_scanner import ScanResult, ScanFinding
-        from datetime import datetime, timezone
+        from datetime import timezone
 
-        result = ScanResult(
-            scanner="ps_arsenal",
-            target="localhost",
-            status="completed"
-        )
+        from aipt_v2.tools.ps_arsenal.ps_scanner import ScanFinding, ScanResult
+
+        result = ScanResult(scanner="ps_arsenal", target="localhost", status="completed")
         result.start_time = datetime.now(timezone.utc)
         result.end_time = datetime.now(timezone.utc)
-        result.findings.append(ScanFinding(
-            title="Test Finding",
-            severity="high",
-            description="Test description"
-        ))
+        result.findings.append(
+            ScanFinding(title="Test Finding", severity="high", description="Test description")
+        )
 
         data = result.to_dict()
 
@@ -528,13 +518,18 @@ class TestPSArsenalScanner:
 # ATTACKS ORCHESTRATOR TESTS
 # =============================================================================
 
+
 class TestPSArsenalAttacks:
     """Tests for PSArsenalAttacks orchestrator."""
 
     def test_attack_result_properties(self):
         """Test AttackResult property methods."""
         from aipt_v2.tools.ps_arsenal import AttackResult
-        from aipt_v2.tools.ps_arsenal.ps_parsers import PSFinding, PSFindingCategory, PSFindingSeverity
+        from aipt_v2.tools.ps_arsenal.ps_parsers import (
+            PSFinding,
+            PSFindingCategory,
+            PSFindingSeverity,
+        )
 
         result = AttackResult(
             success=True,
@@ -546,16 +541,16 @@ class TestPSArsenalAttacks:
                     category=PSFindingCategory.CREDENTIAL,
                     severity=PSFindingSeverity.CRITICAL,
                     description="Test",
-                    source_script="Script1"
+                    source_script="Script1",
                 ),
                 PSFinding(
                     title="High Issue",
                     category=PSFindingCategory.HASH,
                     severity=PSFindingSeverity.HIGH,
                     description="Test",
-                    source_script="Script2"
+                    source_script="Script2",
                 ),
-            ]
+            ],
         )
 
         assert len(result.critical_findings) == 1
@@ -569,7 +564,7 @@ class TestPSArsenalAttacks:
             success=True,
             attack_name="gather_credentials",
             scripts_executed=["Invoke-Mimikatz"],
-            errors=[]
+            errors=[],
         )
 
         data = result.to_dict()
@@ -582,6 +577,7 @@ class TestPSArsenalAttacks:
 # =============================================================================
 # INTEGRATION TESTS
 # =============================================================================
+
 
 class TestToolRegistryIntegration:
     """Tests for ToolRegistry integration."""
@@ -623,6 +619,7 @@ class TestToolRegistryIntegration:
 # FIXTURE DEFINITIONS
 # =============================================================================
 
+
 @pytest.fixture
 def mock_powershell_result():
     """Create a mock PowerShellResult."""
@@ -634,7 +631,7 @@ def mock_powershell_result():
         stdout="Test output",
         stderr="",
         execution_time=1.5,
-        command="test command"
+        command="test command",
     )
 
 

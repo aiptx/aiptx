@@ -14,18 +14,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from typing import Any, Optional
+from typing import Any
 
-from aipt_v2.agents.specialized.base_specialized import (
-    SpecializedAgent,
-    AgentCapability,
-    AgentConfig,
-)
 from aipt_v2.agents.shared.finding_repository import (
     Finding,
     FindingSeverity,
     VulnerabilityType,
-    Evidence,
+)
+from aipt_v2.agents.specialized.base_specialized import (
+    AgentCapability,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -103,7 +101,7 @@ class ReconAgent(SpecializedAgent):
             results["findings_count"] = self._findings_count
 
         except asyncio.CancelledError:
-            logger.info(f"ReconAgent cancelled")
+            logger.info("ReconAgent cancelled")
             results["success"] = False
             results["error"] = "Cancelled"
         except Exception as e:
@@ -130,19 +128,17 @@ class ReconAgent(SpecializedAgent):
 
             # Try subfinder first
             if await registry.is_tool_available("subfinder"):
-                result = await self._run_tool("subfinder", [
-                    "-d", self._extract_domain(self.target),
-                    "-silent"
-                ])
+                result = await self._run_tool(
+                    "subfinder", ["-d", self._extract_domain(self.target), "-silent"]
+                )
                 if result.get("output"):
                     subdomains.extend(result["output"].strip().split("\n"))
 
             # Also try amass if available
             if await registry.is_tool_available("amass"):
-                result = await self._run_tool("amass", [
-                    "enum", "-passive",
-                    "-d", self._extract_domain(self.target)
-                ])
+                result = await self._run_tool(
+                    "amass", ["enum", "-passive", "-d", self._extract_domain(self.target)]
+                )
                 if result.get("output"):
                     for line in result["output"].strip().split("\n"):
                         if line and line not in subdomains:
@@ -156,7 +152,7 @@ class ReconAgent(SpecializedAgent):
             finding = Finding(
                 vuln_type=VulnerabilityType.INFORMATION_DISCLOSURE,
                 title=f"Subdomain discovered: {subdomain}",
-                description=f"Discovered subdomain during reconnaissance",
+                description="Discovered subdomain during reconnaissance",
                 severity=FindingSeverity.INFO,
                 target=self.target,
                 url=f"https://{subdomain}",
@@ -183,12 +179,18 @@ class ReconAgent(SpecializedAgent):
 
             if await registry.is_tool_available("nmap"):
                 # Quick scan of common ports
-                result = await self._run_tool("nmap", [
-                    "-sV", "-sC",
-                    "-p", "21,22,25,53,80,110,143,443,445,993,995,3306,3389,5432,6379,8080,8443,27017",
-                    "--open",
-                    host
-                ], timeout=120)
+                result = await self._run_tool(
+                    "nmap",
+                    [
+                        "-sV",
+                        "-sC",
+                        "-p",
+                        "21,22,25,53,80,110,143,443,445,993,995,3306,3389,5432,6379,8080,8443,27017",
+                        "--open",
+                        host,
+                    ],
+                    timeout=120,
+                )
 
                 if result.get("output"):
                     ports = self._parse_nmap_output(result["output"])
@@ -229,20 +231,13 @@ class ReconAgent(SpecializedAgent):
             registry = get_registry()
 
             if await registry.is_tool_available("httpx"):
-                result = await self._run_tool("httpx", [
-                    "-u", self.target,
-                    "-tech-detect",
-                    "-json"
-                ])
+                result = await self._run_tool("httpx", ["-u", self.target, "-tech-detect", "-json"])
                 if result.get("output"):
                     technologies = self._parse_httpx_tech(result["output"])
 
             # Also try whatweb
             if await registry.is_tool_available("whatweb"):
-                result = await self._run_tool("whatweb", [
-                    self.target,
-                    "--color=never"
-                ])
+                result = await self._run_tool("whatweb", [self.target, "--color=never"])
                 if result.get("output"):
                     for tech in self._parse_whatweb_output(result["output"]):
                         if tech not in technologies:
@@ -284,25 +279,40 @@ class ReconAgent(SpecializedAgent):
 
             # Use feroxbuster if available
             if await registry.is_tool_available("feroxbuster"):
-                result = await self._run_tool("feroxbuster", [
-                    "-u", self.target,
-                    "-w", "/usr/share/seclists/Discovery/Web-Content/common.txt",
-                    "--quiet",
-                    "-t", "10",
-                    "--depth", "2"
-                ], timeout=180)
+                result = await self._run_tool(
+                    "feroxbuster",
+                    [
+                        "-u",
+                        self.target,
+                        "-w",
+                        "/usr/share/seclists/Discovery/Web-Content/common.txt",
+                        "--quiet",
+                        "-t",
+                        "10",
+                        "--depth",
+                        "2",
+                    ],
+                    timeout=180,
+                )
 
                 if result.get("output"):
                     directories = self._parse_feroxbuster_output(result["output"])
 
             elif await registry.is_tool_available("gobuster"):
-                result = await self._run_tool("gobuster", [
-                    "dir",
-                    "-u", self.target,
-                    "-w", "/usr/share/seclists/Discovery/Web-Content/common.txt",
-                    "-t", "10",
-                    "-q"
-                ], timeout=180)
+                result = await self._run_tool(
+                    "gobuster",
+                    [
+                        "dir",
+                        "-u",
+                        self.target,
+                        "-w",
+                        "/usr/share/seclists/Discovery/Web-Content/common.txt",
+                        "-t",
+                        "10",
+                        "-q",
+                    ],
+                    timeout=180,
+                )
 
                 if result.get("output"):
                     directories = self._parse_gobuster_output(result["output"])
@@ -312,8 +322,17 @@ class ReconAgent(SpecializedAgent):
 
         # Create findings for interesting directories
         sensitive_patterns = [
-            ".git", ".env", "config", "admin", "backup", ".svn",
-            "phpinfo", "debug", "test", "staging", "api"
+            ".git",
+            ".env",
+            "config",
+            "admin",
+            "backup",
+            ".svn",
+            "phpinfo",
+            "debug",
+            "test",
+            "staging",
+            "api",
         ]
 
         for directory in directories[:100]:
@@ -322,8 +341,12 @@ class ReconAgent(SpecializedAgent):
                 finding = Finding(
                     vuln_type=VulnerabilityType.INFORMATION_DISCLOSURE,
                     title=f"Sensitive path discovered: {directory}",
-                    description=f"Potentially sensitive path found during directory enumeration",
-                    severity=FindingSeverity.MEDIUM if ".git" in directory or ".env" in directory else FindingSeverity.LOW,
+                    description="Potentially sensitive path found during directory enumeration",
+                    severity=(
+                        FindingSeverity.MEDIUM
+                        if ".git" in directory or ".env" in directory
+                        else FindingSeverity.LOW
+                    ),
                     target=self.target,
                     url=f"{self.target.rstrip('/')}/{directory.lstrip('/')}",
                     endpoint=directory,
@@ -345,7 +368,7 @@ class ReconAgent(SpecializedAgent):
                 "technologies": results.get("technologies", []),
                 "directories_count": len(results.get("directories", [])),
                 "findings_count": self._findings_count,
-            }
+            },
         )
 
     async def _run_tool(
@@ -382,12 +405,14 @@ class ReconAgent(SpecializedAgent):
     def _extract_domain(self, target: str) -> str:
         """Extract domain from target URL."""
         from urllib.parse import urlparse
+
         parsed = urlparse(target)
         return parsed.netloc or target
 
     def _extract_host(self, target: str) -> str:
         """Extract host from target URL."""
         from urllib.parse import urlparse
+
         parsed = urlparse(target)
         host = parsed.netloc or target
         # Remove port if present
@@ -404,18 +429,21 @@ class ReconAgent(SpecializedAgent):
                 if len(parts) >= 3:
                     port_proto = parts[0]
                     port, proto = port_proto.split("/")
-                    ports.append({
-                        "port": int(port),
-                        "protocol": proto,
-                        "state": parts[1],
-                        "service": parts[2] if len(parts) > 2 else "unknown",
-                        "version": " ".join(parts[3:]) if len(parts) > 3 else "",
-                    })
+                    ports.append(
+                        {
+                            "port": int(port),
+                            "protocol": proto,
+                            "state": parts[1],
+                            "service": parts[2] if len(parts) > 2 else "unknown",
+                            "version": " ".join(parts[3:]) if len(parts) > 3 else "",
+                        }
+                    )
         return ports
 
     def _parse_httpx_tech(self, output: str) -> list[dict]:
         """Parse httpx technology detection output."""
         import json
+
         technologies = []
         try:
             for line in output.strip().split("\n"):
@@ -432,7 +460,8 @@ class ReconAgent(SpecializedAgent):
         technologies = []
         # Simple parsing - whatweb output is complex
         import re
-        for match in re.findall(r'\[([^\]]+)\]', output):
+
+        for match in re.findall(r"\[([^\]]+)\]", output):
             if match and not match.startswith("http"):
                 technologies.append({"name": match, "version": ""})
         return technologies
@@ -446,6 +475,7 @@ class ReconAgent(SpecializedAgent):
                 for part in parts:
                     if part.startswith("http"):
                         from urllib.parse import urlparse
+
                         parsed = urlparse(part)
                         if parsed.path:
                             directories.append(parsed.path)

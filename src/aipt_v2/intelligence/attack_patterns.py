@@ -19,17 +19,14 @@ Each pattern includes:
 - Risk scoring factors
 """
 
-from dataclasses import dataclass, field
-from typing import Set, List, Dict, Any
-from enum import Enum
+from typing import Any, Dict, List, Set
 
 from .chain_analysis import (
-    ChainPattern,
     ChainImpact,
+    ChainPattern,
     MitreTactic,
     MitreTechnique,
 )
-
 
 # ============================================================================
 # Extended MITRE ATT&CK Technique Mappings
@@ -37,128 +34,251 @@ from .chain_analysis import (
 
 EXTENDED_TECHNIQUE_MAP = {
     # === Initial Access ===
-    "sqli": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                           "SQL injection exploitation"),
-    "xss_stored": MitreTechnique("T1189", "Drive-by Compromise", MitreTactic.INITIAL_ACCESS,
-                                  "Stored XSS for persistent attack"),
-    "xss_reflected": MitreTechnique("T1189", "Drive-by Compromise", MitreTactic.INITIAL_ACCESS,
-                                     "Reflected XSS attack"),
-    "xxe": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                          "XML External Entity injection"),
-    "ssti": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                           "Server-Side Template Injection"),
-    "ssrf": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                           "Server-Side Request Forgery"),
-    "deserialization": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                       "Insecure deserialization"),
-    "rce": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                          "Remote Code Execution"),
-    "file_upload": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                   "Malicious file upload"),
-    "command_injection": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                         "OS Command Injection"),
-    "path_traversal": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                      "Path traversal attack"),
-    "idor": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                           "Insecure Direct Object Reference"),
-    "jwt_attack": MitreTechnique("T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS,
-                                  "JWT token manipulation"),
-    "oauth_flaw": MitreTechnique("T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS,
-                                  "OAuth/OIDC implementation flaw"),
-    "graphql_introspection": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                             "GraphQL introspection attack"),
-    "websocket_hijack": MitreTechnique("T1190", "Exploit Public-Facing Application", MitreTactic.INITIAL_ACCESS,
-                                        "WebSocket hijacking"),
-
+    "sqli": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "SQL injection exploitation",
+    ),
+    "xss_stored": MitreTechnique(
+        "T1189",
+        "Drive-by Compromise",
+        MitreTactic.INITIAL_ACCESS,
+        "Stored XSS for persistent attack",
+    ),
+    "xss_reflected": MitreTechnique(
+        "T1189", "Drive-by Compromise", MitreTactic.INITIAL_ACCESS, "Reflected XSS attack"
+    ),
+    "xxe": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "XML External Entity injection",
+    ),
+    "ssti": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Server-Side Template Injection",
+    ),
+    "ssrf": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Server-Side Request Forgery",
+    ),
+    "deserialization": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Insecure deserialization",
+    ),
+    "rce": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Remote Code Execution",
+    ),
+    "file_upload": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Malicious file upload",
+    ),
+    "command_injection": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "OS Command Injection",
+    ),
+    "path_traversal": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Path traversal attack",
+    ),
+    "idor": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "Insecure Direct Object Reference",
+    ),
+    "jwt_attack": MitreTechnique(
+        "T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS, "JWT token manipulation"
+    ),
+    "oauth_flaw": MitreTechnique(
+        "T1078", "Valid Accounts", MitreTactic.INITIAL_ACCESS, "OAuth/OIDC implementation flaw"
+    ),
+    "graphql_introspection": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "GraphQL introspection attack",
+    ),
+    "websocket_hijack": MitreTechnique(
+        "T1190",
+        "Exploit Public-Facing Application",
+        MitreTactic.INITIAL_ACCESS,
+        "WebSocket hijacking",
+    ),
     # === Credential Access ===
-    "credential_dump": MitreTechnique("T1003", "OS Credential Dumping", MitreTactic.CREDENTIAL_ACCESS,
-                                       "Dumping credentials from system"),
-    "kerberoasting": MitreTechnique("T1558.003", "Kerberoasting", MitreTactic.CREDENTIAL_ACCESS,
-                                     "Kerberos ticket extraction"),
-    "asreproasting": MitreTechnique("T1558.004", "AS-REP Roasting", MitreTactic.CREDENTIAL_ACCESS,
-                                     "AS-REP Kerberos attack"),
-    "password_spray": MitreTechnique("T1110.003", "Password Spraying", MitreTactic.CREDENTIAL_ACCESS,
-                                      "Password spray attack"),
-    "brute_force": MitreTechnique("T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS,
-                                   "Credential brute forcing"),
-    "credential_stuffing": MitreTechnique("T1110.004", "Credential Stuffing", MitreTactic.CREDENTIAL_ACCESS,
-                                           "Using leaked credentials"),
-    "session_hijack": MitreTechnique("T1539", "Steal Web Session Cookie", MitreTactic.CREDENTIAL_ACCESS,
-                                      "Session cookie theft"),
-    "mfa_bypass": MitreTechnique("T1111", "Multi-Factor Authentication Interception", MitreTactic.CREDENTIAL_ACCESS,
-                                  "MFA bypass techniques"),
-    "api_key_leak": MitreTechnique("T1552.001", "Credentials In Files", MitreTactic.CREDENTIAL_ACCESS,
-                                    "Exposed API keys"),
-    "git_secrets": MitreTechnique("T1552.001", "Credentials In Files", MitreTactic.CREDENTIAL_ACCESS,
-                                   "Secrets in git history"),
-
+    "credential_dump": MitreTechnique(
+        "T1003",
+        "OS Credential Dumping",
+        MitreTactic.CREDENTIAL_ACCESS,
+        "Dumping credentials from system",
+    ),
+    "kerberoasting": MitreTechnique(
+        "T1558.003", "Kerberoasting", MitreTactic.CREDENTIAL_ACCESS, "Kerberos ticket extraction"
+    ),
+    "asreproasting": MitreTechnique(
+        "T1558.004", "AS-REP Roasting", MitreTactic.CREDENTIAL_ACCESS, "AS-REP Kerberos attack"
+    ),
+    "password_spray": MitreTechnique(
+        "T1110.003", "Password Spraying", MitreTactic.CREDENTIAL_ACCESS, "Password spray attack"
+    ),
+    "brute_force": MitreTechnique(
+        "T1110", "Brute Force", MitreTactic.CREDENTIAL_ACCESS, "Credential brute forcing"
+    ),
+    "credential_stuffing": MitreTechnique(
+        "T1110.004",
+        "Credential Stuffing",
+        MitreTactic.CREDENTIAL_ACCESS,
+        "Using leaked credentials",
+    ),
+    "session_hijack": MitreTechnique(
+        "T1539", "Steal Web Session Cookie", MitreTactic.CREDENTIAL_ACCESS, "Session cookie theft"
+    ),
+    "mfa_bypass": MitreTechnique(
+        "T1111",
+        "Multi-Factor Authentication Interception",
+        MitreTactic.CREDENTIAL_ACCESS,
+        "MFA bypass techniques",
+    ),
+    "api_key_leak": MitreTechnique(
+        "T1552.001", "Credentials In Files", MitreTactic.CREDENTIAL_ACCESS, "Exposed API keys"
+    ),
+    "git_secrets": MitreTechnique(
+        "T1552.001", "Credentials In Files", MitreTactic.CREDENTIAL_ACCESS, "Secrets in git history"
+    ),
     # === Privilege Escalation ===
-    "priv_esc": MitreTechnique("T1068", "Exploitation for Privilege Escalation", MitreTactic.PRIVILEGE_ESC,
-                                "Generic privilege escalation"),
-    "sudo_abuse": MitreTechnique("T1548.003", "Sudo and Sudo Caching", MitreTactic.PRIVILEGE_ESC,
-                                  "Sudo misconfiguration abuse"),
-    "suid_abuse": MitreTechnique("T1548.001", "Setuid and Setgid", MitreTactic.PRIVILEGE_ESC,
-                                  "SUID binary exploitation"),
-    "kernel_exploit": MitreTechnique("T1068", "Exploitation for Privilege Escalation", MitreTactic.PRIVILEGE_ESC,
-                                      "Kernel vulnerability exploitation"),
-    "container_escape": MitreTechnique("T1611", "Escape to Host", MitreTactic.PRIVILEGE_ESC,
-                                        "Container escape to host"),
-    "token_impersonation": MitreTechnique("T1134", "Access Token Manipulation", MitreTactic.PRIVILEGE_ESC,
-                                           "Token impersonation attack"),
-    "dll_hijack": MitreTechnique("T1574.001", "DLL Search Order Hijacking", MitreTactic.PRIVILEGE_ESC,
-                                  "DLL hijacking for privilege escalation"),
-
+    "priv_esc": MitreTechnique(
+        "T1068",
+        "Exploitation for Privilege Escalation",
+        MitreTactic.PRIVILEGE_ESC,
+        "Generic privilege escalation",
+    ),
+    "sudo_abuse": MitreTechnique(
+        "T1548.003",
+        "Sudo and Sudo Caching",
+        MitreTactic.PRIVILEGE_ESC,
+        "Sudo misconfiguration abuse",
+    ),
+    "suid_abuse": MitreTechnique(
+        "T1548.001", "Setuid and Setgid", MitreTactic.PRIVILEGE_ESC, "SUID binary exploitation"
+    ),
+    "kernel_exploit": MitreTechnique(
+        "T1068",
+        "Exploitation for Privilege Escalation",
+        MitreTactic.PRIVILEGE_ESC,
+        "Kernel vulnerability exploitation",
+    ),
+    "container_escape": MitreTechnique(
+        "T1611", "Escape to Host", MitreTactic.PRIVILEGE_ESC, "Container escape to host"
+    ),
+    "token_impersonation": MitreTechnique(
+        "T1134",
+        "Access Token Manipulation",
+        MitreTactic.PRIVILEGE_ESC,
+        "Token impersonation attack",
+    ),
+    "dll_hijack": MitreTechnique(
+        "T1574.001",
+        "DLL Search Order Hijacking",
+        MitreTactic.PRIVILEGE_ESC,
+        "DLL hijacking for privilege escalation",
+    ),
     # === Lateral Movement ===
-    "pass_the_hash": MitreTechnique("T1550.002", "Pass the Hash", MitreTactic.LATERAL_MOVEMENT,
-                                     "NTLM hash relay"),
-    "pass_the_ticket": MitreTechnique("T1550.003", "Pass the Ticket", MitreTactic.LATERAL_MOVEMENT,
-                                       "Kerberos ticket reuse"),
-    "lateral_ssh": MitreTechnique("T1021.004", "SSH", MitreTactic.LATERAL_MOVEMENT,
-                                   "SSH lateral movement"),
-    "lateral_smb": MitreTechnique("T1021.002", "SMB/Windows Admin Shares", MitreTactic.LATERAL_MOVEMENT,
-                                   "SMB lateral movement"),
-    "lateral_rdp": MitreTechnique("T1021.001", "Remote Desktop Protocol", MitreTactic.LATERAL_MOVEMENT,
-                                   "RDP lateral movement"),
-    "lateral_winrm": MitreTechnique("T1021.006", "Windows Remote Management", MitreTactic.LATERAL_MOVEMENT,
-                                     "WinRM lateral movement"),
-    "psexec": MitreTechnique("T1569.002", "Service Execution", MitreTactic.LATERAL_MOVEMENT,
-                              "PsExec remote execution"),
-
+    "pass_the_hash": MitreTechnique(
+        "T1550.002", "Pass the Hash", MitreTactic.LATERAL_MOVEMENT, "NTLM hash relay"
+    ),
+    "pass_the_ticket": MitreTechnique(
+        "T1550.003", "Pass the Ticket", MitreTactic.LATERAL_MOVEMENT, "Kerberos ticket reuse"
+    ),
+    "lateral_ssh": MitreTechnique(
+        "T1021.004", "SSH", MitreTactic.LATERAL_MOVEMENT, "SSH lateral movement"
+    ),
+    "lateral_smb": MitreTechnique(
+        "T1021.002",
+        "SMB/Windows Admin Shares",
+        MitreTactic.LATERAL_MOVEMENT,
+        "SMB lateral movement",
+    ),
+    "lateral_rdp": MitreTechnique(
+        "T1021.001", "Remote Desktop Protocol", MitreTactic.LATERAL_MOVEMENT, "RDP lateral movement"
+    ),
+    "lateral_winrm": MitreTechnique(
+        "T1021.006",
+        "Windows Remote Management",
+        MitreTactic.LATERAL_MOVEMENT,
+        "WinRM lateral movement",
+    ),
+    "psexec": MitreTechnique(
+        "T1569.002", "Service Execution", MitreTactic.LATERAL_MOVEMENT, "PsExec remote execution"
+    ),
     # === Discovery ===
-    "network_scan": MitreTechnique("T1046", "Network Service Discovery", MitreTactic.DISCOVERY,
-                                    "Network scanning"),
-    "ad_enumeration": MitreTechnique("T1087.002", "Domain Account", MitreTactic.DISCOVERY,
-                                      "Active Directory enumeration"),
-    "cloud_enumeration": MitreTechnique("T1580", "Cloud Infrastructure Discovery", MitreTactic.DISCOVERY,
-                                         "Cloud resource enumeration"),
-    "container_discovery": MitreTechnique("T1613", "Container and Resource Discovery", MitreTactic.DISCOVERY,
-                                           "Container enumeration"),
-
+    "network_scan": MitreTechnique(
+        "T1046", "Network Service Discovery", MitreTactic.DISCOVERY, "Network scanning"
+    ),
+    "ad_enumeration": MitreTechnique(
+        "T1087.002", "Domain Account", MitreTactic.DISCOVERY, "Active Directory enumeration"
+    ),
+    "cloud_enumeration": MitreTechnique(
+        "T1580",
+        "Cloud Infrastructure Discovery",
+        MitreTactic.DISCOVERY,
+        "Cloud resource enumeration",
+    ),
+    "container_discovery": MitreTechnique(
+        "T1613", "Container and Resource Discovery", MitreTactic.DISCOVERY, "Container enumeration"
+    ),
     # === Collection & Exfiltration ===
-    "data_staging": MitreTechnique("T1074", "Data Staged", MitreTactic.COLLECTION,
-                                    "Staging data for exfiltration"),
-    "data_exfil_http": MitreTechnique("T1048.002", "Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
-                                       MitreTactic.EXFILTRATION, "HTTPS exfiltration"),
-    "data_exfil_dns": MitreTechnique("T1048.003", "Exfiltration Over Alternative Protocol",
-                                      MitreTactic.EXFILTRATION, "DNS exfiltration"),
-
+    "data_staging": MitreTechnique(
+        "T1074", "Data Staged", MitreTactic.COLLECTION, "Staging data for exfiltration"
+    ),
+    "data_exfil_http": MitreTechnique(
+        "T1048.002",
+        "Exfiltration Over Asymmetric Encrypted Non-C2 Protocol",
+        MitreTactic.EXFILTRATION,
+        "HTTPS exfiltration",
+    ),
+    "data_exfil_dns": MitreTechnique(
+        "T1048.003",
+        "Exfiltration Over Alternative Protocol",
+        MitreTactic.EXFILTRATION,
+        "DNS exfiltration",
+    ),
     # === Persistence ===
-    "webshell": MitreTechnique("T1505.003", "Web Shell", MitreTactic.PERSISTENCE,
-                                "Web shell persistence"),
-    "cron_persistence": MitreTechnique("T1053.003", "Cron", MitreTactic.PERSISTENCE,
-                                        "Cron job persistence"),
-    "ssh_key_persistence": MitreTechnique("T1098.004", "SSH Authorized Keys", MitreTactic.PERSISTENCE,
-                                           "SSH key persistence"),
-    "backdoor_user": MitreTechnique("T1136", "Create Account", MitreTactic.PERSISTENCE,
-                                     "Backdoor account creation"),
-
+    "webshell": MitreTechnique(
+        "T1505.003", "Web Shell", MitreTactic.PERSISTENCE, "Web shell persistence"
+    ),
+    "cron_persistence": MitreTechnique(
+        "T1053.003", "Cron", MitreTactic.PERSISTENCE, "Cron job persistence"
+    ),
+    "ssh_key_persistence": MitreTechnique(
+        "T1098.004", "SSH Authorized Keys", MitreTactic.PERSISTENCE, "SSH key persistence"
+    ),
+    "backdoor_user": MitreTechnique(
+        "T1136", "Create Account", MitreTactic.PERSISTENCE, "Backdoor account creation"
+    ),
     # === Impact ===
-    "ransomware": MitreTechnique("T1486", "Data Encrypted for Impact", MitreTactic.IMPACT,
-                                  "Ransomware encryption"),
-    "defacement": MitreTechnique("T1491", "Defacement", MitreTactic.IMPACT,
-                                  "Website defacement"),
-    "dos": MitreTechnique("T1499", "Endpoint Denial of Service", MitreTactic.IMPACT,
-                           "Denial of service"),
+    "ransomware": MitreTechnique(
+        "T1486", "Data Encrypted for Impact", MitreTactic.IMPACT, "Ransomware encryption"
+    ),
+    "defacement": MitreTechnique("T1491", "Defacement", MitreTactic.IMPACT, "Website defacement"),
+    "dos": MitreTechnique(
+        "T1499", "Endpoint Denial of Service", MitreTactic.IMPACT, "Denial of service"
+    ),
 }
 
 
@@ -170,7 +290,6 @@ EXTENDED_CHAIN_PATTERNS = [
     # =========================================================================
     # OWASP TOP 10 - INJECTION ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="sqli_union_exfil",
         name="SQL Injection UNION-Based Data Exfiltration",
@@ -182,7 +301,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"union", "select", "from", "sql", "injection", "database", "dump", "extract"},
     ),
-
     ChainPattern(
         id="sqli_blind_boolean",
         name="Blind SQL Injection Boolean-Based Extraction",
@@ -194,7 +312,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"blind", "boolean", "true", "false", "and", "or", "conditional"},
     ),
-
     ChainPattern(
         id="sqli_time_based",
         name="Time-Based Blind SQL Injection",
@@ -206,7 +323,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"sleep", "benchmark", "waitfor", "delay", "time-based", "blind"},
     ),
-
     ChainPattern(
         id="sqli_stacked_rce",
         name="Stacked SQL Injection to RCE",
@@ -216,9 +332,16 @@ EXTENDED_CHAIN_PATTERNS = [
         exit_types={"rce", "shell", "command_exec"},
         tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.EXECUTION],
         base_impact=ChainImpact.CRITICAL,
-        keywords={"xp_cmdshell", "into outfile", "load_file", "stacked", "exec", "sp_", "procedure"},
+        keywords={
+            "xp_cmdshell",
+            "into outfile",
+            "load_file",
+            "stacked",
+            "exec",
+            "sp_",
+            "procedure",
+        },
     ),
-
     ChainPattern(
         id="nosql_injection",
         name="NoSQL Injection Attack",
@@ -230,7 +353,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"$ne", "$gt", "$regex", "$where", "mongodb", "nosql", "json", "bson"},
     ),
-
     ChainPattern(
         id="ldap_injection",
         name="LDAP Injection Attack",
@@ -242,7 +364,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"ldap", ")(", "cn=", "uid=", "filter", "directory", "injection"},
     ),
-
     ChainPattern(
         id="xpath_injection",
         name="XPath Injection Attack",
@@ -254,7 +375,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.MEDIUM,
         keywords={"xpath", "xml", "//", "node", "contains", "text()"},
     ),
-
     ChainPattern(
         id="command_injection_rce",
         name="OS Command Injection to Shell",
@@ -264,13 +384,24 @@ EXTENDED_CHAIN_PATTERNS = [
         exit_types={"rce", "shell", "reverse_shell"},
         tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.EXECUTION],
         base_impact=ChainImpact.CRITICAL,
-        keywords={";", "|", "&&", "`", "$()", "ping", "curl", "wget", "bash", "sh", "cmd", "powershell"},
+        keywords={
+            ";",
+            "|",
+            "&&",
+            "`",
+            "$()",
+            "ping",
+            "curl",
+            "wget",
+            "bash",
+            "sh",
+            "cmd",
+            "powershell",
+        },
     ),
-
     # =========================================================================
     # OWASP TOP 10 - BROKEN ACCESS CONTROL
     # =========================================================================
-
     ChainPattern(
         id="idor_horizontal",
         name="Horizontal IDOR - Access Other Users' Data",
@@ -282,7 +413,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"id=", "user_id", "account", "profile", "document", "file", "idor"},
     ),
-
     ChainPattern(
         id="idor_vertical",
         name="Vertical IDOR - Privilege Escalation",
@@ -294,7 +424,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"admin", "role", "privilege", "permission", "access_level", "is_admin"},
     ),
-
     ChainPattern(
         id="bola_api",
         name="Broken Object Level Authorization (BOLA)",
@@ -306,7 +435,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"api", "/v1/", "/v2/", "object", "uuid", "guid", "resource"},
     ),
-
     ChainPattern(
         id="bfla_api",
         name="Broken Function Level Authorization (BFLA)",
@@ -318,7 +446,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"admin", "api", "delete", "update", "create", "management", "internal"},
     ),
-
     ChainPattern(
         id="path_traversal_lfi",
         name="Path Traversal to Local File Inclusion",
@@ -330,7 +457,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"../", "..\\", "passwd", "etc", "config", "file=", "path=", "include"},
     ),
-
     ChainPattern(
         id="lfi_log_poison_rce",
         name="LFI Log Poisoning to RCE",
@@ -342,7 +468,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"log", "access.log", "error.log", "proc/self", "php://", "user-agent"},
     ),
-
     ChainPattern(
         id="lfi_php_wrapper_rce",
         name="LFI PHP Wrapper to RCE",
@@ -354,11 +479,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"php://filter", "php://input", "expect://", "data://", "base64", "convert"},
     ),
-
     # =========================================================================
     # OWASP TOP 10 - XSS ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="xss_stored_admin",
         name="Stored XSS to Admin Account Takeover",
@@ -366,11 +489,14 @@ EXTENDED_CHAIN_PATTERNS = [
         entry_types={"xss", "stored", "vuln"},
         intermediate_types={"script", "payload", "storage"},
         exit_types={"session_hijack", "admin_access", "account_takeover"},
-        tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.CREDENTIAL_ACCESS, MitreTactic.PRIVILEGE_ESC],
+        tactics=[
+            MitreTactic.INITIAL_ACCESS,
+            MitreTactic.CREDENTIAL_ACCESS,
+            MitreTactic.PRIVILEGE_ESC,
+        ],
         base_impact=ChainImpact.CRITICAL,
         keywords={"stored", "persistent", "xss", "script", "document.cookie", "admin", "session"},
     ),
-
     ChainPattern(
         id="xss_dom_based",
         name="DOM-Based XSS Attack",
@@ -382,7 +508,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"dom", "innerhtml", "document.write", "location.hash", "window.name", "eval"},
     ),
-
     ChainPattern(
         id="xss_to_csrf",
         name="XSS to CSRF Chain",
@@ -394,7 +519,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"xss", "fetch", "xmlhttprequest", "ajax", "csrf", "token"},
     ),
-
     ChainPattern(
         id="xss_keylogger",
         name="XSS Keylogger Deployment",
@@ -406,11 +530,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"keylogger", "onkeypress", "onkeydown", "addeventlistener", "keycode"},
     ),
-
     # =========================================================================
     # SSRF ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="ssrf_cloud_metadata",
         name="SSRF to Cloud Metadata Exploitation",
@@ -422,7 +544,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"169.254.169.254", "metadata", "aws", "gcp", "azure", "iam", "role"},
     ),
-
     ChainPattern(
         id="ssrf_internal_scan",
         name="SSRF Internal Network Reconnaissance",
@@ -434,7 +555,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"localhost", "127.0.0.1", "internal", "10.0", "172.16", "192.168", "intranet"},
     ),
-
     ChainPattern(
         id="ssrf_internal_exploit",
         name="SSRF to Internal Service Exploitation",
@@ -446,7 +566,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"redis", "memcached", "elasticsearch", "mongodb", "gopher://", "dict://"},
     ),
-
     ChainPattern(
         id="ssrf_file_read",
         name="SSRF to Local File Read",
@@ -458,11 +577,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"file://", "file:", "/etc/passwd", "config", "credential"},
     ),
-
     # =========================================================================
     # XXE ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="xxe_file_read",
         name="XXE Local File Disclosure",
@@ -474,7 +591,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"<!entity", "<!doctype", "system", "file://", "xxe", "dtd", "external"},
     ),
-
     ChainPattern(
         id="xxe_ssrf",
         name="XXE to SSRF",
@@ -486,7 +602,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"xxe", "entity", "http://", "https://", "internal", "metadata"},
     ),
-
     ChainPattern(
         id="xxe_blind_oob",
         name="Blind XXE Out-of-Band Exfiltration",
@@ -498,7 +613,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"blind", "oob", "burpcollaborator", "dnslog", "webhook", "exfil"},
     ),
-
     ChainPattern(
         id="xxe_rce",
         name="XXE to Remote Code Execution",
@@ -510,11 +624,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"xxe", "expect://", "php://", "rce", "command", "exec"},
     ),
-
     # =========================================================================
     # SSTI ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="ssti_jinja2_rce",
         name="Jinja2 SSTI to RCE",
@@ -526,7 +638,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"{{", "}}", "__class__", "__mro__", "__subclasses__", "jinja", "flask", "config"},
     ),
-
     ChainPattern(
         id="ssti_twig_rce",
         name="Twig SSTI to RCE",
@@ -538,7 +649,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"twig", "{{", "}}", "_self", "env", "filter", "symfony"},
     ),
-
     ChainPattern(
         id="ssti_freemarker_rce",
         name="FreeMarker SSTI to RCE",
@@ -550,11 +660,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"freemarker", "${", "}", "exec", "runtime", "processbuilder", "java"},
     ),
-
     # =========================================================================
     # DESERIALIZATION ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="java_deserial_rce",
         name="Java Deserialization RCE",
@@ -564,9 +672,15 @@ EXTENDED_CHAIN_PATTERNS = [
         exit_types={"rce", "shell"},
         tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.EXECUTION],
         base_impact=ChainImpact.CRITICAL,
-        keywords={"aced0005", "rO0", "objectinputstream", "ysoserial", "gadget", "commons-collections"},
+        keywords={
+            "aced0005",
+            "rO0",
+            "objectinputstream",
+            "ysoserial",
+            "gadget",
+            "commons-collections",
+        },
     ),
-
     ChainPattern(
         id="php_deserial_rce",
         name="PHP Deserialization RCE",
@@ -578,7 +692,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"unserialize", "O:", "a:", "__wakeup", "__destruct", "phar://", "phpggc"},
     ),
-
     ChainPattern(
         id="python_pickle_rce",
         name="Python Pickle Deserialization RCE",
@@ -590,7 +703,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"pickle", "unpickle", "__reduce__", "cPickle", "loads", "gASV"},
     ),
-
     ChainPattern(
         id="dotnet_deserial_rce",
         name=".NET Deserialization RCE",
@@ -600,13 +712,17 @@ EXTENDED_CHAIN_PATTERNS = [
         exit_types={"rce", "shell"},
         tactics=[MitreTactic.INITIAL_ACCESS, MitreTactic.EXECUTION],
         base_impact=ChainImpact.CRITICAL,
-        keywords={"viewstate", "binaryformatter", "objectstateformatter", "ysoserial.net", "aaeaaad"},
+        keywords={
+            "viewstate",
+            "binaryformatter",
+            "objectstateformatter",
+            "ysoserial.net",
+            "aaeaaad",
+        },
     ),
-
     # =========================================================================
     # AUTHENTICATION/AUTHORIZATION ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="jwt_none_alg",
         name="JWT Algorithm None Attack",
@@ -618,7 +734,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"jwt", "alg", "none", "hs256", "rs256", "header", "bearer"},
     ),
-
     ChainPattern(
         id="jwt_key_confusion",
         name="JWT Algorithm Confusion (RS256 to HS256)",
@@ -630,7 +745,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"jwt", "rs256", "hs256", "algorithm", "confusion", "public_key"},
     ),
-
     ChainPattern(
         id="jwt_secret_bruteforce",
         name="JWT Secret Key Brute Force",
@@ -642,7 +756,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"jwt", "secret", "bruteforce", "hashcat", "john", "weak"},
     ),
-
     ChainPattern(
         id="oauth_redirect_theft",
         name="OAuth Redirect URI Token Theft",
@@ -654,7 +767,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"redirect_uri", "oauth", "code", "token", "callback", "state"},
     ),
-
     ChainPattern(
         id="mfa_bypass_backup",
         name="MFA Bypass via Backup Codes",
@@ -666,7 +778,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"mfa", "2fa", "backup", "recovery", "code", "otp"},
     ),
-
     ChainPattern(
         id="password_reset_token",
         name="Password Reset Token Exploitation",
@@ -678,7 +789,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"reset", "forgot", "token", "password", "recovery", "email"},
     ),
-
     ChainPattern(
         id="session_fixation",
         name="Session Fixation Attack",
@@ -690,11 +800,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"session", "fixation", "cookie", "sessionid", "jsessionid", "phpsessid"},
     ),
-
     # =========================================================================
     # API SECURITY ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="graphql_introspection_enum",
         name="GraphQL Introspection to Schema Dump",
@@ -706,7 +814,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.MEDIUM,
         keywords={"__schema", "__type", "introspection", "graphql", "query", "mutation"},
     ),
-
     ChainPattern(
         id="graphql_batching_dos",
         name="GraphQL Batching/Nested Query DoS",
@@ -718,7 +825,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.MEDIUM,
         keywords={"graphql", "batch", "nested", "depth", "complexity", "alias"},
     ),
-
     ChainPattern(
         id="api_mass_assignment",
         name="API Mass Assignment Vulnerability",
@@ -730,7 +836,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"role", "admin", "isadmin", "privilege", "binding", "assignment"},
     ),
-
     ChainPattern(
         id="api_rate_limit_bypass",
         name="API Rate Limiting Bypass",
@@ -742,7 +847,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.MEDIUM,
         keywords={"rate", "limit", "x-forwarded-for", "x-real-ip", "429", "retry"},
     ),
-
     ChainPattern(
         id="api_version_exploit",
         name="Deprecated API Version Exploitation",
@@ -754,11 +858,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"v1", "v2", "deprecated", "legacy", "old", "version"},
     ),
-
     # =========================================================================
     # CLOUD SECURITY ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="aws_metadata_to_s3",
         name="AWS Metadata to S3 Bucket Access",
@@ -770,7 +872,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"169.254.169.254", "iam", "role", "s3", "bucket", "aws"},
     ),
-
     ChainPattern(
         id="s3_bucket_takeover",
         name="S3 Bucket Takeover",
@@ -782,7 +883,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"s3", "bucket", "nosuchbucket", "accessdenied", "takeover"},
     ),
-
     ChainPattern(
         id="azure_metadata_to_keyvault",
         name="Azure Metadata to Key Vault Access",
@@ -794,7 +894,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"169.254.169.254", "azure", "identity", "keyvault", "secret", "managed"},
     ),
-
     ChainPattern(
         id="gcp_metadata_to_storage",
         name="GCP Metadata to Cloud Storage Access",
@@ -806,11 +905,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"metadata.google", "computemetadata", "service-account", "gcs", "storage"},
     ),
-
     # =========================================================================
     # CONTAINER/KUBERNETES ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="container_escape_privileged",
         name="Privileged Container Escape",
@@ -822,7 +919,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"privileged", "docker", "container", "mount", "/dev", "escape"},
     ),
-
     ChainPattern(
         id="k8s_api_unauth",
         name="Kubernetes API Unauthenticated Access",
@@ -834,7 +930,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"kubernetes", "k8s", "apiserver", "kubectl", "anonymous", "6443", "8443"},
     ),
-
     ChainPattern(
         id="k8s_etcd_secret_dump",
         name="Kubernetes etcd Secret Dump",
@@ -846,7 +941,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"etcd", "2379", "2380", "secret", "kubernetes", "k8s"},
     ),
-
     ChainPattern(
         id="k8s_serviceaccount_abuse",
         name="Kubernetes Service Account Token Abuse",
@@ -858,11 +952,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"serviceaccount", "token", "rbac", "clusterrole", "rolebinding"},
     ),
-
     # =========================================================================
     # FILE UPLOAD ATTACKS
     # =========================================================================
-
     ChainPattern(
         id="file_upload_webshell",
         name="File Upload to Web Shell",
@@ -874,7 +966,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"upload", "file", "webshell", "php", "jsp", "aspx", "extension"},
     ),
-
     ChainPattern(
         id="file_upload_xxe",
         name="File Upload XXE via SVG/DOCX",
@@ -886,7 +977,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"svg", "docx", "xlsx", "xxe", "entity", "upload"},
     ),
-
     ChainPattern(
         id="file_upload_polyglot",
         name="Polyglot File Upload Bypass",
@@ -898,11 +988,9 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"polyglot", "gif89a", "phar", "magic", "bypass", "filter"},
     ),
-
     # =========================================================================
     # LATERAL MOVEMENT & PRIVILEGE ESCALATION
     # =========================================================================
-
     ChainPattern(
         id="kerberoasting_crack",
         name="Kerberoasting to Domain Compromise",
@@ -914,7 +1002,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"kerberos", "spn", "tgs", "ticket", "hashcat", "kerberoast"},
     ),
-
     ChainPattern(
         id="asreproast_crack",
         name="AS-REP Roasting to Account Compromise",
@@ -926,7 +1013,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"asrep", "roast", "preauth", "kerberos", "hash", "crack"},
     ),
-
     ChainPattern(
         id="dcsync_ntds",
         name="DCSync to NTDS.dit Dump",
@@ -938,7 +1024,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"dcsync", "drsuapi", "ntds", "krbtgt", "replication", "mimikatz"},
     ),
-
     ChainPattern(
         id="linux_sudo_privesc",
         name="Linux Sudo Misconfiguration Privilege Escalation",
@@ -950,7 +1035,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"sudo", "nopasswd", "gtfobins", "vim", "less", "find", "awk"},
     ),
-
     ChainPattern(
         id="linux_suid_privesc",
         name="Linux SUID Binary Privilege Escalation",
@@ -962,7 +1046,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.HIGH,
         keywords={"suid", "4000", "gtfobins", "find", "nmap", "vim", "python"},
     ),
-
     ChainPattern(
         id="windows_token_impersonation",
         name="Windows Token Impersonation",
@@ -974,7 +1057,6 @@ EXTENDED_CHAIN_PATTERNS = [
         base_impact=ChainImpact.CRITICAL,
         keywords={"seimpersonate", "potato", "token", "impersonate", "juicy", "rotten"},
     ),
-
     ChainPattern(
         id="windows_unquoted_service",
         name="Windows Unquoted Service Path Exploitation",
@@ -1000,58 +1082,46 @@ ATTACK_TOOL_RECOMMENDATIONS: Dict[str, List[str]] = {
     "command_injection": ["commix", "burp"],
     "ssti": ["tplmap", "burp", "sstimap"],
     "xxe": ["burp", "xxeinjector"],
-
     # Access control
     "idor": ["burp", "autorize", "ffuf"],
     "bola": ["burp", "autorize"],
     "bfla": ["burp"],
     "lfi": ["burp", "ffuf", "lfimap"],
     "path_traversal": ["dotdotpwn", "burp"],
-
     # XSS
     "xss": ["dalfox", "xsstrike", "burp"],
-
     # SSRF
     "ssrf": ["burp", "ssrfmap", "gopherus"],
-
     # Authentication
     "jwt": ["jwt_tool", "burp"],
     "oauth": ["burp"],
     "session": ["burp"],
     "mfa": ["burp"],
-
     # API
     "graphql": ["graphqlmap", "inql", "burp"],
     "api": ["burp", "postman", "ffuf"],
-
     # Deserialization
     "java_deserial": ["ysoserial", "burp"],
     "php_deserial": ["phpggc", "burp"],
     "python_deserial": ["custom"],
     "dotnet_deserial": ["ysoserial.net"],
-
     # Cloud
     "aws": ["pacu", "awscli", "cloudfox"],
     "azure": ["azurehound", "roadtools"],
     "gcp": ["gcp_scanner"],
-
     # Container/K8s
     "container": ["deepce", "cdkexec"],
     "kubernetes": ["kube-hunter", "kubectl", "kubesploit"],
-
     # File upload
     "upload": ["burp", "fuxploider"],
-
     # Active Directory
     "kerberos": ["impacket", "rubeus", "mimikatz"],
     "ad": ["bloodhound", "ldapdomaindump", "crackmapexec"],
-
     # Lateral movement
     "lateral_ssh": ["ssh", "plink"],
     "lateral_smb": ["crackmapexec", "psexec", "impacket"],
     "lateral_rdp": ["xfreerdp", "rdesktop"],
     "lateral_winrm": ["evil-winrm", "crackmapexec"],
-
     # Privilege escalation
     "linux_privesc": ["linpeas", "linenum", "linux-exploit-suggester"],
     "windows_privesc": ["winpeas", "powerup", "windows-exploit-suggester"],
@@ -1062,9 +1132,11 @@ ATTACK_TOOL_RECOMMENDATIONS: Dict[str, List[str]] = {
 # Helper Functions
 # ============================================================================
 
+
 def get_all_patterns() -> List[ChainPattern]:
     """Get all attack chain patterns including extended patterns."""
     from .chain_analysis import CHAIN_PATTERNS
+
     return CHAIN_PATTERNS + EXTENDED_CHAIN_PATTERNS
 
 

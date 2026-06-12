@@ -12,23 +12,25 @@ import random
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class StealthLevel(str, Enum):
     """Stealth operation levels."""
-    NONE = "none"       # No stealth, maximum speed
-    LOW = "low"         # Minimal stealth
-    MEDIUM = "medium"   # Balanced stealth/speed
-    HIGH = "high"       # Maximum stealth, slow
+
+    NONE = "none"  # No stealth, maximum speed
+    LOW = "low"  # Minimal stealth
+    MEDIUM = "medium"  # Balanced stealth/speed
+    HIGH = "high"  # Maximum stealth, slow
     PARANOID = "paranoid"  # Extreme stealth
 
 
 @dataclass
 class StealthConfig:
     """Configuration for stealthy operations."""
+
     level: StealthLevel = StealthLevel.MEDIUM
     min_delay: float = 0.5
     max_delay: float = 3.0
@@ -114,10 +116,7 @@ class StealthEngine:
         if self.config.level == StealthLevel.NONE:
             return 0
 
-        base_delay = random.uniform(
-            self.config.min_delay,
-            self.config.max_delay
-        )
+        base_delay = random.uniform(self.config.min_delay, self.config.max_delay)
 
         # Add jitter
         jitter = base_delay * self.config.jitter_percentage
@@ -174,8 +173,7 @@ class StealthEngine:
         if "powershell" in command.lower():
             if self.config.level in (StealthLevel.HIGH, StealthLevel.PARANOID):
                 command = command.replace(
-                    "powershell",
-                    "powershell -WindowStyle Hidden -ExecutionPolicy Bypass"
+                    "powershell", "powershell -WindowStyle Hidden -ExecutionPolicy Bypass"
                 )
 
         return command
@@ -193,51 +191,65 @@ class StealthEngine:
             return techniques
 
         # Basic evasion
-        techniques.extend([
-            {
-                "name": "timing_jitter",
-                "description": "Random delays between operations",
-                "config": f"delay: {self.config.min_delay}-{self.config.max_delay}s",
-            },
-        ])
+        techniques.extend(
+            [
+                {
+                    "name": "timing_jitter",
+                    "description": "Random delays between operations",
+                    "config": f"delay: {self.config.min_delay}-{self.config.max_delay}s",
+                },
+            ]
+        )
 
         if self.config.use_lolbins:
-            techniques.append({
-                "name": "lolbin_substitution",
-                "description": "Use built-in OS tools instead of custom binaries",
-                "examples": "certutil, bitsadmin, mshta",
-            })
+            techniques.append(
+                {
+                    "name": "lolbin_substitution",
+                    "description": "Use built-in OS tools instead of custom binaries",
+                    "examples": "certutil, bitsadmin, mshta",
+                }
+            )
 
         if self.config.avoid_known_signatures:
-            techniques.append({
-                "name": "signature_avoidance",
-                "description": "Avoid known malware/tool signatures",
-                "examples": "Obfuscate strings, modify headers",
-            })
+            techniques.append(
+                {
+                    "name": "signature_avoidance",
+                    "description": "Avoid known malware/tool signatures",
+                    "examples": "Obfuscate strings, modify headers",
+                }
+            )
 
         if self.config.randomize_user_agent:
-            techniques.append({
-                "name": "user_agent_rotation",
-                "description": "Randomize HTTP User-Agent headers",
-            })
+            techniques.append(
+                {
+                    "name": "user_agent_rotation",
+                    "description": "Randomize HTTP User-Agent headers",
+                }
+            )
 
         if self.config.fragment_payloads:
-            techniques.append({
-                "name": "payload_fragmentation",
-                "description": "Split payloads across multiple requests",
-            })
+            techniques.append(
+                {
+                    "name": "payload_fragmentation",
+                    "description": "Split payloads across multiple requests",
+                }
+            )
 
         if self.config.encode_traffic:
-            techniques.append({
-                "name": "traffic_encoding",
-                "description": "Encode/encrypt traffic to avoid inspection",
-            })
+            techniques.append(
+                {
+                    "name": "traffic_encoding",
+                    "description": "Encode/encrypt traffic to avoid inspection",
+                }
+            )
 
         if self.config.mimick_normal_traffic:
-            techniques.append({
-                "name": "traffic_mimicry",
-                "description": "Blend with normal application traffic",
-            })
+            techniques.append(
+                {
+                    "name": "traffic_mimicry",
+                    "description": "Blend with normal application traffic",
+                }
+            )
 
         return techniques
 

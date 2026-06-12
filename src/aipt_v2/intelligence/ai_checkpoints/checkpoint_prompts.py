@@ -193,15 +193,9 @@ def get_prompt(
     use_compact = context_size < 6000
 
     prompts = {
-        "post_recon": (
-            COMPACT_POST_RECON_PROMPT if use_compact else POST_RECON_PROMPT
-        ),
-        "post_scan": (
-            COMPACT_POST_SCAN_PROMPT if use_compact else POST_SCAN_PROMPT
-        ),
-        "post_exploit": (
-            COMPACT_POST_EXPLOIT_PROMPT if use_compact else POST_EXPLOIT_PROMPT
-        ),
+        "post_recon": (COMPACT_POST_RECON_PROMPT if use_compact else POST_RECON_PROMPT),
+        "post_scan": (COMPACT_POST_SCAN_PROMPT if use_compact else POST_SCAN_PROMPT),
+        "post_exploit": (COMPACT_POST_EXPLOIT_PROMPT if use_compact else POST_EXPLOIT_PROMPT),
     }
 
     if checkpoint_type not in prompts:

@@ -44,17 +44,15 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Callable, Optional
-from urllib.parse import urlencode, urlparse, parse_qs, urljoin
+from typing import Any, Optional
+from urllib.parse import parse_qs, urlencode, urlparse
 
 logger = logging.getLogger(__name__)
 
 # Try to import browser automation
 try:
-    from aipt_v2.browser.automation import BrowserAutomation, BrowserConfig, PLAYWRIGHT_AVAILABLE
+    from aipt_v2.browser.automation import PLAYWRIGHT_AVAILABLE, BrowserAutomation, BrowserConfig
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
     BrowserAutomation = None
@@ -64,6 +62,7 @@ except ImportError:
 @dataclass
 class BrowserValidationResult:
     """Result from browser-based validation."""
+
     is_vulnerable: bool = False
     confidence: float = 0.0
     evidence: dict = field(default_factory=dict)
@@ -165,6 +164,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -206,7 +206,9 @@ class PATBrowserValidator:
 
                 # Navigate to URL
                 try:
-                    response = await page.goto(test_url, wait_until="networkidle", timeout=self.timeout)
+                    response = await page.goto(
+                        test_url, wait_until="networkidle", timeout=self.timeout
+                    )
                 except Exception as e:
                     # Continue even if timeout - payload might have executed
                     logger.debug(f"Navigation warning: {e}")
@@ -215,7 +217,8 @@ class PATBrowserValidator:
                 await asyncio.sleep(1)
 
                 # Check for XSS indicators
-                xss_evidence = await page.evaluate("""
+                xss_evidence = await page.evaluate(
+                    """
                     () => {
                         return {
                             // Check for script injection
@@ -235,7 +238,8 @@ class PATBrowserValidator:
                             hasAlert: typeof window._xss_triggered !== 'undefined',
                         };
                     }
-                """)
+                """
+                )
 
                 # Analyze results
                 result.alerts = alerts
@@ -269,6 +273,7 @@ class PATBrowserValidator:
                 try:
                     result.screenshot = await page.screenshot()
                     import base64
+
                     result.screenshot_base64 = base64.b64encode(result.screenshot).decode()
                 except Exception as e:
                     logger.debug(f"Screenshot failed: {e}")
@@ -304,6 +309,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -334,7 +340,8 @@ class PATBrowserValidator:
                 await asyncio.sleep(1)
 
                 # Check for DOM XSS sinks
-                dom_xss_check = await page.evaluate("""
+                dom_xss_check = await page.evaluate(
+                    """
                     () => {
                         const sinks = [];
 
@@ -349,7 +356,8 @@ class PATBrowserValidator:
                             innerHTML: document.querySelectorAll('[data-xss-sink]').length,
                         };
                     }
-                """)
+                """
+                )
 
                 result.alerts = alerts
                 result.evidence = dom_xss_check
@@ -387,6 +395,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -403,7 +412,8 @@ class PATBrowserValidator:
                 await asyncio.sleep(0.5)
 
                 # Check for prototype pollution
-                pollution_check = await page.evaluate("""
+                pollution_check = await page.evaluate(
+                    """
                     () => {
                         const checks = {
                             // Check Object.prototype pollution
@@ -429,7 +439,8 @@ class PATBrowserValidator:
 
                         return checks;
                     }
-                """)
+                """
+                )
 
                 result.evidence = pollution_check
 
@@ -440,11 +451,13 @@ class PATBrowserValidator:
                     result.confidence = 0.95
                     result.dom_modifications.append(f"Object.prototype polluted: {polluted_props}")
 
-                elif any([
-                    pollution_check.get("objectPolluted"),
-                    pollution_check.get("isAdmin"),
-                    pollution_check.get("admin"),
-                ]):
+                elif any(
+                    [
+                        pollution_check.get("objectPolluted"),
+                        pollution_check.get("isAdmin"),
+                        pollution_check.get("admin"),
+                    ]
+                ):
                     result.is_vulnerable = True
                     result.confidence = 0.90
                     result.dom_modifications.append("Prototype pollution confirmed")
@@ -485,6 +498,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -500,7 +514,8 @@ class PATBrowserValidator:
                 await page.goto(url, wait_until="networkidle", timeout=self.timeout)
 
                 # Check for DOM clobbering
-                clobbering_check = await page.evaluate(f"""
+                clobbering_check = await page.evaluate(
+                    f"""
                     () => {{
                         const checks = {{
                             // Check if global variables were clobbered
@@ -525,11 +540,14 @@ class PATBrowserValidator:
 
                         return checks;
                     }}
-                """)
+                """
+                )
 
                 result.evidence = clobbering_check
 
-                if clobbering_check.get("targetClobbered") or clobbering_check.get("windowClobbered"):
+                if clobbering_check.get("targetClobbered") or clobbering_check.get(
+                    "windowClobbered"
+                ):
                     result.is_vulnerable = True
                     result.confidence = 0.85
                     result.dom_modifications.append("DOM clobbering successful")
@@ -560,6 +578,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -582,13 +601,17 @@ class PATBrowserValidator:
                 """
 
                 import base64
-                data_url = f"data:text/html;base64,{base64.b64encode(iframe_html.encode()).decode()}"
+
+                data_url = (
+                    f"data:text/html;base64,{base64.b64encode(iframe_html.encode()).decode()}"
+                )
 
                 await page.goto(data_url, timeout=self.timeout)
                 await asyncio.sleep(1)
 
                 # Check if iframe loaded successfully
-                frame_check = await page.evaluate("""
+                frame_check = await page.evaluate(
+                    """
                     () => {
                         const iframe = document.querySelector('iframe');
                         if (!iframe) return { loaded: false };
@@ -610,7 +633,8 @@ class PATBrowserValidator:
                             };
                         }
                     }
-                """)
+                """
+                )
 
                 result.evidence = frame_check
 
@@ -666,6 +690,7 @@ class PATBrowserValidator:
             return result
 
         import time
+
         start_time = time.time()
 
         try:
@@ -698,7 +723,9 @@ class PATBrowserValidator:
                 if traversal_requests:
                     result.is_vulnerable = True
                     result.confidence = 0.80
-                    result.dom_modifications.append(f"Path traversal requests: {len(traversal_requests)}")
+                    result.dom_modifications.append(
+                        f"Path traversal requests: {len(traversal_requests)}"
+                    )
 
         except Exception as e:
             result.error = str(e)
@@ -708,6 +735,7 @@ class PATBrowserValidator:
 
 
 # Convenience functions
+
 
 async def validate_xss_in_browser(
     url: str,

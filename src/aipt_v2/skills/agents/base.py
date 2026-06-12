@@ -15,8 +15,7 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Type
-from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
 import structlog
 from pydantic import BaseModel, Field
@@ -26,6 +25,7 @@ logger = structlog.get_logger()
 
 class Severity(str, Enum):
     """Vulnerability severity levels following CVSS-like classification."""
+
     CRITICAL = "critical"
     HIGH = "high"
     MEDIUM = "medium"
@@ -35,6 +35,7 @@ class Severity(str, Enum):
 
 class VulnCategory(str, Enum):
     """OWASP Top 10 2021 aligned vulnerability categories."""
+
     INJECTION = "A03:2021-Injection"
     BROKEN_AUTH = "A07:2021-Auth-Failures"
     SENSITIVE_DATA = "A02:2021-Crypto-Failures"
@@ -51,6 +52,7 @@ class VulnCategory(str, Enum):
 @dataclass
 class Finding:
     """Represents a security finding/vulnerability discovered by an agent."""
+
     title: str
     severity: Severity
     category: VulnCategory
@@ -83,6 +85,7 @@ class Finding:
 @dataclass
 class AgentResult:
     """Result of an agent's security testing run."""
+
     success: bool
     findings: List[Finding] = field(default_factory=list)
     errors: List[str] = field(default_factory=list)
@@ -113,12 +116,13 @@ class AgentResult:
                 "total": len(self.findings),
                 "critical": self.critical_count,
                 "high": self.high_count,
-            }
+            },
         }
 
 
 class AgentConfig(BaseModel):
     """Configuration for AI security agents."""
+
     # LLM Settings
     model: str = Field(default="claude-3-7-sonnet-20250219", description="LLM model to use")
     temperature: float = Field(default=0.7, ge=0, le=2)
@@ -144,10 +148,7 @@ _tool_registry: Dict[str, Dict[str, Any]] = {}
 
 
 def register_tool(
-    name: str,
-    description: str,
-    parameters: Dict[str, Any],
-    category: str = "general"
+    name: str, description: str, parameters: Dict[str, Any], category: str = "general"
 ) -> Callable:
     """Decorator to register a tool for use by agents.
 
@@ -160,6 +161,7 @@ def register_tool(
         async def run_command(command: str) -> str:
             ...
     """
+
     def decorator(func: Callable) -> Callable:
         _tool_registry[name] = {
             "name": name,
@@ -169,6 +171,7 @@ def register_tool(
             "function": func,
         }
         return func
+
     return decorator
 
 
@@ -225,18 +228,20 @@ class BaseSecurityAgent(ABC):
         definitions = []
 
         for tool in tools:
-            definitions.append({
-                "type": "function",
-                "function": {
-                    "name": tool["name"],
-                    "description": tool["description"],
-                    "parameters": {
-                        "type": "object",
-                        "properties": tool.get("parameters", {}),
-                        "required": tool.get("required", []),
-                    }
+            definitions.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": tool["name"],
+                        "description": tool["description"],
+                        "parameters": {
+                            "type": "object",
+                            "properties": tool.get("parameters", {}),
+                            "required": tool.get("required", []),
+                        },
+                    },
                 }
-            })
+            )
 
         return definitions
 
@@ -254,7 +259,7 @@ class BaseSecurityAgent(ABC):
             )
 
             # Track token usage
-            if hasattr(response, 'usage') and response.usage:
+            if hasattr(response, "usage") and response.usage:
                 self.tokens_used += response.usage.total_tokens
 
             return response
@@ -288,7 +293,7 @@ class BaseSecurityAgent(ABC):
             return findings
 
         # Strategy 1: XML-style finding blocks
-        finding_pattern = r'<finding>(.*?)</finding>'
+        finding_pattern = r"<finding>(.*?)</finding>"
         matches = re.findall(finding_pattern, content, re.DOTALL)
         for match in matches:
             try:
@@ -330,9 +335,28 @@ class BaseSecurityAgent(ABC):
 
         # Severity keywords mapping
         severity_keywords = {
-            Severity.CRITICAL: ["critical", "rce", "remote code execution", "command injection", "sql injection"],
-            Severity.HIGH: ["high", "xss", "cross-site scripting", "authentication bypass", "ssrf", "idor"],
-            Severity.MEDIUM: ["medium", "csrf", "information disclosure", "directory traversal", "path traversal"],
+            Severity.CRITICAL: [
+                "critical",
+                "rce",
+                "remote code execution",
+                "command injection",
+                "sql injection",
+            ],
+            Severity.HIGH: [
+                "high",
+                "xss",
+                "cross-site scripting",
+                "authentication bypass",
+                "ssrf",
+                "idor",
+            ],
+            Severity.MEDIUM: [
+                "medium",
+                "csrf",
+                "information disclosure",
+                "directory traversal",
+                "path traversal",
+            ],
             Severity.LOW: ["low", "information leakage", "verbose error", "missing header"],
             Severity.INFO: ["info", "informational", "note", "observation"],
         }
@@ -340,20 +364,35 @@ class BaseSecurityAgent(ABC):
         # Pattern 1: Markdown headers with vulnerability names
         # e.g., "### SQL Injection Vulnerability" or "## CRITICAL: XSS Found"
         header_patterns = [
-            r'#{1,4}\s*(?:CRITICAL|HIGH|MEDIUM|LOW|INFO)?:?\s*(.+?)(?:\n|$)',
-            r'\*\*(?:Vulnerability|Security Issue|Finding|Risk)(?:\s*Found)?:?\s*(.+?)\*\*',
-            r'(?:Vulnerability|Issue|Finding|Risk)\s*(?:Found|Detected|Identified):\s*(.+?)(?:\n|$)',
+            r"#{1,4}\s*(?:CRITICAL|HIGH|MEDIUM|LOW|INFO)?:?\s*(.+?)(?:\n|$)",
+            r"\*\*(?:Vulnerability|Security Issue|Finding|Risk)(?:\s*Found)?:?\s*(.+?)\*\*",
+            r"(?:Vulnerability|Issue|Finding|Risk)\s*(?:Found|Detected|Identified):\s*(.+?)(?:\n|$)",
         ]
 
         # Pattern 2: Vulnerability indicators with context
         vuln_indicators = [
-            (r'(?:found|detected|identified|discovered)\s+(?:a\s+)?(?:potential\s+)?(.+?(?:vulnerability|injection|xss|csrf|ssrf|idor|exposure))', None),
-            (r'(?:vulnerable to|susceptible to)\s+(.+?)(?:\.|,|\n|$)', None),
-            (r'(?:missing|absent|no)\s+(security header|https|authentication|authorization|rate limiting|input validation)', Severity.MEDIUM),
-            (r'(sql injection|xss|cross-site scripting|command injection|code injection)\s+(?:vulnerability|found|detected)', Severity.HIGH),
-            (r'(sensitive data|credentials|api key|password|token)\s+(?:exposed|leaked|visible|in plain text)', Severity.HIGH),
-            (r'(open redirect|unvalidated redirect)', Severity.MEDIUM),
-            (r'(directory listing|path traversal|lfi|rfi)\s+(?:enabled|possible|detected)', Severity.MEDIUM),
+            (
+                r"(?:found|detected|identified|discovered)\s+(?:a\s+)?(?:potential\s+)?(.+?(?:vulnerability|injection|xss|csrf|ssrf|idor|exposure))",
+                None,
+            ),
+            (r"(?:vulnerable to|susceptible to)\s+(.+?)(?:\.|,|\n|$)", None),
+            (
+                r"(?:missing|absent|no)\s+(security header|https|authentication|authorization|rate limiting|input validation)",
+                Severity.MEDIUM,
+            ),
+            (
+                r"(sql injection|xss|cross-site scripting|command injection|code injection)\s+(?:vulnerability|found|detected)",
+                Severity.HIGH,
+            ),
+            (
+                r"(sensitive data|credentials|api key|password|token)\s+(?:exposed|leaked|visible|in plain text)",
+                Severity.HIGH,
+            ),
+            (r"(open redirect|unvalidated redirect)", Severity.MEDIUM),
+            (
+                r"(directory listing|path traversal|lfi|rfi)\s+(?:enabled|possible|detected)",
+                Severity.MEDIUM,
+            ),
         ]
 
         content_lower = content.lower()
@@ -364,13 +403,24 @@ class BaseSecurityAgent(ABC):
                 title = match.group(1).strip()
                 if len(title) > 5 and len(title) < 200:  # Reasonable title length
                     # Skip if it's just a section header, not a vulnerability
-                    if not any(skip in title.lower() for skip in ["phase", "step", "next", "now", "testing", "scanning", "checking"]):
+                    if not any(
+                        skip in title.lower()
+                        for skip in [
+                            "phase",
+                            "step",
+                            "next",
+                            "now",
+                            "testing",
+                            "scanning",
+                            "checking",
+                        ]
+                    ):
                         severity = self._detect_severity(title, severity_keywords)
                         finding = Finding(
                             title=title,
                             severity=severity,
                             category=self._detect_category(title),
-                            description=f"Detected during automated security testing",
+                            description="Detected during automated security testing",
                             evidence=match.group(0)[:500],
                             location="Target application",
                         )
@@ -381,7 +431,9 @@ class BaseSecurityAgent(ABC):
             for match in re.finditer(pattern, content, re.IGNORECASE):
                 vuln_name = match.group(1).strip()
                 if len(vuln_name) > 3 and len(vuln_name) < 150:
-                    severity = default_severity or self._detect_severity(vuln_name, severity_keywords)
+                    severity = default_severity or self._detect_severity(
+                        vuln_name, severity_keywords
+                    )
                     finding = Finding(
                         title=vuln_name.title(),
                         severity=severity,
@@ -406,11 +458,31 @@ class BaseSecurityAgent(ABC):
         """Detect vulnerability category from text."""
         text_lower = text.lower()
         category_keywords = {
-            VulnCategory.INJECTION: ["injection", "sqli", "command", "code injection", "xss", "scripting"],
-            VulnCategory.BROKEN_AUTH: ["authentication", "auth", "password", "credential", "session"],
+            VulnCategory.INJECTION: [
+                "injection",
+                "sqli",
+                "command",
+                "code injection",
+                "xss",
+                "scripting",
+            ],
+            VulnCategory.BROKEN_AUTH: [
+                "authentication",
+                "auth",
+                "password",
+                "credential",
+                "session",
+            ],
             VulnCategory.SENSITIVE_DATA: ["sensitive", "exposure", "leak", "disclosure", "crypto"],
             VulnCategory.BROKEN_ACCESS: ["access control", "idor", "authorization", "privilege"],
-            VulnCategory.SECURITY_MISCONFIG: ["misconfiguration", "config", "header", "cors", "tls", "ssl"],
+            VulnCategory.SECURITY_MISCONFIG: [
+                "misconfiguration",
+                "config",
+                "header",
+                "cors",
+                "tls",
+                "ssl",
+            ],
             VulnCategory.SSRF: ["ssrf", "server-side request"],
         }
         for category, keywords in category_keywords.items():
@@ -437,8 +509,9 @@ class BaseSecurityAgent(ABC):
 
     def _parse_finding_xml(self, xml_content: str) -> Optional[Finding]:
         """Parse an XML-formatted finding."""
+
         def extract_tag(tag: str, content: str) -> str:
-            pattern = f'<{tag}>(.*?)</{tag}>'
+            pattern = f"<{tag}>(.*?)</{tag}>"
             match = re.search(pattern, content, re.DOTALL)
             return match.group(1).strip() if match else ""
 
@@ -486,17 +559,11 @@ class BaseSecurityAgent(ABC):
         errors = []
 
         # Initialize with system prompt
-        self.messages.append({
-            "role": "system",
-            "content": self.get_system_prompt()
-        })
+        self.messages.append({"role": "system", "content": self.get_system_prompt()})
 
         # Add initial user message if provided
         if initial_message:
-            self.messages.append({
-                "role": "user",
-                "content": initial_message
-            })
+            self.messages.append({"role": "user", "content": initial_message})
 
         try:
             while self.step_count < self.config.max_steps and not self._stop_requested:
@@ -521,7 +588,7 @@ class BaseSecurityAgent(ABC):
                 self.findings.extend(new_findings)
 
                 # Check for tool calls
-                tool_calls = getattr(message, 'tool_calls', None)
+                tool_calls = getattr(message, "tool_calls", None)
 
                 # Add assistant response to history
                 # IMPORTANT: Include tool_calls in the message if present,
@@ -540,7 +607,7 @@ class BaseSecurityAgent(ABC):
                             "function": {
                                 "name": tc.function.name,
                                 "arguments": tc.function.arguments,
-                            }
+                            },
                         }
                         for tc in tool_calls
                     ]
@@ -569,11 +636,13 @@ class BaseSecurityAgent(ABC):
                     result = await self._execute_tool(tool_name, arguments)
 
                     # Add tool result to messages
-                    self.messages.append({
-                        "role": "tool",
-                        "tool_call_id": tool_call.id,
-                        "content": result,
-                    })
+                    self.messages.append(
+                        {
+                            "role": "tool",
+                            "tool_call_id": tool_call.id,
+                            "content": result,
+                        }
+                    )
 
         except Exception as e:
             logger.error("Agent execution failed", error=str(e))
@@ -590,7 +659,9 @@ class BaseSecurityAgent(ABC):
                     if finding.title.lower() not in existing_titles:
                         self.findings.append(finding)
                         existing_titles.add(finding.title.lower())
-                logger.info(f"Extracted {len(additional_findings)} additional findings from message history")
+                logger.info(
+                    f"Extracted {len(additional_findings)} additional findings from message history"
+                )
         except Exception as ex:
             logger.warning(f"Failed to extract additional findings: {ex}")
 

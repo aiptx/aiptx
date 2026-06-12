@@ -6,12 +6,11 @@ vulnerabilities.
 """
 
 from aipt_v2.business_logic.patterns.base import (
-    TestPattern,
-    TestCase,
     PatternCategory,
+    TestCase,
+    TestPattern,
     TestSeverity,
 )
-
 
 WORKFLOW_PATTERNS = [
     TestPattern(
@@ -23,9 +22,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-841", "CWE-639"],
         owasp_category="Business Logic Errors",
         remediation="Implement server-side workflow state machine, validate all required steps completed",
-        endpoint_patterns=[
-            r"/checkout", r"/complete", r"/confirm", r"/order"
-        ],
+        endpoint_patterns=[r"/checkout", r"/complete", r"/confirm", r"/order"],
         applicable_to=["e-commerce"],
         test_cases=[
             TestCase(
@@ -36,7 +33,7 @@ WORKFLOW_PATTERNS = [
                 body_template={"cart_id": "{{cart_id}}", "confirm": True},
                 setup_steps=["Add item to cart", "Skip shipping", "Skip payment"],
                 success_indicators=["order_id", "confirmed"],
-                failure_indicators=["step", "required", "incomplete"]
+                failure_indicators=["step", "required", "incomplete"],
             ),
             TestCase(
                 name="Skip Payment Step",
@@ -45,11 +42,10 @@ WORKFLOW_PATTERNS = [
                 body_template={"cart_id": "{{cart_id}}", "step": "complete"},
                 setup_steps=["Add item", "Set shipping"],
                 success_indicators=["order_id"],
-                failure_indicators=["payment required"]
-            )
-        ]
+                failure_indicators=["payment required"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="FLOW-002",
         name="Verification Bypass",
@@ -59,9 +55,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-841", "CWE-287"],
         owasp_category="Authentication Flaws",
         remediation="Enforce verification status server-side before allowing protected actions",
-        endpoint_patterns=[
-            r"/verify", r"/confirm", r"/activate", r"/profile"
-        ],
+        endpoint_patterns=[r"/verify", r"/confirm", r"/activate", r"/profile"],
         applicable_to=["authentication", "onboarding"],
         test_cases=[
             TestCase(
@@ -71,7 +65,7 @@ WORKFLOW_PATTERNS = [
                 endpoint_pattern=r"/profile|/settings|/account",
                 body_template={"action": "update", "verified": True},
                 success_indicators=["success", "updated"],
-                failure_indicators=["verify email", "not verified"]
+                failure_indicators=["verify email", "not verified"],
             ),
             TestCase(
                 name="Direct Activation",
@@ -80,11 +74,10 @@ WORKFLOW_PATTERNS = [
                 endpoint_pattern=r"/activate",
                 body_template={"user_id": "{{user_id}}", "status": "active"},
                 success_indicators=["activated"],
-                failure_indicators=["verification required"]
-            )
-        ]
+                failure_indicators=["verification required"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="FLOW-003",
         name="State Tampering",
@@ -94,9 +87,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-841", "CWE-20"],
         owasp_category="Business Logic Errors",
         remediation="Store workflow state server-side only, validate state transitions",
-        endpoint_patterns=[
-            r"/order", r"/status", r"/workflow", r"/state"
-        ],
+        endpoint_patterns=[r"/order", r"/status", r"/workflow", r"/state"],
         applicable_to=["e-commerce", "workflow"],
         test_cases=[
             TestCase(
@@ -106,7 +97,7 @@ WORKFLOW_PATTERNS = [
                 body_template={"order_id": "{{order_id}}", "status": "shipped"},
                 manipulation={"status": ["approved", "shipped", "delivered", "refunded"]},
                 success_indicators=["updated", "success"],
-                failure_indicators=["invalid transition", "not allowed"]
+                failure_indicators=["invalid transition", "not allowed"],
             ),
             TestCase(
                 name="Approval Bypass",
@@ -114,11 +105,10 @@ WORKFLOW_PATTERNS = [
                 method="POST",
                 body_template={"request_id": "{{id}}", "approved": True},
                 success_indicators=["approved"],
-                failure_indicators=["pending", "requires approval"]
-            )
-        ]
+                failure_indicators=["pending", "requires approval"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="FLOW-004",
         name="Time-Based Restriction Bypass",
@@ -128,9 +118,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-841"],
         owasp_category="Business Logic Errors",
         remediation="Validate timestamps server-side, don't trust client time",
-        endpoint_patterns=[
-            r"/submit", r"/action", r"/deadline"
-        ],
+        endpoint_patterns=[r"/submit", r"/action", r"/deadline"],
         applicable_to=["voting", "auctions", "forms"],
         test_cases=[
             TestCase(
@@ -140,7 +128,7 @@ WORKFLOW_PATTERNS = [
                 body_template={"submission_time": "{{past_time}}", "data": "test"},
                 manipulation={"submission_time": ["2020-01-01T00:00:00Z"]},
                 success_indicators=["submitted", "accepted"],
-                failure_indicators=["deadline", "closed", "expired"]
+                failure_indicators=["deadline", "closed", "expired"],
             ),
             TestCase(
                 name="Future Date Access",
@@ -148,11 +136,10 @@ WORKFLOW_PATTERNS = [
                 method="GET",
                 body_template={"date": "{{future_date}}"},
                 success_indicators=["content"],
-                failure_indicators=["not yet available"]
-            )
-        ]
+                failure_indicators=["not yet available"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="FLOW-005",
         name="Multi-Use Single-Use Token",
@@ -162,9 +149,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-613", "CWE-384"],
         owasp_category="Session Management",
         remediation="Invalidate tokens immediately upon first use, use atomic operations",
-        endpoint_patterns=[
-            r"/invite", r"/token", r"/link", r"/redeem"
-        ],
+        endpoint_patterns=[r"/invite", r"/token", r"/link", r"/redeem"],
         applicable_to=["invitations", "promotions"],
         test_cases=[
             TestCase(
@@ -175,7 +160,7 @@ WORKFLOW_PATTERNS = [
                 body_template={"token": "{{invite_token}}"},
                 concurrent_requests=3,
                 success_indicators=["accepted", "joined"],
-                failure_indicators=["already_used", "invalid", "expired"]
+                failure_indicators=["already_used", "invalid", "expired"],
             ),
             TestCase(
                 name="Download Link Reuse",
@@ -184,11 +169,10 @@ WORKFLOW_PATTERNS = [
                 endpoint_pattern=r"/download",
                 body_template={"token": "{{download_token}}"},
                 success_indicators=["content-disposition"],
-                failure_indicators=["expired", "invalid"]
-            )
-        ]
+                failure_indicators=["expired", "invalid"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="FLOW-006",
         name="Parameter Tampering for Flow Control",
@@ -198,9 +182,7 @@ WORKFLOW_PATTERNS = [
         cwe_ids=["CWE-472", "CWE-20"],
         owasp_category="Business Logic Errors",
         remediation="Don't expose workflow control in client-accessible parameters",
-        endpoint_patterns=[
-            r"/wizard", r"/step", r"/flow", r"/process"
-        ],
+        endpoint_patterns=[r"/wizard", r"/step", r"/flow", r"/process"],
         applicable_to=["onboarding", "forms"],
         test_cases=[
             TestCase(
@@ -210,7 +192,7 @@ WORKFLOW_PATTERNS = [
                 body_template={"step": 10, "data": "final"},
                 manipulation={"step": [5, 10, 99, -1]},
                 success_indicators=["completed", "success"],
-                failure_indicators=["invalid step", "out of order"]
+                failure_indicators=["invalid step", "out of order"],
             ),
             TestCase(
                 name="Progress Override",
@@ -218,8 +200,8 @@ WORKFLOW_PATTERNS = [
                 method="POST",
                 body_template={"progress": 100, "complete": True},
                 success_indicators=["completed"],
-                failure_indicators=["incomplete steps"]
-            )
-        ]
+                failure_indicators=["incomplete steps"],
+            ),
+        ],
     ),
 ]

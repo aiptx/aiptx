@@ -21,23 +21,22 @@ Benefits:
 - Generates canonical_findings.json for accurate analytics
 - Creates reports with Confirmed/Needs Review/Suppressed sections
 """
+
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Optional
 
+from .deduplicator import DeduplicationStats, Deduplicator
 from .normalizer import FindingsNormalizer, NormalizerResult
-from .deduplicator import Deduplicator, DeduplicationStats
-from .verification_engine import VerificationEngine
 from .persistence import (
     CanonicalFindings,
     PipelinePersistence,
-    save_findings_raw,
     save_canonical_findings,
 )
+from .verification_engine import VerificationEngine
 
 if TYPE_CHECKING:
     from ..orchestrator import Orchestrator
@@ -78,9 +77,7 @@ class PipelineIntegration:
         # Pipeline components
         self.normalizer = FindingsNormalizer()
         self.deduplicator = Deduplicator()
-        self.verification_engine = VerificationEngine(
-            max_concurrent=max_concurrent_verifications
-        )
+        self.verification_engine = VerificationEngine(max_concurrent=max_concurrent_verifications)
 
         # Results
         self.normalizer_result: Optional[NormalizerResult] = None
@@ -105,7 +102,9 @@ class PipelineIntegration:
         scan_id = self.orchestrator.timestamp
         target = self.orchestrator.domain
 
-        logger.info(f"Starting pipeline for {target} ({len(self.orchestrator.findings)} raw findings)")
+        logger.info(
+            f"Starting pipeline for {target} ({len(self.orchestrator.findings)} raw findings)"
+        )
 
         # Stage 1: Normalize findings
         logger.info("Stage 1: Normalizing findings...")
@@ -123,7 +122,9 @@ class PipelineIntegration:
         deduped_findings = self.deduplicator.deduplicate(self.normalizer_result.findings)
         self.dedup_stats = self.deduplicator.get_stats()
         after_dedup = len(deduped_findings)
-        logger.info(f"After deduplication: {after_dedup} findings ({total_raw - after_dedup} duplicates merged)")
+        logger.info(
+            f"After deduplication: {after_dedup} findings ({total_raw - after_dedup} duplicates merged)"
+        )
 
         # Stage 3: Verify (if enabled)
         if self.enable_verification:
@@ -145,14 +146,18 @@ class PipelineIntegration:
             total_raw=total_raw,
             after_dedup=after_dedup,
             tool_stats={
-                name: stats.__dict__ if hasattr(stats, '__dict__') else stats
+                name: stats.__dict__ if hasattr(stats, "__dict__") else stats
                 for name, stats in self.normalizer_result.tool_stats.items()
             },
-            scan_started_at=datetime.fromisoformat(
-                self.orchestrator.phase_results.get(
-                    list(self.orchestrator.phase_results.keys())[0]
-                ).started_at
-            ) if self.orchestrator.phase_results else None,
+            scan_started_at=(
+                datetime.fromisoformat(
+                    self.orchestrator.phase_results.get(
+                        list(self.orchestrator.phase_results.keys())[0]
+                    ).started_at
+                )
+                if self.orchestrator.phase_results
+                else None
+            ),
             scan_completed_at=datetime.now(timezone.utc),
         )
 
@@ -175,11 +180,11 @@ class PipelineIntegration:
         if not self.canonical:
             raise RuntimeError("Run run_pipeline() first")
 
-        from ..reports.generator import ReportGenerator, ReportConfig
+        from ..reports.generator import ReportConfig, ReportGenerator
 
         config = ReportConfig(
-            client_name=getattr(self.orchestrator.config, 'client_name', 'Client'),
-            project_name=getattr(self.orchestrator.config, 'project_name', 'Security Assessment'),
+            client_name=getattr(self.orchestrator.config, "client_name", "Client"),
+            project_name=getattr(self.orchestrator.config, "project_name", "Security Assessment"),
             output_dir=Path(self.orchestrator.output_dir) / "reports",
             formats=["html", "json", "markdown"],
             include_evidence=True,
@@ -198,18 +203,24 @@ class PipelineIntegration:
             "target": self.orchestrator.domain,
             "scan_id": self.orchestrator.timestamp,
             "pipeline": {
-                "total_raw": self.normalizer_result.total_raw_findings if self.normalizer_result else 0,
+                "total_raw": (
+                    self.normalizer_result.total_raw_findings if self.normalizer_result else 0
+                ),
                 "after_dedup": self.dedup_stats.total_output if self.dedup_stats else 0,
                 "duplicates_merged": self.dedup_stats.duplicates_merged if self.dedup_stats else 0,
             },
             "canonical": self.canonical.summary.to_dict() if self.canonical else {},
             "tool_stats": {
                 name: {
-                    "status": stats.status.value if hasattr(stats.status, 'value') else str(stats.status),
+                    "status": (
+                        stats.status.value if hasattr(stats.status, "value") else str(stats.status)
+                    ),
                     "findings": stats.finding_count,
                     "error": stats.error,
                 }
-                for name, stats in (self.normalizer_result.tool_stats.items() if self.normalizer_result else {})
+                for name, stats in (
+                    self.normalizer_result.tool_stats.items() if self.normalizer_result else {}
+                )
             },
             "reports": {fmt: str(path) for fmt, path in self.report_paths.items()},
         }
@@ -259,7 +270,7 @@ async def run_pipeline_standalone(
         total_raw=normalizer_result.total_raw_findings,
         after_dedup=len(deduped),
         tool_stats={
-            name: stats.__dict__ if hasattr(stats, '__dict__') else stats
+            name: stats.__dict__ if hasattr(stats, "__dict__") else stats
             for name, stats in normalizer_result.tool_stats.items()
         },
     )

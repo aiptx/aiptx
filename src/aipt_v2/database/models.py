@@ -9,16 +9,24 @@ Models:
 - Task: PTT task tracking
 """
 
-from datetime import datetime
-from typing import Optional
 from enum import Enum
 
 from sqlalchemy import (
-    Column, Integer, String, Text, DateTime,
-    ForeignKey, JSON, Boolean, Float, Enum as SQLEnum,
-    create_engine, Index
+    JSON,
+    Boolean,
+    Column,
+    DateTime,
 )
-from sqlalchemy.orm import relationship, declarative_base
+from sqlalchemy import Enum as SQLEnum
+from sqlalchemy import (
+    ForeignKey,
+    Index,
+    Integer,
+    String,
+    Text,
+    create_engine,
+)
+from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
 
 Base = declarative_base()
@@ -26,6 +34,7 @@ Base = declarative_base()
 
 class SeverityLevel(str, Enum):
     """Finding severity levels"""
+
     INFO = "info"
     LOW = "low"
     MEDIUM = "medium"
@@ -35,6 +44,7 @@ class SeverityLevel(str, Enum):
 
 class TaskStatus(str, Enum):
     """Task status values"""
+
     TODO = "to-do"
     IN_PROGRESS = "in-progress"
     COMPLETED = "completed"
@@ -43,6 +53,7 @@ class TaskStatus(str, Enum):
 
 class PhaseType(str, Enum):
     """Pentest phases"""
+
     RECON = "recon"
     ENUM = "enum"
     EXPLOIT = "exploit"
@@ -55,6 +66,7 @@ class Project(Base):
     Top-level project container.
     A project represents a complete pentest engagement.
     """
+
     __tablename__ = "projects"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -90,6 +102,7 @@ class Session(Base):
     Individual scan/attack session within a project.
     Tracks a single run of the agent.
     """
+
     __tablename__ = "sessions"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -130,6 +143,7 @@ class Finding(Base):
     """
     Discovered finding (vulnerability, service, credential, etc.)
     """
+
     __tablename__ = "findings"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
@@ -146,7 +160,9 @@ class Finding(Base):
     phase = Column(SQLEnum(PhaseType), nullable=True)
     tool = Column(String(100), nullable=True)  # Tool that found this
     raw_output = Column(Text, nullable=True)  # Original tool output
-    extra_data = Column(JSON, default=dict)  # Additional structured data (renamed from metadata - reserved in SQLAlchemy)
+    extra_data = Column(
+        JSON, default=dict
+    )  # Additional structured data (renamed from metadata - reserved in SQLAlchemy)
 
     # Verification
     verified = Column(Boolean, default=False)
@@ -191,6 +207,7 @@ class Task(Base):
     """
     PTT task for tracking pentest progress
     """
+
     __tablename__ = "tasks"
 
     id = Column(Integer, primary_key=True, autoincrement=True)

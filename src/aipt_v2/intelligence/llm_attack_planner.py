@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 class AttackPhase(str, Enum):
     """Phases of an attack plan."""
+
     RECONNAISSANCE = "reconnaissance"
     SCANNING = "scanning"
     ENUMERATION = "enumeration"
@@ -29,6 +30,7 @@ class AttackPhase(str, Enum):
 
 class AttackObjective(str, Enum):
     """Objectives for attack planning."""
+
     FULL_COMPROMISE = "full_compromise"
     DATA_EXFILTRATION = "data_exfiltration"
     PRIVILEGE_ESCALATION = "privilege_escalation"
@@ -41,6 +43,7 @@ class AttackObjective(str, Enum):
 @dataclass
 class AttackStep:
     """A single step in an attack plan."""
+
     phase: AttackPhase
     action: str
     tool: str
@@ -71,6 +74,7 @@ class AttackStep:
 @dataclass
 class AttackPlan:
     """A complete attack plan."""
+
     objective: AttackObjective
     target: str
     steps: list[AttackStep] = field(default_factory=list)
@@ -284,16 +288,18 @@ class LLMAttackPlanner:
 
         for vuln in sorted_vulns[:3]:  # Top 3 vulnerabilities
             vuln_type = vuln.get("type", "unknown")
-            steps.append(AttackStep(
-                phase=AttackPhase.EXPLOITATION,
-                action=f"Exploit {vuln_type}",
-                tool=self._get_exploit_tool(vuln_type),
-                target=vuln.get("url", ""),
-                parameters=vuln.get("parameters", {}),
-                expected_outcome=f"Successful {vuln_type} exploitation",
-                fallback_actions=self._get_fallback_actions(vuln_type),
-                risk_level=vuln.get("risk", "medium"),
-            ))
+            steps.append(
+                AttackStep(
+                    phase=AttackPhase.EXPLOITATION,
+                    action=f"Exploit {vuln_type}",
+                    tool=self._get_exploit_tool(vuln_type),
+                    target=vuln.get("url", ""),
+                    parameters=vuln.get("parameters", {}),
+                    expected_outcome=f"Successful {vuln_type} exploitation",
+                    fallback_actions=self._get_fallback_actions(vuln_type),
+                    risk_level=vuln.get("risk", "medium"),
+                )
+            )
 
         return steps
 
@@ -432,10 +438,7 @@ class LLMAttackPlanner:
         max_risk_idx = risk_levels.index(max_risk)
 
         # Filter steps by risk
-        plan.steps = [
-            s for s in plan.steps
-            if risk_levels.index(s.risk_level) <= max_risk_idx
-        ]
+        plan.steps = [s for s in plan.steps if risk_levels.index(s.risk_level) <= max_risk_idx]
 
         return plan
 
@@ -450,10 +453,7 @@ class LLMAttackPlanner:
             AttackPhase.LATERAL_MOVEMENT: 90,
         }
 
-        total_minutes = sum(
-            step_durations.get(s.phase, 30)
-            for s in plan.steps
-        )
+        total_minutes = sum(step_durations.get(s.phase, 30) for s in plan.steps)
 
         if total_minutes < 60:
             return f"{total_minutes} minutes"

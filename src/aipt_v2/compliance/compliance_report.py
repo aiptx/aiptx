@@ -18,17 +18,18 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List
 
 from aipt_v2.compliance.framework_mapper import ComplianceMapper, ComplianceMapping
-from aipt_v2.compliance.owasp_mapping import OWASPMapper, OWASP_TOP_10
-from aipt_v2.compliance.pci_mapping import PCIMapper, PCI_DSS_REQUIREMENTS
-from aipt_v2.compliance.nist_mapping import NISTMapper, NIST_CONTROLS
+from aipt_v2.compliance.nist_mapping import NIST_CONTROLS, NISTMapper
+from aipt_v2.compliance.owasp_mapping import OWASPMapper
+from aipt_v2.compliance.pci_mapping import PCI_DSS_REQUIREMENTS, PCIMapper
 
 
 @dataclass
 class ComplianceScore:
     """Compliance score for a framework."""
+
     framework: str
     total_controls: int
     compliant_controls: int
@@ -40,6 +41,7 @@ class ComplianceScore:
 @dataclass
 class ComplianceReport:
     """Complete compliance report."""
+
     generated_at: str
     target: str
     frameworks: List[str]
@@ -67,10 +69,7 @@ class ComplianceReportGenerator:
         self.nist_mapper = NISTMapper()
 
     def generate(
-        self,
-        findings: List[Dict],
-        frameworks: List[str] = None,
-        target: str = ""
+        self, findings: List[Dict], frameworks: List[str] = None, target: str = ""
     ) -> ComplianceReport:
         """
         Generate compliance report from findings.
@@ -114,16 +113,11 @@ class ComplianceReportGenerator:
             findings_by_framework=findings_by_framework,
             executive_summary=executive_summary,
             remediation_priorities=priorities,
-            metadata={
-                "generator": "AIPTX Compliance Report Generator",
-                "version": "1.0"
-            }
+            metadata={"generator": "AIPTX Compliance Report Generator", "version": "1.0"},
         )
 
     def _group_by_framework(
-        self,
-        mappings: List[ComplianceMapping],
-        frameworks: List[str]
+        self, mappings: List[ComplianceMapping], frameworks: List[str]
     ) -> Dict[str, List[ComplianceMapping]]:
         """Group mappings by framework."""
         grouped = {fw: [] for fw in frameworks}
@@ -136,29 +130,36 @@ class ComplianceReportGenerator:
         return grouped
 
     def _calculate_score(
-        self,
-        framework: str,
-        mappings: List[ComplianceMapping]
+        self, framework: str, mappings: List[ComplianceMapping]
     ) -> ComplianceScore:
         """Calculate compliance score for a framework."""
         if framework == "owasp":
             total_controls = 10  # A01-A10
-            controls_with_findings = len(set(
-                m.frameworks.get("owasp", type("", (), {"category_id": ""})()).category_id
-                for m in mappings if "owasp" in m.frameworks
-            ))
+            controls_with_findings = len(
+                set(
+                    m.frameworks.get("owasp", type("", (), {"category_id": ""})()).category_id
+                    for m in mappings
+                    if "owasp" in m.frameworks
+                )
+            )
         elif framework == "pci":
             total_controls = len(PCI_DSS_REQUIREMENTS)
-            controls_with_findings = len(set(
-                m.frameworks.get("pci_dss", type("", (), {"category_id": ""})()).category_id
-                for m in mappings if "pci_dss" in m.frameworks
-            ))
+            controls_with_findings = len(
+                set(
+                    m.frameworks.get("pci_dss", type("", (), {"category_id": ""})()).category_id
+                    for m in mappings
+                    if "pci_dss" in m.frameworks
+                )
+            )
         elif framework == "nist":
             total_controls = len(NIST_CONTROLS)
-            controls_with_findings = len(set(
-                m.frameworks.get("nist", type("", (), {"category_id": ""})()).category_id
-                for m in mappings if "nist" in m.frameworks
-            ))
+            controls_with_findings = len(
+                set(
+                    m.frameworks.get("nist", type("", (), {"category_id": ""})()).category_id
+                    for m in mappings
+                    if "nist" in m.frameworks
+                )
+            )
         else:
             total_controls = 100
             controls_with_findings = len(mappings)
@@ -182,7 +183,7 @@ class ComplianceReportGenerator:
             compliant_controls=compliant,
             non_compliant_controls=controls_with_findings,
             score_percentage=round(score_pct, 1),
-            risk_level=risk_level
+            risk_level=risk_level,
         )
 
     def _generate_executive_summary(
@@ -190,7 +191,7 @@ class ComplianceReportGenerator:
         target: str,
         scores: Dict[str, ComplianceScore],
         total_findings: int,
-        mapped_findings: int
+        mapped_findings: int,
     ) -> str:
         """Generate executive summary text."""
         summary_parts = [
@@ -213,12 +214,9 @@ class ComplianceReportGenerator:
         # Overall assessment
         avg_score = sum(s.score_percentage for s in scores.values()) / len(scores) if scores else 0
 
-        summary_parts.extend([
-            "",
-            f"Overall Compliance Score: {avg_score:.1f}%",
-            "",
-            "Key Observations:"
-        ])
+        summary_parts.extend(
+            ["", f"Overall Compliance Score: {avg_score:.1f}%", "", "Key Observations:"]
+        )
 
         # Add key observations based on scores
         for fw, score in scores.items():
@@ -230,10 +228,7 @@ class ComplianceReportGenerator:
 
         return "\n".join(summary_parts)
 
-    def _prioritize_remediation(
-        self,
-        mappings: List[ComplianceMapping]
-    ) -> List[Dict]:
+    def _prioritize_remediation(self, mappings: List[ComplianceMapping]) -> List[Dict]:
         """Prioritize remediation based on risk and compliance impact."""
         priorities = []
 
@@ -250,15 +245,17 @@ class ComplianceReportGenerator:
             elif mapping.severity == "high":
                 priority_score += 1
 
-            priorities.append({
-                "cwe_id": mapping.cwe_id,
-                "cwe_name": mapping.cwe_name,
-                "severity": mapping.severity,
-                "risk_score": mapping.risk_score,
-                "priority_score": priority_score,
-                "frameworks_affected": list(mapping.frameworks.keys()),
-                "remediation_priority": mapping.remediation_priority
-            })
+            priorities.append(
+                {
+                    "cwe_id": mapping.cwe_id,
+                    "cwe_name": mapping.cwe_name,
+                    "severity": mapping.severity,
+                    "risk_score": mapping.risk_score,
+                    "priority_score": priority_score,
+                    "frameworks_affected": list(mapping.frameworks.keys()),
+                    "remediation_priority": mapping.remediation_priority,
+                }
+            )
 
         # Sort by priority score descending
         priorities.sort(key=lambda x: x["priority_score"], reverse=True)
@@ -361,7 +358,7 @@ class ComplianceReportGenerator:
 """
             for m in mappings[:10]:
                 cat = m.frameworks.get(fw, m.frameworks.get(f"{fw}_dss", {}))
-                cat_id = getattr(cat, 'category_id', 'N/A') if cat else 'N/A'
+                cat_id = getattr(cat, "category_id", "N/A") if cat else "N/A"
                 html += f"""
         <tr>
             <td>{m.cwe_id}</td>
@@ -382,29 +379,28 @@ class ComplianceReportGenerator:
 
     def to_json(self, report: ComplianceReport) -> str:
         """Convert report to JSON format."""
+
         def serialize(obj):
             if hasattr(obj, "__dict__"):
                 return obj.__dict__
             return str(obj)
 
-        return json.dumps({
-            "generated_at": report.generated_at,
-            "target": report.target,
-            "frameworks": report.frameworks,
-            "total_findings": report.total_findings,
-            "mapped_findings": report.mapped_findings,
-            "scores": {k: serialize(v) for k, v in report.scores.items()},
-            "executive_summary": report.executive_summary,
-            "remediation_priorities": report.remediation_priorities,
-            "metadata": report.metadata
-        }, indent=2)
+        return json.dumps(
+            {
+                "generated_at": report.generated_at,
+                "target": report.target,
+                "frameworks": report.frameworks,
+                "total_findings": report.total_findings,
+                "mapped_findings": report.mapped_findings,
+                "scores": {k: serialize(v) for k, v in report.scores.items()},
+                "executive_summary": report.executive_summary,
+                "remediation_priorities": report.remediation_priorities,
+                "metadata": report.metadata,
+            },
+            indent=2,
+        )
 
-    def save(
-        self,
-        report: ComplianceReport,
-        output_path: str,
-        format: str = "html"
-    ):
+    def save(self, report: ComplianceReport, output_path: str, format: str = "html"):
         """Save report to file."""
         path = Path(output_path)
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -425,7 +421,7 @@ def generate_compliance_report(
     frameworks: List[str] = None,
     target: str = "",
     output_format: str = "html",
-    output_path: str = None
+    output_path: str = None,
 ) -> ComplianceReport:
     """
     Generate compliance report from findings.

@@ -21,7 +21,7 @@ import json
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
 from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
@@ -30,6 +30,7 @@ from aipt_v2.tools.active_directory.ad_config import ADConfig, get_ad_config
 @dataclass
 class BloodHoundResult:
     """Result of BloodHound collection."""
+
     domain: str
     status: str
     started_at: str
@@ -45,6 +46,7 @@ class BloodHoundResult:
 @dataclass
 class BloodHoundConfig:
     """BloodHound collection configuration."""
+
     # Collection methods
     collect_all: bool = True
     collect_users: bool = True
@@ -84,13 +86,11 @@ class BloodHoundWrapper:
         "acl": "ACL enumeration",
         "trusts": "Trust enumeration",
         "gpo": "GPO enumeration",
-        "container": "Container enumeration"
+        "container": "Container enumeration",
     }
 
     def __init__(
-        self,
-        ad_config: Optional[ADConfig] = None,
-        bh_config: Optional[BloodHoundConfig] = None
+        self, ad_config: Optional[ADConfig] = None, bh_config: Optional[BloodHoundConfig] = None
     ):
         """
         Initialize BloodHound wrapper.
@@ -113,7 +113,7 @@ class BloodHoundWrapper:
             process = await asyncio.create_subprocess_shell(
                 "bloodhound-python --help",
                 stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                stderr=asyncio.subprocess.PIPE,
             )
             await process.communicate()
             self._installed = process.returncode == 0
@@ -200,8 +200,7 @@ class BloodHoundWrapper:
         """
         if not await self.check_installed():
             raise RuntimeError(
-                "bloodhound-python is not installed. "
-                "Install with: pip install bloodhound"
+                "bloodhound-python is not installed. " "Install with: pip install bloodhound"
             )
 
         started_at = datetime.now(timezone.utc).isoformat()
@@ -211,16 +210,11 @@ class BloodHoundWrapper:
         print(f"[*] Running: {' '.join(cmd)}")
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
             raise TimeoutError(f"BloodHound collection timed out after {timeout}s")
@@ -278,20 +272,13 @@ class BloodHoundWrapper:
             metadata={
                 "return_code": process.returncode,
                 "output": stdout.decode()[:1000],
-                "errors": stderr.decode() if process.returncode != 0 else ""
-            }
+                "errors": stderr.decode() if process.returncode != 0 else "",
+            },
         )
 
     def _parse_statistics(self, output: str) -> Dict[str, int]:
         """Parse collection statistics from output."""
-        stats = {
-            "users": 0,
-            "groups": 0,
-            "computers": 0,
-            "sessions": 0,
-            "acls": 0,
-            "trusts": 0
-        }
+        stats = {"users": 0, "groups": 0, "computers": 0, "sessions": 0, "acls": 0, "trusts": 0}
 
         import re
 
@@ -302,7 +289,7 @@ class BloodHoundWrapper:
             "computers": r"(\d+)\s+computers",
             "sessions": r"(\d+)\s+sessions",
             "acls": r"(\d+)\s+acls?",
-            "trusts": r"(\d+)\s+trusts?"
+            "trusts": r"(\d+)\s+trusts?",
         }
 
         for stat_name, pattern in patterns.items():
@@ -319,14 +306,7 @@ class BloodHoundWrapper:
         Returns:
             Dict with parsed data by type
         """
-        data = {
-            "users": [],
-            "groups": [],
-            "computers": [],
-            "domains": [],
-            "gpos": [],
-            "ous": []
-        }
+        data = {"users": [], "groups": [], "computers": [], "domains": [], "gpos": [], "ous": []}
 
         for file_path in self.output_files:
             if not file_path.endswith(".json"):
@@ -375,34 +355,40 @@ class BloodHoundWrapper:
             if "DOMAIN ADMINS" in name.upper():
                 members = group.get("Members", [])
                 for member in members:
-                    targets.append({
-                        "type": "user",
-                        "name": member.get("MemberId", ""),
-                        "reason": "Domain Admin member",
-                        "priority": "critical"
-                    })
+                    targets.append(
+                        {
+                            "type": "user",
+                            "name": member.get("MemberId", ""),
+                            "reason": "Domain Admin member",
+                            "priority": "critical",
+                        }
+                    )
 
         # Look for computers with unconstrained delegation
         for computer in data.get("computers", []):
             props = computer.get("Properties", {})
             if props.get("unconstraineddelegation", False):
-                targets.append({
-                    "type": "computer",
-                    "name": props.get("name", ""),
-                    "reason": "Unconstrained delegation",
-                    "priority": "high"
-                })
+                targets.append(
+                    {
+                        "type": "computer",
+                        "name": props.get("name", ""),
+                        "reason": "Unconstrained delegation",
+                        "priority": "high",
+                    }
+                )
 
         # Look for users with admincount
         for user in data.get("users", []):
             props = user.get("Properties", {})
             if props.get("admincount", False):
-                targets.append({
-                    "type": "user",
-                    "name": props.get("name", ""),
-                    "reason": "Admin count set",
-                    "priority": "medium"
-                })
+                targets.append(
+                    {
+                        "type": "user",
+                        "name": props.get("name", ""),
+                        "reason": "Admin count set",
+                        "priority": "medium",
+                    }
+                )
 
         return targets
 
@@ -415,7 +401,7 @@ async def run_bloodhound(
     password: str,
     output_dir: str = "./bloodhound_output",
     collect_all: bool = True,
-    **kwargs
+    **kwargs,
 ) -> BloodHoundResult:
     """
     Quick BloodHound collection.
@@ -431,18 +417,9 @@ async def run_bloodhound(
     Returns:
         BloodHoundResult
     """
-    ad_config = get_ad_config(
-        domain=domain,
-        dc_ip=dc_ip,
-        username=username,
-        password=password
-    )
+    ad_config = get_ad_config(domain=domain, dc_ip=dc_ip, username=username, password=password)
 
-    bh_config = BloodHoundConfig(
-        collect_all=collect_all,
-        output_dir=output_dir,
-        compress=True
-    )
+    bh_config = BloodHoundConfig(collect_all=collect_all, output_dir=output_dir, compress=True)
 
     wrapper = BloodHoundWrapper(ad_config, bh_config)
     return await wrapper.collect()

@@ -9,14 +9,15 @@ Graph-based storage and analysis of security findings:
 
 This provides a structured way to understand relationships between findings.
 """
+
 from __future__ import annotations
 
 import json
 import logging
+from collections import defaultdict
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Optional
-from collections import defaultdict
 
 from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
 
@@ -76,6 +77,7 @@ VULN_TO_MITRE = {
 @dataclass
 class GraphNode:
     """A node in the security knowledge graph."""
+
     node_id: str
     node_type: str  # "finding", "target", "technique", "asset"
     data: dict[str, Any]
@@ -86,6 +88,7 @@ class GraphNode:
 @dataclass
 class GraphEdge:
     """An edge connecting two nodes in the graph."""
+
     source_id: str
     target_id: str
     relation: str  # "has_vulnerability", "leads_to", "uses_technique", etc.
@@ -96,6 +99,7 @@ class GraphEdge:
 @dataclass
 class AttackPath:
     """A path through the graph representing an attack chain."""
+
     nodes: list[GraphNode]
     edges: list[GraphEdge]
     total_weight: float
@@ -186,12 +190,14 @@ class SecurityKnowledgeGraph:
                 self._add_node(target_node)
 
             # Connect finding to target
-            self._add_edge(GraphEdge(
-                source_id=target_node_id,
-                target_id=finding_id,
-                relation="has_vulnerability",
-                weight=self._severity_to_weight(finding.severity),
-            ))
+            self._add_edge(
+                GraphEdge(
+                    source_id=target_node_id,
+                    target_id=finding_id,
+                    relation="has_vulnerability",
+                    weight=self._severity_to_weight(finding.severity),
+                )
+            )
 
         # Create MITRE technique node if mapped
         mitre_info = VULN_TO_MITRE.get(finding.vuln_type)
@@ -206,11 +212,13 @@ class SecurityKnowledgeGraph:
                 self._add_node(technique_node)
 
             # Connect finding to technique
-            self._add_edge(GraphEdge(
-                source_id=finding_id,
-                target_id=technique_id,
-                relation="uses_technique",
-            ))
+            self._add_edge(
+                GraphEdge(
+                    source_id=finding_id,
+                    target_id=technique_id,
+                    relation="uses_technique",
+                )
+            )
 
         # Add potential chain edges based on vulnerability type
         self._add_chain_edges(finding, finding_id)
@@ -240,12 +248,14 @@ class SecurityKnowledgeGraph:
             if node_vuln_type and VulnerabilityType(node_vuln_type) in targets:
                 # Check if same target
                 if self._same_target(finding, node):
-                    self._add_edge(GraphEdge(
-                        source_id=finding_id,
-                        target_id=node_id,
-                        relation="leads_to",
-                        weight=0.8,
-                    ))
+                    self._add_edge(
+                        GraphEdge(
+                            source_id=finding_id,
+                            target_id=node_id,
+                            relation="leads_to",
+                            weight=0.8,
+                        )
+                    )
 
     def _same_target(self, finding: Finding, node: GraphNode) -> bool:
         """Check if finding and node are for the same target."""
@@ -282,11 +292,13 @@ class SecurityKnowledgeGraph:
         asset_node_id = f"asset:{asset_id}"
 
         if finding_id in self.nodes and asset_node_id in self.nodes:
-            self._add_edge(GraphEdge(
-                source_id=asset_node_id,
-                target_id=finding_id,
-                relation="has_vulnerability",
-            ))
+            self._add_edge(
+                GraphEdge(
+                    source_id=asset_node_id,
+                    target_id=finding_id,
+                    relation="has_vulnerability",
+                )
+            )
 
     def find_attack_paths(
         self,
@@ -362,25 +374,29 @@ class SecurityKnowledgeGraph:
                 path_key = tuple(path)
                 if path_key not in visited_paths:
                     visited_paths.add(path_key)
-                    paths.append(AttackPath(
-                        nodes=[self.nodes[n] for n in path],
-                        edges=edges,
-                        total_weight=weight,
-                        start_node=start,
-                        end_node=goal,
-                    ))
+                    paths.append(
+                        AttackPath(
+                            nodes=[self.nodes[n] for n in path],
+                            edges=edges,
+                            total_weight=weight,
+                            start_node=start,
+                            end_node=goal,
+                        )
+                    )
                 continue
 
             for neighbor, relation in self._adjacency.get(current, []):
                 if neighbor not in path:  # Avoid cycles
                     edge = self._find_edge(current, neighbor, relation)
                     new_weight = weight + (edge.weight if edge else 1.0)
-                    queue.append((
-                        neighbor,
-                        path + [neighbor],
-                        edges + [edge] if edge else edges,
-                        new_weight,
-                    ))
+                    queue.append(
+                        (
+                            neighbor,
+                            path + [neighbor],
+                            edges + [edge] if edge else edges,
+                            new_weight,
+                        )
+                    )
 
         return paths
 
@@ -405,11 +421,13 @@ class SecurityKnowledgeGraph:
             tactic = node.data.get("tactic")
 
             if technique_id:
-                coverage["techniques"].append({
-                    "id": technique_id,
-                    "name": technique_name,
-                    "tactic": tactic,
-                })
+                coverage["techniques"].append(
+                    {
+                        "id": technique_id,
+                        "name": technique_name,
+                        "tactic": tactic,
+                    }
+                )
                 coverage["tactics"][tactic].append(technique_id)
 
         coverage["total_techniques"] = len(coverage["techniques"])
@@ -434,20 +452,28 @@ class SecurityKnowledgeGraph:
         # Get outgoing edges
         outgoing = []
         for neighbor, relation in self._adjacency.get(finding_id, []):
-            outgoing.append({
-                "target": neighbor,
-                "relation": relation,
-                "target_type": self.nodes[neighbor].node_type if neighbor in self.nodes else "unknown",
-            })
+            outgoing.append(
+                {
+                    "target": neighbor,
+                    "relation": relation,
+                    "target_type": (
+                        self.nodes[neighbor].node_type if neighbor in self.nodes else "unknown"
+                    ),
+                }
+            )
 
         # Get incoming edges
         incoming = []
         for neighbor, relation in self._reverse_adjacency.get(finding_id, []):
-            incoming.append({
-                "source": neighbor,
-                "relation": relation,
-                "source_type": self.nodes[neighbor].node_type if neighbor in self.nodes else "unknown",
-            })
+            incoming.append(
+                {
+                    "source": neighbor,
+                    "relation": relation,
+                    "source_type": (
+                        self.nodes[neighbor].node_type if neighbor in self.nodes else "unknown"
+                    ),
+                }
+            )
 
         return {
             "finding_id": finding_id,
@@ -544,9 +570,11 @@ class SecurityKnowledgeGraph:
         """Add an edge to the graph."""
         # Avoid duplicate edges
         for existing in self.edges:
-            if (existing.source_id == edge.source_id and
-                existing.target_id == edge.target_id and
-                existing.relation == edge.relation):
+            if (
+                existing.source_id == edge.source_id
+                and existing.target_id == edge.target_id
+                and existing.relation == edge.relation
+            ):
                 return
 
         self.edges.append(edge)
@@ -556,9 +584,7 @@ class SecurityKnowledgeGraph:
     def _find_edge(self, source: str, target: str, relation: str) -> Optional[GraphEdge]:
         """Find an edge by source, target, and relation."""
         for edge in self.edges:
-            if (edge.source_id == source and
-                edge.target_id == target and
-                edge.relation == relation):
+            if edge.source_id == source and edge.target_id == target and edge.relation == relation:
                 return edge
         return None
 
@@ -566,6 +592,7 @@ class SecurityKnowledgeGraph:
         """Extract host from URL."""
         try:
             from urllib.parse import urlparse
+
             parsed = urlparse(url)
             return parsed.netloc or parsed.path.split("/")[0]
         except Exception:
@@ -618,8 +645,7 @@ class SecurityKnowledgeGraph:
         # 1. Identify high-value targets (multiple vulnerabilities)
         target_findings = self._count_findings_per_target()
         high_value_targets = [
-            (target, count) for target, count in target_findings.items()
-            if count >= 3
+            (target, count) for target, count in target_findings.items() if count >= 3
         ]
         for target, count in sorted(high_value_targets, key=lambda x: -x[1])[:5]:
             insights.append(
@@ -628,8 +654,10 @@ class SecurityKnowledgeGraph:
 
         # 2. Find unexploited credentials
         cred_findings = [
-            n for n in finding_nodes
-            if n.metadata.get("vuln_type") in ["auth_bypass", "credential_disclosure", "default_credentials"]
+            n
+            for n in finding_nodes
+            if n.metadata.get("vuln_type")
+            in ["auth_bypass", "credential_disclosure", "default_credentials"]
         ]
         for cred in cred_findings:
             if not self._has_follow_up_exploitation(cred.node_id):
@@ -640,10 +668,13 @@ class SecurityKnowledgeGraph:
         # 3. Identify attack chains
         attack_paths = self._find_potential_chains()
         for path in attack_paths[:3]:
-            chain_desc = " -> ".join([
-                self.nodes[n].metadata.get("vuln_type", "unknown")
-                for n in path if n in self.nodes
-            ])
+            chain_desc = " -> ".join(
+                [
+                    self.nodes[n].metadata.get("vuln_type", "unknown")
+                    for n in path
+                    if n in self.nodes
+                ]
+            )
             insights.append(f"ATTACK CHAIN: {chain_desc}")
 
         # 4. Severity distribution insight
@@ -657,8 +688,14 @@ class SecurityKnowledgeGraph:
         # 5. Coverage gaps
         covered_types = set(n.metadata.get("vuln_type") for n in finding_nodes)
         common_vuln_types = {
-            "sql_injection", "xss_reflected", "xss_stored", "command_injection",
-            "ssrf", "idor", "auth_bypass", "file_inclusion"
+            "sql_injection",
+            "xss_reflected",
+            "xss_stored",
+            "command_injection",
+            "ssrf",
+            "idor",
+            "auth_bypass",
+            "file_inclusion",
         }
         missing = common_vuln_types - covered_types
         if missing and len(finding_nodes) > 5:
@@ -677,7 +714,8 @@ class SecurityKnowledgeGraph:
 
         # 7. Identify pivot points
         pivot_vulns = [
-            n for n in finding_nodes
+            n
+            for n in finding_nodes
             if n.metadata.get("vuln_type") in ["ssrf", "rce", "command_injection"]
         ]
         for pivot in pivot_vulns[:2]:
@@ -817,16 +855,18 @@ class SecurityKnowledgeGraph:
                 lines.append(f"    {source_alias} -->|{relation_label}| {target_alias}")
 
         # Add styling
-        lines.extend([
-            "",
-            "    %% Styling",
-            "    classDef critical fill:#ff0000,stroke:#990000,color:#fff",
-            "    classDef high fill:#ff6600,stroke:#cc5500,color:#fff",
-            "    classDef medium fill:#ffcc00,stroke:#ccaa00,color:#000",
-            "    classDef low fill:#00cc00,stroke:#009900,color:#fff",
-            "    classDef target fill:#0066cc,stroke:#004499,color:#fff",
-            "    classDef technique fill:#9900cc,stroke:#660099,color:#fff",
-        ])
+        lines.extend(
+            [
+                "",
+                "    %% Styling",
+                "    classDef critical fill:#ff0000,stroke:#990000,color:#fff",
+                "    classDef high fill:#ff6600,stroke:#cc5500,color:#fff",
+                "    classDef medium fill:#ffcc00,stroke:#ccaa00,color:#000",
+                "    classDef low fill:#00cc00,stroke:#009900,color:#fff",
+                "    classDef target fill:#0066cc,stroke:#004499,color:#fff",
+                "    classDef technique fill:#9900cc,stroke:#660099,color:#fff",
+            ]
+        )
 
         # Apply styles based on node types
         for node in processed_nodes:
@@ -916,12 +956,15 @@ class SecurityKnowledgeGraph:
 
         # Count exploitable vulnerabilities
         exploitable_types = {
-            "rce", "command_injection", "sql_injection", "auth_bypass",
-            "privilege_escalation", "ssrf"
+            "rce",
+            "command_injection",
+            "sql_injection",
+            "auth_bypass",
+            "privilege_escalation",
+            "ssrf",
         }
         exploitable = sum(
-            1 for n in finding_nodes
-            if n.metadata.get("vuln_type") in exploitable_types
+            1 for n in finding_nodes if n.metadata.get("vuln_type") in exploitable_types
         )
 
         # Find attack paths

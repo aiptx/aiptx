@@ -32,10 +32,10 @@ class RiskLevel(Enum):
     """Risk level classification."""
 
     CRITICAL = "critical"  # >= 0.9
-    HIGH = "high"          # 0.7-0.9
-    MEDIUM = "medium"      # 0.4-0.7
-    LOW = "low"            # 0.1-0.4
-    INFO = "info"          # < 0.1
+    HIGH = "high"  # 0.7-0.9
+    MEDIUM = "medium"  # 0.4-0.7
+    LOW = "low"  # 0.1-0.4
+    INFO = "info"  # < 0.1
 
     @classmethod
     def from_score(cls, score: float) -> "RiskLevel":
@@ -54,11 +54,11 @@ class RiskLevel(Enum):
 class AssetCriticality(Enum):
     """Asset criticality levels."""
 
-    CRITICAL = ("critical", 1.0)     # Core business systems
-    HIGH = ("high", 0.8)             # Important systems
-    MEDIUM = ("medium", 0.5)         # Standard systems
-    LOW = ("low", 0.3)               # Non-critical systems
-    MINIMAL = ("minimal", 0.1)       # Test/dev systems
+    CRITICAL = ("critical", 1.0)  # Core business systems
+    HIGH = ("high", 0.8)  # Important systems
+    MEDIUM = ("medium", 0.5)  # Standard systems
+    LOW = ("low", 0.3)  # Non-critical systems
+    MINIMAL = ("minimal", 0.1)  # Test/dev systems
 
     def __init__(self, label: str, weight: float):
         self.label = label
@@ -68,10 +68,10 @@ class AssetCriticality(Enum):
 class DataClassification(Enum):
     """Data classification levels."""
 
-    RESTRICTED = ("restricted", 1.0)       # PII, PCI, PHI
-    CONFIDENTIAL = ("confidential", 0.8)   # Internal sensitive
-    INTERNAL = ("internal", 0.4)           # Internal only
-    PUBLIC = ("public", 0.1)               # Public data
+    RESTRICTED = ("restricted", 1.0)  # PII, PCI, PHI
+    CONFIDENTIAL = ("confidential", 0.8)  # Internal sensitive
+    INTERNAL = ("internal", 0.4)  # Internal only
+    PUBLIC = ("public", 0.1)  # Public data
 
     def __init__(self, label: str, weight: float):
         self.label = label
@@ -83,8 +83,8 @@ class EPSSResult:
     """Result from EPSS API query."""
 
     cve_id: str
-    epss_score: float      # 0-1 probability
-    percentile: float      # 0-100 percentile
+    epss_score: float  # 0-1 probability
+    percentile: float  # 0-100 percentile
     model_version: str = ""
     query_date: datetime = field(default_factory=datetime.now)
 
@@ -104,9 +104,9 @@ class EPSSResult:
 class RiskScore:
     """Comprehensive risk score result."""
 
-    final_score: float               # 0-1 overall risk
+    final_score: float  # 0-1 overall risk
     risk_level: RiskLevel
-    priority: int                    # 1-5, 1 = highest
+    priority: int  # 1-5, 1 = highest
 
     # Component scores
     cvss_score: float
@@ -185,9 +185,7 @@ class RiskScorer:
         logger.info("RiskScorer initialized")
 
     async def calculate_risk_score(
-        self,
-        finding: Any,
-        context: Optional[Dict[str, Any]] = None
+        self, finding: Any, context: Optional[Dict[str, Any]] = None
     ) -> RiskScore:
         """
         Calculate comprehensive risk score for a finding.
@@ -267,9 +265,7 @@ class RiskScorer:
         priority = self._calculate_priority(final_score, multipliers)
 
         # Generate recommendations
-        recommendations = self._generate_recommendations(
-            risk_level, multipliers, context
-        )
+        recommendations = self._generate_recommendations(risk_level, multipliers, context)
 
         return RiskScore(
             final_score=final_score,
@@ -311,10 +307,7 @@ class RiskScorer:
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 cve_list = ",".join(uncached)
-                response = await client.get(
-                    self.EPSS_API,
-                    params={"cve": cve_list}
-                )
+                response = await client.get(self.EPSS_API, params={"cve": cve_list})
                 response.raise_for_status()
                 data = response.json()
 
@@ -419,12 +412,7 @@ class RiskScorer:
         revenue_score = 0.5 if revenue_impact else 0.0
 
         # Weighted combination
-        return (
-            criticality_score * 0.4
-            + data_score * 0.3
-            + user_score * 0.2
-            + revenue_score * 0.1
-        )
+        return criticality_score * 0.4 + data_score * 0.3 + user_score * 0.2 + revenue_score * 0.1
 
     def _calculate_exploitability(
         self,
@@ -492,11 +480,7 @@ class RiskScorer:
 
         return min(1.0, score), multipliers
 
-    def _calculate_priority(
-        self,
-        final_score: float,
-        multipliers: Dict[str, float]
-    ) -> int:
+    def _calculate_priority(self, final_score: float, multipliers: Dict[str, float]) -> int:
         """Calculate remediation priority (1 = highest)."""
         # Base priority from score
         if final_score >= 0.9:
@@ -519,10 +503,7 @@ class RiskScorer:
         return priority
 
     def _generate_recommendations(
-        self,
-        risk_level: RiskLevel,
-        multipliers: Dict[str, float],
-        context: Dict[str, Any]
+        self, risk_level: RiskLevel, multipliers: Dict[str, float], context: Dict[str, Any]
     ) -> List[str]:
         """Generate risk-based recommendations."""
         recommendations = []
@@ -563,10 +544,7 @@ class RiskScorer:
 
 
 # Convenience functions
-async def calculate_risk(
-    finding: Any,
-    context: Optional[Dict[str, Any]] = None
-) -> RiskScore:
+async def calculate_risk(finding: Any, context: Optional[Dict[str, Any]] = None) -> RiskScore:
     """
     Convenience function to calculate risk score.
 

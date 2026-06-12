@@ -8,13 +8,11 @@ without requiring actual Windows infrastructure or PowerShell execution.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
-
 
 # =============================================================================
 # Test WinPwn Configuration
 # =============================================================================
+
 
 class TestWinPwnConfig:
     """Tests for winpwn_config.py"""
@@ -33,11 +31,7 @@ class TestWinPwnConfig:
         """Test WinPwnCredentials can be instantiated"""
         from aipt_v2.tools.winpwn import WinPwnCredentials
 
-        creds = WinPwnCredentials(
-            username="testuser",
-            password="testpass",
-            domain="test.local"
-        )
+        creds = WinPwnCredentials(username="testuser", password="testpass", domain="test.local")
         assert creds.username == "testuser"
         assert creds.domain == "test.local"
         assert creds.has_credentials() is True
@@ -49,7 +43,7 @@ class TestWinPwnConfig:
         creds = WinPwnCredentials(
             username="admin",
             domain="CORP",
-            ntlm_hash="aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+            ntlm_hash="aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0",
         )
         assert creds.has_credentials() is True
         assert creds.ntlm_hash.startswith("aad3b435")
@@ -80,14 +74,14 @@ class TestWinPwnConfig:
 
     def test_get_winpwn_config(self):
         """Test get_winpwn_config factory function"""
-        from aipt_v2.tools.winpwn import get_winpwn_config, WinPwnExecutionMode
+        from aipt_v2.tools.winpwn import WinPwnExecutionMode, get_winpwn_config
 
         config = get_winpwn_config(
             script_path="/nonexistent/path.ps1",
             domain="corp.local",
             dc_ip="10.0.0.1",
             username="admin",
-            password="secret"
+            password="secret",
         )
 
         assert config.domain == "corp.local"
@@ -98,15 +92,10 @@ class TestWinPwnConfig:
 
     def test_validate_config_missing_script(self):
         """Test config validation with missing script"""
-        from aipt_v2.tools.winpwn import (
-            WinPwnConfig,
-            WinPwnExecutionMode,
-            validate_winpwn_config
-        )
+        from aipt_v2.tools.winpwn import WinPwnConfig, WinPwnExecutionMode, validate_winpwn_config
 
         config = WinPwnConfig(
-            script_path="/nonexistent/script.ps1",
-            execution_mode=WinPwnExecutionMode.LOCAL_SCRIPT
+            script_path="/nonexistent/script.ps1", execution_mode=WinPwnExecutionMode.LOCAL_SCRIPT
         )
 
         result = validate_winpwn_config(config)
@@ -115,15 +104,9 @@ class TestWinPwnConfig:
 
     def test_validate_config_valid_remote(self):
         """Test config validation for remote mode"""
-        from aipt_v2.tools.winpwn import (
-            WinPwnConfig,
-            WinPwnExecutionMode,
-            validate_winpwn_config
-        )
+        from aipt_v2.tools.winpwn import WinPwnConfig, WinPwnExecutionMode, validate_winpwn_config
 
-        config = WinPwnConfig(
-            execution_mode=WinPwnExecutionMode.REMOTE_REPO
-        )
+        config = WinPwnConfig(execution_mode=WinPwnExecutionMode.REMOTE_REPO)
 
         result = validate_winpwn_config(config)
         assert result["valid"] is True
@@ -155,6 +138,7 @@ class TestWinPwnConfig:
 # Test PowerShell Executor
 # =============================================================================
 
+
 class TestPowerShellExecutor:
     """Tests for powershell_executor.py"""
 
@@ -168,7 +152,7 @@ class TestPowerShellExecutor:
             stdout="Hello World",
             stderr="",
             execution_time=1.5,
-            command="Write-Output 'Hello World'"
+            command="Write-Output 'Hello World'",
         )
 
         assert result.success is True
@@ -185,7 +169,7 @@ class TestPowerShellExecutor:
             exit_code=1,
             stdout="Output text",
             stderr="Error text",
-            execution_time=0.5
+            execution_time=0.5,
         )
 
         assert "Output text" in result.output
@@ -195,13 +179,7 @@ class TestPowerShellExecutor:
         """Test automatic timestamp"""
         from aipt_v2.tools.winpwn import PowerShellResult
 
-        result = PowerShellResult(
-            success=True,
-            exit_code=0,
-            stdout="",
-            stderr="",
-            execution_time=0
-        )
+        result = PowerShellResult(success=True, exit_code=0, stdout="", stderr="", execution_time=0)
 
         assert result.timestamp is not None
         assert "T" in result.timestamp  # ISO format
@@ -219,9 +197,7 @@ class TestPowerShellExecutor:
         from aipt_v2.tools.winpwn import PowerShellExecutor
 
         executor = PowerShellExecutor(
-            powershell_path="/custom/pwsh",
-            use_pwsh_core=True,
-            execution_policy="RemoteSigned"
+            powershell_path="/custom/pwsh", use_pwsh_core=True, execution_policy="RemoteSigned"
         )
 
         # Custom path should be used
@@ -232,23 +208,20 @@ class TestPowerShellExecutor:
 # Test WinPwn Output Parsers
 # =============================================================================
 
+
 class TestWinPwnParsers:
     """Tests for winpwn_parsers.py"""
 
     def test_finding_dataclass(self):
         """Test WinPwnFinding dataclass"""
-        from aipt_v2.tools.winpwn import (
-            WinPwnFinding,
-            FindingSeverity,
-            FindingCategory
-        )
+        from aipt_v2.tools.winpwn import FindingCategory, FindingSeverity, WinPwnFinding
 
         finding = WinPwnFinding(
             title="Test Finding",
             category=FindingCategory.CREDENTIAL,
             severity=FindingSeverity.HIGH,
             description="A test finding",
-            source_module="test"
+            source_module="test",
         )
 
         assert finding.title == "Test Finding"
@@ -258,18 +231,14 @@ class TestWinPwnParsers:
 
     def test_finding_to_dict(self):
         """Test finding serialization"""
-        from aipt_v2.tools.winpwn import (
-            WinPwnFinding,
-            FindingSeverity,
-            FindingCategory
-        )
+        from aipt_v2.tools.winpwn import FindingCategory, FindingSeverity, WinPwnFinding
 
         finding = WinPwnFinding(
             title="Test",
             category=FindingCategory.VULNERABILITY,
             severity=FindingSeverity.CRITICAL,
             description="Description",
-            source_module="module"
+            source_module="module",
         )
 
         data = finding.to_dict()
@@ -286,7 +255,7 @@ class TestWinPwnParsers:
             domain="CORP",
             ntlm_hash="aad3b435b51404ee:31d6cfe0d16ae931",
             source="sam_dump",
-            credential_type="hash"
+            credential_type="hash",
         )
 
         assert cred.username == "admin"
@@ -424,6 +393,7 @@ SeDebugPrivilege Enabled
 # Test WinPwn Attacks Orchestrator
 # =============================================================================
 
+
 class TestWinPwnAttacks:
     """Tests for winpwn_attacks.py"""
 
@@ -435,7 +405,7 @@ class TestWinPwnAttacks:
             module=WinPwnModule.LOCAL_RECON,
             success=True,
             execution_time=5.0,
-            raw_output="test output"
+            raw_output="test output",
         )
 
         assert result.success is True
@@ -452,7 +422,7 @@ class TestWinPwnAttacks:
             finished_at="2024-01-01T00:05:00Z",
             duration=300.0,
             modules_run=["localrecon", "privesc"],
-            module_results=[]
+            module_results=[],
         )
 
         assert result.status == "completed"
@@ -461,10 +431,10 @@ class TestWinPwnAttacks:
     def test_result_summary(self):
         """Test result summary generation"""
         from aipt_v2.tools.winpwn import (
-            WinPwnResult,
-            WinPwnFinding,
+            FindingCategory,
             FindingSeverity,
-            FindingCategory
+            WinPwnFinding,
+            WinPwnResult,
         )
 
         finding = WinPwnFinding(
@@ -472,7 +442,7 @@ class TestWinPwnAttacks:
             category=FindingCategory.CREDENTIAL,
             severity=FindingSeverity.HIGH,
             description="Test finding",
-            source_module="test"
+            source_module="test",
         )
 
         result = WinPwnResult(
@@ -482,7 +452,7 @@ class TestWinPwnAttacks:
             duration=60.0,
             modules_run=["localrecon"],
             module_results=[],
-            all_findings=[finding]
+            all_findings=[finding],
         )
 
         summary = result.get_summary()
@@ -506,6 +476,7 @@ class TestWinPwnAttacks:
 # =============================================================================
 # Test Module Utilities
 # =============================================================================
+
 
 class TestModuleUtilities:
     """Tests for module utility functions"""
@@ -545,6 +516,7 @@ class TestModuleUtilities:
 # Test Module Exports
 # =============================================================================
 
+
 class TestModuleExports:
     """Test that all expected exports are available"""
 
@@ -553,8 +525,6 @@ class TestModuleExports:
         from aipt_v2.tools.winpwn import (
             WinPwnConfig,
             WinPwnCredentials,
-            WinPwnModule,
-            WinPwnExecutionMode,
             get_winpwn_config,
             validate_winpwn_config,
         )
@@ -579,11 +549,9 @@ class TestModuleExports:
     def test_parser_exports(self):
         """Test parser exports"""
         from aipt_v2.tools.winpwn import (
-            WinPwnParser,
-            WinPwnFinding,
             ExtractedCredential,
-            FindingSeverity,
-            FindingCategory,
+            WinPwnFinding,
+            WinPwnParser,
         )
 
         assert WinPwnParser is not None
@@ -595,9 +563,8 @@ class TestModuleExports:
         from aipt_v2.tools.winpwn import (
             WinPwnAttacks,
             WinPwnResult,
-            ModuleResult,
-            run_winpwn_assessment,
             quick_local_recon,
+            run_winpwn_assessment,
         )
 
         assert WinPwnAttacks is not None

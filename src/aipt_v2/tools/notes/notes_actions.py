@@ -19,7 +19,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -441,7 +441,7 @@ def get_notes_summary() -> dict[str, Any]:
     Returns:
         dict with category counts
     """
-    summary = {cat: 0 for cat in VALID_CATEGORIES}
+    summary = dict.fromkeys(VALID_CATEGORIES, 0)
     for note in _notes_storage.values():
         cat = note.get("category", "general")
         summary[cat] = summary.get(cat, 0) + 1

@@ -29,37 +29,34 @@ import shutil
 import tempfile
 import urllib.request
 import zipfile
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Set, Callable, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
-from rich.console import Console
-from rich.progress import Progress, SpinnerColumn, TextColumn, BarColumn, TaskProgressColumn
-from rich.table import Table
-from rich.panel import Panel
-from rich.prompt import Confirm
 from rich import box
+from rich.console import Console
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.table import Table
 
 from aipt_v2.system_detector import (
-    SystemDetector,
-    SystemInfo,
     OSType,
     PackageManager,
-    Architecture,
+    SystemDetector,
+    SystemInfo,
 )
 from aipt_v2.utils.logging import logger
-
 
 console = Console()
 
 # Default timeout for tool installation (seconds)
 DEFAULT_INSTALL_TIMEOUT = 120  # 2 minutes per tool
-QUICK_INSTALL_TIMEOUT = 60     # 1 minute for pip/simple installs
+QUICK_INSTALL_TIMEOUT = 60  # 1 minute for pip/simple installs
 
 
 class ToolCategory(Enum):
     """Security tool categories."""
+
     RECON = "recon"
     SCAN = "scan"
     EXPLOIT = "exploit"
@@ -80,6 +77,7 @@ class ToolCategory(Enum):
 @dataclass
 class ToolDefinition:
     """Definition of a security tool with installation commands."""
+
     name: str
     description: str
     category: ToolCategory
@@ -180,7 +178,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="cargo --version",
         is_core=False,
     ),
-
     # RECON Tools
     "nmap": ToolDefinition(
         name="nmap",
@@ -323,7 +320,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="wafw00f -h",
         pip_package="wafw00f",
     ),
-
     # SCAN Tools
     "nuclei": ToolDefinition(
         name="nuclei",
@@ -463,7 +459,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="wpscan --version",
         dependencies=["ruby"],
     ),
-
     # EXPLOIT Tools
     "sqlmap": ToolDefinition(
         name="sqlmap",
@@ -536,7 +531,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="commix --version",
         pip_package="commix",
     ),
-
     # NETWORK Tools
     "masscan": ToolDefinition(
         name="masscan",
@@ -569,7 +563,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="naabu -version",
         dependencies=["go"],
     ),
-
     # API Security Tools
     "arjun": ToolDefinition(
         name="arjun",
@@ -589,7 +582,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="arjun -h",
         pip_package="arjun",
     ),
-
     # =========================================================================
     # Additional RECON Tools
     # =========================================================================
@@ -701,7 +693,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="shodan -h",
         pip_package="shodan",
     ),
-
     "sublist3r": ToolDefinition(
         name="sublist3r",
         description="Subdomain enumeration using search engines and DNS",
@@ -720,7 +711,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="sublist3r -h",
         pip_package="sublist3r",
     ),
-
     # =========================================================================
     # Additional SCAN Tools
     # =========================================================================
@@ -799,7 +789,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="subjack -h",
         dependencies=["go"],
     ),
-
     # =========================================================================
     # WEB Application Tools
     # =========================================================================
@@ -844,7 +833,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="python3 -c 'import cors'",
     ),
-
     # =========================================================================
     # EXPLOIT Tools (Additional)
     # =========================================================================
@@ -892,7 +880,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="responder -h",
         requires_sudo=True,
     ),
-
     # =========================================================================
     # POST-EXPLOIT Tools
     # =========================================================================
@@ -963,7 +950,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="lazagne -h",
     ),
-
     # =========================================================================
     # ACTIVE DIRECTORY Tools
     # =========================================================================
@@ -1026,7 +1012,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="adidnsdump -h",
     ),
-
     # =========================================================================
     # CLOUD Security Tools
     # =========================================================================
@@ -1082,7 +1067,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="aws --version",
     ),
-
     # =========================================================================
     # CONTAINER Security Tools
     # =========================================================================
@@ -1138,7 +1122,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="kubectl version --client",
     ),
-
     # =========================================================================
     # OSINT Tools
     # =========================================================================
@@ -1197,7 +1180,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="photon -h",
     ),
-
     # =========================================================================
     # SECRETS Detection Tools
     # =========================================================================
@@ -1250,7 +1232,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         check_command="shhgit -h",
         dependencies=["go"],
     ),
-
     # =========================================================================
     # MOBILE Security Tools
     # =========================================================================
@@ -1284,7 +1265,6 @@ TOOLS: Dict[str, ToolDefinition] = {
         },
         check_command="mobsfscan -h",
     ),
-
     # =========================================================================
     # WIRELESS Tools (Linux primarily)
     # =========================================================================
@@ -1328,6 +1308,7 @@ TOOLS: Dict[str, ToolDefinition] = {
 @dataclass
 class InstallResult:
     """Result of a tool installation."""
+
     tool_name: str
     success: bool
     message: str
@@ -1443,17 +1424,13 @@ class LocalToolInstaller:
         tool = TOOLS.get(tool_name)
         if not tool:
             return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                message=f"Unknown tool: {tool_name}"
+                tool_name=tool_name, success=False, message=f"Unknown tool: {tool_name}"
             )
 
         # Check Windows compatibility
         if os_type == OSType.WINDOWS and not tool.windows_compatible:
             return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                message="Not compatible with Windows"
+                tool_name=tool_name, success=False, message="Not compatible with Windows"
             )
 
         # Check if already installed
@@ -1462,7 +1439,7 @@ class LocalToolInstaller:
                 tool_name=tool_name,
                 success=True,
                 message="Already installed",
-                already_installed=True
+                already_installed=True,
             )
 
         # Install dependencies first (with skip on failure for optional deps)
@@ -1477,13 +1454,13 @@ class LocalToolInstaller:
                         return InstallResult(
                             tool_name=tool_name,
                             success=False,
-                            message=f"Failed to install dependency: {dep}"
+                            message=f"Failed to install dependency: {dep}",
                         )
                 else:
                     return InstallResult(
                         tool_name=tool_name,
                         success=False,
-                        message=f"Failed to install dependency: {dep}"
+                        message=f"Failed to install dependency: {dep}",
                     )
 
         # Build list of installation methods to try
@@ -1493,7 +1470,7 @@ class LocalToolInstaller:
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
-                message=f"No installation method for {pkg_mgr.value}"
+                message=f"No installation method for {pkg_mgr.value}",
             )
 
         if progress_callback:
@@ -1505,7 +1482,9 @@ class LocalToolInstaller:
         # Try each installation method
         last_error = "No methods available"
         for method_name, install_cmd in install_methods:
-            logger.info(f"Installing tool: {tool_name} via {method_name}", command=install_cmd[:100])
+            logger.info(
+                f"Installing tool: {tool_name} via {method_name}", command=install_cmd[:100]
+            )
 
             result = await self._try_install_command(
                 tool_name, install_cmd, use_sudo, timeout, os_type
@@ -1522,9 +1501,7 @@ class LocalToolInstaller:
         if len(error_display) > 150:
             error_display = error_display[:150] + "..."
         return InstallResult(
-            tool_name=tool_name,
-            success=False,
-            message=f"All methods failed. Last: {error_display}"
+            tool_name=tool_name, success=False, message=f"All methods failed. Last: {error_display}"
         )
 
     def _get_install_methods(
@@ -1543,7 +1520,9 @@ class LocalToolInstaller:
         # 2. Fallback: pip install (cross-platform)
         if tool.pip_package or any("pip" in cmd for cmd in tool.install_commands.values()):
             pip_pkg = tool.pip_package or tool.name
-            pip_cmd = f"pip install {pip_pkg}" if os_type == OSType.WINDOWS else f"pip3 install {pip_pkg}"
+            pip_cmd = (
+                f"pip install {pip_pkg}" if os_type == OSType.WINDOWS else f"pip3 install {pip_pkg}"
+            )
             if ("pip", pip_cmd) not in methods:
                 methods.append(("pip", pip_cmd))
 
@@ -1612,31 +1591,26 @@ class LocalToolInstaller:
                     env=env,
                 )
 
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=timeout)
 
             if proc.returncode == 0:
                 # Verify installation
                 if await self.check_tool_installed(tool_name):
                     return InstallResult(
-                        tool_name=tool_name,
-                        success=True,
-                        message="Installed successfully"
+                        tool_name=tool_name, success=True, message="Installed successfully"
                     )
                 else:
                     return InstallResult(
                         tool_name=tool_name,
                         success=False,
-                        message="Install completed but verification failed"
+                        message="Install completed but verification failed",
                     )
             else:
-                error_msg = stderr.decode(errors='ignore')[:200] if stderr else "Unknown error"
+                error_msg = stderr.decode(errors="ignore")[:200] if stderr else "Unknown error"
                 return InstallResult(
                     tool_name=tool_name,
                     success=False,
-                    message=f"Exit code {proc.returncode}: {error_msg}"
+                    message=f"Exit code {proc.returncode}: {error_msg}",
                 )
 
         except asyncio.TimeoutError:
@@ -1646,16 +1620,14 @@ class LocalToolInstaller:
             except Exception:
                 pass
             return InstallResult(
-                tool_name=tool_name,
-                success=False,
-                message=f"Timed out after {timeout}s"
+                tool_name=tool_name, success=False, message=f"Timed out after {timeout}s"
             )
         except Exception as e:
             error_str = str(e).strip() if str(e) else type(e).__name__
             return InstallResult(
                 tool_name=tool_name,
                 success=False,
-                message=f"Error: {error_str[:150]}" if error_str else f"Error: {type(e).__name__}"
+                message=f"Error: {error_str[:150]}" if error_str else f"Error: {type(e).__name__}",
             )
 
     def _prepare_windows_command(self, cmd: str) -> str:
@@ -1709,18 +1681,17 @@ class LocalToolInstaller:
                     urllib.request.urlretrieve(url, zip_path)
                 except Exception as e:
                     return InstallResult(
-                        tool_name="go",
-                        success=False,
-                        message=f"Download failed: {e}"
+                        tool_name="go", success=False, message=f"Download failed: {e}"
                     )
 
                 # Extract to C:\Go
                 go_root = Path("C:/Go")
                 if go_root.exists():
                     import shutil
+
                     shutil.rmtree(go_root, ignore_errors=True)
 
-                with zipfile.ZipFile(zip_path, 'r') as zf:
+                with zipfile.ZipFile(zip_path, "r") as zf:
                     zf.extractall(go_root.parent)
 
                 # Verify
@@ -1737,22 +1708,14 @@ class LocalToolInstaller:
                     console.print("  [green]Go installed to C:\\Go[/green]")
                     console.print("  [dim]PATH updated for this session[/dim]")
                     return InstallResult(
-                        tool_name="go",
-                        success=True,
-                        message="Installed via direct download"
+                        tool_name="go", success=True, message="Installed via direct download"
                     )
 
-            return InstallResult(
-                tool_name="go",
-                success=False,
-                message="Extraction failed"
-            )
+            return InstallResult(tool_name="go", success=False, message="Extraction failed")
 
         except Exception as e:
             return InstallResult(
-                tool_name="go",
-                success=False,
-                message=f"Direct install failed: {e}"
+                tool_name="go", success=False, message=f"Direct install failed: {e}"
             )
 
     async def install_tools(
@@ -1789,10 +1752,7 @@ class LocalToolInstaller:
                     if not core_only or tool_def.is_core:
                         tools_to_install.append(tool_name)
         elif core_only:
-            tools_to_install = [
-                name for name, tool in TOOLS.items()
-                if tool.is_core
-            ]
+            tools_to_install = [name for name, tool in TOOLS.items() if tool.is_core]
         else:
             tools_to_install = list(TOOLS.keys())
 
@@ -1809,8 +1769,7 @@ class LocalToolInstaller:
             console=console,
         ) as progress:
             task = progress.add_task(
-                f"[cyan]Installing {len(tools_to_install)} tools...",
-                total=len(tools_to_install)
+                f"[cyan]Installing {len(tools_to_install)} tools...", total=len(tools_to_install)
             )
 
             for tool_name in tools_to_install:
@@ -1871,7 +1830,11 @@ class LocalToolInstaller:
 
         for tool_name, result in sorted(results.items()):
             if result.success:
-                status = "[green]✓ Installed[/green]" if not result.already_installed else "[dim]✓ Already installed[/dim]"
+                status = (
+                    "[green]✓ Installed[/green]"
+                    if not result.already_installed
+                    else "[dim]✓ Already installed[/dim]"
+                )
             else:
                 status = "[red]✗ Failed[/red]"
 
@@ -1884,11 +1847,17 @@ class LocalToolInstaller:
         already = sum(1 for r in results.values() if r.already_installed)
         failed = sum(1 for r in results.values() if not r.success)
 
-        console.print(f"\n[bold]Summary:[/bold] {installed} installed, {already} already present, {failed} failed")
+        console.print(
+            f"\n[bold]Summary:[/bold] {installed} installed, {already} already present, {failed} failed"
+        )
 
         # Show PATH instructions if Go tools were installed
         go_tools_installed = any(
-            r.success and not r.already_installed and TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {},"")).dependencies and "go" in TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {}, "")).dependencies
+            r.success
+            and not r.already_installed
+            and TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {}, "")).dependencies
+            and "go"
+            in TOOLS.get(name, ToolDefinition("", "", ToolCategory.RECON, {}, "")).dependencies
             for name, r in results.items()
         )
         if go_tools_installed:
@@ -1920,23 +1889,30 @@ class LocalToolInstaller:
 
         elif platform.system().lower() == "windows":
             console.print("\n[bold]Add to System PATH (PowerShell as Admin):[/bold]")
-            console.print(f'[green][Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";{go_bin}", "User")[/green]')
+            console.print(
+                f'[green][Environment]::SetEnvironmentVariable("PATH", $env:PATH + ";{go_bin}", "User")[/green]'
+            )
             console.print("\nOr add manually via: System Properties → Environment Variables → PATH")
 
-        console.print("\n[dim]After updating PATH, restart your terminal or run the source command.[/dim]")
+        console.print(
+            "\n[dim]After updating PATH, restart your terminal or run the source command.[/dim]"
+        )
 
 
-async def install_prerequisites(system_info: Optional[SystemInfo] = None) -> Dict[str, InstallResult]:
+async def install_prerequisites(
+    system_info: Optional[SystemInfo] = None,
+) -> Dict[str, InstallResult]:
     """Install prerequisite tools (Go, Ruby, etc.)."""
     installer = LocalToolInstaller(system_info)
     prereq_tools = [
-        name for name, tool in TOOLS.items()
-        if tool.category == ToolCategory.PREREQUISITE
+        name for name, tool in TOOLS.items() if tool.category == ToolCategory.PREREQUISITE
     ]
     return await installer.install_tools(tools=prereq_tools)
 
 
-async def install_recommended_tools(system_info: Optional[SystemInfo] = None) -> Dict[str, InstallResult]:
+async def install_recommended_tools(
+    system_info: Optional[SystemInfo] = None,
+) -> Dict[str, InstallResult]:
     """Install recommended core security tools."""
     installer = LocalToolInstaller(system_info)
     return await installer.install_core_tools()
@@ -1949,13 +1925,11 @@ def get_available_tools() -> Dict[str, ToolDefinition]:
 
 def get_tools_by_category(category: str) -> Dict[str, ToolDefinition]:
     """Get tools in a specific category."""
-    return {
-        name: tool for name, tool in TOOLS.items()
-        if tool.category.value == category
-    }
+    return {name: tool for name, tool in TOOLS.items() if tool.category.value == category}
 
 
 if __name__ == "__main__":
+
     async def main():
         detector = SystemDetector()
         system_info = await detector.detect()

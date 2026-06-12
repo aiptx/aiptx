@@ -4,18 +4,19 @@ PAT Payload Database
 Stores and retrieves parsed payloads with caching support.
 Provides efficient querying by vulnerability type, technique, and subcategory.
 """
+
 from __future__ import annotations
 
+import hashlib
 import json
 import logging
-import hashlib
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterator, Optional
 
-from .config import VulnerabilityType, PayloadTechnique, PayloadConfig
-from .payload_parser import PayloadParser, ParsedPayload
+from .config import PayloadConfig, PayloadTechnique, VulnerabilityType
+from .payload_parser import ParsedPayload, PayloadParser
 
 logger = logging.getLogger(__name__)
 
@@ -23,6 +24,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PayloadStats:
     """Statistics about loaded payloads."""
+
     total_payloads: int = 0
     by_category: dict[str, int] = None
     by_technique: dict[str, int] = None
@@ -112,7 +114,9 @@ class PayloadDatabase:
         metadata = self._load_metadata()
         if metadata:
             last_updated = datetime.fromisoformat(metadata.get("last_updated", "2000-01-01"))
-            age_hours = (datetime.now(timezone.utc) - last_updated.replace(tzinfo=timezone.utc)).total_seconds() / 3600
+            age_hours = (
+                datetime.now(timezone.utc) - last_updated.replace(tzinfo=timezone.utc)
+            ).total_seconds() / 3600
             if age_hours > self.config.cache_ttl_hours:
                 logger.info(f"Cache expired ({age_hours:.1f}h old)")
                 return False
@@ -174,11 +178,13 @@ class PayloadDatabase:
                 json.dump(data, f, indent=2)
 
             # Save metadata
-            self._save_metadata({
-                "last_updated": datetime.now(timezone.utc).isoformat(),
-                "total_payloads": self.stats.total_payloads,
-                "repo_path": str(self.config.repo_path),
-            })
+            self._save_metadata(
+                {
+                    "last_updated": datetime.now(timezone.utc).isoformat(),
+                    "total_payloads": self.stats.total_payloads,
+                    "repo_path": str(self.config.repo_path),
+                }
+            )
 
             logger.debug(f"Saved {self.stats.total_payloads} payloads to cache")
 

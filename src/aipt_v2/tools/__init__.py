@@ -7,6 +7,7 @@ Includes v5.2 additions:
 
 from aipt_v2.tools.parser import Finding, OutputParser
 from aipt_v2.tools.tool_processing import process_tool_invocations
+
 # v5.2 - Wordlist Generator
 from aipt_v2.tools.wordlist_generator import (
     WordlistConfig,

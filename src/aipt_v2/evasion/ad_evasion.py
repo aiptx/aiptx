@@ -7,22 +7,23 @@ Stealth techniques for AD penetration testing:
 - Log evasion tactics
 - Detection avoidance
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import random
-import time
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime
 from enum import Enum
-from typing import Optional, Callable, Any
+from typing import Any, Callable, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class StealthLevel(Enum):
     """Stealth levels for operations"""
+
     NONE = "none"  # No stealth, fastest
     LOW = "low"  # Basic delays
     MEDIUM = "medium"  # Jitter + timing
@@ -32,6 +33,7 @@ class StealthLevel(Enum):
 
 class EvasionTechnique(Enum):
     """Available evasion techniques"""
+
     TIMING_JITTER = "timing_jitter"
     QUERY_THROTTLE = "query_throttle"
     NATIVE_TOOLS = "native_tools"
@@ -45,6 +47,7 @@ class EvasionTechnique(Enum):
 @dataclass
 class EvasionConfig:
     """Evasion configuration"""
+
     stealth_level: StealthLevel = StealthLevel.MEDIUM
 
     # Timing
@@ -70,15 +73,18 @@ class EvasionConfig:
     randomize_user_agent: bool = True
 
     # Specific techniques
-    enabled_techniques: list[EvasionTechnique] = field(default_factory=lambda: [
-        EvasionTechnique.TIMING_JITTER,
-        EvasionTechnique.QUERY_THROTTLE,
-    ])
+    enabled_techniques: list[EvasionTechnique] = field(
+        default_factory=lambda: [
+            EvasionTechnique.TIMING_JITTER,
+            EvasionTechnique.QUERY_THROTTLE,
+        ]
+    )
 
 
 @dataclass
 class EvasionStats:
     """Statistics for evasion operations"""
+
     total_operations: int = 0
     total_delay_seconds: float = 0.0
     queries_this_minute: int = 0
@@ -371,7 +377,7 @@ class ADEvasion:
         elif self.config.stealth_level == StealthLevel.PARANOID:
             size = max(5, size // 4)
 
-        return [items[i:i + size] for i in range(0, len(items), size)]
+        return [items[i : i + size] for i in range(0, len(items), size)]
 
     # -------------------------------------------------------------------------
     # Tool Signature Evasion
@@ -409,11 +415,7 @@ class ADEvasion:
     # -------------------------------------------------------------------------
 
     async def stealth_execute(
-        self,
-        func: Callable,
-        *args,
-        operation_name: str = "generic",
-        **kwargs
+        self, func: Callable, *args, operation_name: str = "generic", **kwargs
     ) -> Any:
         """
         Execute function with stealth measures.

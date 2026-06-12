@@ -12,16 +12,16 @@ from typing import Optional
 
 from aipt_v2.sast.parsers.base import (
     BaseParser,
+    CodeLocation,
+    DataFlow,
     Language,
+    ParsedClass,
     ParsedFile,
     ParsedFunction,
-    ParsedClass,
-    ParsedVariable,
     ParsedImport,
     ParsedParameter,
-    CodeLocation,
+    ParsedVariable,
     SecurityPattern,
-    DataFlow,
 )
 
 
@@ -154,7 +154,9 @@ class JavaParser(BaseParser):
                 brace_count += line.count("{") - line.count("}")
 
                 # Look for methods
-                method = self._extract_method(line, i, file_path, current_class.name if current_class else None)
+                method = self._extract_method(
+                    line, i, file_path, current_class.name if current_class else None
+                )
                 if method and current_class:
                     current_class.methods.append(method)
 
@@ -279,9 +281,7 @@ class JavaParser(BaseParser):
 
         return params
 
-    def _find_java_security_patterns(
-        self, content: str, file_path: str
-    ) -> list[SecurityPattern]:
+    def _find_java_security_patterns(self, content: str, file_path: str) -> list[SecurityPattern]:
         """Find Java-specific security patterns."""
         patterns = self._find_security_patterns(content, file_path)
         lines = content.split("\n")
@@ -289,43 +289,43 @@ class JavaParser(BaseParser):
         # Java-specific dangerous patterns
         dangerous_patterns = {
             "sql_injection": [
-                (r'Statement\s*\w*\s*=', "Statement usage - use PreparedStatement"),
-                (r'createStatement\s*\(', "createStatement - use prepareStatement"),
+                (r"Statement\s*\w*\s*=", "Statement usage - use PreparedStatement"),
+                (r"createStatement\s*\(", "createStatement - use prepareStatement"),
                 (r'executeQuery\s*\(\s*["\'].*\+', "SQL with string concatenation"),
                 (r'executeUpdate\s*\(\s*["\'].*\+', "SQL with string concatenation"),
             ],
             "command_injection": [
-                (r'Runtime\.getRuntime\(\)\.exec\s*\(', "Runtime.exec - command injection"),
-                (r'ProcessBuilder\s*\(', "ProcessBuilder - command injection"),
-                (r'new\s+ProcessBuilder', "ProcessBuilder - command injection"),
+                (r"Runtime\.getRuntime\(\)\.exec\s*\(", "Runtime.exec - command injection"),
+                (r"ProcessBuilder\s*\(", "ProcessBuilder - command injection"),
+                (r"new\s+ProcessBuilder", "ProcessBuilder - command injection"),
             ],
             "xxe": [
-                (r'DocumentBuilderFactory', "XML parsing - check XXE protection"),
-                (r'SAXParserFactory', "SAX parsing - check XXE protection"),
-                (r'XMLInputFactory', "StAX parsing - check XXE protection"),
-                (r'TransformerFactory', "XSLT - check XXE protection"),
-                (r'SchemaFactory', "Schema - check XXE protection"),
+                (r"DocumentBuilderFactory", "XML parsing - check XXE protection"),
+                (r"SAXParserFactory", "SAX parsing - check XXE protection"),
+                (r"XMLInputFactory", "StAX parsing - check XXE protection"),
+                (r"TransformerFactory", "XSLT - check XXE protection"),
+                (r"SchemaFactory", "Schema - check XXE protection"),
             ],
             "deserialization": [
-                (r'ObjectInputStream', "ObjectInputStream - unsafe deserialization"),
-                (r'readObject\s*\(', "readObject - unsafe deserialization"),
-                (r'XMLDecoder', "XMLDecoder - unsafe deserialization"),
-                (r'XStream', "XStream - check deserialization safety"),
+                (r"ObjectInputStream", "ObjectInputStream - unsafe deserialization"),
+                (r"readObject\s*\(", "readObject - unsafe deserialization"),
+                (r"XMLDecoder", "XMLDecoder - unsafe deserialization"),
+                (r"XStream", "XStream - check deserialization safety"),
             ],
             "path_traversal": [
-                (r'new\s+File\s*\([^)]*\+', "File with concatenation"),
-                (r'new\s+FileInputStream\s*\([^)]*\+', "FileInputStream with concatenation"),
-                (r'Paths\.get\s*\([^)]*\+', "Paths.get with concatenation"),
+                (r"new\s+File\s*\([^)]*\+", "File with concatenation"),
+                (r"new\s+FileInputStream\s*\([^)]*\+", "FileInputStream with concatenation"),
+                (r"Paths\.get\s*\([^)]*\+", "Paths.get with concatenation"),
             ],
             "ldap_injection": [
-                (r'LdapContext', "LDAP - check for injection"),
-                (r'DirContext', "Directory context - check for injection"),
-                (r'search\s*\([^)]*\+', "LDAP search with concatenation"),
+                (r"LdapContext", "LDAP - check for injection"),
+                (r"DirContext", "Directory context - check for injection"),
+                (r"search\s*\([^)]*\+", "LDAP search with concatenation"),
             ],
             "ssrf": [
-                (r'new\s+URL\s*\([^)]*\+', "URL with concatenation"),
-                (r'HttpURLConnection', "HTTP connection - check SSRF"),
-                (r'openConnection\s*\(', "openConnection - check SSRF"),
+                (r"new\s+URL\s*\([^)]*\+", "URL with concatenation"),
+                (r"HttpURLConnection", "HTTP connection - check SSRF"),
+                (r"openConnection\s*\(", "openConnection - check SSRF"),
             ],
             "hardcoded_secret": [
                 (r'(?i)password\s*=\s*"[^"]+"', "Hardcoded password"),
@@ -336,18 +336,18 @@ class JavaParser(BaseParser):
                 (r'getInstance\s*\(\s*"MD5"', "MD5 - weak hash"),
                 (r'getInstance\s*\(\s*"SHA-?1"', "SHA1 - weak hash"),
                 (r'getInstance\s*\(\s*"DES"', "DES - weak encryption"),
-                (r'SecureRandom\(\)', "SecureRandom without seed"),
+                (r"SecureRandom\(\)", "SecureRandom without seed"),
             ],
             "xss": [
-                (r'getParameter\s*\(', "Request parameter - check XSS"),
-                (r'getHeader\s*\(', "Request header - check XSS"),
-                (r'\.write\s*\([^)]*getParameter', "Direct output of parameter"),
+                (r"getParameter\s*\(", "Request parameter - check XSS"),
+                (r"getHeader\s*\(", "Request header - check XSS"),
+                (r"\.write\s*\([^)]*getParameter", "Direct output of parameter"),
             ],
             "insecure_config": [
-                (r'setAllowFileAccess\s*\(\s*true', "WebView file access enabled"),
-                (r'setJavaScriptEnabled\s*\(\s*true', "WebView JS enabled"),
-                (r'ALLOW_ALL_HOSTNAME_VERIFIER', "Hostname verification disabled"),
-                (r'TrustAllCerts', "All certificates trusted"),
+                (r"setAllowFileAccess\s*\(\s*true", "WebView file access enabled"),
+                (r"setJavaScriptEnabled\s*\(\s*true", "WebView JS enabled"),
+                (r"ALLOW_ALL_HOSTNAME_VERIFIER", "Hostname verification disabled"),
+                (r"TrustAllCerts", "All certificates trusted"),
             ],
         }
 

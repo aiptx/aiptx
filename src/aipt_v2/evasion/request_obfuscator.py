@@ -17,13 +17,14 @@ Usage:
 import random
 import string
 import urllib.parse
-from dataclasses import dataclass, field
-from typing import Dict, List, Optional, Any
+from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 
 @dataclass
 class ObfuscationConfig:
     """Configuration for request obfuscation."""
+
     encode_parameters: bool = True
     randomize_case: bool = True
     add_junk_headers: bool = True
@@ -35,6 +36,7 @@ class ObfuscationConfig:
 @dataclass
 class ObfuscatedRequest:
     """Obfuscated HTTP request."""
+
     method: str
     url: str
     headers: Dict[str, str]
@@ -53,10 +55,17 @@ class RequestObfuscator:
 
     # Junk headers that are typically ignored
     JUNK_HEADERS = [
-        "X-Forwarded-For", "X-Real-IP", "X-Originating-IP",
-        "X-Client-IP", "CF-Connecting-IP", "True-Client-IP",
-        "X-Custom-Header", "X-Debug", "X-Request-ID",
-        "X-Correlation-ID", "X-Trace-ID"
+        "X-Forwarded-For",
+        "X-Real-IP",
+        "X-Originating-IP",
+        "X-Client-IP",
+        "CF-Connecting-IP",
+        "True-Client-IP",
+        "X-Custom-Header",
+        "X-Debug",
+        "X-Request-ID",
+        "X-Correlation-ID",
+        "X-Trace-ID",
     ]
 
     # Content-Type variations
@@ -65,7 +74,7 @@ class RequestObfuscator:
         "application/x-www-form-urlencoded",
         "text/plain",
         "application/xml",
-        "multipart/form-data"
+        "multipart/form-data",
     ]
 
     def __init__(self, config: Optional[ObfuscationConfig] = None):
@@ -104,10 +113,7 @@ class RequestObfuscator:
         new_headers = {}
         for name, value in headers.items():
             # Random case for header name
-            new_name = "".join(
-                c.upper() if random.random() > 0.5 else c.lower()
-                for c in name
-            )
+            new_name = "".join(c.upper() if random.random() > 0.5 else c.lower() for c in name)
             new_headers[new_name] = value
         return new_headers
 
@@ -141,9 +147,9 @@ class RequestObfuscator:
         """Obfuscate URL path."""
         # Add path segments that resolve to same path
         path_tricks = [
-            "/./",      # Current directory
-            "/../..",   # Parent then back
-            "//",       # Double slash
+            "/./",  # Current directory
+            "/../..",  # Parent then back
+            "//",  # Double slash
         ]
 
         # Random insertion point
@@ -157,11 +163,7 @@ class RequestObfuscator:
 
         return url
 
-    def use_method_override(
-        self,
-        method: str,
-        headers: Dict[str, str]
-    ) -> tuple:
+    def use_method_override(self, method: str, headers: Dict[str, str]) -> tuple:
         """
         Use HTTP method override headers.
 
@@ -172,7 +174,7 @@ class RequestObfuscator:
             "X-HTTP-Method-Override",
             "X-HTTP-Method",
             "X-Method-Override",
-            "_method"
+            "_method",
         ]
 
         new_headers = headers.copy()
@@ -189,7 +191,7 @@ class RequestObfuscator:
         url: str,
         headers: Dict[str, str] = None,
         params: Dict[str, str] = None,
-        body: str = None
+        body: str = None,
     ) -> ObfuscatedRequest:
         """
         Obfuscate HTTP request.
@@ -243,7 +245,7 @@ class RequestObfuscator:
             headers=headers,
             body=body,
             params=params,
-            modifications=modifications
+            modifications=modifications,
         )
 
 
@@ -253,7 +255,7 @@ def obfuscate_request(
     url: str,
     headers: Dict[str, str] = None,
     params: Dict[str, str] = None,
-    body: str = None
+    body: str = None,
 ) -> ObfuscatedRequest:
     """
     Obfuscate HTTP request.

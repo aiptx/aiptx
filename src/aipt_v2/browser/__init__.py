@@ -16,9 +16,9 @@ from .automation import (
     PageResult,
 )
 from .crawler import (
-    WebCrawler,
     CrawlConfig,
     CrawlResult,
+    WebCrawler,
 )
 
 __all__ = [

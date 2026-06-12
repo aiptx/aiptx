@@ -13,16 +13,16 @@ Key differences from legacy Finding:
 
 Backward compatible with legacy Finding class via converters.
 """
+
 from __future__ import annotations
 
 import hashlib
-import json
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urlparse
 
 
 class FindingCategory(Enum):
@@ -37,26 +37,27 @@ class FindingCategory(Enum):
     - HOST_HEADER: Requires demonstrable impact
     - SSRF: Requires OOB callback or content verification
     """
-    TLS_SSL = "tls_ssl"                    # SSL/TLS issues (auto-confirm from sslscan/testssl)
-    EXPOSURE = "exposure"                  # Info disclosure, sensitive files, phpinfo
-    CVE_VERSION = "cve_version"            # Version-based CVEs (requires version match)
-    INJECTION_SSTI = "injection_ssti"      # SSTI (requires canary+flip verification)
-    INJECTION_SQLI = "injection_sqli"      # SQL Injection
-    INJECTION_XSS = "injection_xss"        # Cross-Site Scripting
-    INJECTION_CMDI = "injection_cmdi"      # Command Injection
-    INJECTION_XXE = "injection_xxe"        # XML External Entity
-    HOST_HEADER = "host_header"            # Host Header Injection (impact-only)
-    SSRF = "ssrf"                          # Server-Side Request Forgery
-    CONFIG = "config"                      # Misconfigurations
-    AUTH = "auth"                          # Authentication issues
-    ACCESS_CONTROL = "access_control"      # Authorization/IDOR issues
-    CRYPTO = "crypto"                      # Cryptographic weaknesses
-    SECRETS = "secrets"                    # Hardcoded secrets/credentials
-    CSRF = "csrf"                          # Cross-Site Request Forgery
-    OPEN_REDIRECT = "open_redirect"        # Open Redirect
-    FILE_UPLOAD = "file_upload"            # File Upload vulnerabilities
-    DESERIALIZATION = "deserialization"    # Insecure Deserialization
-    OTHER = "other"                        # Uncategorized
+
+    TLS_SSL = "tls_ssl"  # SSL/TLS issues (auto-confirm from sslscan/testssl)
+    EXPOSURE = "exposure"  # Info disclosure, sensitive files, phpinfo
+    CVE_VERSION = "cve_version"  # Version-based CVEs (requires version match)
+    INJECTION_SSTI = "injection_ssti"  # SSTI (requires canary+flip verification)
+    INJECTION_SQLI = "injection_sqli"  # SQL Injection
+    INJECTION_XSS = "injection_xss"  # Cross-Site Scripting
+    INJECTION_CMDI = "injection_cmdi"  # Command Injection
+    INJECTION_XXE = "injection_xxe"  # XML External Entity
+    HOST_HEADER = "host_header"  # Host Header Injection (impact-only)
+    SSRF = "ssrf"  # Server-Side Request Forgery
+    CONFIG = "config"  # Misconfigurations
+    AUTH = "auth"  # Authentication issues
+    ACCESS_CONTROL = "access_control"  # Authorization/IDOR issues
+    CRYPTO = "crypto"  # Cryptographic weaknesses
+    SECRETS = "secrets"  # Hardcoded secrets/credentials
+    CSRF = "csrf"  # Cross-Site Request Forgery
+    OPEN_REDIRECT = "open_redirect"  # Open Redirect
+    FILE_UPLOAD = "file_upload"  # File Upload vulnerabilities
+    DESERIALIZATION = "deserialization"  # Insecure Deserialization
+    OTHER = "other"  # Uncategorized
 
 
 class VerificationStatusV2(Enum):
@@ -68,13 +69,14 @@ class VerificationStatusV2(Enum):
     State machine:
     NEEDS_REVIEW -> PENDING -> IN_PROGRESS -> CONFIRMED/LIKELY/SUPPRESSED_FP/MANUAL_REVIEW
     """
-    NEEDS_REVIEW = "needs_review"          # Default state - requires verification
-    PENDING = "pending"                    # Queued for verification
-    IN_PROGRESS = "in_progress"            # Currently being verified
-    CONFIRMED = "confirmed"                # Verified with evidence
-    LIKELY = "likely"                      # High confidence, no definitive proof
-    SUPPRESSED_FP = "suppressed_fp"        # Confirmed false positive (suppressed)
-    MANUAL_REVIEW = "manual_review"        # Cannot auto-verify, needs human review
+
+    NEEDS_REVIEW = "needs_review"  # Default state - requires verification
+    PENDING = "pending"  # Queued for verification
+    IN_PROGRESS = "in_progress"  # Currently being verified
+    CONFIRMED = "confirmed"  # Verified with evidence
+    LIKELY = "likely"  # High confidence, no definitive proof
+    SUPPRESSED_FP = "suppressed_fp"  # Confirmed false positive (suppressed)
+    MANUAL_REVIEW = "manual_review"  # Cannot auto-verify, needs human review
 
 
 class ScannerType(Enum):
@@ -83,10 +85,11 @@ class ScannerType(Enum):
 
     Used to properly attribute findings and handle failures.
     """
-    LOCAL = "local"                        # Local tool execution (subprocess)
-    VPS = "vps"                            # Remote VPS execution (SSH)
-    API_ENTERPRISE = "api_enterprise"      # Enterprise scanner API (Acunetix, Burp, Nessus, ZAP)
-    FAILED = "failed"                      # Tool failed to execute
+
+    LOCAL = "local"  # Local tool execution (subprocess)
+    VPS = "vps"  # Remote VPS execution (SSH)
+    API_ENTERPRISE = "api_enterprise"  # Enterprise scanner API (Acunetix, Burp, Nessus, ZAP)
+    FAILED = "failed"  # Tool failed to execute
 
 
 class SeverityV2(Enum):
@@ -95,11 +98,12 @@ class SeverityV2(Enum):
 
     Maps to CVSS score ranges but stored as enum strings.
     """
-    CRITICAL = "critical"                  # CVSS 9.0-10.0
-    HIGH = "high"                          # CVSS 7.0-8.9
-    MEDIUM = "medium"                      # CVSS 4.0-6.9
-    LOW = "low"                            # CVSS 0.1-3.9
-    INFO = "info"                          # CVSS 0.0 / Informational
+
+    CRITICAL = "critical"  # CVSS 9.0-10.0
+    HIGH = "high"  # CVSS 7.0-8.9
+    MEDIUM = "medium"  # CVSS 4.0-6.9
+    LOW = "low"  # CVSS 0.1-3.9
+    INFO = "info"  # CVSS 0.0 / Informational
 
     @classmethod
     def from_cvss(cls, score: float) -> "SeverityV2":
@@ -119,11 +123,19 @@ class SeverityV2(Enum):
         """Convert string to severity enum"""
         s_lower = s.lower().strip()
         mapping = {
-            "critical": cls.CRITICAL, "crit": cls.CRITICAL, "4": cls.CRITICAL,
-            "high": cls.HIGH, "3": cls.HIGH,
-            "medium": cls.MEDIUM, "med": cls.MEDIUM, "2": cls.MEDIUM,
-            "low": cls.LOW, "1": cls.LOW,
-            "info": cls.INFO, "informational": cls.INFO, "0": cls.INFO,
+            "critical": cls.CRITICAL,
+            "crit": cls.CRITICAL,
+            "4": cls.CRITICAL,
+            "high": cls.HIGH,
+            "3": cls.HIGH,
+            "medium": cls.MEDIUM,
+            "med": cls.MEDIUM,
+            "2": cls.MEDIUM,
+            "low": cls.LOW,
+            "1": cls.LOW,
+            "info": cls.INFO,
+            "informational": cls.INFO,
+            "0": cls.INFO,
         }
         return mapping.get(s_lower, cls.INFO)
 
@@ -165,8 +177,8 @@ class FindingV2:
     vuln_type: str = "other"  # String for flexibility with legacy types
 
     # Location
-    target: str = ""                       # Base target (domain/IP)
-    url: str = ""                          # Full URL (properly joined, no //)
+    target: str = ""  # Base target (domain/IP)
+    url: str = ""  # Full URL (properly joined, no //)
     parameter: Optional[str] = None
     method: str = "GET"
 
@@ -183,9 +195,9 @@ class FindingV2:
     verified_at: Optional[datetime] = None
 
     # Source Tracking
-    source_tool: str = "unknown"           # Original scanner name
+    source_tool: str = "unknown"  # Original scanner name
     source_scanner_type: ScannerType = ScannerType.LOCAL
-    source_raw_id: Optional[str] = None    # Original finding ID from scanner
+    source_raw_id: Optional[str] = None  # Original finding ID from scanner
     discovered_at: datetime = field(default_factory=datetime.utcnow)
 
     # Metadata
@@ -303,28 +315,28 @@ class FindingV2:
         if self.severity == SeverityV2.MEDIUM:
             return self.verification_status in [
                 VerificationStatusV2.CONFIRMED,
-                VerificationStatusV2.LIKELY
+                VerificationStatusV2.LIKELY,
             ]
 
         # Low and Info - more lenient
         return self.verification_status not in [
             VerificationStatusV2.NEEDS_REVIEW,
             VerificationStatusV2.PENDING,
-            VerificationStatusV2.SUPPRESSED_FP
+            VerificationStatusV2.SUPPRESSED_FP,
         ]
 
     def needs_verification(self) -> bool:
         """Check if finding requires verification"""
         return self.verification_status in [
             VerificationStatusV2.NEEDS_REVIEW,
-            VerificationStatusV2.PENDING
+            VerificationStatusV2.PENDING,
         ]
 
     def mark_verified(
         self,
         status: VerificationStatusV2,
         evidence: Optional[str] = None,
-        confidence: Optional[float] = None
+        confidence: Optional[float] = None,
     ) -> None:
         """Mark finding with verification result"""
         self.verification_status = status
@@ -346,11 +358,7 @@ class FindingV2:
             self.confirmed = False
             self.exploited = False
 
-    def add_screenshot(
-        self,
-        data_uri: str,
-        description: str = ""
-    ) -> None:
+    def add_screenshot(self, data_uri: str, description: str = "") -> None:
         """
         Add a screenshot as evidence.
 
@@ -358,16 +366,15 @@ class FindingV2:
             data_uri: Base64 data URI (data:image/png;base64,...)
             description: Optional description of what the screenshot shows
         """
-        self.screenshots.append({
-            "data_uri": data_uri,
-            "description": description or f"Screenshot {len(self.screenshots) + 1}"
-        })
+        self.screenshots.append(
+            {
+                "data_uri": data_uri,
+                "description": description or f"Screenshot {len(self.screenshots) + 1}",
+            }
+        )
 
     def add_http_evidence(
-        self,
-        request: str,
-        response: str,
-        curl_command: Optional[str] = None
+        self, request: str, response: str, curl_command: Optional[str] = None
     ) -> None:
         """
         Add HTTP request/response evidence.
@@ -441,14 +448,22 @@ class FindingV2:
             evidence=data.get("evidence", ""),
             raw_request=data.get("raw_request"),
             raw_response=data.get("raw_response"),
-            verification_status=VerificationStatusV2(data.get("verification_status", "needs_review")),
+            verification_status=VerificationStatusV2(
+                data.get("verification_status", "needs_review")
+            ),
             verification_evidence=data.get("verification_evidence", []),
             verification_attempts=data.get("verification_attempts", 0),
-            verified_at=datetime.fromisoformat(data["verified_at"]) if data.get("verified_at") else None,
+            verified_at=(
+                datetime.fromisoformat(data["verified_at"]) if data.get("verified_at") else None
+            ),
             source_tool=data.get("source_tool", "unknown"),
             source_scanner_type=ScannerType(data.get("source_scanner_type", "local")),
             source_raw_id=data.get("source_raw_id"),
-            discovered_at=datetime.fromisoformat(data["discovered_at"]) if data.get("discovered_at") else datetime.utcnow(),
+            discovered_at=(
+                datetime.fromisoformat(data["discovered_at"])
+                if data.get("discovered_at")
+                else datetime.utcnow()
+            ),
             cvss_score=data.get("cvss_score"),
             cwe_id=data.get("cwe_id"),
             cve_ids=data.get("cve_ids", []),
@@ -473,7 +488,7 @@ class FindingV2:
         - VerificationStatus.FALSE_POSITIVE -> SUPPRESSED_FP
         - Auto-categorizes based on vuln_type
         """
-        from aipt_v2.models.findings import Finding, VerificationStatus, Severity
+        from aipt_v2.models.findings import Severity, VerificationStatus
 
         # Map legacy verification status
         status_mapping = {
@@ -497,7 +512,11 @@ class FindingV2:
         }
 
         # Determine category from vuln_type
-        category = categorize_vuln_type(finding.vuln_type.value if hasattr(finding.vuln_type, 'value') else str(finding.vuln_type))
+        category = categorize_vuln_type(
+            finding.vuln_type.value
+            if hasattr(finding.vuln_type, "value")
+            else str(finding.vuln_type)
+        )
 
         # Determine scanner type from source
         scanner_type = determine_scanner_type(finding.source)
@@ -507,7 +526,11 @@ class FindingV2:
             title=finding.title,
             severity=severity_mapping.get(finding.severity, SeverityV2.INFO),
             category=category,
-            vuln_type=finding.vuln_type.value if hasattr(finding.vuln_type, 'value') else str(finding.vuln_type),
+            vuln_type=(
+                finding.vuln_type.value
+                if hasattr(finding.vuln_type, "value")
+                else str(finding.vuln_type)
+            ),
             target=urlparse(finding.url).netloc,
             url=finding.url,
             parameter=finding.parameter,
@@ -516,29 +539,37 @@ class FindingV2:
             evidence=finding.evidence,
             raw_request=finding.request,
             raw_response=finding.response,
-            verification_status=status_mapping.get(finding.verification_status, VerificationStatusV2.NEEDS_REVIEW),
-            verification_evidence=finding.verification_evidence if hasattr(finding, 'verification_evidence') else [],
-            verification_attempts=finding.verification_attempts if hasattr(finding, 'verification_attempts') else 0,
-            verified_at=finding.last_verification_at if hasattr(finding, 'last_verification_at') else None,
+            verification_status=status_mapping.get(
+                finding.verification_status, VerificationStatusV2.NEEDS_REVIEW
+            ),
+            verification_evidence=(
+                finding.verification_evidence if hasattr(finding, "verification_evidence") else []
+            ),
+            verification_attempts=(
+                finding.verification_attempts if hasattr(finding, "verification_attempts") else 0
+            ),
+            verified_at=(
+                finding.last_verification_at if hasattr(finding, "last_verification_at") else None
+            ),
             source_tool=finding.source,
             source_scanner_type=scanner_type,
-            source_raw_id=finding.source_id if hasattr(finding, 'source_id') else None,
+            source_raw_id=finding.source_id if hasattr(finding, "source_id") else None,
             discovered_at=finding.discovered_at,
             cvss_score=finding.cvss_score,
             cwe_id=finding.cwe_id,
-            cve_ids=finding.cve_ids if hasattr(finding, 'cve_ids') else [],
-            references=finding.references if hasattr(finding, 'references') else [],
-            remediation=finding.remediation if hasattr(finding, 'remediation') else "",
-            ai_reasoning=finding.ai_reasoning if hasattr(finding, 'ai_reasoning') else None,
-            ai_confidence=finding.ai_confidence if hasattr(finding, 'ai_confidence') else None,
-            confirmed=finding.confirmed if hasattr(finding, 'confirmed') else False,
-            exploited=finding.exploited if hasattr(finding, 'exploited') else False,
-            poc_command=finding.poc_command if hasattr(finding, 'poc_command') else None,
+            cve_ids=finding.cve_ids if hasattr(finding, "cve_ids") else [],
+            references=finding.references if hasattr(finding, "references") else [],
+            remediation=finding.remediation if hasattr(finding, "remediation") else "",
+            ai_reasoning=finding.ai_reasoning if hasattr(finding, "ai_reasoning") else None,
+            ai_confidence=finding.ai_confidence if hasattr(finding, "ai_confidence") else None,
+            confirmed=finding.confirmed if hasattr(finding, "confirmed") else False,
+            exploited=finding.exploited if hasattr(finding, "exploited") else False,
+            poc_command=finding.poc_command if hasattr(finding, "poc_command") else None,
         )
 
     def to_legacy(self) -> Any:
         """Convert FindingV2 back to legacy Finding for backward compatibility"""
-        from aipt_v2.models.findings import Finding, VerificationStatus, Severity, VulnerabilityType
+        from aipt_v2.models.findings import Finding, Severity, VerificationStatus, VulnerabilityType
 
         # Reverse map verification status
         status_mapping = {
@@ -590,7 +621,9 @@ class FindingV2:
             discovered_at=self.discovered_at,
             ai_reasoning=self.ai_reasoning,
             ai_confidence=self.ai_confidence,
-            verification_status=status_mapping.get(self.verification_status, VerificationStatus.UNVERIFIED),
+            verification_status=status_mapping.get(
+                self.verification_status, VerificationStatus.UNVERIFIED
+            ),
             verification_attempts=self.verification_attempts,
             last_verification_at=self.verified_at,
             verification_evidence=self.verification_evidence,
@@ -640,7 +673,10 @@ def categorize_vuln_type(vuln_type: str) -> FindingCategory:
         return FindingCategory.TLS_SSL
 
     # Exposures
-    if any(x in vuln_lower for x in ["exposure", "disclosure", "phpinfo", "directory_listing", "backup"]):
+    if any(
+        x in vuln_lower
+        for x in ["exposure", "disclosure", "phpinfo", "directory_listing", "backup"]
+    ):
         return FindingCategory.EXPOSURE
 
     # CVE/Version
@@ -734,6 +770,7 @@ def determine_scanner_type(source: str) -> ScannerType:
 
 def _min_datetime(dt1: datetime, dt2: datetime) -> datetime:
     """Compare datetimes handling timezone-aware vs naive safely."""
+
     # Normalize both to naive UTC for comparison
     def to_naive_utc(dt: datetime) -> datetime:
         if dt.tzinfo is not None:
@@ -771,8 +808,16 @@ def merge_findings_v2(primary: FindingV2, duplicate: FindingV2) -> FindingV2:
         VerificationStatusV2.SUPPRESSED_FP,
     ]
 
-    primary_priority = status_priority.index(primary.verification_status) if primary.verification_status in status_priority else 99
-    dup_priority = status_priority.index(duplicate.verification_status) if duplicate.verification_status in status_priority else 99
+    primary_priority = (
+        status_priority.index(primary.verification_status)
+        if primary.verification_status in status_priority
+        else 99
+    )
+    dup_priority = (
+        status_priority.index(duplicate.verification_status)
+        if duplicate.verification_status in status_priority
+        else 99
+    )
 
     if dup_priority < primary_priority:
         primary, duplicate = duplicate, primary
@@ -783,7 +828,9 @@ def merge_findings_v2(primary: FindingV2, duplicate: FindingV2) -> FindingV2:
         merged_evidence = f"{merged_evidence}\n\n--- Additional Evidence ---\n{duplicate.evidence}"
 
     # Combine verification evidence
-    merged_verification_evidence = list(set(primary.verification_evidence + duplicate.verification_evidence))
+    merged_verification_evidence = list(
+        set(primary.verification_evidence + duplicate.verification_evidence)
+    )
 
     # Track merged IDs
     merged_from = list(set(primary.merged_from + duplicate.merged_from + [duplicate.id]))
@@ -807,7 +854,11 @@ def merge_findings_v2(primary: FindingV2, duplicate: FindingV2) -> FindingV2:
         verification_evidence=merged_verification_evidence,
         verification_attempts=max(primary.verification_attempts, duplicate.verification_attempts),
         verified_at=primary.verified_at or duplicate.verified_at,
-        source_tool=f"{primary.source_tool}, {duplicate.source_tool}" if primary.source_tool != duplicate.source_tool else primary.source_tool,
+        source_tool=(
+            f"{primary.source_tool}, {duplicate.source_tool}"
+            if primary.source_tool != duplicate.source_tool
+            else primary.source_tool
+        ),
         source_scanner_type=primary.source_scanner_type,
         source_raw_id=primary.source_raw_id,
         discovered_at=_min_datetime(primary.discovered_at, duplicate.discovered_at),

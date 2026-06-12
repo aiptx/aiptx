@@ -3,14 +3,13 @@ AIPT Terminal Executor
 
 Async command execution with streaming output, timeouts, and safety controls.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-import re
 import shlex
-import signal
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 
 class ExecutionStatus(Enum):
     """Command execution status"""
+
     PENDING = "pending"
     RUNNING = "running"
     SUCCESS = "success"
@@ -33,6 +33,7 @@ class ExecutionStatus(Enum):
 @dataclass
 class ExecutionConfig:
     """Configuration for command execution"""
+
     timeout: float = 300.0  # 5 minutes default
     working_dir: Optional[str] = None
     environment: dict[str, str] = field(default_factory=dict)
@@ -43,12 +44,14 @@ class ExecutionConfig:
 
     # Safety settings
     allow_sudo: bool = False
-    blocked_commands: list[str] = field(default_factory=lambda: [
-        "rm -rf /",
-        "mkfs",
-        "dd if=/dev/zero",
-        ":(){:|:&};:",  # Fork bomb
-    ])
+    blocked_commands: list[str] = field(
+        default_factory=lambda: [
+            "rm -rf /",
+            "mkfs",
+            "dd if=/dev/zero",
+            ":(){:|:&};:",  # Fork bomb
+        ]
+    )
 
     # Resource limits
     max_memory_mb: int = 1024
@@ -58,6 +61,7 @@ class ExecutionConfig:
 @dataclass
 class CommandResult:
     """Result of a command execution"""
+
     command: str
     status: ExecutionStatus
     exit_code: Optional[int] = None
@@ -200,7 +204,9 @@ class TerminalExecutor:
                 )
 
                 result.exit_code = process.returncode
-                result.status = ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILED
+                result.status = (
+                    ExecutionStatus.SUCCESS if process.returncode == 0 else ExecutionStatus.FAILED
+                )
 
                 if stdout:
                     result.stdout = self._limit_output(stdout.decode("utf-8", errors="replace"))
@@ -381,7 +387,7 @@ class TerminalExecutor:
     def _limit_output(self, output: str) -> str:
         """Limit output size"""
         if len(output) > self.config.max_output_size:
-            return output[:self.config.max_output_size] + "\n[OUTPUT TRUNCATED]"
+            return output[: self.config.max_output_size] + "\n[OUTPUT TRUNCATED]"
         return output
 
     def get_history(self, limit: int = 100) -> list[CommandResult]:

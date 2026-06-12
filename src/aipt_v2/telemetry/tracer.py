@@ -11,12 +11,10 @@ Provides comprehensive tracking of:
 
 import json
 import logging
-import os
+from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Optional
-from dataclasses import dataclass, field
-
 
 logger = logging.getLogger(__name__)
 
@@ -24,6 +22,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ToolExecution:
     """Record of a tool execution"""
+
     execution_id: int
     agent_id: str
     tool_name: str
@@ -37,6 +36,7 @@ class ToolExecution:
 @dataclass
 class AgentRecord:
     """Record of an agent"""
+
     agent_id: str
     name: str
     task: str

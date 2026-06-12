@@ -10,10 +10,9 @@ Uses LLM intelligence to prioritize vulnerability findings based on:
 
 This helps pentesters focus on the most impactful findings first.
 """
+
 from __future__ import annotations
 
-import asyncio
-import json
 import logging
 import os
 from dataclasses import dataclass, field
@@ -25,31 +24,33 @@ from typing import Any
 # This ensures consistency with Finding objects which use the same enum
 from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
 
-
 logger = logging.getLogger(__name__)
 
 
 class Exploitability(Enum):
     """How easy is this to exploit in the real world"""
-    TRIVIAL = "trivial"       # Script kiddie level, public exploits
-    EASY = "easy"             # Basic skills required
-    MODERATE = "moderate"     # Some expertise needed
-    DIFFICULT = "difficult"   # Advanced skills, custom exploit
+
+    TRIVIAL = "trivial"  # Script kiddie level, public exploits
+    EASY = "easy"  # Basic skills required
+    MODERATE = "moderate"  # Some expertise needed
+    DIFFICULT = "difficult"  # Advanced skills, custom exploit
     THEORETICAL = "theoretical"  # Requires specific conditions
 
 
 class BusinessCriticality(Enum):
     """Business impact if exploited"""
-    CRITICAL = "critical"     # Business-ending, massive breach
-    HIGH = "high"             # Significant financial/reputational damage
-    MEDIUM = "medium"         # Notable impact, recoverable
-    LOW = "low"               # Minor impact
-    MINIMAL = "minimal"       # Negligible business impact
+
+    CRITICAL = "critical"  # Business-ending, massive breach
+    HIGH = "high"  # Significant financial/reputational damage
+    MEDIUM = "medium"  # Notable impact, recoverable
+    LOW = "low"  # Minor impact
+    MINIMAL = "minimal"  # Negligible business impact
 
 
 @dataclass
 class RiskAssessment:
     """Detailed risk assessment for a finding"""
+
     finding: Finding
 
     # AI-assessed factors
@@ -98,6 +99,7 @@ class RiskAssessment:
 @dataclass
 class TriageResult:
     """Complete triage result for all findings"""
+
     assessments: list[RiskAssessment]
     prioritized_findings: list[Finding]
 
@@ -116,11 +118,7 @@ class TriageResult:
 
     def get_top_priority(self, n: int = 10) -> list[RiskAssessment]:
         """Get top N priority findings"""
-        sorted_assessments = sorted(
-            self.assessments,
-            key=lambda a: a.priority_score,
-            reverse=True
-        )
+        sorted_assessments = sorted(self.assessments, key=lambda a: a.priority_score, reverse=True)
         return sorted_assessments[:n]
 
     def to_dict(self) -> dict[str, Any]:
@@ -283,9 +281,7 @@ class AITriage:
         # Assess each finding
         assessments = []
         for finding in findings:
-            assessment = await self._assess_finding(
-                finding, business_context, target_type
-            )
+            assessment = await self._assess_finding(finding, business_context, target_type)
             assessments.append(assessment)
 
         # Sort by priority score
@@ -293,7 +289,9 @@ class AITriage:
         prioritized = [a.finding for a in assessments]
 
         # Identify critical and immediate action items
-        critical = [a for a in assessments if a.business_criticality == BusinessCriticality.CRITICAL]
+        critical = [
+            a for a in assessments if a.business_criticality == BusinessCriticality.CRITICAL
+        ]
         immediate = [a for a in assessments if a.requires_immediate_action]
         quick_wins = [a.finding for a in assessments if a.quick_win]
 
@@ -329,9 +327,9 @@ class AITriage:
 
         # Calculate priority score (weighted combination)
         priority_score = int(
-            (exploitability_score * 0.4) +
-            (impact_score * 0.4) +
-            (self._severity_to_score(finding.severity) * 0.2)
+            (exploitability_score * 0.4)
+            + (impact_score * 0.4)
+            + (self._severity_to_score(finding.severity) * 0.2)
         )
 
         # Generate reasoning (use LLM if available, otherwise heuristic)
@@ -354,10 +352,9 @@ class AITriage:
         quick_win = self._is_quick_win(finding)
 
         # Check if requires immediate action
-        immediate = (
-            business_criticality == BusinessCriticality.CRITICAL or
-            (exploitability in [Exploitability.TRIVIAL, Exploitability.EASY] and
-             finding.severity in [Severity.CRITICAL, Severity.HIGH])
+        immediate = business_criticality == BusinessCriticality.CRITICAL or (
+            exploitability in [Exploitability.TRIVIAL, Exploitability.EASY]
+            and finding.severity in [Severity.CRITICAL, Severity.HIGH]
         )
 
         return RiskAssessment(
@@ -394,10 +391,7 @@ class AITriage:
                 Severity.LOW: (Exploitability.DIFFICULT, 30),
                 Severity.INFO: (Exploitability.THEORETICAL, 10),
             }
-            base, score = severity_map.get(
-                finding.severity,
-                (Exploitability.MODERATE, 50)
-            )
+            base, score = severity_map.get(finding.severity, (Exploitability.MODERATE, 50))
 
         # Adjust score based on additional factors
         if finding.confirmed:
@@ -425,8 +419,16 @@ class AITriage:
 
         # Adjust for business context keywords
         high_value_keywords = [
-            "payment", "financial", "pii", "healthcare", "hipaa",
-            "pci", "credentials", "admin", "authentication", "api",
+            "payment",
+            "financial",
+            "pii",
+            "healthcare",
+            "hipaa",
+            "pci",
+            "credentials",
+            "admin",
+            "authentication",
+            "api",
         ]
 
         context_lower = (business_context + finding.url + finding.description).lower()
@@ -518,8 +520,7 @@ class AITriage:
         }
 
         impact = impacts.get(
-            finding.vuln_type,
-            f"could have {finding.severity.value} impact on the application"
+            finding.vuln_type, f"could have {finding.severity.value} impact on the application"
         )
 
         return f"This vulnerability {impact}."
@@ -560,8 +561,7 @@ class AITriage:
         }
 
         return scenarios.get(
-            finding.vuln_type,
-            f"Attacker exploits {finding.vuln_type.value} at {finding.url}"
+            finding.vuln_type, f"Attacker exploits {finding.vuln_type.value} at {finding.url}"
         )
 
     def _can_use_llm(self) -> bool:
@@ -592,12 +592,14 @@ class AITriage:
         if not assessments:
             return "No vulnerabilities were identified during this assessment."
 
-        critical = sum(1 for a in assessments if a.business_criticality == BusinessCriticality.CRITICAL)
+        critical = sum(
+            1 for a in assessments if a.business_criticality == BusinessCriticality.CRITICAL
+        )
         high = sum(1 for a in assessments if a.business_criticality == BusinessCriticality.HIGH)
         immediate = sum(1 for a in assessments if a.requires_immediate_action)
 
         lines = [
-            f"## Executive Summary\n",
+            "## Executive Summary\n",
             f"This assessment identified **{len(assessments)} vulnerabilities** requiring attention.\n",
         ]
 
@@ -607,7 +609,7 @@ class AITriage:
                 f"require priority remediation.\n"
             )
 
-        lines.append(f"\n### Risk Breakdown\n")
+        lines.append("\n### Risk Breakdown\n")
         lines.append(f"- **Critical Impact:** {critical}")
         lines.append(f"- **High Impact:** {high}")
         lines.append(f"- **Requires Immediate Action:** {immediate}")
@@ -636,9 +638,7 @@ class AITriage:
         quick_wins = [a for a in assessments if a.quick_win]
 
         if priority_1:
-            recommendations.append(
-                f"Address {len(priority_1)} critical-priority items immediately"
-            )
+            recommendations.append(f"Address {len(priority_1)} critical-priority items immediately")
 
         if quick_wins:
             recommendations.append(
@@ -649,23 +649,18 @@ class AITriage:
         vuln_types = {a.finding.vuln_type for a in assessments}
 
         if VulnerabilityType.SQL_INJECTION in vuln_types:
-            recommendations.append(
-                "Implement parameterized queries to eliminate SQL injection"
-            )
+            recommendations.append("Implement parameterized queries to eliminate SQL injection")
 
-        if VulnerabilityType.XSS_STORED in vuln_types or VulnerabilityType.XSS_REFLECTED in vuln_types:
-            recommendations.append(
-                "Deploy Content Security Policy and output encoding"
-            )
+        if (
+            VulnerabilityType.XSS_STORED in vuln_types
+            or VulnerabilityType.XSS_REFLECTED in vuln_types
+        ):
+            recommendations.append("Deploy Content Security Policy and output encoding")
 
         if VulnerabilityType.IDOR in vuln_types:
-            recommendations.append(
-                "Implement proper authorization checks on all object access"
-            )
+            recommendations.append("Implement proper authorization checks on all object access")
 
         if VulnerabilityType.DEFAULT_CREDENTIALS in vuln_types:
-            recommendations.append(
-                "Change all default credentials immediately"
-            )
+            recommendations.append("Change all default credentials immediately")
 
         return recommendations[:10]  # Top 10

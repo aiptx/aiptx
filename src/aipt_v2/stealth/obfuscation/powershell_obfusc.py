@@ -10,8 +10,6 @@ from __future__ import annotations
 import base64
 import logging
 import random
-import string
-from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +51,7 @@ class PowerShellObfuscator:
             Obfuscated command
         """
         if techniques is None:
-            techniques = self._techniques[:level * 2]
+            techniques = self._techniques[: level * 2]
 
         result = command
 
@@ -104,7 +102,7 @@ class PowerShellObfuscator:
                 # Find end of string
                 end = command.find(quote, i + 1)
                 if end != -1:
-                    original = command[i+1:end]
+                    original = command[i + 1 : end]
                     if len(original) > 3:
                         # Break into parts
                         parts = []
@@ -112,7 +110,7 @@ class PowerShellObfuscator:
                             parts.append(f"'{original[j:j+3]}'")
                         result.append("(" + "+".join(parts) + ")")
                     else:
-                        result.append(command[i:end+1])
+                        result.append(command[i : end + 1])
                     i = end + 1
                 else:
                     result.append(command[i])
@@ -135,17 +133,28 @@ class PowerShellObfuscator:
         """
         # PowerShell is case-insensitive
         keywords = [
-            "powershell", "invoke", "expression", "iex", "new-object",
-            "webclient", "downloadstring", "downloadfile", "system",
-            "net", "reflection", "assembly", "load", "type", "method",
+            "powershell",
+            "invoke",
+            "expression",
+            "iex",
+            "new-object",
+            "webclient",
+            "downloadstring",
+            "downloadfile",
+            "system",
+            "net",
+            "reflection",
+            "assembly",
+            "load",
+            "type",
+            "method",
         ]
 
         result = command
         for keyword in keywords:
             if keyword in result.lower():
                 randomized = "".join(
-                    c.upper() if random.random() > 0.5 else c.lower()
-                    for c in keyword
+                    c.upper() if random.random() > 0.5 else c.lower() for c in keyword
                 )
                 result = result.replace(keyword, randomized)
                 result = result.replace(keyword.title(), randomized)
@@ -206,8 +215,14 @@ class PowerShellObfuscator:
         """
         # Backtick is escape character in PowerShell, ignored within keywords
         keywords = [
-            "Invoke", "Expression", "Object", "WebClient",
-            "Download", "String", "System", "Reflection",
+            "Invoke",
+            "Expression",
+            "Object",
+            "WebClient",
+            "Download",
+            "String",
+            "System",
+            "Reflection",
         ]
 
         result = command

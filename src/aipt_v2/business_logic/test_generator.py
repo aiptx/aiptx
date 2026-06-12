@@ -6,23 +6,20 @@ based on application analysis and known vulnerability patterns.
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
-from aipt_v2.business_logic.patterns import (
-    TestPattern,
-    TestCase,
-    PatternCategory,
-    TestSeverity,
-    get_all_patterns,
-)
 from aipt_v2.business_logic.analyzer import Workflow
+from aipt_v2.business_logic.patterns import (
+    TestCase,
+)
 
 
 @dataclass
 class GeneratedTest:
     """An AI-generated test case."""
+
     name: str
     description: str
     category: str
@@ -55,6 +52,7 @@ class GeneratedTest:
 @dataclass
 class GenerationContext:
     """Context for test generation."""
+
     target_url: str
     workflows: List[Workflow]
     discovered_endpoints: List[str]
@@ -168,19 +166,29 @@ class AITestGenerator:
             endpoint_lower = endpoint.lower()
 
             # Race condition targets
-            if any(kw in endpoint_lower for kw in ["payment", "transfer", "order", "checkout", "claim", "redeem"]):
+            if any(
+                kw in endpoint_lower
+                for kw in ["payment", "transfer", "order", "checkout", "claim", "redeem"]
+            ):
                 attack_surface["race_conditions"].append(endpoint)
 
             # Parameter tampering targets
-            if any(kw in endpoint_lower for kw in ["update", "edit", "modify", "create", "price", "quantity"]):
+            if any(
+                kw in endpoint_lower
+                for kw in ["update", "edit", "modify", "create", "price", "quantity"]
+            ):
                 attack_surface["parameter_tampering"].append(endpoint)
 
             # Workflow targets
-            if any(kw in endpoint_lower for kw in ["step", "wizard", "process", "checkout", "verify"]):
+            if any(
+                kw in endpoint_lower for kw in ["step", "wizard", "process", "checkout", "verify"]
+            ):
                 attack_surface["workflow_bypass"].append(endpoint)
 
             # Access control targets
-            if any(kw in endpoint_lower for kw in ["admin", "user", "profile", "settings", "manage"]):
+            if any(
+                kw in endpoint_lower for kw in ["admin", "user", "profile", "settings", "manage"]
+            ):
                 attack_surface["access_control"].append(endpoint)
 
         # Analyze workflow parameters
@@ -337,12 +345,14 @@ class AITestGenerator:
 
         elif attack_type == "mass_assignment":
             # Try to set internal fields
-            payload.update({
-                "role": "admin",
-                "is_admin": True,
-                "verified": True,
-                "approved": True,
-            })
+            payload.update(
+                {
+                    "role": "admin",
+                    "is_admin": True,
+                    "verified": True,
+                    "approved": True,
+                }
+            )
             for param in parameters:
                 payload[param] = f"{{{{test_{param}}}}}"
 
@@ -428,33 +438,37 @@ class AITestGenerator:
         # Price manipulation tests
         for endpoint in context.discovered_endpoints:
             if any(kw in endpoint.lower() for kw in ["cart", "checkout", "order"]):
-                tests.append(GeneratedTest(
-                    name=f"NegativePrice_{endpoint.replace('/', '_')}",
-                    description="Submit negative price to get credit",
-                    category="price_manipulation",
-                    attack_vector="negative_value_injection",
-                    method="POST",
-                    endpoint=endpoint,
-                    payload={"price": -100, "quantity": 1},
-                    expected_behavior="Reject negative prices",
-                    success_criteria=["added", "cart", "total"],
-                    risk_level="critical",
-                    reasoning="E-commerce endpoint may not validate price sign",
-                ))
+                tests.append(
+                    GeneratedTest(
+                        name=f"NegativePrice_{endpoint.replace('/', '_')}",
+                        description="Submit negative price to get credit",
+                        category="price_manipulation",
+                        attack_vector="negative_value_injection",
+                        method="POST",
+                        endpoint=endpoint,
+                        payload={"price": -100, "quantity": 1},
+                        expected_behavior="Reject negative prices",
+                        success_criteria=["added", "cart", "total"],
+                        risk_level="critical",
+                        reasoning="E-commerce endpoint may not validate price sign",
+                    )
+                )
 
-                tests.append(GeneratedTest(
-                    name=f"QuantityOverflow_{endpoint.replace('/', '_')}",
-                    description="Submit very large quantity for overflow",
-                    category="price_manipulation",
-                    attack_vector="integer_overflow",
-                    method="POST",
-                    endpoint=endpoint,
-                    payload={"quantity": 2147483647},
-                    expected_behavior="Validate quantity range",
-                    success_criteria=["added", "total"],
-                    risk_level="high",
-                    reasoning="Large quantities may cause integer overflow in total calculation",
-                ))
+                tests.append(
+                    GeneratedTest(
+                        name=f"QuantityOverflow_{endpoint.replace('/', '_')}",
+                        description="Submit very large quantity for overflow",
+                        category="price_manipulation",
+                        attack_vector="integer_overflow",
+                        method="POST",
+                        endpoint=endpoint,
+                        payload={"quantity": 2147483647},
+                        expected_behavior="Validate quantity range",
+                        success_criteria=["added", "total"],
+                        risk_level="high",
+                        reasoning="Large quantities may cause integer overflow in total calculation",
+                    )
+                )
 
         return tests
 
@@ -464,19 +478,21 @@ class AITestGenerator:
 
         for endpoint in context.discovered_endpoints:
             if any(kw in endpoint.lower() for kw in ["transfer", "payment", "withdraw"]):
-                tests.append(GeneratedTest(
-                    name=f"DoubleSpend_{endpoint.replace('/', '_')}",
-                    description="Concurrent withdrawal to double-spend",
-                    category="race_condition",
-                    attack_vector="concurrent_withdrawal",
-                    method="POST",
-                    endpoint=endpoint,
-                    payload={"amount": 100},
-                    expected_behavior="Only one withdrawal should succeed",
-                    success_criteria=["success", "completed"],
-                    risk_level="critical",
-                    reasoning="Financial transactions vulnerable to race conditions",
-                ))
+                tests.append(
+                    GeneratedTest(
+                        name=f"DoubleSpend_{endpoint.replace('/', '_')}",
+                        description="Concurrent withdrawal to double-spend",
+                        category="race_condition",
+                        attack_vector="concurrent_withdrawal",
+                        method="POST",
+                        endpoint=endpoint,
+                        payload={"amount": 100},
+                        expected_behavior="Only one withdrawal should succeed",
+                        success_criteria=["success", "completed"],
+                        risk_level="critical",
+                        reasoning="Financial transactions vulnerable to race conditions",
+                    )
+                )
 
         return tests
 
@@ -486,19 +502,21 @@ class AITestGenerator:
 
         for endpoint in context.discovered_endpoints:
             if any(kw in endpoint.lower() for kw in ["vote", "like", "follow"]):
-                tests.append(GeneratedTest(
-                    name=f"VoteBombing_{endpoint.replace('/', '_')}",
-                    description="Submit multiple votes via race condition",
-                    category="race_condition",
-                    attack_vector="concurrent_votes",
-                    method="POST",
-                    endpoint=endpoint,
-                    payload={"target_id": "1", "direction": "up"},
-                    expected_behavior="One vote per user enforced",
-                    success_criteria=["voted", "success"],
-                    risk_level="medium",
-                    reasoning="Voting endpoints may allow duplicate votes via race condition",
-                ))
+                tests.append(
+                    GeneratedTest(
+                        name=f"VoteBombing_{endpoint.replace('/', '_')}",
+                        description="Submit multiple votes via race condition",
+                        category="race_condition",
+                        attack_vector="concurrent_votes",
+                        method="POST",
+                        endpoint=endpoint,
+                        payload={"target_id": "1", "direction": "up"},
+                        expected_behavior="One vote per user enforced",
+                        success_criteria=["voted", "success"],
+                        risk_level="medium",
+                        reasoning="Voting endpoints may allow duplicate votes via race condition",
+                    )
+                )
 
         return tests
 

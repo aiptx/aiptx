@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ServiceInfo:
     """Information about a detected service."""
+
     port: int
     protocol: str
     service: str
@@ -39,6 +40,7 @@ class ServiceInfo:
 @dataclass
 class ScanResult:
     """Result of a scan operation."""
+
     host: str
     alive: bool
     services: list[ServiceInfo] = field(default_factory=list)
@@ -62,15 +64,129 @@ class ScanResult:
 
 # Common ports for quick scanning
 COMMON_PORTS = {
-    "top_20": [21, 22, 23, 25, 53, 80, 110, 111, 135, 139, 143, 443, 445, 993, 995, 1723, 3306, 3389, 5900, 8080],
+    "top_20": [
+        21,
+        22,
+        23,
+        25,
+        53,
+        80,
+        110,
+        111,
+        135,
+        139,
+        143,
+        443,
+        445,
+        993,
+        995,
+        1723,
+        3306,
+        3389,
+        5900,
+        8080,
+    ],
     "top_100": [
-        7, 9, 13, 21, 22, 23, 25, 26, 37, 53, 79, 80, 81, 88, 106, 110, 111, 113, 119, 135,
-        139, 143, 144, 179, 199, 389, 427, 443, 444, 445, 465, 513, 514, 515, 543, 544, 548,
-        554, 587, 631, 646, 873, 990, 993, 995, 1025, 1026, 1027, 1028, 1029, 1110, 1433,
-        1720, 1723, 1755, 1900, 2000, 2001, 2049, 2121, 2717, 3000, 3128, 3306, 3389, 3986,
-        4899, 5000, 5009, 5051, 5060, 5101, 5190, 5357, 5432, 5631, 5666, 5800, 5900, 6000,
-        6001, 6646, 7070, 8000, 8008, 8009, 8080, 8081, 8443, 8888, 9100, 9999, 10000, 32768,
-        49152, 49153, 49154, 49155, 49156, 49157,
+        7,
+        9,
+        13,
+        21,
+        22,
+        23,
+        25,
+        26,
+        37,
+        53,
+        79,
+        80,
+        81,
+        88,
+        106,
+        110,
+        111,
+        113,
+        119,
+        135,
+        139,
+        143,
+        144,
+        179,
+        199,
+        389,
+        427,
+        443,
+        444,
+        445,
+        465,
+        513,
+        514,
+        515,
+        543,
+        544,
+        548,
+        554,
+        587,
+        631,
+        646,
+        873,
+        990,
+        993,
+        995,
+        1025,
+        1026,
+        1027,
+        1028,
+        1029,
+        1110,
+        1433,
+        1720,
+        1723,
+        1755,
+        1900,
+        2000,
+        2001,
+        2049,
+        2121,
+        2717,
+        3000,
+        3128,
+        3306,
+        3389,
+        3986,
+        4899,
+        5000,
+        5009,
+        5051,
+        5060,
+        5101,
+        5190,
+        5357,
+        5432,
+        5631,
+        5666,
+        5800,
+        5900,
+        6000,
+        6001,
+        6646,
+        7070,
+        8000,
+        8008,
+        8009,
+        8080,
+        8081,
+        8443,
+        8888,
+        9100,
+        9999,
+        10000,
+        32768,
+        49152,
+        49153,
+        49154,
+        49155,
+        49156,
+        49157,
     ],
     "web": [80, 443, 8080, 8443, 8000, 8008, 8888, 9000, 9443],
     "database": [1433, 1521, 3306, 5432, 6379, 27017, 9200, 5984],
@@ -167,8 +283,12 @@ class InternalScanner:
 
         if ports:
             for key in scans:
-                scans[key]["command"] = scans[key]["command"].replace("--top-ports 20", f"-p{ports}")
-                scans[key]["command"] = scans[key]["command"].replace("--top-ports 100", f"-p{ports}")
+                scans[key]["command"] = scans[key]["command"].replace(
+                    "--top-ports 20", f"-p{ports}"
+                )
+                scans[key]["command"] = scans[key]["command"].replace(
+                    "--top-ports 100", f"-p{ports}"
+                )
 
         return scans.get(scan_type, scans["quick"])
 
@@ -224,19 +344,23 @@ class InternalScanner:
 
         # Bash TCP scan
         bash_ports = " ".join(map(str, ports))
-        commands.append({
-            "name": "bash_tcp_scan",
-            "command": f"for port in {bash_ports}; do (echo >/dev/tcp/{target}/$port) 2>/dev/null && echo \"$port open\"; done",
-            "description": "Bash /dev/tcp port scan",
-            "shell": "bash",
-        })
+        commands.append(
+            {
+                "name": "bash_tcp_scan",
+                "command": f'for port in {bash_ports}; do (echo >/dev/tcp/{target}/$port) 2>/dev/null && echo "$port open"; done',
+                "description": "Bash /dev/tcp port scan",
+                "shell": "bash",
+            }
+        )
 
         # Netcat scan
-        commands.append({
-            "name": "nc_scan",
-            "command": f"nc -zv {target} {ports[0]}-{ports[-1]} 2>&1 | grep -v refused",
-            "description": "Netcat port scan",
-        })
+        commands.append(
+            {
+                "name": "nc_scan",
+                "command": f"nc -zv {target} {ports[0]}-{ports[-1]} 2>&1 | grep -v refused",
+                "description": "Netcat port scan",
+            }
+        )
 
         # Python scan
         python_script = f"""
@@ -252,18 +376,22 @@ for port in ports:
         s.close()
     except: pass
 """
-        commands.append({
-            "name": "python_scan",
-            "command": f"python3 -c '{python_script.strip()}'",
-            "description": "Python socket scan",
-        })
+        commands.append(
+            {
+                "name": "python_scan",
+                "command": f"python3 -c '{python_script.strip()}'",
+                "description": "Python socket scan",
+            }
+        )
 
         # Perl scan
-        commands.append({
-            "name": "perl_scan",
-            "command": f'perl -e \'use IO::Socket; for $p ({",".join(map(str,ports))}){{$s=IO::Socket::INET->new(PeerAddr=>"{target}",PeerPort=>$p,Proto=>"tcp",Timeout=>1) and print "$p open\\n"}}\'',
-            "description": "Perl socket scan",
-        })
+        commands.append(
+            {
+                "name": "perl_scan",
+                "command": f'perl -e \'use IO::Socket; for $p ({",".join(map(str,ports))}){{$s=IO::Socket::INET->new(PeerAddr=>"{target}",PeerPort=>$p,Proto=>"tcp",Timeout=>1) and print "$p open\\n"}}\'',
+                "description": "Perl socket scan",
+            }
+        )
 
         return commands
 
@@ -310,7 +438,9 @@ for port in ports:
             },
         ]
 
-    def get_ldap_enum_commands(self, target: str, domain: str | None = None) -> list[dict[str, str]]:
+    def get_ldap_enum_commands(
+        self, target: str, domain: str | None = None
+    ) -> list[dict[str, str]]:
         """
         Get LDAP enumeration commands.
 
@@ -336,22 +466,26 @@ for port in ports:
 
         if domain:
             base_dn = ",".join(f"DC={part}" for part in domain.split("."))
-            commands.extend([
-                {
-                    "name": "ldap_users",
-                    "command": f"ldapsearch -x -H ldap://{target} -b '{base_dn}' '(objectClass=user)' sAMAccountName",
-                    "description": "Enumerate domain users",
-                },
-                {
-                    "name": "ldap_computers",
-                    "command": f"ldapsearch -x -H ldap://{target} -b '{base_dn}' '(objectClass=computer)' dNSHostName",
-                    "description": "Enumerate domain computers",
-                },
-            ])
+            commands.extend(
+                [
+                    {
+                        "name": "ldap_users",
+                        "command": f"ldapsearch -x -H ldap://{target} -b '{base_dn}' '(objectClass=user)' sAMAccountName",
+                        "description": "Enumerate domain users",
+                    },
+                    {
+                        "name": "ldap_computers",
+                        "command": f"ldapsearch -x -H ldap://{target} -b '{base_dn}' '(objectClass=computer)' dNSHostName",
+                        "description": "Enumerate domain computers",
+                    },
+                ]
+            )
 
         return commands
 
-    def get_web_discovery_commands(self, target: str, ports: list[int] | None = None) -> list[dict[str, str]]:
+    def get_web_discovery_commands(
+        self, target: str, ports: list[int] | None = None
+    ) -> list[dict[str, str]]:
         """
         Get web service discovery commands.
 
@@ -369,25 +503,31 @@ for port in ports:
 
         for port in ports:
             proto = "https" if port in (443, 8443, 9443) else "http"
-            commands.append({
-                "name": f"curl_{port}",
-                "command": f"curl -sIk {proto}://{target}:{port} --connect-timeout 5 | head -20",
-                "description": f"Check {proto}://{target}:{port}",
-            })
+            commands.append(
+                {
+                    "name": f"curl_{port}",
+                    "command": f"curl -sIk {proto}://{target}:{port} --connect-timeout 5 | head -20",
+                    "description": f"Check {proto}://{target}:{port}",
+                }
+            )
 
         # Directory busting
-        commands.append({
-            "name": "gobuster",
-            "command": f"gobuster dir -u http://{target} -w /usr/share/wordlists/dirb/common.txt -t 20",
-            "description": "Directory bruteforce",
-        })
+        commands.append(
+            {
+                "name": "gobuster",
+                "command": f"gobuster dir -u http://{target} -w /usr/share/wordlists/dirb/common.txt -t 20",
+                "description": "Directory bruteforce",
+            }
+        )
 
         # Tech detection
-        commands.append({
-            "name": "whatweb",
-            "command": f"whatweb -a 3 http://{target}",
-            "description": "Web technology fingerprinting",
-        })
+        commands.append(
+            {
+                "name": "whatweb",
+                "command": f"whatweb -a 3 http://{target}",
+                "description": "Web technology fingerprinting",
+            }
+        )
 
         return commands
 
@@ -402,6 +542,7 @@ for port in ports:
             List of ScanResult objects
         """
         import re
+
         results = []
         current_host = None
         current_services = []
@@ -412,11 +553,13 @@ for port in ports:
             if host_match:
                 # Save previous host
                 if current_host:
-                    results.append(ScanResult(
-                        host=current_host,
-                        alive=True,
-                        services=current_services,
-                    ))
+                    results.append(
+                        ScanResult(
+                            host=current_host,
+                            alive=True,
+                            services=current_services,
+                        )
+                    )
                 current_host = host_match.group(1)
                 current_services = []
                 continue
@@ -426,19 +569,23 @@ for port in ports:
             if port_match and current_host:
                 port, proto, state, service = port_match.groups()
                 if state == "open":
-                    current_services.append(ServiceInfo(
-                        port=int(port),
-                        protocol=proto,
-                        service=service.strip() if service else "unknown",
-                    ))
+                    current_services.append(
+                        ServiceInfo(
+                            port=int(port),
+                            protocol=proto,
+                            service=service.strip() if service else "unknown",
+                        )
+                    )
 
         # Save last host
         if current_host:
-            results.append(ScanResult(
-                host=current_host,
-                alive=True,
-                services=current_services,
-            ))
+            results.append(
+                ScanResult(
+                    host=current_host,
+                    alive=True,
+                    services=current_services,
+                )
+            )
 
         self._results.extend(results)
         return results

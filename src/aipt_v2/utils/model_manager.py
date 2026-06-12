@@ -8,8 +8,8 @@ reference utils.model_manager.
 """
 
 import os
-from typing import Any, Optional, Dict, List
 from dataclasses import dataclass
+from typing import Dict, List, Optional
 
 from aipt_v2.utils.logging import logger
 
@@ -17,6 +17,7 @@ from aipt_v2.utils.logging import logger
 @dataclass
 class ModelConfig:
     """Configuration for model instances."""
+
     model_name: str = "gpt-4"
     temperature: float = 0.7
     max_tokens: int = 4096
@@ -39,20 +40,15 @@ class ModelWrapper:
         if self._litellm is None:
             try:
                 import litellm
+
                 self._litellm = litellm
             except ImportError:
                 raise ImportError(
-                    "litellm is required for model_manager. "
-                    "Install with: pip install litellm"
+                    "litellm is required for model_manager. " "Install with: pip install litellm"
                 )
         return self._litellm
 
-    def complete(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> str:
+    def complete(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
         """
         Synchronous completion.
 
@@ -84,12 +80,7 @@ class ModelWrapper:
             logger.error("Model completion failed", model=self.config.model_name, error=str(e))
             raise
 
-    async def acomplete(
-        self,
-        prompt: str,
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> str:
+    async def acomplete(self, prompt: str, system_prompt: Optional[str] = None, **kwargs) -> str:
         """
         Asynchronous completion.
 
@@ -118,7 +109,9 @@ class ModelWrapper:
             )
             return response.choices[0].message.content
         except Exception as e:
-            logger.error("Async model completion failed", model=self.config.model_name, error=str(e))
+            logger.error(
+                "Async model completion failed", model=self.config.model_name, error=str(e)
+            )
             raise
 
     def embed(self, text: str) -> List[float]:
@@ -148,10 +141,7 @@ class ModelWrapper:
 _model_cache: Dict[str, ModelWrapper] = {}
 
 
-def get_model(
-    model_name: Optional[str] = None,
-    **kwargs
-) -> ModelWrapper:
+def get_model(model_name: Optional[str] = None, **kwargs) -> ModelWrapper:
     """
     Get or create a model instance.
 

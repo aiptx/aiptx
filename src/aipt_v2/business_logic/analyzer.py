@@ -10,12 +10,12 @@ import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
-from urllib.parse import urlparse, urljoin
+from urllib.parse import urljoin
 
 from aipt_v2.business_logic.patterns import (
-    TestPattern,
     PatternCategory,
     TestCase,
+    TestPattern,
     TestResult,
     get_all_patterns,
     get_patterns_by_category,
@@ -30,6 +30,7 @@ except ImportError:
 @dataclass
 class Workflow:
     """A discovered workflow in the application."""
+
     name: str
     endpoints: List[str]
     methods: List[str]
@@ -41,6 +42,7 @@ class Workflow:
 @dataclass
 class BusinessLogicFinding:
     """A business logic vulnerability finding."""
+
     pattern_id: str
     pattern_name: str
     category: str
@@ -61,6 +63,7 @@ class BusinessLogicFinding:
 @dataclass
 class BusinessLogicScanResult:
     """Result of business logic analysis."""
+
     target: str
     status: str
     started_at: str
@@ -173,43 +176,43 @@ class BusinessLogicAnalyzer:
             "authentication": {
                 "endpoints": ["/login", "/signin", "/auth", "/register", "/signup", "/logout"],
                 "methods": ["GET", "POST"],
-                "params": ["username", "password", "email", "remember"]
+                "params": ["username", "password", "email", "remember"],
             },
             "password_reset": {
                 "endpoints": ["/forgot", "/reset", "/recover", "/password"],
                 "methods": ["GET", "POST"],
-                "params": ["email", "token", "new_password"]
+                "params": ["email", "token", "new_password"],
             },
             "user_profile": {
                 "endpoints": ["/profile", "/account", "/settings", "/user"],
                 "methods": ["GET", "PUT", "POST", "PATCH"],
-                "params": ["name", "email", "phone", "avatar"]
+                "params": ["name", "email", "phone", "avatar"],
             },
             "e-commerce_cart": {
                 "endpoints": ["/cart", "/basket", "/bag"],
                 "methods": ["GET", "POST", "DELETE"],
-                "params": ["item_id", "quantity", "remove"]
+                "params": ["item_id", "quantity", "remove"],
             },
             "e-commerce_checkout": {
                 "endpoints": ["/checkout", "/payment", "/order", "/purchase"],
                 "methods": ["GET", "POST"],
-                "params": ["address", "payment_method", "card", "total"]
+                "params": ["address", "payment_method", "card", "total"],
             },
             "search": {
                 "endpoints": ["/search", "/find", "/query", "/lookup"],
                 "methods": ["GET", "POST"],
-                "params": ["q", "query", "term", "filter"]
+                "params": ["q", "query", "term", "filter"],
             },
             "admin": {
                 "endpoints": ["/admin", "/dashboard", "/manage", "/control"],
                 "methods": ["GET", "POST", "PUT", "DELETE"],
-                "params": ["action", "user_id", "role"]
+                "params": ["action", "user_id", "role"],
             },
             "api_resources": {
                 "endpoints": ["/api/users", "/api/orders", "/api/products"],
                 "methods": ["GET", "POST", "PUT", "DELETE"],
-                "params": ["id", "limit", "offset", "filter"]
-            }
+                "params": ["id", "limit", "offset", "filter"],
+            },
         }
 
         # Check which workflows exist
@@ -224,14 +227,17 @@ class BusinessLogicAnalyzer:
                     discovered_endpoints.append(endpoint)
 
             if discovered_endpoints:
-                workflows.append(Workflow(
-                    name=workflow_name,
-                    endpoints=discovered_endpoints,
-                    methods=config["methods"],
-                    parameters={ep: config["params"] for ep in discovered_endpoints},
-                    requires_auth=workflow_name in ["user_profile", "admin", "e-commerce_checkout"],
-                    description=f"Discovered {workflow_name} workflow"
-                ))
+                workflows.append(
+                    Workflow(
+                        name=workflow_name,
+                        endpoints=discovered_endpoints,
+                        methods=config["methods"],
+                        parameters=dict.fromkeys(discovered_endpoints, config["params"]),
+                        requires_auth=workflow_name
+                        in ["user_profile", "admin", "e-commerce_checkout"],
+                        description=f"Discovered {workflow_name} workflow",
+                    )
+                )
 
         self.workflows = workflows
         return workflows
@@ -295,14 +301,12 @@ class BusinessLogicAnalyzer:
 
                 # Check success indicators
                 success_matches = [
-                    ind for ind in test_case.success_indicators
-                    if ind.lower() in response_text
+                    ind for ind in test_case.success_indicators if ind.lower() in response_text
                 ]
 
                 # Check failure indicators
                 failure_matches = [
-                    ind for ind in test_case.failure_indicators
-                    if ind.lower() in response_text
+                    ind for ind in test_case.failure_indicators if ind.lower() in response_text
                 ]
 
                 # Vulnerability found if success without failure indicators
@@ -314,17 +318,19 @@ class BusinessLogicAnalyzer:
                     )
 
             if vulnerability_found:
-                findings.append(BusinessLogicFinding(
-                    pattern_id=pattern.id,
-                    pattern_name=pattern.name,
-                    category=pattern.category.value,
-                    severity=pattern.severity.value,
-                    description=f"{pattern.description}. Test case: {test_case.name}",
-                    endpoint=url,
-                    evidence="; ".join(evidence_parts),
-                    remediation=pattern.remediation,
-                    cwe_ids=pattern.cwe_ids,
-                ))
+                findings.append(
+                    BusinessLogicFinding(
+                        pattern_id=pattern.id,
+                        pattern_name=pattern.name,
+                        category=pattern.category.value,
+                        severity=pattern.severity.value,
+                        description=f"{pattern.description}. Test case: {test_case.name}",
+                        endpoint=url,
+                        evidence="; ".join(evidence_parts),
+                        remediation=pattern.remediation,
+                        cwe_ids=pattern.cwe_ids,
+                    )
+                )
 
         return findings
 
@@ -350,26 +356,34 @@ class BusinessLogicAnalyzer:
                         json_data=body if test_case.method in ["POST", "PUT", "PATCH"] else None,
                     )
 
-                    results.append({
-                        "status": status,
-                        "headers": headers,
-                        "body": body_text,
-                        "payload": body,
-                    })
+                    results.append(
+                        {
+                            "status": status,
+                            "headers": headers,
+                            "body": body_text,
+                            "payload": body,
+                        }
+                    )
         else:
             status, headers, body_text = await self._send_request(
                 test_case.method,
                 url,
                 headers=test_case.headers,
-                json_data=test_case.body_template if test_case.method in ["POST", "PUT", "PATCH"] else None,
+                json_data=(
+                    test_case.body_template
+                    if test_case.method in ["POST", "PUT", "PATCH"]
+                    else None
+                ),
             )
 
-            results.append({
-                "status": status,
-                "headers": headers,
-                "body": body_text,
-                "payload": test_case.body_template,
-            })
+            results.append(
+                {
+                    "status": status,
+                    "headers": headers,
+                    "body": body_text,
+                    "payload": test_case.body_template,
+                }
+            )
 
         return results
 
@@ -397,17 +411,21 @@ class BusinessLogicAnalyzer:
         for resp in responses:
             if isinstance(resp, tuple):
                 status, headers, body = resp
-                results.append({
-                    "status": status,
-                    "headers": headers,
-                    "body": body,
-                })
+                results.append(
+                    {
+                        "status": status,
+                        "headers": headers,
+                        "body": body,
+                    }
+                )
                 if status in [200, 201]:
                     success_count += 1
 
         # For race conditions, multiple successes indicate vulnerability
         if success_count > 1:
-            results[0]["race_condition_indicator"] = f"{success_count} successful concurrent requests"
+            results[0][
+                "race_condition_indicator"
+            ] = f"{success_count} successful concurrent requests"
 
         return results
 
@@ -466,8 +484,10 @@ class BusinessLogicAnalyzer:
             workflows=workflows,
             metadata={
                 "patterns_available": len(self.patterns),
-                "categories_tested": list(set(f.category for f in all_findings)) if all_findings else [],
-            }
+                "categories_tested": (
+                    list(set(f.category for f in all_findings)) if all_findings else []
+                ),
+            },
         )
 
 
@@ -492,6 +512,8 @@ async def analyze_business_logic(
     # Convert string categories to enum
     cat_enums = None
     if categories:
-        cat_enums = [PatternCategory(c) for c in categories if c in [e.value for e in PatternCategory]]
+        cat_enums = [
+            PatternCategory(c) for c in categories if c in [e.value for e in PatternCategory]
+        ]
 
     return await analyzer.analyze(categories=cat_enums)

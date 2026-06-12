@@ -23,8 +23,8 @@ Usage:
 
 from __future__ import annotations
 
-from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
+from typing import Any, Dict, List
 
 from .animations import Colors
 
@@ -32,6 +32,7 @@ from .animations import Colors
 @dataclass
 class TableStyle:
     """Table border style."""
+
     top_left: str = "┌"
     top_right: str = "┐"
     bottom_left: str = "└"
@@ -49,29 +50,49 @@ class TableStyle:
 TABLE_STYLES = {
     "default": TableStyle(),
     "rounded": TableStyle(
-        top_left="╭", top_right="╮",
-        bottom_left="╰", bottom_right="╯",
+        top_left="╭",
+        top_right="╮",
+        bottom_left="╰",
+        bottom_right="╯",
     ),
     "double": TableStyle(
-        top_left="╔", top_right="╗",
-        bottom_left="╚", bottom_right="╝",
-        horizontal="═", vertical="║",
-        cross="╬", top_t="╦", bottom_t="╩",
-        left_t="╠", right_t="╣",
+        top_left="╔",
+        top_right="╗",
+        bottom_left="╚",
+        bottom_right="╝",
+        horizontal="═",
+        vertical="║",
+        cross="╬",
+        top_t="╦",
+        bottom_t="╩",
+        left_t="╠",
+        right_t="╣",
     ),
     "heavy": TableStyle(
-        top_left="┏", top_right="┓",
-        bottom_left="┗", bottom_right="┛",
-        horizontal="━", vertical="┃",
-        cross="╋", top_t="┳", bottom_t="┻",
-        left_t="┣", right_t="┫",
+        top_left="┏",
+        top_right="┓",
+        bottom_left="┗",
+        bottom_right="┛",
+        horizontal="━",
+        vertical="┃",
+        cross="╋",
+        top_t="┳",
+        bottom_t="┻",
+        left_t="┣",
+        right_t="┫",
     ),
     "minimal": TableStyle(
-        top_left=" ", top_right=" ",
-        bottom_left=" ", bottom_right=" ",
-        horizontal="─", vertical=" ",
-        cross="─", top_t="─", bottom_t="─",
-        left_t="─", right_t="─",
+        top_left=" ",
+        top_right=" ",
+        bottom_left=" ",
+        bottom_right=" ",
+        horizontal="─",
+        vertical=" ",
+        cross="─",
+        top_t="─",
+        bottom_t="─",
+        left_t="─",
+        right_t="─",
     ),
 }
 
@@ -163,7 +184,8 @@ def create_table(
 def _strip_ansi(text: str) -> str:
     """Remove ANSI escape codes from text."""
     import re
-    return re.sub(r'\033\[[0-9;]*m', '', text)
+
+    return re.sub(r"\033\[[0-9;]*m", "", text)
 
 
 def print_findings_table(
@@ -199,13 +221,15 @@ def print_findings_table(
         severity = finding.get("severity", "info").lower()
         sev_color = severity_colors.get(severity, Colors.WHITE)
 
-        rows.append([
-            str(i),
-            f"{sev_color}{severity.upper()}{Colors.RESET}",
-            finding.get("type", "unknown"),
-            _truncate(finding.get("value", ""), 40),
-            finding.get("tool", ""),
-        ])
+        rows.append(
+            [
+                str(i),
+                f"{sev_color}{severity.upper()}{Colors.RESET}",
+                finding.get("type", "unknown"),
+                _truncate(finding.get("value", ""), 40),
+                finding.get("tool", ""),
+            ]
+        )
 
     table = create_table(headers, rows, style="rounded")
     print(table)
@@ -308,7 +332,7 @@ def _truncate(text: str, max_len: int, suffix: str = "...") -> str:
     """Truncate text to max length."""
     if len(text) <= max_len:
         return text
-    return text[:max_len - len(suffix)] + suffix
+    return text[: max_len - len(suffix)] + suffix
 
 
 # Demo function
@@ -325,7 +349,7 @@ def demo():
             ["Nikto", f"{Colors.BRIGHT_YELLOW}Running{Colors.RESET}", "2"],
             ["Nuclei", f"{Colors.DIM}Pending{Colors.RESET}", "0"],
         ],
-        style="rounded"
+        style="rounded",
     )
     print(table)
 
@@ -333,20 +357,20 @@ def demo():
     for style in ["default", "double", "heavy", "minimal"]:
         print(f"\n{Colors.BRIGHT_YELLOW}Style: {style}{Colors.RESET}")
         table = create_table(
-            headers=["Name", "Value"],
-            rows=[["Test", "Data"], ["More", "Info"]],
-            style=style
+            headers=["Name", "Value"], rows=[["Test", "Data"], ["More", "Info"]], style=style
         )
         print(table)
 
     # Scan progress
     print(f"\n{Colors.BRIGHT_YELLOW}Scan Progress:{Colors.RESET}")
-    print_scan_progress_table([
-        {"name": "Nmap", "progress": 100, "status": "completed"},
-        {"name": "Nikto", "progress": 75, "status": "running"},
-        {"name": "Nuclei", "progress": 30, "status": "running"},
-        {"name": "SQLMap", "progress": 0, "status": "pending"},
-    ])
+    print_scan_progress_table(
+        [
+            {"name": "Nmap", "progress": 100, "status": "completed"},
+            {"name": "Nikto", "progress": 75, "status": "running"},
+            {"name": "Nuclei", "progress": 30, "status": "running"},
+            {"name": "SQLMap", "progress": 0, "status": "pending"},
+        ]
+    )
 
 
 if __name__ == "__main__":

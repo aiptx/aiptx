@@ -6,8 +6,6 @@ It can coordinate multiple specialized agents or perform comprehensive
 testing on its own.
 """
 
-import asyncio
-import json
 from typing import Any, Dict, List, Optional
 
 import structlog
@@ -16,10 +14,9 @@ from aipt_v2.skills.agents.base import (
     AgentConfig,
     AgentResult,
     BaseSecurityAgent,
-    Finding,
     Severity,
 )
-from aipt_v2.skills.prompts import SkillPrompts, VULNERABILITY_PROMPTS
+from aipt_v2.skills.prompts import VULNERABILITY_PROMPTS, SkillPrompts
 
 logger = structlog.get_logger()
 
@@ -94,7 +91,7 @@ class SecurityAgent(BaseSecurityAgent):
         target: str,
         config: Optional[AgentConfig] = None,
         test_types: Optional[List[str]] = None,
-        credentials: Optional[Dict[str, str]] = None
+        credentials: Optional[Dict[str, str]] = None,
     ):
         """
         Initialize the security agent.
@@ -133,99 +130,112 @@ class SecurityAgent(BaseSecurityAgent):
     def get_tools(self) -> List[Dict[str, Any]]:
         """Get tools for security testing."""
         # Import tools from specialized agents
-        from aipt_v2.skills.agents.base import get_all_tools
 
         tools = []
 
         # Add appropriate tools based on test types
         if "web" in self.test_types:
-            tools.extend([
-                {
-                    "name": "fetch_page",
-                    "description": "Fetch a web page and analyze its content",
-                    "parameters": {
-                        "url": {"type": "string", "description": "URL to fetch"},
-                        "headers": {"type": "object", "description": "Optional headers"},
-                        "method": {"type": "string", "description": "HTTP method"}
+            tools.extend(
+                [
+                    {
+                        "name": "fetch_page",
+                        "description": "Fetch a web page and analyze its content",
+                        "parameters": {
+                            "url": {"type": "string", "description": "URL to fetch"},
+                            "headers": {"type": "object", "description": "Optional headers"},
+                            "method": {"type": "string", "description": "HTTP method"},
+                        },
+                        "required": ["url"],
                     },
-                    "required": ["url"]
-                },
-                {
-                    "name": "test_xss",
-                    "description": "Test for XSS vulnerabilities",
-                    "parameters": {
-                        "url": {"type": "string"},
-                        "param": {"type": "string"},
-                        "method": {"type": "string"}
+                    {
+                        "name": "test_xss",
+                        "description": "Test for XSS vulnerabilities",
+                        "parameters": {
+                            "url": {"type": "string"},
+                            "param": {"type": "string"},
+                            "method": {"type": "string"},
+                        },
+                        "required": ["url", "param"],
                     },
-                    "required": ["url", "param"]
-                },
-                {
-                    "name": "test_sqli",
-                    "description": "Test for SQL injection",
-                    "parameters": {
-                        "url": {"type": "string"},
-                        "param": {"type": "string"},
-                        "method": {"type": "string"}
+                    {
+                        "name": "test_sqli",
+                        "description": "Test for SQL injection",
+                        "parameters": {
+                            "url": {"type": "string"},
+                            "param": {"type": "string"},
+                            "method": {"type": "string"},
+                        },
+                        "required": ["url", "param"],
                     },
-                    "required": ["url", "param"]
-                },
-            ])
+                ]
+            )
 
         if "api" in self.test_types:
-            tools.extend([
-                {
-                    "name": "http_request",
-                    "description": "Send an HTTP request to test an API endpoint",
-                    "parameters": {
-                        "method": {"type": "string"},
-                        "url": {"type": "string"},
-                        "headers": {"type": "object"},
-                        "body": {"type": "string"},
-                        "params": {"type": "object"}
+            tools.extend(
+                [
+                    {
+                        "name": "http_request",
+                        "description": "Send an HTTP request to test an API endpoint",
+                        "parameters": {
+                            "method": {"type": "string"},
+                            "url": {"type": "string"},
+                            "headers": {"type": "object"},
+                            "body": {"type": "string"},
+                            "params": {"type": "object"},
+                        },
+                        "required": ["method", "url"],
                     },
-                    "required": ["method", "url"]
-                },
-            ])
+                ]
+            )
 
         if "code" in self.test_types:
-            tools.extend([
-                {
-                    "name": "read_file",
-                    "description": "Read a source code file",
-                    "parameters": {
-                        "file_path": {"type": "string"}
+            tools.extend(
+                [
+                    {
+                        "name": "read_file",
+                        "description": "Read a source code file",
+                        "parameters": {"file_path": {"type": "string"}},
+                        "required": ["file_path"],
                     },
-                    "required": ["file_path"]
-                },
-                {
-                    "name": "search_code",
-                    "description": "Search for patterns in code",
-                    "parameters": {
-                        "directory": {"type": "string"},
-                        "pattern": {"type": "string"},
-                        "file_extension": {"type": "string"}
+                    {
+                        "name": "search_code",
+                        "description": "Search for patterns in code",
+                        "parameters": {
+                            "directory": {"type": "string"},
+                            "pattern": {"type": "string"},
+                            "file_extension": {"type": "string"},
+                        },
+                        "required": ["directory", "pattern"],
                     },
-                    "required": ["directory", "pattern"]
-                },
-            ])
+                ]
+            )
 
         # Always include reporting tool
-        tools.append({
-            "name": "report_finding",
-            "description": "Report a security vulnerability finding",
-            "parameters": {
-                "title": {"type": "string"},
-                "severity": {"type": "string"},
-                "category": {"type": "string"},
-                "description": {"type": "string"},
-                "evidence": {"type": "string"},
-                "location": {"type": "string"},
-                "remediation": {"type": "string"},
-                "cwe_id": {"type": "string"}
-            },
-            "required": ["title", "severity", "category", "description", "evidence", "location", "remediation"]
-        })
+        tools.append(
+            {
+                "name": "report_finding",
+                "description": "Report a security vulnerability finding",
+                "parameters": {
+                    "title": {"type": "string"},
+                    "severity": {"type": "string"},
+                    "category": {"type": "string"},
+                    "description": {"type": "string"},
+                    "evidence": {"type": "string"},
+                    "location": {"type": "string"},
+                    "remediation": {"type": "string"},
+                    "cwe_id": {"type": "string"},
+                },
+                "required": [
+                    "title",
+                    "severity",
+                    "category",
+                    "description",
+                    "evidence",
+                    "location",
+                    "remediation",
+                ],
+            }
+        )
 
         return tools
 
@@ -267,16 +277,19 @@ Begin testing now. Be thorough and systematic.
 
         if "web" in self.test_types:
             from aipt_v2.skills.agents.web_pentest import WebPentestAgent
+
             web_agent = WebPentestAgent(target=self.target, config=self.config)
             tasks.append(("web", web_agent.run()))
 
         if "api" in self.test_types:
             from aipt_v2.skills.agents.api_tester import APITestAgent
+
             api_agent = APITestAgent(base_url=self.target, config=self.config)
             tasks.append(("api", api_agent.run()))
 
         if "code" in self.test_types:
             from aipt_v2.skills.agents.code_review import CodeReviewAgent
+
             code_agent = CodeReviewAgent(target_path=self.target, config=self.config)
             tasks.append(("code", code_agent.run()))
 
@@ -321,7 +334,7 @@ Begin testing now. Be thorough and systematic.
             Severity.HIGH: 1,
             Severity.MEDIUM: 2,
             Severity.LOW: 3,
-            Severity.INFO: 4
+            Severity.INFO: 4,
         }
         all_findings.sort(key=lambda f: severity_order.get(f.severity, 5))
 
@@ -332,5 +345,5 @@ Begin testing now. Be thorough and systematic.
             execution_time=total_time,
             total_steps=total_steps,
             tokens_used=total_tokens,
-            model_used=self.config.model
+            model_used=self.config.model,
         )

@@ -16,11 +16,11 @@ Usage:
     python scripts/test_ai_scan.py --target http://vulnbank.org --phases recon,scan
 """
 
-import asyncio
 import argparse
+import asyncio
 import sys
-from pathlib import Path
 from datetime import datetime
+from pathlib import Path
 
 # Add src to path
 src_path = Path(__file__).parent.parent / "src"
@@ -28,9 +28,9 @@ sys.path.insert(0, str(src_path))
 
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import Progress, SpinnerColumn, TextColumn
 from rich.table import Table
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, TextColumn
 
 console = Console()
 
@@ -39,6 +39,7 @@ async def check_ollama() -> bool:
     """Check if Ollama is available."""
     try:
         import aiohttp
+
         async with aiohttp.ClientSession() as session:
             async with session.get("http://localhost:11434/api/version", timeout=5) as resp:
                 if resp.status == 200:
@@ -53,7 +54,7 @@ async def check_ollama() -> bool:
 
 async def check_tools() -> dict:
     """Check available security tools."""
-    from aipt_v2.execution.tool_registry import get_registry, ToolPhase
+    from aipt_v2.execution.tool_registry import ToolPhase, get_registry
 
     registry = get_registry()
     status = await registry.discover_tools()
@@ -75,7 +76,7 @@ async def check_tools() -> dict:
         table.add_row(
             phase.value,
             ", ".join(avail[:4]) + ("..." if len(avail) > 4 else ""),
-            ", ".join(miss[:3]) + ("..." if len(miss) > 3 else "") if miss else "-"
+            ", ".join(miss[:3]) + ("..." if len(miss) > 3 else "") if miss else "-",
         )
 
     console.print(table)
@@ -100,7 +101,9 @@ FINDINGS: 5 total
 [MEDIUM] x2
   [F0004|service|M] Apache/2.4.41
   [F0005|tech|M] PHP/7.4.3
-""".format(target=target)
+""".format(
+        target=target
+    )
 
     console.print("\n[cyan]Testing AI Checkpoint...[/]")
 
@@ -111,20 +114,25 @@ FINDINGS: 5 total
     )
 
     if result.get("analysis"):
-        console.print(f"[green]✓[/] AI Checkpoint working")
-        console.print(f"   Source: {'Ollama LLM' if 'Fallback' not in result['analysis'] else 'Rule-based fallback'}")
+        console.print("[green]✓[/] AI Checkpoint working")
+        console.print(
+            f"   Source: {'Ollama LLM' if 'Fallback' not in result['analysis'] else 'Rule-based fallback'}"
+        )
         if result.get("recommendations"):
             console.print(f"   Recommendations: {len(result['recommendations'])}")
             for rec in result["recommendations"][:3]:
                 console.print(f"     - {rec[:60]}...")
-        return {"success": True, "source": "llm" if "Fallback" not in result["analysis"] else "fallback"}
+        return {
+            "success": True,
+            "source": "llm" if "Fallback" not in result["analysis"] else "fallback",
+        }
 
     return {"success": False, "error": "No analysis returned"}
 
 
 async def run_quick_scan(target: str, phases: list) -> dict:
     """Run a quick scan to verify the pipeline."""
-    from aipt_v2.execution.phase_runner import PhaseRunner, PipelineConfig, PhaseConfig, ToolPhase
+    from aipt_v2.execution.phase_runner import PhaseConfig, PhaseRunner, PipelineConfig, ToolPhase
 
     phase_map = {
         "recon": ToolPhase.RECON,
@@ -134,7 +142,8 @@ async def run_quick_scan(target: str, phases: list) -> dict:
 
     phase_configs = [
         PhaseConfig(phase=phase_map[p], timeout=120, ai_checkpoint=True)
-        for p in phases if p in phase_map
+        for p in phases
+        if p in phase_map
     ]
 
     config = PipelineConfig(
@@ -168,20 +177,25 @@ async def run_quick_scan(target: str, phases: list) -> dict:
             try:
                 report = await runner.run_phase(phase_config.phase, phase_config)
 
-                results["phases_completed"].append({
-                    "phase": phase_config.phase.value,
-                    "findings": report.findings_count,
-                    "critical": report.critical_count,
-                    "high": report.high_count,
-                    "ai_analysis": bool(report.ai_analysis),
-                    "recommendations": report.recommended_actions[:3],
-                })
+                results["phases_completed"].append(
+                    {
+                        "phase": phase_config.phase.value,
+                        "findings": report.findings_count,
+                        "critical": report.critical_count,
+                        "high": report.high_count,
+                        "ai_analysis": bool(report.ai_analysis),
+                        "recommendations": report.recommended_actions[:3],
+                    }
+                )
 
                 results["total_findings"] += report.findings_count
                 results["critical_findings"] += report.critical_count
                 results["ai_recommendations"].extend(report.recommended_actions[:2])
 
-                progress.update(task, description=f"[green]✓ {phase_config.phase.value}: {report.findings_count} findings")
+                progress.update(
+                    task,
+                    description=f"[green]✓ {phase_config.phase.value}: {report.findings_count} findings",
+                )
 
             except Exception as e:
                 progress.update(task, description=f"[red]✗ {phase_config.phase.value}: {e}")
@@ -197,18 +211,22 @@ async def main():
     parser = argparse.ArgumentParser(description="Test AIPTX AI Integration")
     parser.add_argument("--target", default="http://vulnbank.org", help="Target to scan")
     parser.add_argument("--phases", default="recon", help="Phases to run (comma-separated)")
-    parser.add_argument("--skip-scan", action="store_true", help="Skip actual scanning, only test AI")
+    parser.add_argument(
+        "--skip-scan", action="store_true", help="Skip actual scanning, only test AI"
+    )
     args = parser.parse_args()
 
     phases = [p.strip() for p in args.phases.split(",")]
 
-    console.print(Panel(
-        f"[bold cyan]AIPTX AI Integration Test[/]\n\n"
-        f"Target: {args.target}\n"
-        f"Phases: {', '.join(phases)}\n"
-        f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-        border_style="cyan",
-    ))
+    console.print(
+        Panel(
+            f"[bold cyan]AIPTX AI Integration Test[/]\n\n"
+            f"Target: {args.target}\n"
+            f"Phases: {', '.join(phases)}\n"
+            f"Time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
+            border_style="cyan",
+        )
+    )
 
     # Step 1: Check Ollama
     console.print("\n[bold]Step 1: Checking Ollama (AI Backend)[/]")
@@ -250,6 +268,7 @@ async def main():
         except Exception as e:
             console.print(f"[red]Scan failed: {e}[/]")
             import traceback
+
             console.print(traceback.format_exc())
 
     # Final Summary

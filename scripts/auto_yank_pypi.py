@@ -14,8 +14,9 @@ Usage:
 """
 
 import asyncio
-import sys
-from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeout
+
+from playwright.async_api import TimeoutError as PlaywrightTimeout
+from playwright.async_api import async_playwright
 
 PACKAGE_NAME = "aiptx"
 YANK_REASON = "Security: hardcoded API credentials exposed"
@@ -23,18 +24,40 @@ YANK_REASON = "Security: hardcoded API credentials exposed"
 # All affected versions with hardcoded credentials
 AFFECTED_VERSIONS = [
     # v2.x series
-    "2.0.0", "2.0.1", "2.0.2", "2.0.3", "2.0.4",
-    "2.0.5", "2.0.6", "2.0.7", "2.0.9", "2.0.10",
+    "2.0.0",
+    "2.0.1",
+    "2.0.2",
+    "2.0.3",
+    "2.0.4",
+    "2.0.5",
+    "2.0.6",
+    "2.0.7",
+    "2.0.9",
+    "2.0.10",
     # v3.x series
-    "3.0.0", "3.0.1", "3.0.2", "3.0.3",
-    "3.1.0", "3.1.1", "3.1.2",
-    "3.2.0", "3.2.1",
-    "3.3.0", "3.3.1",
-    "3.4.0", "3.4.1", "3.4.2", "3.4.3", "3.4.4", "3.4.5",
-    "3.5.1", "3.5.2",
+    "3.0.0",
+    "3.0.1",
+    "3.0.2",
+    "3.0.3",
+    "3.1.0",
+    "3.1.1",
+    "3.1.2",
+    "3.2.0",
+    "3.2.1",
+    "3.3.0",
+    "3.3.1",
+    "3.4.0",
+    "3.4.1",
+    "3.4.2",
+    "3.4.3",
+    "3.4.4",
+    "3.4.5",
+    "3.5.1",
+    "3.5.2",
     "3.6.0",
     # v4.x and v5.x
-    "4.0.0", "4.0.1",
+    "4.0.0",
+    "4.0.1",
     "5.0.0",
 ]
 
@@ -81,11 +104,13 @@ async def yank_version(page, version: str) -> str:
 
         # Find the options menu button in this row
         # PyPI uses a dropdown with class "dropdown" or similar
-        options_btn = version_row.locator('details summary, button.dropdown-trigger, [data-dropdown-trigger], button:has-text("Options")').first
+        options_btn = version_row.locator(
+            'details summary, button.dropdown-trigger, [data-dropdown-trigger], button:has-text("Options")'
+        ).first
 
         if await options_btn.count() == 0:
             # Fallback: find any clickable element that might be options
-            options_btn = version_row.locator('details, .dropdown').first
+            options_btn = version_row.locator("details, .dropdown").first
 
         if await options_btn.count() == 0:
             return "error"
@@ -108,12 +133,16 @@ async def yank_version(page, version: str) -> str:
 
         # Look for the yank confirmation modal/form
         # Fill in the reason
-        reason_input = page.locator('#yanked_reason, input[name="yanked_reason"], textarea[name="yanked_reason"]').first
+        reason_input = page.locator(
+            '#yanked_reason, input[name="yanked_reason"], textarea[name="yanked_reason"]'
+        ).first
         if await reason_input.count() > 0:
             await reason_input.fill(YANK_REASON)
 
         # Click confirm/submit
-        submit_btn = page.locator('button[type="submit"]:has-text("Yank"), input[type="submit"][value*="Yank"], button.primary:has-text("Yank"), form button[type="submit"]').first
+        submit_btn = page.locator(
+            'button[type="submit"]:has-text("Yank"), input[type="submit"][value*="Yank"], button.primary:has-text("Yank"), form button[type="submit"]'
+        ).first
 
         if await submit_btn.count() > 0:
             await submit_btn.click()
@@ -142,13 +171,8 @@ async def main():
     async with async_playwright() as p:
         # Launch browser in headed mode so user can login
         print("Launching browser...")
-        browser = await p.chromium.launch(
-            headless=False,
-            slow_mo=100  # Slow down for visibility
-        )
-        context = await browser.new_context(
-            viewport={"width": 1280, "height": 900}
-        )
+        browser = await p.chromium.launch(headless=False, slow_mo=100)  # Slow down for visibility
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
         page = await context.new_page()
 
         # Navigate to PyPI releases management page

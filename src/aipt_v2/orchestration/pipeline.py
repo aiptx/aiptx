@@ -7,20 +7,22 @@ Provides a configurable pipeline for pentest workflows with:
 - Parallel stage support
 - Progress callbacks
 """
+
 from __future__ import annotations
 
 import asyncio
-from typing import Optional, List, Dict, Any, Callable, Awaitable
-from dataclasses import dataclass, field
-from enum import Enum
-from datetime import datetime
 import logging
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any, Awaitable, Callable, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
 
 class StageStatus(str, Enum):
     """Stage execution status"""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -42,6 +44,7 @@ class PipelineStage:
         timeout: Stage timeout in seconds
         retry_count: Number of retries on failure
     """
+
     name: str
     description: str
     handler: Callable[..., Awaitable[Any]]
@@ -55,6 +58,7 @@ class PipelineStage:
 @dataclass
 class StageResult:
     """Result of stage execution"""
+
     stage_name: str
     status: StageStatus
     output: Any = None
@@ -68,6 +72,7 @@ class StageResult:
 @dataclass
 class PipelineResult:
     """Result of pipeline execution"""
+
     success: bool
     stages: Dict[str, StageResult]
     total_duration: float
@@ -81,7 +86,9 @@ class PipelineResult:
 
     @property
     def completed_stages(self) -> List[str]:
-        return [name for name, result in self.stages.items() if result.status == StageStatus.COMPLETED]
+        return [
+            name for name, result in self.stages.items() if result.status == StageStatus.COMPLETED
+        ]
 
 
 class Pipeline:
@@ -227,8 +234,7 @@ class Pipeline:
 
         # Determine overall success
         success = all(
-            r.status in [StageStatus.COMPLETED, StageStatus.SKIPPED]
-            for r in results.values()
+            r.status in [StageStatus.COMPLETED, StageStatus.SKIPPED] for r in results.values()
         )
 
         return PipelineResult(
@@ -322,10 +328,7 @@ class Pipeline:
         previous_results: Dict[str, StageResult],
     ) -> Dict[str, StageResult]:
         """Execute multiple stages in parallel"""
-        tasks = [
-            self._run_stage(name, context, previous_results)
-            for name in stage_names
-        ]
+        tasks = [self._run_stage(name, context, previous_results) for name in stage_names]
         results = await asyncio.gather(*tasks)
         return dict(zip(stage_names, results))
 

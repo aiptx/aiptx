@@ -9,14 +9,15 @@ Finds patterns and insights across multiple penetration tests:
 
 This provides strategic insights beyond individual target assessments.
 """
+
 from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Optional
 from collections import defaultdict
+from dataclasses import dataclass
+from datetime import datetime
+from typing import Any
 
 from aipt_v2.models.findings import Finding, Severity, VulnerabilityType
 
@@ -26,6 +27,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class TargetSummary:
     """Summary of findings for a single target."""
+
     target: str
     total_findings: int
     critical_count: int
@@ -53,6 +55,7 @@ class TargetSummary:
 @dataclass
 class CommonVulnerability:
     """A vulnerability type found across multiple targets."""
+
     vuln_type: str
     occurrence_count: int
     affected_targets: list[str]
@@ -75,6 +78,7 @@ class CommonVulnerability:
 @dataclass
 class SystemicIssue:
     """A systemic issue identified across the portfolio."""
+
     issue_type: str
     description: str
     affected_percentage: float
@@ -98,6 +102,7 @@ class SystemicIssue:
 @dataclass
 class PortfolioReport:
     """Comprehensive portfolio analysis report."""
+
     analyzed_at: datetime
     total_targets: int
     total_findings: int
@@ -140,15 +145,15 @@ class PortfolioReport:
     def to_executive_summary(self) -> str:
         """Generate executive summary text."""
         lines = [
-            f"# Portfolio Security Assessment",
-            f"",
+            "# Portfolio Security Assessment",
+            "",
             f"**Analysis Date:** {self.analyzed_at.strftime('%Y-%m-%d')}",
             f"**Targets Analyzed:** {self.total_targets}",
             f"**Total Findings:** {self.total_findings}",
             f"**Overall Risk Score:** {self.overall_risk_score:.1f}/100",
-            f"",
-            f"## Key Findings",
-            f"",
+            "",
+            "## Key Findings",
+            "",
         ]
 
         # Add systemic issues
@@ -163,7 +168,9 @@ class PortfolioReport:
         if self.common_vulnerabilities:
             lines.append("### Most Common Vulnerabilities")
             for vuln in self.common_vulnerabilities[:5]:
-                lines.append(f"- {vuln.vuln_type}: {vuln.occurrence_count} occurrences across {len(vuln.affected_targets)} targets")
+                lines.append(
+                    f"- {vuln.vuln_type}: {vuln.occurrence_count} occurrences across {len(vuln.affected_targets)} targets"
+                )
             lines.append("")
 
         # Add recommendations
@@ -321,22 +328,32 @@ class CrossTargetAnalyzer:
             severities = vuln_severity[vuln_type]
             severity_values = {"critical": 4, "high": 3, "medium": 2, "low": 1, "info": 0}
             avg_value = sum(severity_values.get(s.value, 0) for s in severities) / len(severities)
-            avg_severity = "critical" if avg_value >= 3.5 else "high" if avg_value >= 2.5 else "medium" if avg_value >= 1.5 else "low"
+            avg_severity = (
+                "critical"
+                if avg_value >= 3.5
+                else "high" if avg_value >= 2.5 else "medium" if avg_value >= 1.5 else "low"
+            )
 
             # Determine if systemic (affects >50% of targets)
             is_systemic = len(affected_targets) >= total_targets * 0.5
 
             # Calculate remediation priority
-            priority = 1 if is_systemic and avg_value >= 3 else 2 if avg_value >= 3 else 3 if is_systemic else 4
+            priority = (
+                1
+                if is_systemic and avg_value >= 3
+                else 2 if avg_value >= 3 else 3 if is_systemic else 4
+            )
 
-            common.append(CommonVulnerability(
-                vuln_type=vuln_type,
-                occurrence_count=len(severities),
-                affected_targets=list(affected_targets),
-                average_severity=avg_severity,
-                is_systemic=is_systemic,
-                remediation_priority=priority,
-            ))
+            common.append(
+                CommonVulnerability(
+                    vuln_type=vuln_type,
+                    occurrence_count=len(severities),
+                    affected_targets=list(affected_targets),
+                    average_severity=avg_severity,
+                    is_systemic=is_systemic,
+                    remediation_priority=priority,
+                )
+            )
 
         # Sort by priority
         common.sort(key=lambda c: (c.remediation_priority, -c.occurrence_count))
@@ -359,15 +376,17 @@ class CrossTargetAnalyzer:
                 input_affected.update(cv.affected_targets)
 
         if len(input_affected) >= total_targets * 0.5:
-            issues.append(SystemicIssue(
-                issue_type="Input Validation",
-                description="Widespread input validation failures across the portfolio",
-                affected_percentage=(len(input_affected) / total_targets) * 100,
-                affected_targets=list(input_affected),
-                root_cause_hypothesis="Lack of centralized input validation framework or developer training",
-                remediation_recommendation="Implement organization-wide input validation library and secure coding training",
-                priority=1,
-            ))
+            issues.append(
+                SystemicIssue(
+                    issue_type="Input Validation",
+                    description="Widespread input validation failures across the portfolio",
+                    affected_percentage=(len(input_affected) / total_targets) * 100,
+                    affected_targets=list(input_affected),
+                    root_cause_hypothesis="Lack of centralized input validation framework or developer training",
+                    remediation_recommendation="Implement organization-wide input validation library and secure coding training",
+                    priority=1,
+                )
+            )
 
         # Check for authentication issues
         auth_vulns = ["auth_bypass", "weak_password", "session_fixation", "idor"]
@@ -377,15 +396,17 @@ class CrossTargetAnalyzer:
                 auth_affected.update(cv.affected_targets)
 
         if len(auth_affected) >= total_targets * 0.3:
-            issues.append(SystemicIssue(
-                issue_type="Authentication & Authorization",
-                description="Repeated authentication and authorization weaknesses",
-                affected_percentage=(len(auth_affected) / total_targets) * 100,
-                affected_targets=list(auth_affected),
-                root_cause_hypothesis="Inconsistent identity management practices or outdated authentication frameworks",
-                remediation_recommendation="Standardize on a secure authentication framework and implement centralized authorization",
-                priority=1,
-            ))
+            issues.append(
+                SystemicIssue(
+                    issue_type="Authentication & Authorization",
+                    description="Repeated authentication and authorization weaknesses",
+                    affected_percentage=(len(auth_affected) / total_targets) * 100,
+                    affected_targets=list(auth_affected),
+                    root_cause_hypothesis="Inconsistent identity management practices or outdated authentication frameworks",
+                    remediation_recommendation="Standardize on a secure authentication framework and implement centralized authorization",
+                    priority=1,
+                )
+            )
 
         # Check for configuration issues
         config_vulns = ["misconfiguration", "default_credentials", "information_disclosure"]
@@ -395,15 +416,17 @@ class CrossTargetAnalyzer:
                 config_affected.update(cv.affected_targets)
 
         if len(config_affected) >= total_targets * 0.4:
-            issues.append(SystemicIssue(
-                issue_type="Security Configuration",
-                description="Widespread security misconfiguration issues",
-                affected_percentage=(len(config_affected) / total_targets) * 100,
-                affected_targets=list(config_affected),
-                root_cause_hypothesis="Lack of security hardening standards or deployment automation",
-                remediation_recommendation="Implement security configuration baselines and automated compliance checking",
-                priority=2,
-            ))
+            issues.append(
+                SystemicIssue(
+                    issue_type="Security Configuration",
+                    description="Widespread security misconfiguration issues",
+                    affected_percentage=(len(config_affected) / total_targets) * 100,
+                    affected_targets=list(config_affected),
+                    root_cause_hypothesis="Lack of security hardening standards or deployment automation",
+                    remediation_recommendation="Implement security configuration baselines and automated compliance checking",
+                    priority=2,
+                )
+            )
 
         # Check for crypto issues
         crypto_vulns = ["weak_crypto", "sensitive_data_exposure"]
@@ -413,15 +436,17 @@ class CrossTargetAnalyzer:
                 crypto_affected.update(cv.affected_targets)
 
         if len(crypto_affected) >= total_targets * 0.3:
-            issues.append(SystemicIssue(
-                issue_type="Cryptographic Practices",
-                description="Weak cryptography and data protection practices",
-                affected_percentage=(len(crypto_affected) / total_targets) * 100,
-                affected_targets=list(crypto_affected),
-                root_cause_hypothesis="Outdated crypto libraries or lack of data classification",
-                remediation_recommendation="Update cryptographic libraries and implement data classification program",
-                priority=2,
-            ))
+            issues.append(
+                SystemicIssue(
+                    issue_type="Cryptographic Practices",
+                    description="Weak cryptography and data protection practices",
+                    affected_percentage=(len(crypto_affected) / total_targets) * 100,
+                    affected_targets=list(crypto_affected),
+                    root_cause_hypothesis="Outdated crypto libraries or lack of data classification",
+                    remediation_recommendation="Update cryptographic libraries and implement data classification program",
+                    priority=2,
+                )
+            )
 
         return issues
 
@@ -447,10 +472,10 @@ class CrossTargetAnalyzer:
         weights = {"critical": 40, "high": 25, "medium": 10, "low": 3}
 
         raw_score = (
-            summary.critical_count * weights["critical"] +
-            summary.high_count * weights["high"] +
-            summary.medium_count * weights["medium"] +
-            summary.low_count * weights["low"]
+            summary.critical_count * weights["critical"]
+            + summary.high_count * weights["high"]
+            + summary.medium_count * weights["medium"]
+            + summary.low_count * weights["low"]
         )
 
         # Normalize to 0-100 (cap at 100)
@@ -494,7 +519,10 @@ class CrossTargetAnalyzer:
         # Check for easy-to-fix issues
         for target, findings in self.target_findings.items():
             for f in findings:
-                if f.vuln_type in [VulnerabilityType.DEFAULT_CREDENTIALS, VulnerabilityType.MISCONFIGURATION]:
+                if f.vuln_type in [
+                    VulnerabilityType.DEFAULT_CREDENTIALS,
+                    VulnerabilityType.MISCONFIGURATION,
+                ]:
                     quick_wins.append(f"Fix {f.vuln_type.value} on {target}: {f.title}")
 
         # Deduplicate and limit

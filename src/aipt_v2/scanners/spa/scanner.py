@@ -13,22 +13,22 @@ Uses Playwright for:
 from __future__ import annotations
 
 import asyncio
-import json
 import logging
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Optional
-from urllib.parse import urlparse, urljoin
+from typing import Optional
+from urllib.parse import urlparse
 
-from aipt_v2.scanners.base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from aipt_v2.scanners.base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
 
 class SPAFramework(str, Enum):
     """Detected SPA frameworks."""
+
     REACT = "react"
     VUE = "vue"
     ANGULAR = "angular"
@@ -40,6 +40,7 @@ class SPAFramework(str, Enum):
 
 class DOMSink(str, Enum):
     """DOM XSS sink types."""
+
     INNER_HTML = "innerHTML"
     OUTER_HTML = "outerHTML"
     DOCUMENT_WRITE = "document.write"
@@ -55,6 +56,7 @@ class DOMSink(str, Enum):
 @dataclass
 class DOMXSSFinding:
     """DOM-based XSS finding."""
+
     sink: DOMSink
     source: str  # Where the data comes from
     payload: str
@@ -80,6 +82,7 @@ class DOMXSSFinding:
 @dataclass
 class InterceptedRequest:
     """Intercepted API request."""
+
     method: str
     url: str
     headers: dict
@@ -91,6 +94,7 @@ class InterceptedRequest:
 @dataclass
 class SPAScanConfig:
     """Configuration for SPA scanning."""
+
     timeout: float = 60.0
     wait_for_idle: float = 5.0  # Wait for network idle
     max_depth: int = 3  # Navigation depth
@@ -109,6 +113,7 @@ class SPAScanConfig:
 @dataclass
 class SPAScanResult:
     """Result of SPA security scan."""
+
     target: str
     started_at: datetime
     completed_at: Optional[datetime] = None
@@ -166,6 +171,7 @@ class SPAScanner(BaseScanner):
         """Check if Playwright is available."""
         try:
             from playwright.async_api import async_playwright
+
             return True
         except ImportError:
             return False
@@ -243,10 +249,14 @@ class SPAScanner(BaseScanner):
                 # Navigate to target
                 logger.info(f"[SPA] Loading {url}")
                 try:
-                    await page.goto(url, wait_until="networkidle", timeout=self.config.timeout * 1000)
+                    await page.goto(
+                        url, wait_until="networkidle", timeout=self.config.timeout * 1000
+                    )
                 except Exception as e:
                     logger.warning(f"Navigation error: {e}")
-                    await page.goto(url, wait_until="domcontentloaded", timeout=self.config.timeout * 1000)
+                    await page.goto(
+                        url, wait_until="domcontentloaded", timeout=self.config.timeout * 1000
+                    )
 
                 # Wait for SPA to hydrate
                 await asyncio.sleep(self.config.wait_for_idle)
@@ -287,6 +297,7 @@ class SPAScanner(BaseScanner):
 
     async def _setup_request_interception(self, page, result: SPAScanResult) -> None:
         """Set up request interception."""
+
         async def handle_request(route, request):
             # Log API requests
             if "/api/" in request.url or "graphql" in request.url.lower():
@@ -343,11 +354,13 @@ class SPAScanner(BaseScanner):
         parsed_base = urlparse(base_url)
 
         # Get all links
-        links = await page.evaluate("""
+        links = await page.evaluate(
+            """
             () => Array.from(document.querySelectorAll('a[href]'))
                 .map(a => a.href)
                 .filter(href => href.startsWith(window.location.origin))
-        """)
+        """
+        )
 
         for link in links:
             parsed = urlparse(link)
@@ -355,7 +368,8 @@ class SPAScanner(BaseScanner):
                 routes.add(parsed.path or "/")
 
         # Check for React Router links
-        router_links = await page.evaluate("""
+        router_links = await page.evaluate(
+            """
             () => {
                 const links = [];
                 document.querySelectorAll('[data-testid], [to], [href]').forEach(el => {
@@ -364,11 +378,13 @@ class SPAScanner(BaseScanner):
                 });
                 return links;
             }
-        """)
+        """
+        )
         routes.update(router_links)
 
         # Check for Vue Router links
-        vue_links = await page.evaluate("""
+        vue_links = await page.evaluate(
+            """
             () => {
                 const links = [];
                 document.querySelectorAll('router-link, [to]').forEach(el => {
@@ -377,10 +393,11 @@ class SPAScanner(BaseScanner):
                 });
                 return links;
             }
-        """)
+        """
+        )
         routes.update(vue_links)
 
-        return list(routes)[:self.config.max_pages]
+        return list(routes)[: self.config.max_pages]
 
     async def _test_dom_xss(self, page, url: str) -> list[DOMXSSFinding]:
         """Test for DOM-based XSS."""
@@ -462,7 +479,8 @@ class SPAScanner(BaseScanner):
         """Check if XSS payload was triggered."""
         try:
             # Check for alert in page
-            triggered = await page.evaluate("""
+            triggered = await page.evaluate(
+                """
                 () => {
                     // Check if our payload created elements
                     const scripts = document.querySelectorAll('script');
@@ -473,7 +491,8 @@ class SPAScanner(BaseScanner):
                     if (imgs.length > 0) return true;
                     return false;
                 }
-            """)
+            """
+            )
             return triggered
         except Exception:
             return False
@@ -498,31 +517,35 @@ class SPAScanner(BaseScanner):
 
         try:
             # Get all script content
-            scripts = await page.evaluate("""
+            scripts = await page.evaluate(
+                """
                 () => {
                     return Array.from(document.querySelectorAll('script'))
                         .map(s => s.textContent)
                         .join('\\n');
                 }
-            """)
+            """
+            )
 
             # Check for dangerous patterns
             dangerous = [
-                (r'\.innerHTML\s*=\s*[^;]*location', DOMSink.INNER_HTML, "location"),
-                (r'document\.write\s*\([^)]*location', DOMSink.DOCUMENT_WRITE, "location"),
-                (r'eval\s*\([^)]*location', DOMSink.EVAL, "location"),
-                (r'\.innerHTML\s*=\s*[^;]*\.hash', DOMSink.INNER_HTML, "location.hash"),
-                (r'\.innerHTML\s*=\s*[^;]*\.search', DOMSink.INNER_HTML, "location.search"),
+                (r"\.innerHTML\s*=\s*[^;]*location", DOMSink.INNER_HTML, "location"),
+                (r"document\.write\s*\([^)]*location", DOMSink.DOCUMENT_WRITE, "location"),
+                (r"eval\s*\([^)]*location", DOMSink.EVAL, "location"),
+                (r"\.innerHTML\s*=\s*[^;]*\.hash", DOMSink.INNER_HTML, "location.hash"),
+                (r"\.innerHTML\s*=\s*[^;]*\.search", DOMSink.INNER_HTML, "location.search"),
             ]
 
             for pattern, sink, source in dangerous:
                 matches = re.findall(pattern, scripts, re.IGNORECASE)
                 for match in matches:
-                    patterns.append({
-                        "sink": sink,
-                        "source": source,
-                        "code": match[:200],
-                    })
+                    patterns.append(
+                        {
+                            "sink": sink,
+                            "source": source,
+                            "code": match[:200],
+                        }
+                    )
 
         except Exception as e:
             logger.debug(f"Pattern search error: {e}")
@@ -535,7 +558,8 @@ class SPAScanner(BaseScanner):
 
         try:
             # Get localStorage
-            local_storage = await page.evaluate("""
+            local_storage = await page.evaluate(
+                """
                 () => {
                     const items = {};
                     for (let i = 0; i < localStorage.length; i++) {
@@ -544,10 +568,12 @@ class SPAScanner(BaseScanner):
                     }
                     return items;
                 }
-            """)
+            """
+            )
 
             # Get sessionStorage
-            session_storage = await page.evaluate("""
+            session_storage = await page.evaluate(
+                """
                 () => {
                     const items = {};
                     for (let i = 0; i < sessionStorage.length; i++) {
@@ -556,27 +582,37 @@ class SPAScanner(BaseScanner):
                     }
                     return items;
                 }
-            """)
+            """
+            )
 
             # Check for sensitive data
             sensitive_patterns = [
-                (r'(?i)(password|passwd|pwd)', "password"),
-                (r'(?i)(token|jwt|bearer)', "token"),
-                (r'(?i)(api_key|apikey|api-key)', "api_key"),
-                (r'(?i)(secret|private)', "secret"),
-                (r'eyJ[A-Za-z0-9_-]+\.eyJ', "jwt_token"),
+                (r"(?i)(password|passwd|pwd)", "password"),
+                (r"(?i)(token|jwt|bearer)", "token"),
+                (r"(?i)(api_key|apikey|api-key)", "api_key"),
+                (r"(?i)(secret|private)", "secret"),
+                (r"eyJ[A-Za-z0-9_-]+\.eyJ", "jwt_token"),
             ]
 
-            for storage_name, storage_data in [("localStorage", local_storage), ("sessionStorage", session_storage)]:
+            for storage_name, storage_data in [
+                ("localStorage", local_storage),
+                ("sessionStorage", session_storage),
+            ]:
                 for key, value in storage_data.items():
                     for pattern, data_type in sensitive_patterns:
                         if re.search(pattern, key) or (value and re.search(pattern, str(value))):
-                            findings.append({
-                                "storage": storage_name,
-                                "key": key,
-                                "data_type": data_type,
-                                "severity": "high" if data_type in ["password", "token", "jwt_token"] else "medium",
-                            })
+                            findings.append(
+                                {
+                                    "storage": storage_name,
+                                    "key": key,
+                                    "data_type": data_type,
+                                    "severity": (
+                                        "high"
+                                        if data_type in ["password", "token", "jwt_token"]
+                                        else "medium"
+                                    ),
+                                }
+                            )
 
         except Exception as e:
             logger.debug(f"Storage check error: {e}")
@@ -587,10 +623,12 @@ class SPAScanner(BaseScanner):
         """Check for exposed source maps."""
         try:
             # Get all script sources
-            scripts = await page.evaluate("""
+            scripts = await page.evaluate(
+                """
                 () => Array.from(document.querySelectorAll('script[src]'))
                     .map(s => s.src)
-            """)
+            """
+            )
 
             for script_url in scripts:
                 map_url = f"{script_url}.map"
@@ -620,7 +658,11 @@ class SPAScanner(BaseScanner):
             result.findings.append(
                 ScanFinding(
                     title=f"Sensitive Data in {storage_finding['storage']}",
-                    severity=ScanSeverity.HIGH if storage_finding["severity"] == "high" else ScanSeverity.MEDIUM,
+                    severity=(
+                        ScanSeverity.HIGH
+                        if storage_finding["severity"] == "high"
+                        else ScanSeverity.MEDIUM
+                    ),
                     description=f"Sensitive {storage_finding['data_type']} found in {storage_finding['storage']}",
                     evidence=f"Key: {storage_finding['key']}",
                     cwe="CWE-922",

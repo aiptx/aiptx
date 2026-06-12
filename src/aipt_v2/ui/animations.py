@@ -29,13 +29,12 @@ Usage:
 
 from __future__ import annotations
 
-import sys
-import time
-import threading
 import random
-from dataclasses import dataclass, field
-from typing import List, Optional, Dict, Any, Callable
-from datetime import datetime
+import sys
+import threading
+import time
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
 
 
 class Colors:
@@ -128,38 +127,31 @@ SPINNER_STYLES = {
     "dots2": ["⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷"],
     "dots3": ["⠁", "⠂", "⠄", "⡀", "⢀", "⠠", "⠐", "⠈"],
     "dots4": ["⠃", "⠊", "⠒", "⠢", "⠆", "⠰", "⠤", "⠖", "⠲", "⠴", "⠦", "⠧"],
-
     # Lines and arrows
     "line": ["-", "\\", "|", "/"],
     "line2": ["◐", "◓", "◑", "◒"],
     "arrow": ["←", "↖", "↑", "↗", "→", "↘", "↓", "↙"],
     "arrow2": ["⬆️ ", "↗️ ", "➡️ ", "↘️ ", "⬇️ ", "↙️ ", "⬅️ ", "↖️ "],
-
     # Shapes
     "circle": ["◜", "◠", "◝", "◞", "◡", "◟"],
     "square": ["◰", "◳", "◲", "◱"],
     "triangle": ["◢", "◣", "◤", "◥"],
     "star": ["✶", "✸", "✹", "✺", "✹", "✷"],
-
     # Blocks
     "block": ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▁"],
     "block2": ["▖", "▘", "▝", "▗"],
     "pulse": ["█", "▓", "▒", "░", "▒", "▓"],
     "grow": ["▁", "▂", "▃", "▄", "▅", "▆", "▇", "█", "▇", "▆", "▅", "▄", "▃", "▂"],
-
     # Cyber/Hacker style
     "cyber": ["◢", "◣", "◤", "◥", "▪", "▫"],
     "hacker": ["⟨⟩", "⟪⟫", "⟬⟭", "⟮⟯"],
     "matrix": ["0", "1", "0", "1", "▓", "░"],
     "snake": ["⠏", "⠛", "⠹", "⢸", "⣰", "⣤", "⣆", "⡇"],
-
     # Bouncing
     "bounce": ["⠁", "⠂", "⠄", "⠂"],
     "bounce2": [".", "o", "O", "o"],
-
     # Clock
     "clock": ["🕐", "🕑", "🕒", "🕓", "🕔", "🕕", "🕖", "🕗", "🕘", "🕙", "🕚", "🕛"],
-
     # Simple
     "simple": ["◜ ", " ◝", " ◞", "◟ "],
 }
@@ -429,9 +421,7 @@ class ProgressBar:
         cfg = self.style_config
 
         if cfg.get("fill_color") is None:  # Gradient style
-            bar_fill = "".join(
-                self._get_gradient_char(i / self.width) for i in range(filled)
-            )
+            bar_fill = "".join(self._get_gradient_char(i / self.width) for i in range(filled))
             bar_fill += Colors.RESET
         else:
             bar_fill = f"{self.color}{cfg['fill'] * filled}{Colors.RESET}"
@@ -480,6 +470,7 @@ class ProgressBar:
 @dataclass
 class TaskState:
     """State of a task in MultiProgress."""
+
     name: str
     total: int = 100
     current: int = 0
@@ -535,12 +526,10 @@ class MultiProgress:
     def _render_task(self, task: TaskState) -> str:
         """Render a single task line."""
         # Status symbol
-        symbol, symbol_color = self.STATUS_SYMBOLS.get(
-            task.status, self.STATUS_SYMBOLS["pending"]
-        )
+        symbol, symbol_color = self.STATUS_SYMBOLS.get(task.status, self.STATUS_SYMBOLS["pending"])
 
         # Name (padded)
-        name = task.name[:self.name_width].ljust(self.name_width)
+        name = task.name[: self.name_width].ljust(self.name_width)
 
         # Progress bar
         progress = task.current / task.total if task.total > 0 else 0

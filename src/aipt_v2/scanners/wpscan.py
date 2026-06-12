@@ -14,7 +14,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from .base import BaseScanner, ScanResult, ScanFinding, ScanSeverity
+from .base import BaseScanner, ScanFinding, ScanResult, ScanSeverity
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,8 @@ class WPScanConfig:
 
     # Enumeration options
     enumerate_plugins: bool = True  # vp = vulnerable plugins
-    enumerate_themes: bool = True   # vt = vulnerable themes
-    enumerate_users: bool = True    # u = users
+    enumerate_themes: bool = True  # vt = vulnerable themes
+    enumerate_users: bool = True  # u = users
     enumerate_config_backups: bool = True  # cb = config backups
     enumerate_db_exports: bool = True  # dbe = database exports
     enumerate_all_plugins: bool = False  # ap = all plugins
@@ -84,11 +84,7 @@ class WPScanScanner(BaseScanner):
         """Check if wpscan is installed."""
         return shutil.which("wpscan") is not None
 
-    async def scan(
-        self,
-        target: str,
-        **kwargs
-    ) -> ScanResult:
+    async def scan(self, target: str, **kwargs) -> ScanResult:
         """
         Run wpscan against target.
 
@@ -115,8 +111,7 @@ class WPScanScanner(BaseScanner):
             self._process = process
 
             stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=kwargs.get("timeout", 600)
+                process.communicate(), timeout=kwargs.get("timeout", 600)
             )
 
             result.raw_output = stdout.decode("utf-8", errors="replace")
@@ -221,20 +216,24 @@ class WPScanScanner(BaseScanner):
 
             # Version info finding
             if version_info.get("number"):
-                findings.append(ScanFinding(
-                    title=f"WordPress Version: {version_info['number']}",
-                    severity=ScanSeverity.INFO,
-                    description=f"WordPress {version_info['number']} detected",
-                    scanner="wpscan",
-                    tags=["wordpress", "version"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title=f"WordPress Version: {version_info['number']}",
+                        severity=ScanSeverity.INFO,
+                        description=f"WordPress {version_info['number']} detected",
+                        scanner="wpscan",
+                        tags=["wordpress", "version"],
+                    )
+                )
 
         # Main theme
         if "main_theme" in data and data["main_theme"]:
             theme = data["main_theme"]
             if theme.get("vulnerabilities"):
                 for vuln in theme["vulnerabilities"]:
-                    findings.append(self._vuln_to_finding(vuln, f"Theme: {theme.get('slug', 'unknown')}"))
+                    findings.append(
+                        self._vuln_to_finding(vuln, f"Theme: {theme.get('slug', 'unknown')}")
+                    )
 
         # Plugins
         if "plugins" in data:
@@ -245,48 +244,56 @@ class WPScanScanner(BaseScanner):
 
                 # Outdated plugin
                 if plugin_data.get("outdated"):
-                    findings.append(ScanFinding(
-                        title=f"Outdated Plugin: {plugin_name}",
-                        severity=ScanSeverity.LOW,
-                        description=f"Plugin {plugin_name} version {plugin_data.get('version', 'unknown')} is outdated",
-                        scanner="wpscan",
-                        tags=["wordpress", "plugin", "outdated"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title=f"Outdated Plugin: {plugin_name}",
+                            severity=ScanSeverity.LOW,
+                            description=f"Plugin {plugin_name} version {plugin_data.get('version', 'unknown')} is outdated",
+                            scanner="wpscan",
+                            tags=["wordpress", "plugin", "outdated"],
+                        )
+                    )
 
         # Users
         if "users" in data:
             for username, user_data in data["users"].items():
-                findings.append(ScanFinding(
-                    title=f"User Enumerated: {username}",
-                    severity=ScanSeverity.LOW,
-                    description=f"WordPress user '{username}' discovered (ID: {user_data.get('id', 'unknown')})",
-                    scanner="wpscan",
-                    tags=["wordpress", "user", "enumeration"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title=f"User Enumerated: {username}",
+                        severity=ScanSeverity.LOW,
+                        description=f"WordPress user '{username}' discovered (ID: {user_data.get('id', 'unknown')})",
+                        scanner="wpscan",
+                        tags=["wordpress", "user", "enumeration"],
+                    )
+                )
 
         # Config backups
         if "config_backups" in data:
             for backup in data["config_backups"]:
-                findings.append(ScanFinding(
-                    title="Config Backup Found",
-                    severity=ScanSeverity.HIGH,
-                    description=f"Configuration backup file found: {backup}",
-                    url=backup,
-                    scanner="wpscan",
-                    tags=["wordpress", "config", "backup", "sensitive"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title="Config Backup Found",
+                        severity=ScanSeverity.HIGH,
+                        description=f"Configuration backup file found: {backup}",
+                        url=backup,
+                        scanner="wpscan",
+                        tags=["wordpress", "config", "backup", "sensitive"],
+                    )
+                )
 
         # DB exports
         if "db_exports" in data:
             for export in data["db_exports"]:
-                findings.append(ScanFinding(
-                    title="Database Export Found",
-                    severity=ScanSeverity.CRITICAL,
-                    description=f"Database export file found: {export}",
-                    url=export,
-                    scanner="wpscan",
-                    tags=["wordpress", "database", "export", "sensitive"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title="Database Export Found",
+                        severity=ScanSeverity.CRITICAL,
+                        description=f"Database export file found: {export}",
+                        url=export,
+                        scanner="wpscan",
+                        tags=["wordpress", "database", "export", "sensitive"],
+                    )
+                )
 
         # Interesting findings
         if "interesting_findings" in data:
@@ -297,14 +304,16 @@ class WPScanScanner(BaseScanner):
                 elif "debug" in item.get("url", "").lower():
                     severity = ScanSeverity.MEDIUM
 
-                findings.append(ScanFinding(
-                    title=item.get("to_s", "Interesting Finding"),
-                    severity=severity,
-                    description=item.get("to_s", ""),
-                    url=item.get("url", ""),
-                    scanner="wpscan",
-                    tags=["wordpress", "interesting"],
-                ))
+                findings.append(
+                    ScanFinding(
+                        title=item.get("to_s", "Interesting Finding"),
+                        severity=severity,
+                        description=item.get("to_s", ""),
+                        url=item.get("url", ""),
+                        scanner="wpscan",
+                        tags=["wordpress", "interesting"],
+                    )
+                )
 
         return findings
 
@@ -330,7 +339,9 @@ class WPScanScanner(BaseScanner):
         if "cve" in refs:
             cve_list = refs["cve"]
             if cve_list:
-                cve = f"CVE-{cve_list[0]}" if not str(cve_list[0]).startswith("CVE") else cve_list[0]
+                cve = (
+                    f"CVE-{cve_list[0]}" if not str(cve_list[0]).startswith("CVE") else cve_list[0]
+                )
 
         return ScanFinding(
             title=f"{component}: {title[:80]}",
@@ -338,7 +349,11 @@ class WPScanScanner(BaseScanner):
             description=title,
             cwe=vuln.get("cwe", ""),
             scanner="wpscan",
-            tags=["wordpress", "vulnerability", vuln_type] if vuln_type else ["wordpress", "vulnerability"],
+            tags=(
+                ["wordpress", "vulnerability", vuln_type]
+                if vuln_type
+                else ["wordpress", "vulnerability"]
+            ),
         )
 
     def _parse_text_output(self, output: str) -> List[ScanFinding]:
@@ -349,13 +364,15 @@ class WPScanScanner(BaseScanner):
         if "[!]" in output:
             for line in output.split("\n"):
                 if "[!]" in line:
-                    findings.append(ScanFinding(
-                        title=line.replace("[!]", "").strip()[:100],
-                        severity=ScanSeverity.MEDIUM,
-                        description=line.strip(),
-                        scanner="wpscan",
-                        tags=["wordpress"],
-                    ))
+                    findings.append(
+                        ScanFinding(
+                            title=line.replace("[!]", "").strip()[:100],
+                            severity=ScanSeverity.MEDIUM,
+                            description=line.strip(),
+                            scanner="wpscan",
+                            tags=["wordpress"],
+                        )
+                    )
 
         return findings
 

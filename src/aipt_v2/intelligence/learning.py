@@ -9,6 +9,7 @@ Learns from exploitation attempts to improve future scans:
 
 This creates a feedback loop that makes AIPT smarter over time.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,14 +20,13 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Optional
 
-from aipt_v2.models.findings import VulnerabilityType
-
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class ExploitAttempt:
     """Record of an exploitation attempt."""
+
     vuln_type: str
     target_url: str
     payload: str
@@ -58,6 +58,7 @@ class ExploitAttempt:
 @dataclass
 class PayloadSuggestion:
     """A suggested payload based on historical success."""
+
     payload: str
     success_count: int
     total_attempts: int
@@ -77,6 +78,7 @@ class PayloadSuggestion:
 @dataclass
 class TechniqueStats:
     """Statistics for a vulnerability type."""
+
     vuln_type: str
     total_attempts: int
     successful_attempts: int
@@ -129,7 +131,8 @@ class ExploitationLearner:
         cursor = conn.cursor()
 
         # Exploitation attempts table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS exploit_attempts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vuln_type TEXT NOT NULL,
@@ -145,21 +148,29 @@ class ExploitationLearner:
                 timestamp TEXT NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # Index for faster queries
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_vuln_type ON exploit_attempts(vuln_type)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_success ON exploit_attempts(success)
-        """)
-        cursor.execute("""
+        """
+        )
+        cursor.execute(
+            """
             CREATE INDEX IF NOT EXISTS idx_waf ON exploit_attempts(waf)
-        """)
+        """
+        )
 
         # WAF bypass techniques table
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS waf_bypasses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 waf_name TEXT NOT NULL,
@@ -170,10 +181,12 @@ class ExploitationLearner:
                 notes TEXT,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )
-        """)
+        """
+        )
 
         # Payload effectiveness table (aggregated stats)
-        cursor.execute("""
+        cursor.execute(
+            """
             CREATE TABLE IF NOT EXISTS payload_stats (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 vuln_type TEXT NOT NULL,
@@ -186,7 +199,8 @@ class ExploitationLearner:
                 last_failure TEXT,
                 UNIQUE(vuln_type, payload_hash)
             )
-        """)
+        """
+        )
 
         conn.commit()
         conn.close()
@@ -202,51 +216,72 @@ class ExploitationLearner:
         cursor = conn.cursor()
 
         # Insert attempt
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO exploit_attempts
             (vuln_type, target_url, payload, success, tech_stack, waf,
              response_code, response_time_ms, error_message, notes, timestamp)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        """, (
-            attempt.vuln_type,
-            attempt.target_url,
-            attempt.payload,
-            1 if attempt.success else 0,
-            attempt.tech_stack,
-            attempt.waf,
-            attempt.response_code,
-            attempt.response_time_ms,
-            attempt.error_message,
-            attempt.notes,
-            attempt.timestamp.isoformat(),
-        ))
+        """,
+            (
+                attempt.vuln_type,
+                attempt.target_url,
+                attempt.payload,
+                1 if attempt.success else 0,
+                attempt.tech_stack,
+                attempt.waf,
+                attempt.response_code,
+                attempt.response_time_ms,
+                attempt.error_message,
+                attempt.notes,
+                attempt.timestamp.isoformat(),
+            ),
+        )
 
         # Update payload stats
         payload_hash = self._hash_payload(attempt.payload)
         if attempt.success:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO payload_stats (vuln_type, payload_hash, payload, success_count, last_success)
                 VALUES (?, ?, ?, 1, ?)
                 ON CONFLICT(vuln_type, payload_hash) DO UPDATE SET
                     success_count = success_count + 1,
                     last_success = ?
-            """, (attempt.vuln_type, payload_hash, attempt.payload,
-                  attempt.timestamp.isoformat(), attempt.timestamp.isoformat()))
+            """,
+                (
+                    attempt.vuln_type,
+                    payload_hash,
+                    attempt.payload,
+                    attempt.timestamp.isoformat(),
+                    attempt.timestamp.isoformat(),
+                ),
+            )
         else:
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO payload_stats (vuln_type, payload_hash, payload, failure_count, last_failure)
                 VALUES (?, ?, ?, 1, ?)
                 ON CONFLICT(vuln_type, payload_hash) DO UPDATE SET
                     failure_count = failure_count + 1,
                     last_failure = ?
-            """, (attempt.vuln_type, payload_hash, attempt.payload,
-                  attempt.timestamp.isoformat(), attempt.timestamp.isoformat()))
+            """,
+                (
+                    attempt.vuln_type,
+                    payload_hash,
+                    attempt.payload,
+                    attempt.timestamp.isoformat(),
+                    attempt.timestamp.isoformat(),
+                ),
+            )
 
         conn.commit()
         conn.close()
 
-        logger.debug(f"Recorded {'successful' if attempt.success else 'failed'} "
-                     f"attempt for {attempt.vuln_type}")
+        logger.debug(
+            f"Recorded {'successful' if attempt.success else 'failed'} "
+            f"attempt for {attempt.vuln_type}"
+        )
 
     def record_waf_bypass(
         self,
@@ -271,12 +306,14 @@ class ExploitationLearner:
         conn = sqlite3.connect(self.db_path)
         cursor = conn.cursor()
 
-        cursor.execute("""
+        cursor.execute(
+            """
             INSERT INTO waf_bypasses
             (waf_name, vuln_type, original_payload, bypass_payload, success, notes)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (waf_name, vuln_type, original_payload, bypass_payload,
-              1 if success else 0, notes))
+        """,
+            (waf_name, vuln_type, original_payload, bypass_payload, 1 if success else 0, notes),
+        )
 
         conn.commit()
         conn.close()
@@ -343,15 +380,17 @@ class ExploitationLearner:
         suggestions = []
         for row in rows:
             payload, success_count, total, avg_time, common_waf, common_tech = row
-            suggestions.append(PayloadSuggestion(
-                payload=payload,
-                success_count=success_count,
-                total_attempts=total,
-                success_rate=success_count / total if total > 0 else 0,
-                avg_response_time_ms=avg_time,
-                common_waf=common_waf,
-                common_tech=common_tech,
-            ))
+            suggestions.append(
+                PayloadSuggestion(
+                    payload=payload,
+                    success_count=success_count,
+                    total_attempts=total,
+                    success_rate=success_count / total if total > 0 else 0,
+                    avg_response_time_ms=avg_time,
+                    common_waf=common_waf,
+                    common_tech=common_tech,
+                )
+            )
 
         return suggestions
 
@@ -417,19 +456,23 @@ class ExploitationLearner:
         cursor = conn.cursor()
 
         # Get overall stats
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT
                 COUNT(*) as total,
                 SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) as successes
             FROM exploit_attempts
             WHERE vuln_type = ?
-        """, (vuln_type,))
+        """,
+            (vuln_type,),
+        )
         total, successes = cursor.fetchone()
         total = total or 0
         successes = successes or 0
 
         # Get best payload
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT payload,
                    CAST(SUM(CASE WHEN success = 1 THEN 1 ELSE 0 END) AS FLOAT) / COUNT(*) as rate
             FROM exploit_attempts
@@ -438,16 +481,21 @@ class ExploitationLearner:
             HAVING COUNT(*) >= 3
             ORDER BY rate DESC
             LIMIT 1
-        """, (vuln_type,))
+        """,
+            (vuln_type,),
+        )
         best_row = cursor.fetchone()
 
         # Get common WAF bypasses
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT DISTINCT waf
             FROM exploit_attempts
             WHERE vuln_type = ? AND waf IS NOT NULL AND success = 1
             LIMIT 5
-        """, (vuln_type,))
+        """,
+            (vuln_type,),
+        )
         waf_rows = cursor.fetchall()
 
         conn.close()
@@ -518,19 +566,23 @@ class ExploitationLearner:
         cursor = conn.cursor()
 
         # Get all payload stats
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT vuln_type, payload, success_count, failure_count
             FROM payload_stats
             ORDER BY vuln_type, (success_count * 1.0 / (success_count + failure_count + 1)) DESC
-        """)
+        """
+        )
         payload_rows = cursor.fetchall()
 
         # Get all WAF bypasses
-        cursor.execute("""
+        cursor.execute(
+            """
             SELECT waf_name, vuln_type, original_payload, bypass_payload, success
             FROM waf_bypasses
             WHERE success = 1
-        """)
+        """
+        )
         bypass_rows = cursor.fetchall()
 
         conn.close()
@@ -579,30 +631,36 @@ class ExploitationLearner:
         # Import payload knowledge
         for payload_data in data.get("payload_knowledge", []):
             payload_hash = self._hash_payload(payload_data["payload"])
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT OR REPLACE INTO payload_stats
                 (vuln_type, payload_hash, payload, success_count, failure_count)
                 VALUES (?, ?, ?, ?, ?)
-            """, (
-                payload_data["vuln_type"],
-                payload_hash,
-                payload_data["payload"],
-                payload_data["success_count"],
-                payload_data["failure_count"],
-            ))
+            """,
+                (
+                    payload_data["vuln_type"],
+                    payload_hash,
+                    payload_data["payload"],
+                    payload_data["success_count"],
+                    payload_data["failure_count"],
+                ),
+            )
 
         # Import WAF bypasses
         for bypass in data.get("waf_bypasses", []):
-            cursor.execute("""
+            cursor.execute(
+                """
                 INSERT INTO waf_bypasses
                 (waf_name, vuln_type, original_payload, bypass_payload, success)
                 VALUES (?, ?, ?, ?, 1)
-            """, (
-                bypass["waf"],
-                bypass["vuln_type"],
-                bypass["original"],
-                bypass["bypass"],
-            ))
+            """,
+                (
+                    bypass["waf"],
+                    bypass["vuln_type"],
+                    bypass["original"],
+                    bypass["bypass"],
+                ),
+            )
 
         conn.commit()
         conn.close()
@@ -612,6 +670,7 @@ class ExploitationLearner:
     def _hash_payload(self, payload: str) -> str:
         """Create a hash of a payload for deduplication."""
         import hashlib
+
         return hashlib.sha256(payload.encode()).hexdigest()[:16]
 
     def clear_all(self):

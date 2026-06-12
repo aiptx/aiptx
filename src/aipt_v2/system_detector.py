@@ -22,22 +22,21 @@ import asyncio
 import os
 import platform
 import shutil
-import subprocess
 from dataclasses import dataclass, field
 from enum import Enum
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
+from rich import box
 from rich.console import Console
 from rich.table import Table
-from rich import box
-
 
 console = Console()
 
 
 class OSType(Enum):
     """Supported operating systems."""
+
     LINUX = "linux"
     MACOS = "macos"
     WINDOWS = "windows"
@@ -46,22 +45,24 @@ class OSType(Enum):
 
 class PackageManager(Enum):
     """Supported package managers."""
-    APT = "apt"           # Debian/Ubuntu
-    YUM = "yum"           # RHEL/CentOS/Fedora (older)
-    DNF = "dnf"           # Fedora/RHEL 8+
-    PACMAN = "pacman"     # Arch Linux
-    ZYPPER = "zypper"     # openSUSE
-    BREW = "brew"         # macOS Homebrew
-    MACPORTS = "port"     # macOS MacPorts
-    CHOCO = "choco"       # Windows Chocolatey
-    SCOOP = "scoop"       # Windows Scoop
-    WINGET = "winget"     # Windows Package Manager
-    NIX = "nix"           # Nix package manager
+
+    APT = "apt"  # Debian/Ubuntu
+    YUM = "yum"  # RHEL/CentOS/Fedora (older)
+    DNF = "dnf"  # Fedora/RHEL 8+
+    PACMAN = "pacman"  # Arch Linux
+    ZYPPER = "zypper"  # openSUSE
+    BREW = "brew"  # macOS Homebrew
+    MACPORTS = "port"  # macOS MacPorts
+    CHOCO = "choco"  # Windows Chocolatey
+    SCOOP = "scoop"  # Windows Scoop
+    WINGET = "winget"  # Windows Package Manager
+    NIX = "nix"  # Nix package manager
     UNKNOWN = "unknown"
 
 
 class Architecture(Enum):
     """CPU architectures."""
+
     X86_64 = "x86_64"
     ARM64 = "arm64"
     ARM32 = "arm32"
@@ -72,6 +73,7 @@ class Architecture(Enum):
 @dataclass
 class SystemCapabilities:
     """System capabilities and available runtimes."""
+
     has_docker: bool = False
     has_python3: bool = False
     has_pip: bool = False
@@ -117,6 +119,7 @@ class SystemCapabilities:
 @dataclass
 class SystemInfo:
     """Complete system information."""
+
     os_type: OSType = OSType.UNKNOWN
     os_name: str = ""
     os_version: str = ""
@@ -338,16 +341,16 @@ class SystemDetector:
         check_commands = {
             "winget": [
                 "winget --version",
-                "powershell -Command \"Get-Command winget -ErrorAction SilentlyContinue\"",
+                'powershell -Command "Get-Command winget -ErrorAction SilentlyContinue"',
             ],
             "choco": [
                 "choco --version",
-                "powershell -Command \"Get-Command choco -ErrorAction SilentlyContinue\"",
-                "cmd /c \"where choco\"",
+                'powershell -Command "Get-Command choco -ErrorAction SilentlyContinue"',
+                'cmd /c "where choco"',
             ],
             "scoop": [
                 "scoop --version",
-                "powershell -Command \"Get-Command scoop -ErrorAction SilentlyContinue\"",
+                'powershell -Command "Get-Command scoop -ErrorAction SilentlyContinue"',
             ],
         }
 
@@ -391,8 +394,11 @@ class SystemDetector:
 
         # Get version info for key tools
         if caps.has_python3:
-            caps.python_version = await self._get_command_output("python3 --version") or \
-                                  await self._get_command_output("python --version") or ""
+            caps.python_version = (
+                await self._get_command_output("python3 --version")
+                or await self._get_command_output("python --version")
+                or ""
+            )
 
         if caps.has_go:
             caps.go_version = await self._get_command_output("go version") or ""
@@ -408,6 +414,7 @@ class SystemDetector:
             # Check for admin on Windows
             try:
                 import ctypes
+
                 return ctypes.windll.shell32.IsUserAnAdmin() != 0
             except Exception:
                 return False
@@ -456,7 +463,9 @@ class SystemDetector:
         table.add_column("Value", style="green")
 
         table.add_row("Operating System", info.os_name)
-        table.add_row("Version", f"{info.os_version}" + (f" ({info.os_codename})" if info.os_codename else ""))
+        table.add_row(
+            "Version", f"{info.os_version}" + (f" ({info.os_codename})" if info.os_codename else "")
+        )
         table.add_row("Architecture", info.architecture.value)
         table.add_row("Package Manager", info.package_manager.value)
 
@@ -480,54 +489,44 @@ class SystemDetector:
         caps_table.add_row(
             "Python 3",
             "[green]✓[/green]" if caps.has_python3 else "[red]✗[/red]",
-            caps.python_version.replace("Python ", "") if caps.python_version else ""
+            caps.python_version.replace("Python ", "") if caps.python_version else "",
         )
-        caps_table.add_row(
-            "pip",
-            "[green]✓[/green]" if caps.has_pip else "[red]✗[/red]",
-            ""
-        )
+        caps_table.add_row("pip", "[green]✓[/green]" if caps.has_pip else "[red]✗[/red]", "")
         caps_table.add_row(
             "Go",
             "[green]✓[/green]" if caps.has_go else "[red]✗[/red]",
-            caps.go_version.replace("go version ", "").split()[0] if caps.go_version else ""
+            caps.go_version.replace("go version ", "").split()[0] if caps.go_version else "",
         )
         caps_table.add_row(
             "Docker",
             "[green]✓[/green]" if caps.has_docker else "[yellow]○[/yellow]",
-            caps.docker_version.replace("Docker version ", "").split(",")[0] if caps.docker_version else ""
+            (
+                caps.docker_version.replace("Docker version ", "").split(",")[0]
+                if caps.docker_version
+                else ""
+            ),
+        )
+        caps_table.add_row("Git", "[green]✓[/green]" if caps.has_git else "[red]✗[/red]", "")
+        caps_table.add_row(
+            "Ruby/Gem", "[green]✓[/green]" if caps.has_ruby else "[yellow]○[/yellow]", ""
         )
         caps_table.add_row(
-            "Git",
-            "[green]✓[/green]" if caps.has_git else "[red]✗[/red]",
-            ""
+            "Rust/Cargo", "[green]✓[/green]" if caps.has_cargo else "[yellow]○[/yellow]", ""
         )
         caps_table.add_row(
-            "Ruby/Gem",
-            "[green]✓[/green]" if caps.has_ruby else "[yellow]○[/yellow]",
-            ""
+            "Node.js", "[green]✓[/green]" if caps.has_node else "[yellow]○[/yellow]", ""
         )
         caps_table.add_row(
-            "Rust/Cargo",
-            "[green]✓[/green]" if caps.has_cargo else "[yellow]○[/yellow]",
-            ""
-        )
-        caps_table.add_row(
-            "Node.js",
-            "[green]✓[/green]" if caps.has_node else "[yellow]○[/yellow]",
-            ""
-        )
-        caps_table.add_row(
-            "sudo/admin",
-            "[green]✓[/green]" if caps.has_sudo else "[yellow]○[/yellow]",
-            ""
+            "sudo/admin", "[green]✓[/green]" if caps.has_sudo else "[yellow]○[/yellow]", ""
         )
 
         console.print(caps_table)
         console.print()
 
         # Show legend
-        console.print("[dim]Legend: [green]✓[/green] Available  [yellow]○[/yellow] Optional  [red]✗[/red] Required[/dim]")
+        console.print(
+            "[dim]Legend: [green]✓[/green] Available  [yellow]○[/yellow] Optional  [red]✗[/red] Required[/dim]"
+        )
 
 
 # Convenience functions

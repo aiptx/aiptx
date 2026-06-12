@@ -18,6 +18,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class InternalRoute:
     """Represents a route to an internal network."""
+
     network: str
     gateway: str
     interface: str | None = None
@@ -197,7 +198,7 @@ class RouteManager:
             "add_route": f"sudo ip route add {network} dev {interface}",
             "delete_route": f"sudo ip route del {network} dev {interface}",
             "ligolo_start": "session",  # In ligolo proxy console
-            "ligolo_tunnel": "start",   # Start the tunnel
+            "ligolo_tunnel": "start",  # Start the tunnel
             "notes": "Run these commands on attacker machine after ligolo connection",
         }
 
@@ -351,22 +352,26 @@ class RouteManager:
         if os_type == "linux":
             # Parse ip addr output
             import re
+
             # Match: inet 192.168.1.5/24
             pattern = r"inet\s+(\d+\.\d+\.\d+\.\d+)/(\d+)"
             for match in re.finditer(pattern, output):
                 ip, prefix = match.groups()
                 try:
                     net = ipaddress.ip_network(f"{ip}/{prefix}", strict=False)
-                    networks.append({
-                        "ip": ip,
-                        "network": str(net),
-                        "prefix": prefix,
-                    })
+                    networks.append(
+                        {
+                            "ip": ip,
+                            "network": str(net),
+                            "prefix": prefix,
+                        }
+                    )
                 except ValueError:
                     pass
         else:
             # Parse Windows ipconfig
             import re
+
             # Match IPv4 Address and Subnet Mask
             ip_pattern = r"IPv4 Address[.\s]+:\s*(\d+\.\d+\.\d+\.\d+)"
             mask_pattern = r"Subnet Mask[.\s]+:\s*(\d+\.\d+\.\d+\.\d+)"
@@ -377,11 +382,13 @@ class RouteManager:
             for ip, mask in zip(ips, masks):
                 try:
                     net = ipaddress.ip_network(f"{ip}/{mask}", strict=False)
-                    networks.append({
-                        "ip": ip,
-                        "network": str(net),
-                        "netmask": mask,
-                    })
+                    networks.append(
+                        {
+                            "ip": ip,
+                            "network": str(net),
+                            "netmask": mask,
+                        }
+                    )
                 except ValueError:
                     pass
 

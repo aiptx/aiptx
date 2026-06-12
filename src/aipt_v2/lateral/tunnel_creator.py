@@ -17,8 +17,9 @@ logger = logging.getLogger(__name__)
 
 class TunnelType(str, Enum):
     """Types of tunnels."""
-    SSH_LOCAL = "ssh_local"      # -L: local -> remote
-    SSH_REMOTE = "ssh_remote"    # -R: remote -> local
+
+    SSH_LOCAL = "ssh_local"  # -L: local -> remote
+    SSH_REMOTE = "ssh_remote"  # -R: remote -> local
     SSH_DYNAMIC = "ssh_dynamic"  # -D: SOCKS proxy
     CHISEL_FORWARD = "chisel_forward"
     CHISEL_REVERSE = "chisel_reverse"
@@ -30,6 +31,7 @@ class TunnelType(str, Enum):
 @dataclass
 class TunnelConfig:
     """Configuration for a tunnel."""
+
     tunnel_type: TunnelType
     local_host: str = "127.0.0.1"
     local_port: int = 8080
@@ -97,11 +99,16 @@ class TunnelCreator:
         """
         cmd_parts = [
             "ssh",
-            "-L", f"{local_port}:{remote_host}:{remote_port}",
-            "-N", "-f",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-p", str(pivot_port),
+            "-L",
+            f"{local_port}:{remote_host}:{remote_port}",
+            "-N",
+            "-f",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-p",
+            str(pivot_port),
         ]
 
         if key_file:
@@ -145,12 +152,18 @@ class TunnelCreator:
         """
         cmd_parts = [
             "ssh",
-            "-R", f"{remote_port}:{local_host}:{local_port}",
-            "-N", "-f",
-            "-o", "StrictHostKeyChecking=no",
-            "-o", "UserKnownHostsFile=/dev/null",
-            "-o", "GatewayPorts=yes",
-            "-p", str(pivot_port),
+            "-R",
+            f"{remote_port}:{local_host}:{local_port}",
+            "-N",
+            "-f",
+            "-o",
+            "StrictHostKeyChecking=no",
+            "-o",
+            "UserKnownHostsFile=/dev/null",
+            "-o",
+            "GatewayPorts=yes",
+            "-p",
+            str(pivot_port),
         ]
 
         if key_file:
@@ -195,7 +208,7 @@ class TunnelCreator:
                 "client_command": f"chisel client {server_host}:{server_port} R:socks",
                 "tunnel_type": "chisel_reverse",
                 "description": "Reverse SOCKS proxy through Chisel",
-                "usage": f"Use proxy socks5://127.0.0.1:1080 after connection",
+                "usage": "Use proxy socks5://127.0.0.1:1080 after connection",
                 "notes": "Run server on attacker, client on target",
             }
         else:

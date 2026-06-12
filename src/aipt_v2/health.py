@@ -15,14 +15,12 @@ Usage:
 
 import os
 import time
-import psutil
 from datetime import datetime, timezone
-from typing import Dict, Any, Optional
-from functools import lru_cache
+from typing import Any, Dict, Optional
 
+import psutil
 from fastapi import APIRouter, Response
 from pydantic import BaseModel
-
 
 # =============================================================================
 # Configuration
@@ -37,8 +35,10 @@ START_TIME = time.time()
 # Pydantic Models
 # =============================================================================
 
+
 class HealthStatus(BaseModel):
     """Health check response model."""
+
     status: str
     version: str
     timestamp: str
@@ -48,6 +48,7 @@ class HealthStatus(BaseModel):
 
 class ReadinessStatus(BaseModel):
     """Readiness check response model."""
+
     status: str
     version: str
     timestamp: str
@@ -56,6 +57,7 @@ class ReadinessStatus(BaseModel):
 
 class ComponentCheck(BaseModel):
     """Individual component check result."""
+
     status: str
     latency_ms: Optional[float] = None
     message: Optional[str] = None
@@ -64,6 +66,7 @@ class ComponentCheck(BaseModel):
 # =============================================================================
 # Metrics Storage (Simple in-memory counters)
 # =============================================================================
+
 
 class MetricsCollector:
     """Simple metrics collector for Prometheus-style metrics."""
@@ -116,11 +119,13 @@ class MetricsCollector:
         for key, value in self.counters.items():
             lines.append(f"aipt_{key} {value}")
 
-        lines.extend([
-            "",
-            "# HELP aipt_active_scans Number of active scans",
-            "# TYPE aipt_active_scans gauge",
-        ])
+        lines.extend(
+            [
+                "",
+                "# HELP aipt_active_scans Number of active scans",
+                "# TYPE aipt_active_scans gauge",
+            ]
+        )
 
         # Export gauges
         for key, value in self.gauges.items():
@@ -131,34 +136,38 @@ class MetricsCollector:
             process = psutil.Process()
             memory_info = process.memory_info()
 
-            lines.extend([
-                "",
-                "# HELP process_resident_memory_bytes Resident memory size in bytes",
-                "# TYPE process_resident_memory_bytes gauge",
-                f"process_resident_memory_bytes {memory_info.rss}",
-                "",
-                "# HELP process_virtual_memory_bytes Virtual memory size in bytes",
-                "# TYPE process_virtual_memory_bytes gauge",
-                f"process_virtual_memory_bytes {memory_info.vms}",
-                "",
-                "# HELP process_cpu_percent CPU percent usage",
-                "# TYPE process_cpu_percent gauge",
-                f"process_cpu_percent {process.cpu_percent()}",
-                "",
-                "# HELP process_open_fds Number of open file descriptors",
-                "# TYPE process_open_fds gauge",
-                f"process_open_fds {process.num_fds() if hasattr(process, 'num_fds') else 0}",
-            ])
+            lines.extend(
+                [
+                    "",
+                    "# HELP process_resident_memory_bytes Resident memory size in bytes",
+                    "# TYPE process_resident_memory_bytes gauge",
+                    f"process_resident_memory_bytes {memory_info.rss}",
+                    "",
+                    "# HELP process_virtual_memory_bytes Virtual memory size in bytes",
+                    "# TYPE process_virtual_memory_bytes gauge",
+                    f"process_virtual_memory_bytes {memory_info.vms}",
+                    "",
+                    "# HELP process_cpu_percent CPU percent usage",
+                    "# TYPE process_cpu_percent gauge",
+                    f"process_cpu_percent {process.cpu_percent()}",
+                    "",
+                    "# HELP process_open_fds Number of open file descriptors",
+                    "# TYPE process_open_fds gauge",
+                    f"process_open_fds {process.num_fds() if hasattr(process, 'num_fds') else 0}",
+                ]
+            )
         except Exception:
             pass  # Skip process metrics if unavailable
 
         # Add uptime
-        lines.extend([
-            "",
-            "# HELP aipt_uptime_seconds Time since service started",
-            "# TYPE aipt_uptime_seconds gauge",
-            f"aipt_uptime_seconds {time.time() - START_TIME}",
-        ])
+        lines.extend(
+            [
+                "",
+                "# HELP aipt_uptime_seconds Time since service started",
+                "# TYPE aipt_uptime_seconds gauge",
+                f"aipt_uptime_seconds {time.time() - START_TIME}",
+            ]
+        )
 
         return "\n".join(lines) + "\n"
 
@@ -171,12 +180,14 @@ metrics = MetricsCollector()
 # Health Check Functions
 # =============================================================================
 
+
 def check_database() -> ComponentCheck:
     """Check database connectivity."""
     start = time.time()
     try:
         # Try to import and use the repository
         from database.repository import Repository
+
         repo = Repository()
         # Simple query to verify connection
         repo.list_projects(status=None)
@@ -185,9 +196,7 @@ def check_database() -> ComponentCheck:
     except Exception as e:
         latency = (time.time() - start) * 1000
         return ComponentCheck(
-            status="unhealthy",
-            latency_ms=round(latency, 2),
-            message=str(e)[:100]
+            status="unhealthy", latency_ms=round(latency, 2), message=str(e)[:100]
         )
 
 
@@ -200,6 +209,7 @@ def check_redis() -> ComponentCheck:
     start = time.time()
     try:
         import redis
+
         client = redis.from_url(redis_url)
         client.ping()
         latency = (time.time() - start) * 1000
@@ -209,9 +219,7 @@ def check_redis() -> ComponentCheck:
     except Exception as e:
         latency = (time.time() - start) * 1000
         return ComponentCheck(
-            status="unhealthy",
-            latency_ms=round(latency, 2),
-            message=str(e)[:100]
+            status="unhealthy", latency_ms=round(latency, 2), message=str(e)[:100]
         )
 
 
@@ -234,18 +242,13 @@ def check_disk_space() -> ComponentCheck:
 
         if free_percent < 5:
             return ComponentCheck(
-                status="unhealthy",
-                message=f"Low disk space: {free_percent:.1f}% free"
+                status="unhealthy", message=f"Low disk space: {free_percent:.1f}% free"
             )
         elif free_percent < 15:
             return ComponentCheck(
-                status="warning",
-                message=f"Disk space warning: {free_percent:.1f}% free"
+                status="warning", message=f"Disk space warning: {free_percent:.1f}% free"
             )
-        return ComponentCheck(
-            status="healthy",
-            message=f"{free_percent:.1f}% free"
-        )
+        return ComponentCheck(status="healthy", message=f"{free_percent:.1f}% free")
     except Exception as e:
         return ComponentCheck(status="unknown", message=str(e)[:100])
 
@@ -258,18 +261,13 @@ def check_memory() -> ComponentCheck:
 
         if used_percent > 95:
             return ComponentCheck(
-                status="unhealthy",
-                message=f"Critical memory usage: {used_percent:.1f}%"
+                status="unhealthy", message=f"Critical memory usage: {used_percent:.1f}%"
             )
         elif used_percent > 85:
             return ComponentCheck(
-                status="warning",
-                message=f"High memory usage: {used_percent:.1f}%"
+                status="warning", message=f"High memory usage: {used_percent:.1f}%"
             )
-        return ComponentCheck(
-            status="healthy",
-            message=f"{used_percent:.1f}% used"
-        )
+        return ComponentCheck(status="healthy", message=f"{used_percent:.1f}% used")
     except Exception as e:
         return ComponentCheck(status="unknown", message=str(e)[:100])
 
@@ -348,6 +346,7 @@ async def readiness_probe():
     # Return 503 if unhealthy
     if overall_status == "unhealthy":
         from fastapi import HTTPException
+
         raise HTTPException(status_code=503, detail=response.model_dump())
 
     return response
@@ -361,10 +360,7 @@ async def prometheus_metrics():
     Returns metrics in Prometheus text exposition format.
     """
     content = metrics.to_prometheus()
-    return Response(
-        content=content,
-        media_type="text/plain; charset=utf-8"
-    )
+    return Response(content=content, media_type="text/plain; charset=utf-8")
 
 
 @health_router.get("/health/info")
@@ -386,9 +382,9 @@ async def service_info():
             "database_configured": bool(os.getenv("DATABASE_URL")),
             "redis_configured": bool(os.getenv("REDIS_URL")),
             "llm_configured": bool(
-                os.getenv("ANTHROPIC_API_KEY") or
-                os.getenv("OPENAI_API_KEY") or
-                os.getenv("LLM_API_KEY")
+                os.getenv("ANTHROPIC_API_KEY")
+                or os.getenv("OPENAI_API_KEY")
+                or os.getenv("LLM_API_KEY")
             ),
         },
         "timestamp": datetime.now(timezone.utc).isoformat() + "Z",
@@ -399,17 +395,25 @@ async def service_info():
 # Utility Functions (for use in middleware)
 # =============================================================================
 
+
 def record_request(method: str, path: str, status_code: int, duration_ms: float):
     """Record an HTTP request for metrics."""
-    metrics.increment("http_requests_total", labels={
-        "method": method,
-        "path": path,
-        "status": str(status_code),
-    })
-    metrics.observe("http_request_duration_ms", duration_ms, labels={
-        "method": method,
-        "path": path,
-    })
+    metrics.increment(
+        "http_requests_total",
+        labels={
+            "method": method,
+            "path": path,
+            "status": str(status_code),
+        },
+    )
+    metrics.observe(
+        "http_request_duration_ms",
+        duration_ms,
+        labels={
+            "method": method,
+            "path": path,
+        },
+    )
 
 
 def record_scan(scan_type: str):

@@ -25,13 +25,13 @@ Usage:
 
 from .base import (
     BaseRunner,
+    RunnerConfig,
     RunnerResult,
     RunnerStatus,
-    RunnerConfig,
 )
+from .enterprise import EnterpriseAPIRunner
 from .local import LocalRunner
 from .vps import VPSRunner
-from .enterprise import EnterpriseAPIRunner
 
 __all__ = [
     # Base

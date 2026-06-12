@@ -13,6 +13,11 @@ Components:
 
 from __future__ import annotations
 
+from aipt_v2.learning.context_analyzer import (
+    ContextAnalyzer,
+    TargetContext,
+    analyze_context,
+)
 from aipt_v2.learning.feedback_collector import (
     FeedbackCollector,
     PayloadFeedback,
@@ -23,14 +28,9 @@ from aipt_v2.learning.payload_memory import (
     StoredPayload,
     get_best_payloads,
 )
-from aipt_v2.learning.context_analyzer import (
-    ContextAnalyzer,
-    TargetContext,
-    analyze_context,
-)
 from aipt_v2.learning.success_predictor import (
-    SuccessPredictor,
     PredictionResult,
+    SuccessPredictor,
     predict_success,
 )
 

@@ -13,7 +13,6 @@ from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Tuple
 from urllib.parse import urljoin
 
-from aipt_v2.business_logic.patterns import TestCase, TestResult
 from aipt_v2.business_logic.test_generator import GeneratedTest
 
 try:
@@ -25,6 +24,7 @@ except ImportError:
 @dataclass
 class ExecutionResult:
     """Result of a single test execution."""
+
     test_name: str
     test_category: str
     endpoint: str
@@ -55,6 +55,7 @@ class ExecutionResult:
 @dataclass
 class ExecutionReport:
     """Full execution report for all tests."""
+
     target: str
     total_tests: int
     executed_tests: int
@@ -307,7 +308,9 @@ class TestExecutor:
 
         evidence = []
         if vulnerability_detected:
-            evidence.append(f"Race condition: {success_count}/{concurrent_count} requests succeeded")
+            evidence.append(
+                f"Race condition: {success_count}/{concurrent_count} requests succeeded"
+            )
             evidence.append("Multiple concurrent requests achieved success state")
 
         return ExecutionResult(
@@ -354,7 +357,7 @@ class TestExecutor:
             # Execute in parallel batches
             batch_size = 5
             for i in range(0, len(tests), batch_size):
-                batch = tests[i:i + batch_size]
+                batch = tests[i : i + batch_size]
                 tasks = []
 
                 for test in batch:
@@ -408,10 +411,18 @@ class TestExecutor:
             results=results,
             summary={
                 "by_category": by_category,
-                "high_confidence_findings": len([v for v in vulnerabilities if v.confidence >= 0.7]),
-                "race_conditions_found": len([v for v in vulnerabilities if v.category == "race_condition"]),
-                "average_confidence": sum(v.confidence for v in vulnerabilities) / len(vulnerabilities) if vulnerabilities else 0,
-            }
+                "high_confidence_findings": len(
+                    [v for v in vulnerabilities if v.confidence >= 0.7]
+                ),
+                "race_conditions_found": len(
+                    [v for v in vulnerabilities if v.category == "race_condition"]
+                ),
+                "average_confidence": (
+                    sum(v.confidence for v in vulnerabilities) / len(vulnerabilities)
+                    if vulnerabilities
+                    else 0
+                ),
+            },
         )
 
     def get_high_confidence_findings(self, threshold: float = 0.7) -> List[ExecutionResult]:

@@ -16,39 +16,35 @@ Usage:
     payloads = bypass.generate_sqli_bypasses("' OR '1'='1")
 """
 
-from aipt_v2.evasion.waf_bypass import (
-    WAFBypass,
-    BypassPayload,
-    generate_bypass_payloads,
-)
-
-from aipt_v2.evasion.request_obfuscator import (
-    RequestObfuscator,
-    ObfuscationConfig,
-    obfuscate_request,
-)
-
-from aipt_v2.evasion.ua_rotator import (
-    UARotator,
-    UserAgent,
-    get_random_ua,
-)
-
-from aipt_v2.evasion.tls_fingerprint import (
-    TLSFingerprint,
-    randomize_tls,
-)
-
 # AD-specific evasion for stealth penetration testing
 from aipt_v2.evasion.ad_evasion import (
+    STEALTH_PROFILES,
     ADEvasion,
     EvasionConfig,
     EvasionStats,
     EvasionTechnique,
     StealthLevel,
-    STEALTH_PROFILES,
-    get_evasion_profile,
     create_stealth_wrapper,
+    get_evasion_profile,
+)
+from aipt_v2.evasion.request_obfuscator import (
+    ObfuscationConfig,
+    RequestObfuscator,
+    obfuscate_request,
+)
+from aipt_v2.evasion.tls_fingerprint import (
+    TLSFingerprint,
+    randomize_tls,
+)
+from aipt_v2.evasion.ua_rotator import (
+    UARotator,
+    UserAgent,
+    get_random_ua,
+)
+from aipt_v2.evasion.waf_bypass import (
+    BypassPayload,
+    WAFBypass,
+    generate_bypass_payloads,
 )
 
 __all__ = [

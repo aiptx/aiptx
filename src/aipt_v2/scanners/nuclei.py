@@ -3,6 +3,7 @@ AIPT Nuclei Scanner Integration
 
 Template-based vulnerability scanning using Nuclei.
 """
+
 from __future__ import annotations
 
 import json
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class NucleiConfig:
     """Nuclei scanner configuration"""
+
     # Template selection
     templates: list[str] = field(default_factory=list)  # Specific templates
     tags: list[str] = field(default_factory=list)  # Filter by tags
@@ -202,7 +204,9 @@ class NucleiScanner(BaseScanner):
 
         return findings
 
-    def _build_command(self, target: str, config: Optional[NucleiConfig] = None, **kwargs) -> list[str]:
+    def _build_command(
+        self, target: str, config: Optional[NucleiConfig] = None, **kwargs
+    ) -> list[str]:
         """Build Nuclei command"""
         cfg = config or self.config
 

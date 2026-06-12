@@ -26,13 +26,12 @@ References:
 """
 
 import base64
-import json
 import logging
 import os
 import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Dict, List, Optional
 
 import requests
 
@@ -41,19 +40,22 @@ logger = logging.getLogger(__name__)
 
 # ==================== Data Classes ====================
 
+
 @dataclass
 class ZoomEyeConfig:
     """Configuration for ZoomEye connection."""
+
     api_key: str = field(default_factory=lambda: os.getenv("ZOOMEYE_API_KEY", ""))
     base_url: str = "https://api.zoomeye.ai"
     timeout: int = 30
     max_results: int = 100  # Max results per query
-    cache_ttl: int = 3600   # Cache TTL in seconds (1 hour)
+    cache_ttl: int = 3600  # Cache TTL in seconds (1 hour)
 
 
 @dataclass
 class ZoomEyeHost:
     """Represents a discovered host from ZoomEye."""
+
     ip: str
     port: int
     protocol: str = "tcp"
@@ -78,6 +80,7 @@ class ZoomEyeHost:
 @dataclass
 class ZoomEyeResult:
     """Result of a ZoomEye search."""
+
     query: str
     total: int = 0
     hosts: List[ZoomEyeHost] = field(default_factory=list)
@@ -92,6 +95,7 @@ class ZoomEyeResult:
 
 
 # ==================== Main Tool Class ====================
+
 
 class ZoomEyeTool:
     """
@@ -114,11 +118,13 @@ class ZoomEyeTool:
         self._quota_info: Dict = {}
 
         # Set headers
-        self._session.headers.update({
-            "API-KEY": self.config.api_key,
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-        })
+        self._session.headers.update(
+            {
+                "API-KEY": self.config.api_key,
+                "Content-Type": "application/json",
+                "Accept": "application/json",
+            }
+        )
 
     def _encode_query(self, query: str) -> str:
         """Base64 encode a query string for the API."""
@@ -147,11 +153,7 @@ class ZoomEyeTool:
         """Make authenticated request to ZoomEye API."""
         url = f"{self.config.base_url}{endpoint}"
         try:
-            response = self._session.get(
-                url,
-                params=params,
-                timeout=self.config.timeout
-            )
+            response = self._session.get(url, params=params, timeout=self.config.timeout)
 
             # Handle rate limiting
             if response.status_code == 429:
@@ -170,7 +172,9 @@ class ZoomEyeTool:
             # Handle server errors (5xx)
             if response.status_code >= 500:
                 logger.warning(f"ZoomEye server error: {response.status_code}")
-                return {"error": f"ZoomEye server error ({response.status_code}) - service may be temporarily unavailable"}
+                return {
+                    "error": f"ZoomEye server error ({response.status_code}) - service may be temporarily unavailable"
+                }
 
             response.raise_for_status()
             return response.json()
@@ -202,7 +206,9 @@ class ZoomEyeTool:
 
             # Log quota info
             resources = result.get("resources", {})
-            logger.info(f"Connected to ZoomEye - Quota: {resources.get('search', 'N/A')} searches remaining")
+            logger.info(
+                f"Connected to ZoomEye - Quota: {resources.get('search', 'N/A')} searches remaining"
+            )
             return True
 
         except Exception as e:
@@ -229,7 +235,7 @@ class ZoomEyeTool:
         pagesize: int = 20,
         sub_type: str = "v4",
         fields: str = None,
-        use_cache: bool = True
+        use_cache: bool = True,
     ) -> ZoomEyeResult:
         """
         Execute a ZoomEye search query.
@@ -280,9 +286,7 @@ class ZoomEyeTool:
 
         if "error" in response:
             return ZoomEyeResult(
-                query=query,
-                error=response["error"],
-                search_time=time.time() - start_time
+                query=query, error=response["error"], search_time=time.time() - start_time
             )
 
         # Parse results
@@ -427,7 +431,7 @@ class ZoomEyeTool:
         Returns:
             ZoomEyeResult with discovered hosts
         """
-        query = f'asn:{asn}'
+        query = f"asn:{asn}"
         return self.search(query, pagesize=100)
 
     def search_service(self, service: str, domain: str = None) -> ZoomEyeResult:
@@ -491,46 +495,50 @@ class ZoomEyeTool:
 
         # Add discovered IPs as findings
         for host in result.hosts:
-            findings.append({
-                "type": "discovered_host",
-                "value": f"{host.ip}:{host.port}",
-                "description": f"{host.service or 'Unknown'} service on {host.ip}:{host.port}",
-                "severity": "info",
-                "phase": "recon",
-                "tool": "zoomeye",
-                "target": host.domain or host.ip,
-                "metadata": {
-                    "ip": host.ip,
-                    "port": host.port,
-                    "protocol": host.protocol,
-                    "service": host.service,
-                    "app": host.app,
-                    "version": host.version,
-                    "os": host.os,
-                    "country": host.country,
-                    "city": host.city,
-                    "org": host.org,
-                    "asn": host.asn,
-                    "title": host.title,
-                    "banner_preview": host.banner[:200] if host.banner else "",
-                },
-                "timestamp": datetime.now(timezone.utc).isoformat()
-            })
+            findings.append(
+                {
+                    "type": "discovered_host",
+                    "value": f"{host.ip}:{host.port}",
+                    "description": f"{host.service or 'Unknown'} service on {host.ip}:{host.port}",
+                    "severity": "info",
+                    "phase": "recon",
+                    "tool": "zoomeye",
+                    "target": host.domain or host.ip,
+                    "metadata": {
+                        "ip": host.ip,
+                        "port": host.port,
+                        "protocol": host.protocol,
+                        "service": host.service,
+                        "app": host.app,
+                        "version": host.version,
+                        "os": host.os,
+                        "country": host.country,
+                        "city": host.city,
+                        "org": host.org,
+                        "asn": host.asn,
+                        "title": host.title,
+                        "banner_preview": host.banner[:200] if host.banner else "",
+                    },
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                }
+            )
 
         # Add discovered subdomains as findings
         for domain in result.domains:
             if domain:
-                findings.append({
-                    "type": "subdomain",
-                    "value": domain,
-                    "description": f"Subdomain discovered via ZoomEye: {domain}",
-                    "severity": "info",
-                    "phase": "recon",
-                    "tool": "zoomeye",
-                    "target": domain,
-                    "metadata": {"source": "zoomeye"},
-                    "timestamp": datetime.now(timezone.utc).isoformat()
-                })
+                findings.append(
+                    {
+                        "type": "subdomain",
+                        "value": domain,
+                        "description": f"Subdomain discovered via ZoomEye: {domain}",
+                        "severity": "info",
+                        "phase": "recon",
+                        "tool": "zoomeye",
+                        "target": domain,
+                        "metadata": {"source": "zoomeye"},
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    }
+                )
 
         return findings
 
@@ -613,7 +621,7 @@ if __name__ == "__main__":
     zoomeye = get_zoomeye()
 
     if zoomeye.connect():
-        print(f"[+] Connected to ZoomEye")
+        print("[+] Connected to ZoomEye")
         quota = zoomeye.get_quota()
         print(f"    Quota: {quota.get('resources', {})}")
 
@@ -633,7 +641,7 @@ if __name__ == "__main__":
                 print(f"[+] Top services: {dict(list(result.services.items())[:5])}")
                 print(f"[+] Top ports: {dict(list(result.ports.items())[:5])}")
 
-                print(f"\n[*] Sample hosts:")
+                print("\n[*] Sample hosts:")
                 for host in result.hosts[:5]:
                     print(f"    {host.ip}:{host.port} - {host.service} ({host.country})")
         else:

@@ -8,17 +8,17 @@ Manage SOCKS proxies and pivoting through compromised hosts.
 from __future__ import annotations
 
 import logging
-import subprocess
 import time
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class PivotType(str, Enum):
     """Types of pivot connections."""
+
     SOCKS4 = "socks4"
     SOCKS5 = "socks5"
     SSH_DYNAMIC = "ssh_dynamic"
@@ -31,6 +31,7 @@ class PivotType(str, Enum):
 @dataclass
 class PivotSession:
     """Represents an active pivot session."""
+
     session_id: str
     pivot_type: PivotType
     local_port: int
@@ -103,11 +104,14 @@ class PivotManager:
             # SSH dynamic port forwarding (SOCKS5)
             cmd_parts = [
                 "ssh",
-                "-D", str(local_port),
+                "-D",
+                str(local_port),
                 "-N",  # No remote command
                 "-f",  # Background
-                "-o", "StrictHostKeyChecking=no",
-                "-o", "UserKnownHostsFile=/dev/null",
+                "-o",
+                "StrictHostKeyChecking=no",
+                "-o",
+                "UserKnownHostsFile=/dev/null",
             ]
             if key_file:
                 cmd_parts.extend(["-i", key_file])
@@ -210,16 +214,18 @@ class PivotManager:
                     f"-o StrictHostKeyChecking=no "
                     f"-p {hop.get('port', 22)} "
                 )
-                if hop.get('key'):
+                if hop.get("key"):
                     cmd += f"-i {hop['key']} "
                 cmd += f"{hop.get('user', 'root')}@{hop['host']}"
 
-                commands.append({
-                    "step": i + 1,
-                    "command": cmd,
-                    "description": f"Forward to {final_target}:{final_port} through {hop['host']}",
-                    "access": f"Connect to 127.0.0.1:{local_port}",
-                })
+                commands.append(
+                    {
+                        "step": i + 1,
+                        "command": cmd,
+                        "description": f"Forward to {final_target}:{final_port} through {hop['host']}",
+                        "access": f"Connect to 127.0.0.1:{local_port}",
+                    }
+                )
             else:
                 # Intermediate hop - dynamic forward
                 next_hop = hops[i + 1]
@@ -228,16 +234,18 @@ class PivotManager:
                     f"-o StrictHostKeyChecking=no "
                     f"-p {hop.get('port', 22)} "
                 )
-                if hop.get('key'):
+                if hop.get("key"):
                     cmd += f"-i {hop['key']} "
                 cmd += f"{hop.get('user', 'root')}@{hop['host']}"
 
-                commands.append({
-                    "step": i + 1,
-                    "command": cmd,
-                    "description": f"SOCKS proxy through {hop['host']}",
-                    "next_hop": next_hop['host'],
-                })
+                commands.append(
+                    {
+                        "step": i + 1,
+                        "command": cmd,
+                        "description": f"SOCKS proxy through {hop['host']}",
+                        "next_hop": next_hop["host"],
+                    }
+                )
 
         return commands
 
@@ -261,6 +269,7 @@ class PivotManager:
             Created PivotSession
         """
         import hashlib
+
         session_id = hashlib.md5(
             f"{pivot_type}{remote_host}{local_port}{time.time()}".encode()
         ).hexdigest()[:12]

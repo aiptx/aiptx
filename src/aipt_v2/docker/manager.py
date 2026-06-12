@@ -7,17 +7,19 @@ Provides pre-configured sandboxes for different use cases:
 - Exploitation (metasploit)
 - Post-exploitation (linpeas)
 """
+
 from __future__ import annotations
 
-from typing import Optional, Dict, List
 from dataclasses import dataclass, field
 from enum import Enum
+from typing import Dict, List, Optional
 
 from .sandbox import DockerSandbox, SandboxConfig, SandboxResult
 
 
 class SecurityImage(str, Enum):
     """Pre-defined security tool images"""
+
     KALI = "kalilinux/kali-rolling"
     NMAP = "instrumentisto/nmap"
     NUCLEI = "projectdiscovery/nuclei"
@@ -32,6 +34,7 @@ class SecurityImage(str, Enum):
 @dataclass
 class PhaseConfig:
     """Configuration for a pentest phase"""
+
     memory_limit: str = "1g"
     cpu_limit: float = 2.0
     timeout: int = 600

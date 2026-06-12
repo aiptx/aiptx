@@ -30,29 +30,30 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import Any, Optional, Callable
+from typing import Callable, Optional
 
-from aipt_v2.agents.shared.message_bus import (
-    MessageBus,
-    AgentMessage,
-    MessageType,
-    MessagePriority,
-    get_message_bus,
-)
 from aipt_v2.agents.shared.finding_repository import (
-    FindingRepository,
     Finding,
+    FindingRepository,
     FindingSeverity,
-    VulnerabilityType as RepoVulnType,
+)
+from aipt_v2.agents.shared.finding_repository import VulnerabilityType as RepoVulnType
+from aipt_v2.agents.shared.finding_repository import (
     get_finding_repository,
+)
+from aipt_v2.agents.shared.message_bus import (
+    AgentMessage,
+    MessageBus,
+    MessagePriority,
+    MessageType,
+    get_message_bus,
 )
 
 from .base_specialized import (
-    SpecializedAgent,
-    AgentConfig,
     AgentCapability,
+    AgentConfig,
     AgentProgress,
+    SpecializedAgent,
 )
 
 logger = logging.getLogger(__name__)
@@ -61,6 +62,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class PATAgentConfig(AgentConfig):
     """Configuration specific to PAT agent."""
+
     # PAT-specific settings
     vuln_types: list[str] = field(default_factory=list)
     parameters: list[str] = field(default_factory=list)
@@ -411,11 +413,13 @@ class PATCoordinator:
             async with semaphore:
                 result = await worker.run()
                 if progress_callback:
-                    progress_callback({
-                        "worker_id": worker.pat_config.worker_id,
-                        "status": result.get("status"),
-                        "findings_count": result.get("findings_count", 0),
-                    })
+                    progress_callback(
+                        {
+                            "worker_id": worker.pat_config.worker_id,
+                            "status": result.get("status"),
+                            "findings_count": result.get("findings_count", 0),
+                        }
+                    )
                 return result
 
         tasks = [run_with_semaphore(w) for w in self._workers]
@@ -427,8 +431,7 @@ class PATCoordinator:
         # Log summary
         total_findings = len(all_findings)
         successful_workers = sum(
-            1 for r in self._results
-            if isinstance(r, dict) and r.get("status") == "success"
+            1 for r in self._results if isinstance(r, dict) and r.get("status") == "success"
         )
 
         logger.info(
@@ -453,23 +456,19 @@ class PATCoordinator:
         idx = 0
         for i in range(self.max_workers):
             size = chunk_size + (1 if i < remainder else 0)
-            chunks.append(vuln_types[idx:idx + size])
+            chunks.append(vuln_types[idx : idx + size])
             idx += size
 
         return [c for c in chunks if c]  # Filter empty
 
     def get_worker_results(self) -> list[dict]:
         """Get results from all workers."""
-        return [
-            r for r in self._results
-            if isinstance(r, dict)
-        ]
+        return [r for r in self._results if isinstance(r, dict)]
 
     def get_statistics(self) -> dict:
         """Get distributed scan statistics."""
         successful = [
-            r for r in self._results
-            if isinstance(r, dict) and r.get("status") == "success"
+            r for r in self._results if isinstance(r, dict) and r.get("status") == "success"
         ]
 
         total_findings = sum(r.get("findings_count", 0) for r in successful)
@@ -508,7 +507,8 @@ def create_pat_agent(
     """
     config = PATAgentConfig(
         target=target,
-        vuln_types=vuln_types or [
+        vuln_types=vuln_types
+        or [
             "sql_injection",
             "xss",
             "command_injection",

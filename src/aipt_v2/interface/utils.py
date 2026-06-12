@@ -8,7 +8,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 from urllib.parse import urlparse
 
 from rich.console import Console
@@ -28,7 +28,9 @@ def _ensure_docker():
     global docker, DockerException, ImageNotFound
     if docker is None:
         import docker as _docker
-        from docker.errors import DockerException as _DockerException, ImageNotFound as _ImageNotFound
+        from docker.errors import DockerException as _DockerException
+        from docker.errors import ImageNotFound as _ImageNotFound
+
         docker = _docker
         DockerException = _DockerException
         ImageNotFound = _ImageNotFound
@@ -232,7 +234,9 @@ def _slugify_for_run_name(text: str, max_length: int = 32) -> str:
     return text or "pentest"
 
 
-def _derive_target_label_for_run_name(targets_info: list[dict[str, Any]] | None) -> str:  # noqa: PLR0911
+def _derive_target_label_for_run_name(
+    targets_info: list[dict[str, Any]] | None,
+) -> str:  # noqa: PLR0911
     if not targets_info:
         return "pentest"
 
@@ -506,7 +510,7 @@ def check_docker_connection() -> Any:
     _ensure_docker()
     try:
         return docker.from_env()
-    except (DockerException, Exception) as e:
+    except (DockerException, Exception):
         console = Console()
         error_text = Text()
         error_text.append(f"{icon('cross')} ", style="bold red")
@@ -540,15 +544,15 @@ def image_exists(client: Any, image_name: str) -> bool:
 
 def update_layer_status(layers_info: dict[str, str], layer_id: str, layer_status: str) -> None:
     if "Pull complete" in layer_status or "Already exists" in layer_status:
-        layers_info[layer_id] = icon('check')
+        layers_info[layer_id] = icon("check")
     elif "Downloading" in layer_status:
-        layers_info[layer_id] = icon('arrow')
+        layers_info[layer_id] = icon("arrow")
     elif "Extracting" in layer_status:
-        layers_info[layer_id] = icon('package')
+        layers_info[layer_id] = icon("package")
     elif "Waiting" in layer_status:
-        layers_info[layer_id] = icon('hourglass')
+        layers_info[layer_id] = icon("hourglass")
     else:
-        layers_info[layer_id] = icon('bullet')
+        layers_info[layer_id] = icon("bullet")
 
 
 def process_pull_line(
@@ -558,7 +562,7 @@ def process_pull_line(
         layer_id = line["id"]
         update_layer_status(layers_info, layer_id, line["status"])
 
-        completed = sum(1 for v in layers_info.values() if v == icon('check'))
+        completed = sum(1 for v in layers_info.values() if v == icon("check"))
         total = len(layers_info)
 
         if total > 0:

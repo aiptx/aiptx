@@ -6,12 +6,11 @@ and DoS prevention mechanisms.
 """
 
 from aipt_v2.business_logic.patterns.base import (
-    TestPattern,
-    TestCase,
     PatternCategory,
+    TestCase,
+    TestPattern,
     TestSeverity,
 )
-
 
 RATE_LIMIT_PATTERNS = [
     TestPattern(
@@ -23,9 +22,7 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-307", "CWE-770"],
         owasp_category="Security Misconfiguration",
         remediation="Validate X-Forwarded-For and similar headers, use multiple rate limit keys",
-        endpoint_patterns=[
-            r"/login", r"/api/", r"/search", r"/submit"
-        ],
+        endpoint_patterns=[r"/login", r"/api/", r"/search", r"/submit"],
         applicable_to=["authentication", "api"],
         test_cases=[
             TestCase(
@@ -35,7 +32,7 @@ RATE_LIMIT_PATTERNS = [
                 headers={"X-Forwarded-For": "{{random_ip}}"},
                 body_template={"username": "test", "password": "test"},
                 success_indicators=["attempt"],
-                failure_indicators=["rate limit"]
+                failure_indicators=["rate limit"],
             ),
             TestCase(
                 name="X-Real-IP Bypass",
@@ -43,7 +40,7 @@ RATE_LIMIT_PATTERNS = [
                 method="POST",
                 headers={"X-Real-IP": "{{random_ip}}"},
                 success_indicators=["attempt"],
-                failure_indicators=["too many requests"]
+                failure_indicators=["too many requests"],
             ),
             TestCase(
                 name="Client-IP Bypass",
@@ -53,14 +50,13 @@ RATE_LIMIT_PATTERNS = [
                     "X-Forwarded-For": "{{random_ip}}",
                     "X-Real-IP": "{{random_ip_2}}",
                     "X-Client-IP": "{{random_ip_3}}",
-                    "CF-Connecting-IP": "{{random_ip_4}}"
+                    "CF-Connecting-IP": "{{random_ip_4}}",
                 },
                 success_indicators=["response"],
-                failure_indicators=["rate limit", "429"]
-            )
-        ]
+                failure_indicators=["rate limit", "429"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="RATE-002",
         name="Account Lockout Bypass",
@@ -70,9 +66,7 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-307"],
         owasp_category="A07:2021 - Identification and Authentication Failures",
         remediation="Implement robust lockout with exponential backoff, don't reset on valid username",
-        endpoint_patterns=[
-            r"/login", r"/signin", r"/auth"
-        ],
+        endpoint_patterns=[r"/login", r"/signin", r"/auth"],
         applicable_to=["authentication"],
         test_cases=[
             TestCase(
@@ -80,9 +74,11 @@ RATE_LIMIT_PATTERNS = [
                 description="Bypass lockout with username variations",
                 method="POST",
                 body_template={"username": "{{username_variation}}", "password": "test"},
-                manipulation={"username": ["user", "User", "USER", "user ", " user", "user@domain.com"]},
+                manipulation={
+                    "username": ["user", "User", "USER", "user ", " user", "user@domain.com"]
+                },
                 success_indicators=["invalid password"],
-                failure_indicators=["locked", "try again"]
+                failure_indicators=["locked", "try again"],
             ),
             TestCase(
                 name="Case Sensitivity Bypass",
@@ -90,20 +86,23 @@ RATE_LIMIT_PATTERNS = [
                 method="POST",
                 body_template={"username": "ADMIN", "password": "{{password}}"},
                 success_indicators=["invalid"],
-                failure_indicators=["locked"]
+                failure_indicators=["locked"],
             ),
             TestCase(
                 name="Lockout Reset via Valid Login",
                 description="Check if failed attempts reset after successful login",
                 method="POST",
                 body_template={"username": "test", "password": "correct"},
-                setup_steps=["Make 4 failed attempts", "Make 1 successful attempt", "Make more failed attempts"],
+                setup_steps=[
+                    "Make 4 failed attempts",
+                    "Make 1 successful attempt",
+                    "Make more failed attempts",
+                ],
                 success_indicators=["attempt"],
-                failure_indicators=["locked"]
-            )
-        ]
+                failure_indicators=["locked"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="RATE-003",
         name="Password Reset Rate Limiting",
@@ -113,9 +112,7 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-307", "CWE-640"],
         owasp_category="A07:2021 - Identification and Authentication Failures",
         remediation="Rate limit by IP and account, implement CAPTCHA after threshold",
-        endpoint_patterns=[
-            r"/reset", r"/forgot", r"/recover"
-        ],
+        endpoint_patterns=[r"/reset", r"/forgot", r"/recover"],
         applicable_to=["authentication"],
         test_cases=[
             TestCase(
@@ -126,7 +123,7 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"email": "{{email}}"},
                 manipulation={"email": ["admin@test.com", "user@test.com", "test@test.com"]},
                 success_indicators=["sent", "email"],
-                failure_indicators=["not found", "invalid"]
+                failure_indicators=["not found", "invalid"],
             ),
             TestCase(
                 name="Reset Flood",
@@ -135,11 +132,10 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"email": "target@test.com"},
                 concurrent_requests=20,
                 success_indicators=["sent"],
-                failure_indicators=["rate limit", "try again"]
-            )
-        ]
+                failure_indicators=["rate limit", "try again"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="RATE-004",
         name="API Rate Limit Bypass",
@@ -149,25 +145,25 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-770"],
         owasp_category="Security Misconfiguration",
         remediation="Implement multi-factor rate limiting, use sliding windows",
-        endpoint_patterns=[
-            r"/api/"
-        ],
+        endpoint_patterns=[r"/api/"],
         applicable_to=["api"],
         test_cases=[
             TestCase(
                 name="Endpoint Variation",
                 description="Access same resource through URL variations",
                 method="GET",
-                manipulation={"path": [
-                    "/api/users/1",
-                    "/api/users/1/",
-                    "/api/users/1?",
-                    "/api/users/1?_=1",
-                    "/api/Users/1",
-                    "/api/./users/1"
-                ]},
+                manipulation={
+                    "path": [
+                        "/api/users/1",
+                        "/api/users/1/",
+                        "/api/users/1?",
+                        "/api/users/1?_=1",
+                        "/api/Users/1",
+                        "/api/./users/1",
+                    ]
+                },
                 success_indicators=["data"],
-                failure_indicators=["rate limit"]
+                failure_indicators=["rate limit"],
             ),
             TestCase(
                 name="HTTP Method Variation",
@@ -175,7 +171,7 @@ RATE_LIMIT_PATTERNS = [
                 method="GET",
                 manipulation={"method": ["GET", "HEAD", "OPTIONS"]},
                 success_indicators=["response"],
-                failure_indicators=["rate limit"]
+                failure_indicators=["rate limit"],
             ),
             TestCase(
                 name="Parameter Pollution",
@@ -183,11 +179,10 @@ RATE_LIMIT_PATTERNS = [
                 method="GET",
                 body_template={"id": ["1", "1"]},
                 success_indicators=["data"],
-                failure_indicators=["rate limit"]
-            )
-        ]
+                failure_indicators=["rate limit"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="RATE-005",
         name="OTP/2FA Brute Force",
@@ -197,9 +192,7 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-307", "CWE-287"],
         owasp_category="A07:2021 - Identification and Authentication Failures",
         remediation="Limit OTP attempts, implement exponential backoff, invalidate after threshold",
-        endpoint_patterns=[
-            r"/verify", r"/otp", r"/2fa", r"/mfa", r"/code"
-        ],
+        endpoint_patterns=[r"/verify", r"/otp", r"/2fa", r"/mfa", r"/code"],
         applicable_to=["authentication", "2fa"],
         test_cases=[
             TestCase(
@@ -210,7 +203,7 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"otp": "{{otp_code}}"},
                 manipulation={"otp": ["000000", "123456", "111111", "000001"]},
                 success_indicators=["verified", "success"],
-                failure_indicators=["invalid", "locked", "expired"]
+                failure_indicators=["invalid", "locked", "expired"],
             ),
             TestCase(
                 name="OTP Reuse",
@@ -219,11 +212,10 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"otp": "{{valid_otp}}"},
                 setup_steps=["Use valid OTP once", "Try same OTP again"],
                 success_indicators=["verified"],
-                failure_indicators=["already used", "invalid"]
-            )
-        ]
+                failure_indicators=["already used", "invalid"],
+            ),
+        ],
     ),
-
     TestPattern(
         id="RATE-006",
         name="Search/Query Rate Limiting",
@@ -233,9 +225,7 @@ RATE_LIMIT_PATTERNS = [
         cwe_ids=["CWE-770", "CWE-400"],
         owasp_category="Security Misconfiguration",
         remediation="Implement search rate limits, add CAPTCHA for excessive searches",
-        endpoint_patterns=[
-            r"/search", r"/query", r"/find", r"/lookup"
-        ],
+        endpoint_patterns=[r"/search", r"/query", r"/find", r"/lookup"],
         applicable_to=["search"],
         test_cases=[
             TestCase(
@@ -246,7 +236,7 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"q": "{{search_term}}"},
                 concurrent_requests=50,
                 success_indicators=["results"],
-                failure_indicators=["rate limit", "captcha"]
+                failure_indicators=["rate limit", "captcha"],
             ),
             TestCase(
                 name="Wildcard Search Abuse",
@@ -255,8 +245,8 @@ RATE_LIMIT_PATTERNS = [
                 body_template={"q": "*"},
                 manipulation={"q": ["*", "a*", "b*", "%", "_"]},
                 success_indicators=["results"],
-                failure_indicators=["not allowed", "specific"]
-            )
-        ]
+                failure_indicators=["not allowed", "specific"],
+            ),
+        ],
     ),
 ]

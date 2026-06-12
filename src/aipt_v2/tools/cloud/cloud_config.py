@@ -7,13 +7,14 @@ Supports AWS profiles, Azure subscriptions, and GCP projects.
 
 import os
 from dataclasses import dataclass, field
-from typing import Optional, List, Dict, Any
 from pathlib import Path
+from typing import Any, Dict, List, Optional
 
 
 @dataclass
 class AWSConfig:
     """AWS-specific configuration."""
+
     profile: str = "default"
     region: str = "us-east-1"
     access_key_id: Optional[str] = None
@@ -21,10 +22,22 @@ class AWSConfig:
     session_token: Optional[str] = None
 
     # Scanning options
-    services: List[str] = field(default_factory=lambda: [
-        "iam", "s3", "ec2", "rds", "lambda", "cloudtrail",
-        "cloudwatch", "kms", "sns", "sqs", "vpc", "elb"
-    ])
+    services: List[str] = field(
+        default_factory=lambda: [
+            "iam",
+            "s3",
+            "ec2",
+            "rds",
+            "lambda",
+            "cloudtrail",
+            "cloudwatch",
+            "kms",
+            "sns",
+            "sqs",
+            "vpc",
+            "elb",
+        ]
+    )
     skip_services: List[str] = field(default_factory=list)
 
     def __post_init__(self):
@@ -64,6 +77,7 @@ class AWSConfig:
 @dataclass
 class AzureConfig:
     """Azure-specific configuration."""
+
     subscription_id: Optional[str] = None
     tenant_id: Optional[str] = None
     client_id: Optional[str] = None
@@ -91,8 +105,9 @@ class AzureConfig:
         if self.use_cli_auth:
             # Check for Azure CLI
             return Path.home().joinpath(".azure").exists()
-        return bool(self.subscription_id and self.tenant_id and
-                    self.client_id and self.client_secret)
+        return bool(
+            self.subscription_id and self.tenant_id and self.client_id and self.client_secret
+        )
 
     def to_env_dict(self) -> Dict[str, str]:
         """Convert to environment variables dict."""
@@ -111,6 +126,7 @@ class AzureConfig:
 @dataclass
 class GCPConfig:
     """GCP-specific configuration."""
+
     project_id: Optional[str] = None
     credentials_file: Optional[str] = None
 
@@ -177,11 +193,7 @@ class CloudConfig:
 
     def get_provider_config(self, provider: str) -> Any:
         """Get configuration for a specific provider."""
-        provider_map = {
-            "aws": self.aws,
-            "azure": self.azure,
-            "gcp": self.gcp
-        }
+        provider_map = {"aws": self.aws, "azure": self.azure, "gcp": self.gcp}
         return provider_map.get(provider.lower())
 
 
@@ -190,7 +202,7 @@ def get_cloud_config(
     aws_profile: Optional[str] = None,
     azure_subscription: Optional[str] = None,
     gcp_project: Optional[str] = None,
-    **kwargs
+    **kwargs,
 ) -> CloudConfig:
     """
     Create CloudConfig from parameters and environment.
@@ -208,7 +220,7 @@ def get_cloud_config(
     # Build AWS config
     aws_config = AWSConfig(
         profile=aws_profile or os.getenv("AWS_PROFILE", "default"),
-        region=kwargs.get("aws_region", os.getenv("AWS_DEFAULT_REGION", "us-east-1"))
+        region=kwargs.get("aws_region", os.getenv("AWS_DEFAULT_REGION", "us-east-1")),
     )
 
     # Build Azure config
@@ -217,9 +229,7 @@ def get_cloud_config(
     )
 
     # Build GCP config
-    gcp_config = GCPConfig(
-        project_id=gcp_project or os.getenv("GOOGLE_CLOUD_PROJECT")
-    )
+    gcp_config = GCPConfig(project_id=gcp_project or os.getenv("GOOGLE_CLOUD_PROJECT"))
 
     # Determine providers
     if providers is None:
@@ -232,7 +242,7 @@ def get_cloud_config(
         providers=providers,
         output_dir=kwargs.get("output_dir", "./cloud_scan_results"),
         severity_threshold=kwargs.get("severity_threshold", "low"),
-        timeout=kwargs.get("timeout", 3600)
+        timeout=kwargs.get("timeout", 3600),
     )
 
 
@@ -251,7 +261,7 @@ def validate_cloud_credentials() -> Dict[str, Dict[str, Any]]:
         "configured": aws_config.is_configured(),
         "profile": aws_config.profile,
         "region": aws_config.region,
-        "has_keys": bool(aws_config.access_key_id)
+        "has_keys": bool(aws_config.access_key_id),
     }
 
     # Check Azure
@@ -259,7 +269,7 @@ def validate_cloud_credentials() -> Dict[str, Dict[str, Any]]:
     results["azure"] = {
         "configured": azure_config.is_configured(),
         "subscription": azure_config.subscription_id,
-        "use_cli": azure_config.use_cli_auth
+        "use_cli": azure_config.use_cli_auth,
     }
 
     # Check GCP
@@ -267,7 +277,7 @@ def validate_cloud_credentials() -> Dict[str, Dict[str, Any]]:
     results["gcp"] = {
         "configured": gcp_config.is_configured(),
         "project": gcp_config.project_id,
-        "use_adc": gcp_config.use_adc
+        "use_adc": gcp_config.use_adc,
     }
 
     return results

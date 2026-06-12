@@ -8,23 +8,29 @@ Inspired by:
 - PentestGPT: PTT task tracking
 - Pentagi: Message chain isolation
 """
+
 from __future__ import annotations
 
-from typing import Optional, Any, Callable
+import json
 from dataclasses import dataclass, field
 from enum import Enum
-import json
+from typing import Any, Callable, Optional
 
 try:
     from pydantic import BaseModel, Field
+
     PYDANTIC_AVAILABLE = True
 except ImportError:
     PYDANTIC_AVAILABLE = False
     BaseModel = object
-    def Field(**kwargs): return None
+
+    def Field(**kwargs):
+        return None
+
 
 try:
-    from langgraph.graph import StateGraph, END
+    from langgraph.graph import END, StateGraph
+
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
@@ -36,6 +42,7 @@ from .memory import MemoryManager
 
 class Phase(str, Enum):
     """Penetration testing phases"""
+
     RECON = "recon"
     ENUM = "enum"
     EXPLOIT = "exploit"
@@ -44,11 +51,13 @@ class Phase(str, Enum):
 
 
 if PYDANTIC_AVAILABLE:
+
     class PentestState(BaseModel):
         """
         State object passed through the LangGraph.
         Contains all information about the current pentest session.
         """
+
         # Target information
         target: str = Field(default="", description="Primary target (IP, domain, or range)")
         scope: list[str] = Field(default_factory=list, description="In-scope targets")
@@ -77,10 +86,13 @@ if PYDANTIC_AVAILABLE:
 
         class Config:
             arbitrary_types_allowed = True
+
 else:
+
     @dataclass
     class PentestState:
         """Fallback state without Pydantic"""
+
         target: str = ""
         scope: list = field(default_factory=list)
         phase: Phase = Phase.RECON
@@ -211,7 +223,7 @@ Respond with your analysis and recommended next action.
                 "execute": "execute",
                 "think": "think",
                 "end": END,
-            }
+            },
         )
         graph.add_edge("execute", "learn")
         graph.add_conditional_edges(
@@ -220,7 +232,7 @@ Respond with your analysis and recommended next action.
             {
                 "continue": "think",
                 "end": END,
-            }
+            },
         )
 
         # Set entry point
@@ -319,10 +331,15 @@ Suggest a security tool and command to achieve this objective.
 Return JSON: {{"tool": "tool_name", "command": "full command"}}"""
 
         try:
-            response = self.llm.invoke([
-                {"role": "system", "content": "You are a security tool expert. Return only valid JSON."},
-                {"role": "user", "content": prompt}
-            ])
+            response = self.llm.invoke(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a security tool expert. Return only valid JSON.",
+                    },
+                    {"role": "user", "content": prompt},
+                ]
+            )
 
             content = response.content.strip()
             if content.startswith("```"):
@@ -370,8 +387,8 @@ Return JSON: {{"tool": "tool_name", "command": "full command"}}"""
             )
 
             return {
-                "last_output": result.output if hasattr(result, 'output') else str(result),
-                "error": result.error if hasattr(result, 'error') and result.error else None,
+                "last_output": result.output if hasattr(result, "output") else str(result),
+                "error": result.error if hasattr(result, "error") and result.error else None,
             }
 
         except Exception as e:
@@ -501,13 +518,13 @@ Return JSON: {{"tool": "tool_name", "command": "full command"}}"""
 
     def _format_ptt(self, state: PentestState) -> str:
         """Format PTT for prompt"""
-        if self.ptt and hasattr(self.ptt, 'to_prompt'):
+        if self.ptt and hasattr(self.ptt, "to_prompt"):
             return self.ptt.to_prompt()
         return json.dumps(state.ptt, indent=2) if state.ptt else "No tasks yet."
 
     def _initialize_ptt(self, target: str) -> dict:
         """Initialize PTT structure"""
-        if self.ptt and hasattr(self.ptt, 'initialize'):
+        if self.ptt and hasattr(self.ptt, "initialize"):
             return self.ptt.initialize(target)
         return {
             "target": target,
@@ -516,7 +533,7 @@ Return JSON: {{"tool": "tool_name", "command": "full command"}}"""
                 "enum": {"status": "pending", "tasks": []},
                 "exploit": {"status": "pending", "tasks": []},
                 "post": {"status": "pending", "tasks": []},
-            }
+            },
         }
 
     def _extract_objective(self, llm_response: str) -> str:
@@ -573,10 +590,16 @@ Extract findings in this JSON format:
 Only return valid JSON array. If no findings, return []."""
 
         try:
-            response = self.llm.invoke([
-                {"role": "system", "content": "You are a security findings parser. Return only valid JSON."},
-                {"role": "user", "content": extract_prompt},
-            ], max_tokens=1000)
+            response = self.llm.invoke(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a security findings parser. Return only valid JSON.",
+                    },
+                    {"role": "user", "content": extract_prompt},
+                ],
+                max_tokens=1000,
+            )
 
             content = response.content.strip()
             if content.startswith("```"):
@@ -586,16 +609,18 @@ Only return valid JSON array. If no findings, return []."""
 
             return json.loads(content)
         except (json.JSONDecodeError, Exception):
-            return [{
-                "type": "info",
-                "description": f"Tool output captured ({len(output)} chars)",
-                "severity": "info",
-                "data": {"raw_length": len(output)},
-            }]
+            return [
+                {
+                    "type": "info",
+                    "description": f"Tool output captured ({len(output)} chars)",
+                    "severity": "info",
+                    "data": {"raw_length": len(output)},
+                }
+            ]
 
     def _update_ptt(self, state: PentestState, findings: list[dict]) -> None:
         """Update PTT with new findings"""
-        if self.ptt and hasattr(self.ptt, 'add_findings'):
+        if self.ptt and hasattr(self.ptt, "add_findings"):
             self.ptt.add_findings(state.phase.value, findings)
 
     def _check_phase_transition(self, state: PentestState) -> Phase:

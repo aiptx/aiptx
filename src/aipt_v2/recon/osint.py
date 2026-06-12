@@ -3,11 +3,11 @@ AIPT OSINT Collector
 
 Open-source intelligence gathering from public sources.
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Optional
@@ -20,6 +20,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class OSINTResult:
     """OSINT collection results"""
+
     target: str
     target_type: str  # domain, email, ip, username
 
@@ -194,8 +195,16 @@ class OSINTCollector:
 
         # Fallback: search common patterns
         common_prefixes = [
-            "info", "contact", "admin", "support", "sales", "hello",
-            "mail", "webmaster", "postmaster", "abuse",
+            "info",
+            "contact",
+            "admin",
+            "support",
+            "sales",
+            "hello",
+            "mail",
+            "webmaster",
+            "postmaster",
+            "abuse",
         ]
         for prefix in common_prefixes:
             result.emails.append(f"{prefix}@{domain}")
@@ -224,12 +233,14 @@ class OSINTCollector:
 
             if response.status_code == 200:
                 for breach in response.json():
-                    result.breaches.append({
-                        "name": breach.get("Name"),
-                        "date": breach.get("BreachDate"),
-                        "domain": breach.get("Domain"),
-                        "data_classes": breach.get("DataClasses", []),
-                    })
+                    result.breaches.append(
+                        {
+                            "name": breach.get("Name"),
+                            "date": breach.get("BreachDate"),
+                            "domain": breach.get("Domain"),
+                            "data_classes": breach.get("DataClasses", []),
+                        }
+                    )
 
         except Exception as e:
             logger.debug(f"HIBP error: {e}")
@@ -257,10 +268,7 @@ class OSINTCollector:
                 pass
             return None
 
-        tasks = [
-            check_platform(platform, url)
-            for platform, url in self.SOCIAL_PLATFORMS.items()
-        ]
+        tasks = [check_platform(platform, url) for platform, url in self.SOCIAL_PLATFORMS.items()]
 
         results = await asyncio.gather(*tasks)
         for profile in results:
@@ -285,6 +293,7 @@ class OSINTCollector:
             if test_domain != domain:
                 try:
                     import socket
+
                     socket.gethostbyname(test_domain)
                     result.related_domains.append(test_domain)
                 except socket.gaierror:
@@ -335,6 +344,7 @@ class OSINTCollector:
 
         try:
             import whois
+
             w = whois.whois(domain)
             result.whois_data = {
                 "registrar": w.registrar,

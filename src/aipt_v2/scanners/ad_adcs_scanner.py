@@ -12,11 +12,11 @@ Identifies vulnerable ADCS configurations:
 - ESC8: NTLM relay to HTTP enrollment
 - ESC9-11: Additional misconfigurations
 """
+
 from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class ESCType(Enum):
     """ADCS vulnerability types (ESC = Escalation)"""
+
     ESC1 = "ESC1"  # Enrollee supplies subject
     ESC2 = "ESC2"  # Any Purpose EKU
     ESC3 = "ESC3"  # Certificate Request Agent
@@ -45,6 +46,7 @@ class ESCType(Enum):
 @dataclass
 class CertificateAuthority:
     """Certificate Authority information"""
+
     name: str
     dns_name: str
     ca_certificate: str = ""
@@ -82,6 +84,7 @@ class CertificateAuthority:
 @dataclass
 class CertificateTemplate:
     """Certificate template information"""
+
     name: str
     display_name: str = ""
     oid: str = ""
@@ -134,6 +137,7 @@ class CertificateTemplate:
 @dataclass
 class ADCSConfig:
     """ADCS scanner configuration"""
+
     # Authentication
     username: Optional[str] = None
     password: Optional[str] = None
@@ -153,6 +157,7 @@ class ADCSConfig:
 @dataclass
 class ADCSResult:
     """ADCS scan results"""
+
     target_domain: str
     certificate_authorities: list[CertificateAuthority] = field(default_factory=list)
     templates: list[CertificateTemplate] = field(default_factory=list)
@@ -286,31 +291,37 @@ class ADCSScanner:
             cmd = ["certipy", "find"]
 
             if self.config.username and self.config.password:
-                cmd.extend([
-                    "-u", f"{self.config.username}@{domain}",
-                    "-p", self.config.password,
-                ])
+                cmd.extend(
+                    [
+                        "-u",
+                        f"{self.config.username}@{domain}",
+                        "-p",
+                        self.config.password,
+                    ]
+                )
             elif self.config.username and self.config.ntlm_hash:
-                cmd.extend([
-                    "-u", f"{self.config.username}@{domain}",
-                    "-hashes", f":{self.config.ntlm_hash}",
-                ])
+                cmd.extend(
+                    [
+                        "-u",
+                        f"{self.config.username}@{domain}",
+                        "-hashes",
+                        f":{self.config.ntlm_hash}",
+                    ]
+                )
 
-            cmd.extend([
-                "-dc-ip", dc_ip,
-                "-vulnerable",
-                "-stdout",
-            ])
+            cmd.extend(
+                [
+                    "-dc-ip",
+                    dc_ip,
+                    "-vulnerable",
+                    "-stdout",
+                ]
+            )
 
             proc = await asyncio.create_subprocess_exec(
-                *cmd,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
-            stdout, stderr = await asyncio.wait_for(
-                proc.communicate(),
-                timeout=self.config.timeout
-            )
+            stdout, stderr = await asyncio.wait_for(proc.communicate(), timeout=self.config.timeout)
 
             output = stdout.decode()
             return self._parse_certipy_output(output, domain)
@@ -354,7 +365,9 @@ class ADCSScanner:
                     if "DNS Name" in line:
                         current_ca.dns_name = line.split(":")[-1].strip()
                     elif "Web Enrollment" in line:
-                        current_ca.web_enrollment = "enabled" in line.lower() or "true" in line.lower()
+                        current_ca.web_enrollment = (
+                            "enabled" in line.lower() or "true" in line.lower()
+                        )
                     elif "EDITF_ATTRIBUTESUBJECTALTNAME2" in line:
                         current_ca.allows_san_flag = True
                         current_ca.esc_types.append(ESCType.ESC6)
@@ -392,9 +405,11 @@ class ADCSScanner:
         """Analyze template for ESC vulnerabilities"""
 
         # ESC1: Enrollee supplies subject + Client Authentication + Low-priv enrollment
-        if (template.enrollee_supplies_subject and
-            template.client_authentication and
-            not template.requires_manager_approval):
+        if (
+            template.enrollee_supplies_subject
+            and template.client_authentication
+            and not template.requires_manager_approval
+        ):
             if ESCType.ESC1 not in template.esc_types:
                 template.esc_types.append(ESCType.ESC1)
             template.risk_score += 100
@@ -407,9 +422,7 @@ class ADCSScanner:
             if ESCType.ESC2 not in template.esc_types:
                 template.esc_types.append(ESCType.ESC2)
             template.risk_score += 80
-            template.attack_paths.append(
-                "Request any-purpose certificate -> Use for client auth"
-            )
+            template.attack_paths.append("Request any-purpose certificate -> Use for client auth")
 
         # ESC3: Certificate Request Agent
         if template.certificate_request_agent:
@@ -426,13 +439,15 @@ class ADCSScanner:
     async def _scan_via_ldap(self, domain: str, dc_ip: str, result: ADCSResult) -> None:
         """Fallback LDAP-based ADCS scanning"""
         try:
-            from ldap3 import Server, Connection, SUBTREE, NTLM
+            from ldap3 import NTLM, SUBTREE, Connection, Server
 
             server = Server(dc_ip, port=389, connect_timeout=30)
 
             if self.config.username and self.config.password:
                 user = f"{self.config.domain}\\{self.config.username}"
-                conn = Connection(server, user=user, password=self.config.password, authentication=NTLM)
+                conn = Connection(
+                    server, user=user, password=self.config.password, authentication=NTLM
+                )
             else:
                 conn = Connection(server)
 
@@ -459,7 +474,11 @@ class ADCSScanner:
                 )
 
                 if hasattr(entry, "certificateTemplates"):
-                    templates = entry.certificateTemplates.values if hasattr(entry.certificateTemplates, "values") else []
+                    templates = (
+                        entry.certificateTemplates.values
+                        if hasattr(entry.certificateTemplates, "values")
+                        else []
+                    )
                     ca.templates = list(templates)
 
                 result.certificate_authorities.append(ca)
@@ -471,16 +490,22 @@ class ADCSScanner:
                 search_filter=template_filter,
                 search_scope=SUBTREE,
                 attributes=[
-                    "cn", "displayName", "msPKI-Certificate-Name-Flag",
-                    "msPKI-Enrollment-Flag", "pKIExtendedKeyUsage",
-                    "msPKI-RA-Signature", "msPKI-Certificate-Application-Policy",
+                    "cn",
+                    "displayName",
+                    "msPKI-Certificate-Name-Flag",
+                    "msPKI-Enrollment-Flag",
+                    "pKIExtendedKeyUsage",
+                    "msPKI-RA-Signature",
+                    "msPKI-Certificate-Application-Policy",
                 ],
             )
 
             for entry in conn.entries:
                 template = CertificateTemplate(
                     name=str(entry.cn),
-                    display_name=str(entry.displayName) if hasattr(entry, "displayName") else str(entry.cn),
+                    display_name=(
+                        str(entry.displayName) if hasattr(entry, "displayName") else str(entry.cn)
+                    ),
                 )
 
                 # Check name flags for enrollee supplies subject
@@ -491,7 +516,11 @@ class ADCSScanner:
 
                 # Check EKU
                 if hasattr(entry, "pKIExtendedKeyUsage"):
-                    ekus = entry.pKIExtendedKeyUsage.values if hasattr(entry.pKIExtendedKeyUsage, "values") else []
+                    ekus = (
+                        entry.pKIExtendedKeyUsage.values
+                        if hasattr(entry.pKIExtendedKeyUsage, "values")
+                        else []
+                    )
                     template.eku = list(ekus)
                     template.client_authentication = self.EKU_CLIENT_AUTH in ekus
                     template.any_purpose = self.EKU_ANY_PURPOSE in ekus
@@ -555,71 +584,81 @@ class ADCSScanner:
 
         # ESC1 findings
         for template in result.get_templates_by_esc(ESCType.ESC1):
-            result.findings.append(ScanFinding(
-                title=f"ESC1 Vulnerable Template: {template.name}",
-                severity=ScanSeverity.CRITICAL,
-                description=(
-                    f"Template '{template.name}' allows enrollee to supply subject name "
-                    f"and has Client Authentication EKU. Can request certificate as any user."
-                ),
-                scanner="ad_adcs_scanner",
-                tags=["adcs", "esc1", "certificate", "privilege_escalation"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"ESC1 Vulnerable Template: {template.name}",
+                    severity=ScanSeverity.CRITICAL,
+                    description=(
+                        f"Template '{template.name}' allows enrollee to supply subject name "
+                        f"and has Client Authentication EKU. Can request certificate as any user."
+                    ),
+                    scanner="ad_adcs_scanner",
+                    tags=["adcs", "esc1", "certificate", "privilege_escalation"],
+                )
+            )
 
         # ESC2 findings
         for template in result.get_templates_by_esc(ESCType.ESC2):
-            result.findings.append(ScanFinding(
-                title=f"ESC2 Vulnerable Template: {template.name}",
-                severity=ScanSeverity.HIGH,
-                description=(
-                    f"Template '{template.name}' has Any Purpose EKU. "
-                    f"Certificate can be used for any authentication purpose."
-                ),
-                scanner="ad_adcs_scanner",
-                tags=["adcs", "esc2", "certificate"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"ESC2 Vulnerable Template: {template.name}",
+                    severity=ScanSeverity.HIGH,
+                    description=(
+                        f"Template '{template.name}' has Any Purpose EKU. "
+                        f"Certificate can be used for any authentication purpose."
+                    ),
+                    scanner="ad_adcs_scanner",
+                    tags=["adcs", "esc2", "certificate"],
+                )
+            )
 
         # ESC3 findings
         for template in result.get_templates_by_esc(ESCType.ESC3):
-            result.findings.append(ScanFinding(
-                title=f"ESC3 Vulnerable Template: {template.name}",
-                severity=ScanSeverity.CRITICAL,
-                description=(
-                    f"Template '{template.name}' allows Certificate Request Agent. "
-                    f"Can request certificates on behalf of other users."
-                ),
-                scanner="ad_adcs_scanner",
-                tags=["adcs", "esc3", "certificate", "delegation"],
-            ))
+            result.findings.append(
+                ScanFinding(
+                    title=f"ESC3 Vulnerable Template: {template.name}",
+                    severity=ScanSeverity.CRITICAL,
+                    description=(
+                        f"Template '{template.name}' allows Certificate Request Agent. "
+                        f"Can request certificates on behalf of other users."
+                    ),
+                    scanner="ad_adcs_scanner",
+                    tags=["adcs", "esc3", "certificate", "delegation"],
+                )
+            )
 
         # ESC6 findings (CA level)
         for ca in result.certificate_authorities:
             if ca.allows_san_flag:
-                result.findings.append(ScanFinding(
-                    title=f"ESC6 Vulnerable CA: {ca.name}",
-                    severity=ScanSeverity.CRITICAL,
-                    description=(
-                        f"CA '{ca.name}' has EDITF_ATTRIBUTESUBJECTALTNAME2 flag enabled. "
-                        f"Any template can be used to request certificate with arbitrary SAN."
-                    ),
-                    scanner="ad_adcs_scanner",
-                    tags=["adcs", "esc6", "ca_misconfiguration"],
-                ))
+                result.findings.append(
+                    ScanFinding(
+                        title=f"ESC6 Vulnerable CA: {ca.name}",
+                        severity=ScanSeverity.CRITICAL,
+                        description=(
+                            f"CA '{ca.name}' has EDITF_ATTRIBUTESUBJECTALTNAME2 flag enabled. "
+                            f"Any template can be used to request certificate with arbitrary SAN."
+                        ),
+                        scanner="ad_adcs_scanner",
+                        tags=["adcs", "esc6", "ca_misconfiguration"],
+                    )
+                )
 
         # ESC8 findings
         for ca in result.certificate_authorities:
             if ca.ntlm_relay_vulnerable:
-                result.findings.append(ScanFinding(
-                    title=f"ESC8 Vulnerable Endpoint: {ca.name}",
-                    severity=ScanSeverity.CRITICAL,
-                    description=(
-                        f"CA '{ca.name}' has HTTP enrollment with NTLM authentication at {ca.web_enrollment_url}. "
-                        f"Vulnerable to NTLM relay attacks."
-                    ),
-                    url=ca.web_enrollment_url,
-                    scanner="ad_adcs_scanner",
-                    tags=["adcs", "esc8", "ntlm_relay", "web_enrollment"],
-                ))
+                result.findings.append(
+                    ScanFinding(
+                        title=f"ESC8 Vulnerable Endpoint: {ca.name}",
+                        severity=ScanSeverity.CRITICAL,
+                        description=(
+                            f"CA '{ca.name}' has HTTP enrollment with NTLM authentication at {ca.web_enrollment_url}. "
+                            f"Vulnerable to NTLM relay attacks."
+                        ),
+                        url=ca.web_enrollment_url,
+                        scanner="ad_adcs_scanner",
+                        tags=["adcs", "esc8", "ntlm_relay", "web_enrollment"],
+                    )
+                )
 
 
 # Convenience function

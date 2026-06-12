@@ -13,14 +13,13 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Callable, Dict, List, Optional
 
-from .ollama_client import OllamaCheckpointClient, OllamaConfig
-from .checkpoint_prompts import get_prompt, SYSTEM_PROMPT
+from .checkpoint_prompts import get_prompt
 from .checkpoint_summarizers import (
+    ExploitSummarizer,
     ReconSummarizer,
     ScanSummarizer,
-    ExploitSummarizer,
-    SummarizationConfig,
 )
+from .ollama_client import OllamaCheckpointClient, OllamaConfig
 
 logger = logging.getLogger(__name__)
 
@@ -64,21 +63,25 @@ class CheckpointResult:
 
 class CheckpointError(Exception):
     """Base exception for checkpoint errors."""
+
     pass
 
 
 class OllamaUnavailableError(CheckpointError):
     """Ollama service not running or unreachable."""
+
     pass
 
 
 class ModelNotFoundError(CheckpointError):
     """Requested model not pulled in Ollama."""
+
     pass
 
 
 class ContextOverflowError(CheckpointError):
     """Input exceeds model context window."""
+
     pass
 
 
@@ -193,6 +196,7 @@ class AICheckpointManager:
             CheckpointResult with scan strategy recommendations
         """
         import time
+
         start_time = time.time()
 
         try:
@@ -285,6 +289,7 @@ class AICheckpointManager:
             CheckpointResult with exploitation plan
         """
         import time
+
         start_time = time.time()
 
         try:
@@ -296,7 +301,11 @@ class AICheckpointManager:
             attack_surface_lines = []
             for cf in compact_findings[:10]:
                 attack_surface_lines.append(cf.to_compact_str())
-            attack_surface = "\n".join(attack_surface_lines) if attack_surface_lines else "No high-value findings"
+            attack_surface = (
+                "\n".join(attack_surface_lines)
+                if attack_surface_lines
+                else "No high-value findings"
+            )
 
             # Get model and prompt
             model = self.models[CheckpointType.POST_SCAN]
@@ -395,6 +404,7 @@ class AICheckpointManager:
             CheckpointResult with next action recommendation
         """
         import time
+
         start_time = time.time()
 
         try:
@@ -422,9 +432,7 @@ class AICheckpointManager:
             # Check Ollama health
             if not await client.health_check():
                 if self.fallback_to_rules:
-                    return self._rule_based_post_exploit(
-                        exit_code, output, vuln_type, start_time
-                    )
+                    return self._rule_based_post_exploit(exit_code, output, vuln_type, start_time)
                 raise OllamaUnavailableError("Ollama not available")
 
             # Generate response
@@ -564,10 +572,7 @@ class AICheckpointManager:
 
         # Sort by severity
         severity_order = {"C": 0, "H": 1, "M": 2, "L": 3, "I": 4}
-        sorted_findings = sorted(
-            compact_findings,
-            key=lambda f: severity_order.get(f.severity, 5)
-        )
+        sorted_findings = sorted(compact_findings, key=lambda f: severity_order.get(f.severity, 5))
 
         # Build exploitation order
         exploit_order = []
@@ -580,12 +585,14 @@ class AICheckpointManager:
             elif "rce" in cf.type or "command" in cf.type:
                 tool = "manual"
 
-            exploit_order.append({
-                "finding_id": cf.id,
-                "vulnerability": cf.type,
-                "target": cf.target,
-                "tool": tool,
-            })
+            exploit_order.append(
+                {
+                    "finding_id": cf.id,
+                    "vulnerability": cf.type,
+                    "target": cf.target,
+                    "tool": tool,
+                }
+            )
 
         recommendations = {
             "exploitation_order": exploit_order,

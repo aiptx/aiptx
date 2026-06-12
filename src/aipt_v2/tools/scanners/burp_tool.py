@@ -11,15 +11,14 @@ Burp Suite Pro REST API Endpoints:
 """
 
 import json
+import logging
 import os
 import time
-import logging
-import requests
-from typing import Optional, Dict, List, Any
 from dataclasses import dataclass, field
 from enum import Enum
-from datetime import datetime
-from pathlib import Path
+from typing import Any, Dict, List, Optional
+
+import requests
 import urllib3
 
 # Disable SSL warnings for self-signed certificates
@@ -30,6 +29,7 @@ logger = logging.getLogger(__name__)
 
 class ScanStatus(Enum):
     """Burp Suite scan status types."""
+
     QUEUED = "queued"
     RUNNING = "running"
     PAUSED = "paused"
@@ -40,6 +40,7 @@ class ScanStatus(Enum):
 
 class IssueSeverity(Enum):
     """Vulnerability severity levels in Burp."""
+
     HIGH = "high"
     MEDIUM = "medium"
     LOW = "low"
@@ -48,6 +49,7 @@ class IssueSeverity(Enum):
 
 class IssueConfidence(Enum):
     """Issue confidence levels in Burp."""
+
     CERTAIN = "certain"
     FIRM = "firm"
     TENTATIVE = "tentative"
@@ -56,8 +58,15 @@ class IssueConfidence(Enum):
 @dataclass
 class BurpConfig:
     """Configuration for Burp Suite connection."""
-    base_url: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_URL") or os.getenv("BURP_URL", "http://localhost:1337/v0.1"))
-    api_key: str = field(default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_API_KEY") or os.getenv("BURP_API_KEY", ""))
+
+    base_url: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_URL")
+        or os.getenv("BURP_URL", "http://localhost:1337/v0.1")
+    )
+    api_key: str = field(
+        default_factory=lambda: os.getenv("AIPT_SCANNERS__BURP_API_KEY")
+        or os.getenv("BURP_API_KEY", "")
+    )
     verify_ssl: bool = False
     timeout: int = 120  # Increased for slow/remote networks
 
@@ -65,6 +74,7 @@ class BurpConfig:
 @dataclass
 class ScanResult:
     """Result of a Burp Suite scan."""
+
     task_id: str
     target_url: str
     status: str
@@ -79,6 +89,7 @@ class ScanResult:
 @dataclass
 class Issue:
     """Security issue/vulnerability from Burp Suite."""
+
     issue_type: str
     name: str
     severity: str
@@ -112,44 +123,47 @@ class BurpTool:
 
     def _setup_session(self):
         """Setup the requests session."""
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json"
-        }
+        headers = {"Content-Type": "application/json", "Accept": "application/json"}
         # Burp REST API uses API key directly in Authorization header
         if self.config.api_key:
             headers["Authorization"] = self.config.api_key
         self.session.headers.update(headers)
         self.session.verify = self.config.verify_ssl
 
-    def _request(self, method: str, endpoint: str, data: Optional[Dict] = None,
-                 params: Optional[Dict] = None, silent_404: bool = False) -> Any:
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        data: Optional[Dict] = None,
+        params: Optional[Dict] = None,
+        silent_404: bool = False,
+    ) -> Any:
         """Make an API request to Burp Suite."""
         # Ensure base_url doesn't have trailing slash and endpoint doesn't have leading slash
-        base = self.config.base_url.rstrip('/')
-        ep = endpoint.lstrip('/')
+        base = self.config.base_url.rstrip("/")
+        ep = endpoint.lstrip("/")
         url = f"{base}/{ep}"
         try:
             response = self.session.request(
-                method=method,
-                url=url,
-                json=data,
-                params=params,
-                timeout=self.config.timeout
+                method=method, url=url, json=data, params=params, timeout=self.config.timeout
             )
             response.raise_for_status()
 
             # Handle different response types
             if response.content:
-                content_type = response.headers.get('Content-Type', '')
-                if 'application/json' in content_type:
+                content_type = response.headers.get("Content-Type", "")
+                if "application/json" in content_type:
                     return response.json()
                 return response.text
 
             # For 201/202 responses, return location header
             if response.status_code in [201, 202]:
-                location = response.headers.get('Location', '')
-                return {"success": True, "location": location, "task_id": location.split('/')[-1] if location else ""}
+                location = response.headers.get("Location", "")
+                return {
+                    "success": True,
+                    "location": location,
+                    "task_id": location.split("/")[-1] if location else "",
+                }
 
             return {"success": True}
         except requests.exceptions.HTTPError as e:
@@ -172,13 +186,13 @@ class BurpTool:
             response = self.session.get(f"{self.config.base_url}/", timeout=self.config.timeout)
 
             # Check for Burp version header (present on all responses)
-            burp_version = response.headers.get('X-Burp-Version', '')
+            burp_version = response.headers.get("X-Burp-Version", "")
 
             if not burp_version:
                 # Try root URL for version header
-                root_url = self.config.base_url.replace('/v0.1', '').replace('/v1', '')
+                root_url = self.config.base_url.replace("/v0.1", "").replace("/v1", "")
                 root_response = self.session.get(root_url, timeout=self.config.timeout)
-                burp_version = root_response.headers.get('X-Burp-Version', '')
+                burp_version = root_response.headers.get("X-Burp-Version", "")
 
             if burp_version:
                 logger.info(f"Burp Suite version: {burp_version}")
@@ -216,7 +230,7 @@ class BurpTool:
             "server": self.config.base_url,
             "connected": self._connected,
             "issue_definitions_loaded": len(self._issue_definitions),
-            "type": "Burp Suite Pro REST API"
+            "type": "Burp Suite Pro REST API",
         }
 
     def is_connected(self) -> bool:
@@ -255,7 +269,7 @@ class BurpTool:
             "target": {
                 "scope": {
                     "include": [{"enabled": True, "prefix": url} for url in urls],
-                    "exclude": [{"enabled": True, "prefix": url} for url in (exclude_urls or [])]
+                    "exclude": [{"enabled": True, "prefix": url} for url in (exclude_urls or [])],
                 }
             }
         }
@@ -289,8 +303,7 @@ class BurpTool:
 
     # ==================== Scan Management ====================
 
-    def start_scan(self, url: str, scope: List[str] = None,
-                   configuration: Dict = None) -> str:
+    def start_scan(self, url: str, scope: List[str] = None, configuration: Dict = None) -> str:
         """
         Start a new scan.
 
@@ -302,9 +315,7 @@ class BurpTool:
         Returns:
             Task ID for the scan
         """
-        scan_data = {
-            "urls": [url] + (scope or [])
-        }
+        scan_data = {"urls": [url] + (scope or [])}
 
         if configuration:
             scan_data["configuration"] = configuration
@@ -332,8 +343,9 @@ class BurpTool:
         """
         return self.start_scan(url)
 
-    def get_scan_status(self, task_id: str, after: str = None,
-                        issue_events: int = None) -> ScanResult:
+    def get_scan_status(
+        self, task_id: str, after: str = None, issue_events: int = None
+    ) -> ScanResult:
         """
         Get current status of a scan.
 
@@ -369,7 +381,9 @@ class BurpTool:
             total_requests = crawl_requests + audit_requests
             # Rough estimate: assume crawl is done when we have requests
             if total_requests > 0:
-                progress = min(95, 10 + (audit_requests * 85 // max(1, crawl_requests + audit_requests)))
+                progress = min(
+                    95, 10 + (audit_requests * 85 // max(1, crawl_requests + audit_requests))
+                )
             else:
                 progress = 10
         elif scan_status == "queued":
@@ -377,19 +391,23 @@ class BurpTool:
 
         return ScanResult(
             task_id=task_id,
-            target_url=result.get("scan_metrics", {}).get("crawl_and_audit_urls", [""])[0] if result.get("scan_metrics") else "",
+            target_url=(
+                result.get("scan_metrics", {}).get("crawl_and_audit_urls", [""])[0]
+                if result.get("scan_metrics")
+                else ""
+            ),
             status=result.get("scan_status", "unknown"),
             request_count=result.get("scan_metrics", {}).get("request_count", 0),
             error_count=result.get("scan_metrics", {}).get("crawl_and_audit_error_count", 0),
             insertion_point_count=result.get("scan_metrics", {}).get("insertion_point_count", 0),
             issue_events=result.get("issue_events", []),
             audit_items=result.get("audit_items", []),
-            progress=progress
+            progress=progress,
         )
 
-    def wait_for_scan(self, task_id: str, timeout: int = 3600,
-                      poll_interval: int = 30,
-                      callback: callable = None) -> ScanResult:
+    def wait_for_scan(
+        self, task_id: str, timeout: int = 3600, poll_interval: int = 30, callback: callable = None
+    ) -> ScanResult:
         """
         Wait for a scan to complete.
 
@@ -441,19 +459,21 @@ class BurpTool:
             # Get issue definition for name and description
             issue_def = self.get_issue_definition(type_index) or {}
 
-            issues.append(Issue(
-                issue_type=type_index,
-                name=issue_def.get("name", issue_data.get("name", "Unknown")),
-                severity=issue_data.get("severity", "info"),
-                confidence=issue_data.get("confidence", "tentative"),
-                host=issue_data.get("origin", ""),
-                path=issue_data.get("path", ""),
-                origin=issue_data.get("origin", ""),
-                description=issue_def.get("description", ""),
-                remediation=issue_def.get("remediation", ""),
-                serial_number=str(issue_data.get("serial_number", "")),
-                evidence=issue_data.get("evidence", [])
-            ))
+            issues.append(
+                Issue(
+                    issue_type=type_index,
+                    name=issue_def.get("name", issue_data.get("name", "Unknown")),
+                    severity=issue_data.get("severity", "info"),
+                    confidence=issue_data.get("confidence", "tentative"),
+                    host=issue_data.get("origin", ""),
+                    path=issue_data.get("path", ""),
+                    origin=issue_data.get("origin", ""),
+                    description=issue_def.get("description", ""),
+                    remediation=issue_def.get("remediation", ""),
+                    serial_number=str(issue_data.get("serial_number", "")),
+                    evidence=issue_data.get("evidence", []),
+                )
+            )
 
         return issues
 
@@ -482,7 +502,7 @@ class BurpTool:
             return {
                 "connected": self._connected,
                 "issue_definitions": len(self._issue_definitions),
-                "message": "Provide task_id for scan-specific summary"
+                "message": "Provide task_id for scan-specific summary",
             }
 
         result = self.get_scan_status(task_id, issue_events=1000)
@@ -500,7 +520,7 @@ class BurpTool:
             "request_count": result.request_count,
             "error_count": result.error_count,
             "issue_count": len(result.issue_events),
-            "issues_by_severity": severity_counts
+            "issues_by_severity": severity_counts,
         }
 
     # ==================== Orchestration Helpers ====================
@@ -521,8 +541,8 @@ class BurpTool:
                 "path": issue.path,
                 "origin": issue.origin,
                 "remediation": issue.remediation,
-                "serial_number": issue.serial_number
-            }
+                "serial_number": issue.serial_number,
+            },
         }
 
     def export_findings(self, task_id: str, output_path: str = None) -> List[Dict[str, Any]]:
@@ -540,7 +560,7 @@ class BurpTool:
         findings = [self.to_finding(i) for i in issues]
 
         if output_path:
-            with open(output_path, 'w') as f:
+            with open(output_path, "w") as f:
                 json.dump(findings, f, indent=2)
             logger.info(f"Exported {len(findings)} findings to {output_path}")
 
@@ -608,7 +628,9 @@ if __name__ == "__main__":
     import argparse
 
     parser = argparse.ArgumentParser(description="Burp Suite Scanner Tool")
-    parser.add_argument("command", choices=["test", "scan", "status", "issues", "summary", "definitions"])
+    parser.add_argument(
+        "command", choices=["test", "scan", "status", "issues", "summary", "definitions"]
+    )
     parser.add_argument("--url", help="Target URL for scanning")
     parser.add_argument("--task-id", help="Task ID for status/issues")
 
@@ -622,7 +644,7 @@ if __name__ == "__main__":
         print(f"Server: {config.base_url}")
         if burp.connect():
             info = burp.get_info()
-            print(f"✓ Connected to Burp Suite Pro")
+            print("✓ Connected to Burp Suite Pro")
             print(f"✓ Issue definitions loaded: {info.get('issue_definitions_loaded')}")
         else:
             print("✗ Connection failed")
@@ -643,7 +665,7 @@ if __name__ == "__main__":
         else:
             if burp.connect():
                 task_id = burp.scan_url(args.url)
-                print(f"Scan started!")
+                print("Scan started!")
                 print(f"Task ID: {task_id}")
                 print(f"Check status: python burp_tool.py status --task-id {task_id}")
 

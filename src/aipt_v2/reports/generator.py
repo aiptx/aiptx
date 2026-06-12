@@ -13,6 +13,7 @@ The new format provides:
 - URL normalization (no double slashes)
 - Totals that match actual finding counts
 """
+
 from __future__ import annotations
 
 import json
@@ -20,14 +21,14 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional, TYPE_CHECKING
+from typing import TYPE_CHECKING
 
 from ..models.findings import Finding, Severity, VerificationStatus
 from ..models.phase_result import PipelineResult
 
 if TYPE_CHECKING:
-    from ..pipeline.persistence import CanonicalFindings
     from ..models.finding_v2 import FindingV2
+    from ..pipeline.persistence import CanonicalFindings
 
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ReportConfig:
     """Configuration for report generation"""
+
     # Report metadata
     client_name: str = "Client"
     project_name: str = "Security Assessment"
@@ -55,6 +57,7 @@ class ReportConfig:
 @dataclass
 class ReportData:
     """Data structure for report generation"""
+
     # Metadata
     scan_id: str
     target: str
@@ -107,43 +110,46 @@ class ReportData:
 
         # Count false positives and pending review
         false_positives = [
-            f for f in all_findings
-            if f.verification_status == VerificationStatus.FALSE_POSITIVE
+            f for f in all_findings if f.verification_status == VerificationStatus.FALSE_POSITIVE
         ]
         pending_review = [
-            f for f in all_findings
-            if f.verification_status == VerificationStatus.MANUAL_REVIEW
+            f for f in all_findings if f.verification_status == VerificationStatus.MANUAL_REVIEW
         ]
 
         # Group by severity - ONLY verified findings
         # Critical and High MUST be CONFIRMED
         critical = [
-            f for f in findings
-            if f.severity == Severity.CRITICAL and f.verification_status == VerificationStatus.CONFIRMED
+            f
+            for f in findings
+            if f.severity == Severity.CRITICAL
+            and f.verification_status == VerificationStatus.CONFIRMED
         ]
         high = [
-            f for f in findings
+            f
+            for f in findings
             if f.severity == Severity.HIGH and f.verification_status == VerificationStatus.CONFIRMED
         ]
         # Medium can be CONFIRMED or LIKELY
         medium = [
-            f for f in findings
-            if f.severity == Severity.MEDIUM and f.verification_status in [
-                VerificationStatus.CONFIRMED, VerificationStatus.LIKELY
-            ]
+            f
+            for f in findings
+            if f.severity == Severity.MEDIUM
+            and f.verification_status in [VerificationStatus.CONFIRMED, VerificationStatus.LIKELY]
         ]
         # Low and Info can be POTENTIAL or better
         low = [
-            f for f in findings
-            if f.severity == Severity.LOW and f.verification_status not in [
-                VerificationStatus.UNVERIFIED, VerificationStatus.FALSE_POSITIVE
-            ]
+            f
+            for f in findings
+            if f.severity == Severity.LOW
+            and f.verification_status
+            not in [VerificationStatus.UNVERIFIED, VerificationStatus.FALSE_POSITIVE]
         ]
         info = [
-            f for f in findings
-            if f.severity == Severity.INFO and f.verification_status not in [
-                VerificationStatus.UNVERIFIED, VerificationStatus.FALSE_POSITIVE
-            ]
+            f
+            for f in findings
+            if f.severity == Severity.INFO
+            and f.verification_status
+            not in [VerificationStatus.UNVERIFIED, VerificationStatus.FALSE_POSITIVE]
         ]
 
         # Extract unique sources
@@ -201,12 +207,13 @@ class ReportData:
 
         # Count false positives and pending review
         false_positives = [
-            f for f in all_findings
-            if f.verification_status == VerificationStatusV2.SUPPRESSED_FP
+            f for f in all_findings if f.verification_status == VerificationStatusV2.SUPPRESSED_FP
         ]
         pending_review = [
-            f for f in all_findings
-            if f.verification_status in [
+            f
+            for f in all_findings
+            if f.verification_status
+            in [
                 VerificationStatusV2.NEEDS_REVIEW,
                 VerificationStatusV2.MANUAL_REVIEW,
             ]
@@ -214,33 +221,31 @@ class ReportData:
 
         # Group by severity - ONLY verified findings for Critical/High
         critical = [
-            f for f in reportable
+            f
+            for f in reportable
             if f.severity == SeverityV2.CRITICAL
             and f.verification_status == VerificationStatusV2.CONFIRMED
         ]
         high = [
-            f for f in reportable
+            f
+            for f in reportable
             if f.severity == SeverityV2.HIGH
             and f.verification_status == VerificationStatusV2.CONFIRMED
         ]
         # Medium can be CONFIRMED or LIKELY
         medium = [
-            f for f in reportable
+            f
+            for f in reportable
             if f.severity == SeverityV2.MEDIUM
-            and f.verification_status in [
+            and f.verification_status
+            in [
                 VerificationStatusV2.CONFIRMED,
                 VerificationStatusV2.LIKELY,
             ]
         ]
         # Low and Info - more lenient
-        low = [
-            f for f in reportable
-            if f.severity == SeverityV2.LOW
-        ]
-        info = [
-            f for f in reportable
-            if f.severity == SeverityV2.INFO
-        ]
+        low = [f for f in reportable if f.severity == SeverityV2.LOW]
+        info = [f for f in reportable if f.severity == SeverityV2.INFO]
 
         # Convert to legacy Finding format for existing HTML template compatibility
         def to_legacy_finding(fv2: "FindingV2") -> Finding:
@@ -399,7 +404,6 @@ class ReportGenerator:
         canonical: "CanonicalFindings",
     ) -> Path:
         """Generate JSON report from canonical findings"""
-        from ..models.finding_v2 import VerificationStatusV2
 
         # Get findings by verification status
         confirmed = [f.to_dict() for f in canonical.get_confirmed_findings()]
@@ -437,7 +441,8 @@ class ReportGenerator:
                 "pending_manual_review": data.pending_manual_review,
                 "verification_rate": (
                     f"{(data.total_findings / data.total_discovered * 100):.1f}%"
-                    if data.total_discovered > 0 else "N/A"
+                    if data.total_discovered > 0
+                    else "N/A"
                 ),
             },
             "findings": {
@@ -445,10 +450,7 @@ class ReportGenerator:
                 "needs_review": needs_review,
                 "suppressed": suppressed,
             },
-            "tool_status": {
-                name: entry.to_dict()
-                for name, entry in canonical.tool_status.items()
-            },
+            "tool_status": {name: entry.to_dict() for name, entry in canonical.tool_status.items()},
         }
 
         filename = f"report_{data.scan_id}_{data.generated_at.strftime('%Y%m%d_%H%M%S')}.json"
@@ -533,7 +535,11 @@ class ReportGenerator:
                 "reportable_findings": data.total_findings,
                 "false_positives_filtered": data.false_positives_filtered,
                 "pending_manual_review": data.pending_manual_review,
-                "verification_rate": f"{(data.total_findings / data.total_discovered * 100):.1f}%" if data.total_discovered > 0 else "N/A",
+                "verification_rate": (
+                    f"{(data.total_findings / data.total_discovered * 100):.1f}%"
+                    if data.total_discovered > 0
+                    else "N/A"
+                ),
             },
             "findings": [f.to_dict() for f in reportable_findings],
             "phases": {
@@ -558,43 +564,45 @@ class ReportGenerator:
     async def _generate_markdown(self, data: ReportData) -> Path:
         """Generate Markdown report with verification statistics"""
         lines = [
-            f"# Security Assessment Report",
-            f"",
+            "# Security Assessment Report",
+            "",
             f"**Target:** {data.target}",
             f"**Scan ID:** {data.scan_id}",
             f"**Date:** {data.generated_at.strftime('%Y-%m-%d %H:%M UTC')}",
             f"**Risk Rating:** {data.get_risk_rating()} ({data.get_risk_score()}/100)",
-            f"",
-            f"## Executive Summary",
-            f"",
+            "",
+            "## Executive Summary",
+            "",
             f"This automated security assessment identified **{data.total_findings}** verified vulnerabilities:",
-            f"",
-            f"| Severity | Count |",
-            f"|----------|-------|",
+            "",
+            "| Severity | Count |",
+            "|----------|-------|",
             f"| Critical | {len(data.critical_findings)} |",
             f"| High | {len(data.high_findings)} |",
             f"| Medium | {len(data.medium_findings)} |",
             f"| Low | {len(data.low_findings)} |",
             f"| Info | {len(data.info_findings)} |",
-            f"",
+            "",
         ]
 
         # Add verification statistics if there was filtering
         if data.false_positives_filtered > 0 or data.pending_manual_review > 0:
-            lines.extend([
-                f"### Verification Summary",
-                f"",
-                f"| Metric | Count |",
-                f"|--------|-------|",
-                f"| Total Discovered | {data.total_discovered} |",
-                f"| Verified (Reportable) | {data.total_findings} |",
-                f"| False Positives Filtered | {data.false_positives_filtered} |",
-                f"| Pending Manual Review | {data.pending_manual_review} |",
-                f"",
-                f"> **Note:** Only verified findings are included in this report. ",
-                f"> Critical and High severity findings require confirmed exploitation evidence.",
-                f"",
-            ])
+            lines.extend(
+                [
+                    "### Verification Summary",
+                    "",
+                    "| Metric | Count |",
+                    "|--------|-------|",
+                    f"| Total Discovered | {data.total_discovered} |",
+                    f"| Verified (Reportable) | {data.total_findings} |",
+                    f"| False Positives Filtered | {data.false_positives_filtered} |",
+                    f"| Pending Manual Review | {data.pending_manual_review} |",
+                    "",
+                    "> **Note:** Only verified findings are included in this report. ",
+                    "> Critical and High severity findings require confirmed exploitation evidence.",
+                    "",
+                ]
+            )
 
         # Add findings sections
         for severity_name, findings in [
@@ -609,33 +617,35 @@ class ReportGenerator:
 
                 for i, finding in enumerate(findings, 1):
                     lines.append(f"### {i}. {finding.title}")
-                    lines.append(f"")
+                    lines.append("")
                     lines.append(f"**URL:** `{finding.url}`")
                     if finding.parameter:
                         lines.append(f"**Parameter:** `{finding.parameter}`")
                     lines.append(f"**Source:** {finding.source}")
-                    lines.append(f"")
+                    lines.append("")
                     if finding.description:
-                        lines.append(f"**Description:**")
+                        lines.append("**Description:**")
                         lines.append(f"{finding.description}")
-                        lines.append(f"")
+                        lines.append("")
                     if finding.evidence and self.config.include_evidence:
-                        lines.append(f"**Evidence:**")
-                        lines.append(f"```")
+                        lines.append("**Evidence:**")
+                        lines.append("```")
                         lines.append(finding.evidence[:1000])
-                        lines.append(f"```")
-                        lines.append(f"")
+                        lines.append("```")
+                        lines.append("")
                     if finding.remediation and self.config.include_remediation:
-                        lines.append(f"**Remediation:**")
+                        lines.append("**Remediation:**")
                         lines.append(f"{finding.remediation}")
-                        lines.append(f"")
+                        lines.append("")
 
         # Footer
-        lines.extend([
-            f"---",
-            f"",
-            f"*Generated by AIPT - AI-Powered Penetration Testing Framework*",
-        ])
+        lines.extend(
+            [
+                "---",
+                "",
+                "*Generated by AIPT - AI-Powered Penetration Testing Framework*",
+            ]
+        )
 
         content = "\n".join(lines)
 

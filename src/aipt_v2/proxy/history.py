@@ -3,13 +3,14 @@ AIPT Proxy History
 
 Traffic history management and analysis.
 """
+
 from __future__ import annotations
 
 import json
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Any, Optional
+from typing import Optional
 from urllib.parse import urlparse
 
 from .interceptor import InterceptedRequest, InterceptedResponse
@@ -18,6 +19,7 @@ from .interceptor import InterceptedRequest, InterceptedResponse
 @dataclass
 class HistoryEntry:
     """A request/response pair"""
+
     request: InterceptedRequest
     response: Optional[InterceptedResponse] = None
 
@@ -34,9 +36,7 @@ class HistoryEntry:
     def analyze(self) -> None:
         """Analyze entry for security-relevant features"""
         self.has_parameters = bool(
-            self.request.query_params or
-            self.request.is_form or
-            self.request.is_json
+            self.request.query_params or self.request.is_form or self.request.is_json
         )
         self.has_cookies = bool(self.request.cookies)
         self.has_auth = "authorization" in [h.lower() for h in self.request.headers.keys()]
@@ -248,12 +248,14 @@ class ProxyHistory:
 
             if key not in seen:
                 seen.add(key)
-                endpoints.append({
-                    "method": entry.request.method,
-                    "host": parsed.netloc,
-                    "path": parsed.path,
-                    "count": 1,
-                })
+                endpoints.append(
+                    {
+                        "method": entry.request.method,
+                        "host": parsed.netloc,
+                        "path": parsed.path,
+                        "count": 1,
+                    }
+                )
             else:
                 # Increment count
                 for ep in endpoints:

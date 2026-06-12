@@ -23,15 +23,15 @@ import os
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional
 
 from aipt_v2.core.event_loop_manager import current_time
-from aipt_v2.tools.cloud.cloud_config import CloudConfig, get_cloud_config
 
 
 @dataclass
 class ScoutSuiteConfig:
     """ScoutSuite configuration."""
+
     provider: str = "aws"  # aws, azure, gcp, aliyun, oci
 
     # AWS options
@@ -61,6 +61,7 @@ class ScoutSuiteConfig:
 @dataclass
 class ScoutSuiteResult:
     """Result of a ScoutSuite scan."""
+
     provider: str
     status: str
     started_at: str
@@ -100,9 +101,7 @@ class ScoutSuiteTool:
 
         try:
             process = await asyncio.create_subprocess_exec(
-                "scout", "--version",
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
+                "scout", "--version", stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE
             )
             stdout, _ = await process.communicate()
             self._installed = process.returncode == 0
@@ -179,17 +178,11 @@ class ScoutSuiteTool:
         env = os.environ.copy()
 
         process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            env=env
+            *cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE, env=env
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(),
-                timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
             raise TimeoutError(f"ScoutSuite scan timed out after {timeout}s")
@@ -224,8 +217,8 @@ class ScoutSuiteTool:
             metadata={
                 "command": cmd_display,
                 "return_code": process.returncode,
-                "stderr": stderr.decode() if process.returncode != 0 else ""
-            }
+                "stderr": stderr.decode() if process.returncode != 0 else "",
+            },
         )
 
     def _find_latest_report(self) -> Optional[Path]:
@@ -279,7 +272,7 @@ class ScoutSuiteTool:
                 "flagged_items": flagged_items,
                 "summary": summary,
                 "account_id": data.get("account_id", ""),
-                "last_run": data.get("last_run", {})
+                "last_run": data.get("last_run", {}),
             }
 
         except Exception as e:
@@ -306,18 +299,20 @@ class ScoutSuiteTool:
             for service_name, service_data in services.items():
                 for finding_id, finding_data in service_data.get("findings", {}).items():
                     if finding_data.get("flagged_items", 0) > 0:
-                        findings.append({
-                            "provider": self.config.provider,
-                            "service": service_name,
-                            "id": finding_id,
-                            "level": finding_data.get("level", "warning"),
-                            "description": finding_data.get("description", ""),
-                            "rationale": finding_data.get("rationale", ""),
-                            "remediation": finding_data.get("remediation", ""),
-                            "flagged_items": finding_data.get("flagged_items", 0),
-                            "items": finding_data.get("items", []),
-                            "compliance": finding_data.get("compliance", [])
-                        })
+                        findings.append(
+                            {
+                                "provider": self.config.provider,
+                                "service": service_name,
+                                "id": finding_id,
+                                "level": finding_data.get("level", "warning"),
+                                "description": finding_data.get("description", ""),
+                                "rationale": finding_data.get("rationale", ""),
+                                "remediation": finding_data.get("remediation", ""),
+                                "flagged_items": finding_data.get("flagged_items", 0),
+                                "items": finding_data.get("items", []),
+                                "compliance": finding_data.get("compliance", []),
+                            }
+                        )
 
             return findings
 
@@ -333,7 +328,7 @@ async def run_scoutsuite(
     regions: Optional[List[str]] = None,
     services: Optional[List[str]] = None,
     output_dir: str = "./scoutsuite_results",
-    timeout: int = 3600
+    timeout: int = 3600,
 ) -> ScoutSuiteResult:
     """
     Run ScoutSuite scan.
@@ -354,7 +349,7 @@ async def run_scoutsuite(
         aws_profile=profile or "default",
         aws_regions=regions or [],
         services=services or [],
-        output_dir=output_dir
+        output_dir=output_dir,
     )
 
     tool = ScoutSuiteTool(config)

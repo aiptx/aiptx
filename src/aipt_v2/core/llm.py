@@ -4,17 +4,19 @@ AIPT LLM Provider - Multi-provider LLM abstraction
 Supports: OpenAI, Anthropic, Ollama (local)
 Inspired by: Strix's multi-provider approach
 """
+
 from __future__ import annotations
 
 import os
 from abc import ABC, abstractmethod
-from typing import Optional, Generator, Any
 from dataclasses import dataclass
+from typing import Any, Generator, Optional
 
 
 @dataclass
 class LLMResponse:
     """Standardized LLM response"""
+
     content: str
     model: str
     tokens_used: int
@@ -66,7 +68,8 @@ class OpenAIProvider(LLMProvider):
         base_url: Optional[str] = None,
     ):
         try:
-            from openai import OpenAI, AsyncOpenAI
+            from openai import AsyncOpenAI, OpenAI
+
             self._openai_available = True
         except ImportError:
             self._openai_available = False
@@ -144,6 +147,7 @@ class OpenAIProvider(LLMProvider):
         """Approximate token count (4 chars per token)"""
         try:
             import tiktoken
+
             enc = tiktoken.encoding_for_model(self.model)
             return len(enc.encode(text))
         except ImportError:
@@ -162,6 +166,7 @@ class AnthropicProvider(LLMProvider):
     ):
         try:
             from anthropic import Anthropic, AsyncAnthropic
+
             self._anthropic_available = True
         except ImportError:
             self._anthropic_available = False
@@ -330,8 +335,9 @@ class OllamaProvider(LLMProvider):
 
     def stream(self, messages: list[dict], **kwargs) -> Generator[str, None, None]:
         """Stream Ollama response"""
-        import httpx
         import json
+
+        import httpx
 
         with httpx.stream(
             "POST",
@@ -357,11 +363,7 @@ class OllamaProvider(LLMProvider):
         return len(text) // 4
 
 
-def get_llm(
-    provider: str = "openai",
-    model: Optional[str] = None,
-    **kwargs
-) -> LLMProvider:
+def get_llm(provider: str = "openai", model: Optional[str] = None, **kwargs) -> LLMProvider:
     """
     Factory function to get LLM provider.
 

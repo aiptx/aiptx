@@ -5,13 +5,14 @@ Unit Tests for AIPT v2 REST API
 Tests for app.py - FastAPI REST endpoints.
 """
 
-import pytest
-from unittest.mock import Mock, AsyncMock, patch, MagicMock
 from datetime import datetime
+from unittest.mock import AsyncMock, MagicMock, Mock, patch
+
+import pytest
 from fastapi.testclient import TestClient
 
-
 # ============== Fixtures ==============
+
 
 @pytest.fixture
 def mock_repo():
@@ -112,17 +113,21 @@ def mock_cve_intel():
 @pytest.fixture
 def test_client(mock_repo, mock_tools_rag, mock_cve_intel):
     """Create FastAPI test client with mocked dependencies."""
-    with patch("aipt_v2.app.Repository", return_value=mock_repo), \
-         patch("aipt_v2.app.ToolRAG", return_value=mock_tools_rag), \
-         patch("aipt_v2.app.CVEIntelligence", return_value=mock_cve_intel), \
-         patch("aipt_v2.app.limiter.enabled", False):  # Disable rate limiting in tests
+    with (
+        patch("aipt_v2.app.Repository", return_value=mock_repo),
+        patch("aipt_v2.app.ToolRAG", return_value=mock_tools_rag),
+        patch("aipt_v2.app.CVEIntelligence", return_value=mock_cve_intel),
+        patch("aipt_v2.app.limiter.enabled", False),
+    ):  # Disable rate limiting in tests
         from aipt_v2.app import create_app
+
         app = create_app()
         client = TestClient(app)
         yield client
 
 
 # ============== Health Endpoint Tests ==============
+
 
 class TestHealthEndpoint:
     """Tests for /health endpoint."""
@@ -140,6 +145,7 @@ class TestHealthEndpoint:
 
 # ============== Project Endpoints Tests ==============
 
+
 class TestProjectEndpoints:
     """Tests for /projects endpoints."""
 
@@ -151,7 +157,7 @@ class TestProjectEndpoints:
                 "name": "Test Project",
                 "target": "example.com",
                 "description": "Test description",
-            }
+            },
         )
 
         assert response.status_code == 200
@@ -209,6 +215,7 @@ class TestProjectEndpoints:
 
 # ============== Session Endpoints Tests ==============
 
+
 class TestSessionEndpoints:
     """Tests for /sessions endpoints."""
 
@@ -220,7 +227,7 @@ class TestSessionEndpoints:
                 "name": "Test Session",
                 "phase": "recon",
                 "max_iterations": 50,
-            }
+            },
         )
 
         assert response.status_code == 200
@@ -231,10 +238,7 @@ class TestSessionEndpoints:
         """Test session creation for non-existent project."""
         mock_repo.get_project.return_value = None
 
-        response = test_client.post(
-            "/projects/999/sessions",
-            json={"phase": "recon"}
-        )
+        response = test_client.post("/projects/999/sessions", json={"phase": "recon"})
 
         assert response.status_code == 404
 
@@ -249,6 +253,7 @@ class TestSessionEndpoints:
 
 # ============== Finding Endpoints Tests ==============
 
+
 class TestFindingEndpoints:
     """Tests for /findings endpoints."""
 
@@ -262,9 +267,7 @@ class TestFindingEndpoints:
 
     def test_get_findings_with_filters(self, test_client):
         """Test getting findings with filters."""
-        response = test_client.get(
-            "/projects/1/findings?type=vulnerability&severity=high"
-        )
+        response = test_client.get("/projects/1/findings?type=vulnerability&severity=high")
 
         assert response.status_code == 200
 
@@ -286,9 +289,7 @@ class TestFindingEndpoints:
 
     def test_verify_finding_with_notes(self, test_client):
         """Test verifying a finding with notes."""
-        response = test_client.post(
-            "/findings/1/verify?notes=Confirmed%20via%20manual%20testing"
-        )
+        response = test_client.post("/findings/1/verify?notes=Confirmed%20via%20manual%20testing")
 
         assert response.status_code == 200
 
@@ -303,6 +304,7 @@ class TestFindingEndpoints:
 
 # ============== Scan Endpoints Tests ==============
 
+
 class TestScanEndpoints:
     """Tests for /scan endpoints."""
 
@@ -314,7 +316,7 @@ class TestScanEndpoints:
                 json={
                     "target": "example.com",
                     "phase": "recon",
-                }
+                },
             )
 
             assert response.status_code == 200
@@ -327,15 +329,17 @@ class TestScanEndpoints:
         mock_proc.communicate.return_value = (b"PORT STATE SERVICE\n80/tcp open http", b"")
         mock_proc.returncode = 0
 
-        with patch("shutil.which", return_value="/usr/bin/nmap"), \
-             patch("asyncio.create_subprocess_shell", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"output", b"")):
+        with (
+            patch("shutil.which", return_value="/usr/bin/nmap"),
+            patch("asyncio.create_subprocess_shell", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"output", b"")),
+        ):
             response = test_client.post(
                 "/scan/quick",
                 json={
                     "target": "example.com",
                     "phase": "recon",
-                }
+                },
             )
 
             assert response.status_code == 200
@@ -348,11 +352,11 @@ class TestScanEndpoints:
         mock_proc.communicate.return_value = (b"scan output", b"")
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"scan output", b"")):
-            response = test_client.post(
-                "/scan/tool?tool_name=nmap&target=example.com"
-            )
+        with (
+            patch("asyncio.create_subprocess_shell", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"scan output", b"")),
+        ):
+            response = test_client.post("/scan/tool?tool_name=nmap&target=example.com")
 
             assert response.status_code == 200
             data = response.json()
@@ -363,9 +367,7 @@ class TestScanEndpoints:
         """Test running non-existent tool."""
         mock_tools_rag.get_tool_by_name.return_value = None
 
-        response = test_client.post(
-            "/scan/tool?tool_name=nonexistent&target=example.com"
-        )
+        response = test_client.post("/scan/tool?tool_name=nonexistent&target=example.com")
 
         assert response.status_code == 404
         assert "not found" in response.json()["detail"].lower()
@@ -376,8 +378,10 @@ class TestScanEndpoints:
         mock_proc.communicate.return_value = (b"output", b"")
         mock_proc.returncode = 0
 
-        with patch("asyncio.create_subprocess_shell", return_value=mock_proc), \
-             patch("asyncio.wait_for", return_value=(b"output", b"")):
+        with (
+            patch("asyncio.create_subprocess_shell", return_value=mock_proc),
+            patch("asyncio.wait_for", return_value=(b"output", b"")),
+        ):
             response = test_client.post(
                 "/scan/tool?tool_name=nmap&target=example.com&options=-sV%20-p80"
             )
@@ -386,6 +390,7 @@ class TestScanEndpoints:
 
 
 # ============== Tool Endpoints Tests ==============
+
 
 class TestToolEndpoints:
     """Tests for /tools endpoints."""
@@ -435,15 +440,13 @@ class TestToolEndpoints:
 
 # ============== CVE Endpoints Tests ==============
 
+
 class TestCVEEndpoints:
     """Tests for /cve endpoints."""
 
     def test_lookup_cve(self, test_client):
         """Test CVE lookup."""
-        response = test_client.post(
-            "/cve/lookup",
-            json={"cve_id": "CVE-2024-1234"}
-        )
+        response = test_client.post("/cve/lookup", json={"cve_id": "CVE-2024-1234"})
 
         assert response.status_code == 200
         data = response.json()
@@ -454,10 +457,7 @@ class TestCVEEndpoints:
 
     def test_prioritize_cves(self, test_client):
         """Test CVE prioritization."""
-        response = test_client.post(
-            "/cve/prioritize",
-            json=["CVE-2024-1234", "CVE-2024-5678"]
-        )
+        response = test_client.post("/cve/prioritize", json=["CVE-2024-1234", "CVE-2024-5678"])
 
         assert response.status_code == 200
         data = response.json()
@@ -467,6 +467,7 @@ class TestCVEEndpoints:
 
 
 # ============== Pydantic Model Tests ==============
+
 
 class TestPydanticModels:
     """Tests for Pydantic request/response models."""
@@ -536,6 +537,7 @@ class TestPydanticModels:
 
 # ============== Error Handling Tests ==============
 
+
 class TestErrorHandling:
     """Tests for API error handling."""
 
@@ -551,15 +553,13 @@ class TestErrorHandling:
 
     def test_missing_required_field(self, test_client):
         """Test handling of missing required field."""
-        response = test_client.post(
-            "/projects",
-            json={"name": "Test"}  # Missing 'target'
-        )
+        response = test_client.post("/projects", json={"name": "Test"})  # Missing 'target'
 
         assert response.status_code == 422
 
 
 # ============== CORS Tests ==============
+
 
 class TestCORSConfiguration:
     """Tests for CORS middleware."""
@@ -571,7 +571,7 @@ class TestCORSConfiguration:
             headers={
                 "Origin": "http://localhost:3000",
                 "Access-Control-Request-Method": "GET",
-            }
+            },
         )
 
         # OPTIONS should work (may be 200 or 405 depending on FastAPI version)
@@ -579,10 +579,7 @@ class TestCORSConfiguration:
 
     def test_cors_headers_on_response(self, test_client):
         """Test CORS headers on response."""
-        response = test_client.get(
-            "/health",
-            headers={"Origin": "http://localhost:3000"}
-        )
+        response = test_client.get("/health", headers={"Origin": "http://localhost:3000"})
 
         assert response.status_code == 200
         # CORS headers should be present
@@ -591,14 +588,17 @@ class TestCORSConfiguration:
 
 # ============== App Factory Tests ==============
 
+
 class TestAppFactory:
     """Tests for create_app factory function."""
 
     def test_create_app_default(self):
         """Test app creation with defaults."""
-        with patch("aipt_v2.app.Repository"), \
-             patch("aipt_v2.app.ToolRAG"), \
-             patch("aipt_v2.app.CVEIntelligence"):
+        with (
+            patch("aipt_v2.app.Repository"),
+            patch("aipt_v2.app.ToolRAG"),
+            patch("aipt_v2.app.CVEIntelligence"),
+        ):
             from aipt_v2.app import create_app
 
             app = create_app()
@@ -608,9 +608,11 @@ class TestAppFactory:
 
     def test_create_app_custom_title(self):
         """Test app creation with custom title."""
-        with patch("aipt_v2.app.Repository"), \
-             patch("aipt_v2.app.ToolRAG"), \
-             patch("aipt_v2.app.CVEIntelligence"):
+        with (
+            patch("aipt_v2.app.Repository"),
+            patch("aipt_v2.app.ToolRAG"),
+            patch("aipt_v2.app.CVEIntelligence"),
+        ):
             from aipt_v2.app import create_app
 
             app = create_app(title="Custom API")
@@ -623,9 +625,11 @@ class TestAppFactory:
         mock_rag = Mock()
         mock_cve = Mock()
 
-        with patch("aipt_v2.app.Repository", return_value=mock_repo), \
-             patch("aipt_v2.app.ToolRAG", return_value=mock_rag), \
-             patch("aipt_v2.app.CVEIntelligence", return_value=mock_cve):
+        with (
+            patch("aipt_v2.app.Repository", return_value=mock_repo),
+            patch("aipt_v2.app.ToolRAG", return_value=mock_rag),
+            patch("aipt_v2.app.CVEIntelligence", return_value=mock_cve),
+        ):
             from aipt_v2.app import create_app
 
             app = create_app()

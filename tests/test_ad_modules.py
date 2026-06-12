@@ -8,13 +8,11 @@ without requiring actual AD infrastructure.
 from __future__ import annotations
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
-from datetime import datetime
-
 
 # =============================================================================
 # Test AD Discovery Module
 # =============================================================================
+
 
 class TestADDiscovery:
     """Tests for recon/ad_discovery.py"""
@@ -36,7 +34,7 @@ class TestADDiscovery:
             ip="192.168.1.10",
             domain="test.local",
             is_gc=True,
-            is_pdc=True
+            is_pdc=True,
         )
         assert dc.hostname == "DC01.test.local"
         assert dc.ip == "192.168.1.10"
@@ -50,7 +48,7 @@ class TestADDiscovery:
             source_domain="test.local",
             target_domain="child.test.local",
             trust_type="parent-child",
-            trust_direction="bidirectional"
+            trust_direction="bidirectional",
         )
         assert trust.source_domain == "test.local"
         assert trust.target_domain == "child.test.local"
@@ -60,10 +58,7 @@ class TestADDiscovery:
         from aipt_v2.recon.ad_discovery import ADDiscoveryResult, DomainController
 
         dc = DomainController(hostname="DC01.test.local", ip="192.168.1.10")
-        result = ADDiscoveryResult(
-            target_domain="test.local",
-            domain_controllers=[dc]
-        )
+        result = ADDiscoveryResult(target_domain="test.local", domain_controllers=[dc])
         assert result.target_domain == "test.local"
         assert len(result.domain_controllers) == 1
 
@@ -71,6 +66,7 @@ class TestADDiscovery:
 # =============================================================================
 # Test AD User Enumeration Module
 # =============================================================================
+
 
 class TestADUserEnumeration:
     """Tests for recon/ad_users.py"""
@@ -92,14 +88,14 @@ class TestADUserEnumeration:
             username="jdoe",
             domain="test.local",
             sid="S-1-5-21-...",
-            dn="CN=John Doe,CN=Users,DC=test,DC=local"
+            dn="CN=John Doe,CN=Users,DC=test,DC=local",
         )
         assert user.username == "jdoe"
         assert user.domain == "test.local"
 
     def test_enum_result(self):
         """Test ADUserEnumResult"""
-        from aipt_v2.recon.ad_users import ADUserEnumResult, ADUser
+        from aipt_v2.recon.ad_users import ADUser, ADUserEnumResult
 
         user = ADUser(username="test", domain="test.local")
         result = ADUserEnumResult(
@@ -107,7 +103,7 @@ class TestADUserEnumeration:
             dc_ip="192.168.1.10",
             users=[user],
             methods_used=["kerberos"],
-            total_found=1
+            total_found=1,
         )
         assert result.total_found == 1
         assert len(result.users) == 1
@@ -117,6 +113,7 @@ class TestADUserEnumeration:
 # Test AD Privesc Scanner Module
 # =============================================================================
 
+
 class TestADPrivescScanner:
     """Tests for scanners/ad_privesc_scanner.py"""
 
@@ -125,22 +122,16 @@ class TestADPrivescScanner:
         from aipt_v2.scanners.ad_privesc_scanner import ADPrivescConfig
 
         config = ADPrivescConfig(
-            domain="test.local",
-            dc_ip="192.168.1.10",
-            username="scanner",
-            password="secret"
+            domain="test.local", dc_ip="192.168.1.10", username="scanner", password="secret"
         )
         assert config.domain == "test.local"
 
     def test_scanner_instantiation(self):
         """Test ADPrivescScanner can be created"""
-        from aipt_v2.scanners.ad_privesc_scanner import ADPrivescScanner, ADPrivescConfig
+        from aipt_v2.scanners.ad_privesc_scanner import ADPrivescConfig, ADPrivescScanner
 
         config = ADPrivescConfig(
-            domain="test.local",
-            dc_ip="10.0.0.1",
-            username="user",
-            password="pass"
+            domain="test.local", dc_ip="10.0.0.1", username="user", password="pass"
         )
         scanner = ADPrivescScanner(config)
         assert scanner.config.domain == "test.local"
@@ -150,6 +141,7 @@ class TestADPrivescScanner:
 # Test ADCS Scanner Module
 # =============================================================================
 
+
 class TestADCSScanner:
     """Tests for scanners/ad_adcs_scanner.py"""
 
@@ -158,10 +150,7 @@ class TestADCSScanner:
         from aipt_v2.scanners.ad_adcs_scanner import ADCSConfig
 
         config = ADCSConfig(
-            domain="test.local",
-            dc_ip="192.168.1.10",
-            username="user",
-            password="pass"
+            domain="test.local", dc_ip="192.168.1.10", username="user", password="pass"
         )
         assert config.domain == "test.local"
 
@@ -169,10 +158,7 @@ class TestADCSScanner:
         """Test CertificateTemplate dataclass"""
         from aipt_v2.scanners.ad_adcs_scanner import CertificateTemplate
 
-        template = CertificateTemplate(
-            name="User",
-            display_name="User Certificate"
-        )
+        template = CertificateTemplate(name="User", display_name="User Certificate")
         assert template.name == "User"
         assert template.display_name == "User Certificate"
 
@@ -180,6 +166,7 @@ class TestADCSScanner:
 # =============================================================================
 # Test AD Credential Attacks Module
 # =============================================================================
+
 
 class TestADCredentialAttacks:
     """Tests for exploitation/ad_credentials.py"""
@@ -189,22 +176,19 @@ class TestADCredentialAttacks:
         from aipt_v2.exploitation.ad_credentials import ADCredentialConfig
 
         config = ADCredentialConfig(
-            domain="test.local",
-            dc_ip="192.168.1.10",
-            username="attacker",
-            password="password"
+            domain="test.local", dc_ip="192.168.1.10", username="attacker", password="password"
         )
         assert config.domain == "test.local"
 
     def test_extracted_credential_dataclass(self):
         """Test ExtractedCredential dataclass"""
-        from aipt_v2.exploitation.ad_credentials import ExtractedCredential, CredentialType
+        from aipt_v2.exploitation.ad_credentials import CredentialType, ExtractedCredential
 
         cred = ExtractedCredential(
             username="admin",
             domain="TEST",
             credential_type=CredentialType.NTLM_HASH,
-            ntlm_hash="aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0"
+            ntlm_hash="aad3b435b51404eeaad3b435b51404ee:31d6cfe0d16ae931b73c59d7e0c089c0",
         )
         assert cred.username == "admin"
         assert cred.credential_type == CredentialType.NTLM_HASH
@@ -214,10 +198,7 @@ class TestADCredentialAttacks:
         from aipt_v2.exploitation.ad_credentials import RelayTarget
 
         target = RelayTarget(
-            host="192.168.1.10",
-            port=636,
-            protocol="ldaps",
-            signing_required=False
+            host="192.168.1.10", port=636, protocol="ldaps", signing_required=False
         )
         assert target.protocol == "ldaps"
         assert target.host == "192.168.1.10"
@@ -227,6 +208,7 @@ class TestADCredentialAttacks:
 # Test AD Delegation Attacks Module
 # =============================================================================
 
+
 class TestADDelegationAttacks:
     """Tests for exploitation/ad_delegation.py"""
 
@@ -235,10 +217,7 @@ class TestADDelegationAttacks:
         from aipt_v2.exploitation.ad_delegation import ADDelegationConfig
 
         config = ADDelegationConfig(
-            domain="test.local",
-            dc_ip="192.168.1.10",
-            username="attacker",
-            password="password"
+            domain="test.local", dc_ip="192.168.1.10", username="attacker", password="password"
         )
         assert config.domain == "test.local"
 
@@ -259,7 +238,7 @@ class TestADDelegationAttacks:
             username="user",
             domain="TEST.LOCAL",
             target_service="krbtgt/TEST.LOCAL",
-            ticket_b64="YII..."
+            ticket_b64="YII...",
         )
         assert ticket.ticket_type == TicketType.TGT
         assert ticket.username == "user"
@@ -269,6 +248,7 @@ class TestADDelegationAttacks:
 # Test ADCS Exploitation Module
 # =============================================================================
 
+
 class TestADCSExploitation:
     """Tests for exploitation/ad_adcs.py"""
 
@@ -277,10 +257,7 @@ class TestADCSExploitation:
         from aipt_v2.exploitation.ad_adcs import ADCSExploitConfig
 
         config = ADCSExploitConfig(
-            domain="test.local",
-            ca_host="CA01.test.local",
-            username="user",
-            password="pass"
+            domain="test.local", ca_host="CA01.test.local", username="user", password="pass"
         )
         assert config.ca_host == "CA01.test.local"
 
@@ -292,7 +269,7 @@ class TestADCSExploitation:
             subject="CN=admin,DC=test,DC=local",
             issuer="CN=test-CA,DC=test,DC=local",
             serial_number="1234567890",
-            pfx_file="/tmp/admin.pfx"
+            pfx_file="/tmp/admin.pfx",
         )
         assert cert.subject == "CN=admin,DC=test,DC=local"
         assert cert.pfx_file == "/tmp/admin.pfx"
@@ -301,6 +278,7 @@ class TestADCSExploitation:
 # =============================================================================
 # Test AD Chain Templates Module
 # =============================================================================
+
 
 class TestADChainTemplates:
     """Tests for exploitation/ad_chain_templates.py"""
@@ -344,6 +322,7 @@ class TestADChainTemplates:
 # Test AD Lateral Movement Module
 # =============================================================================
 
+
 class TestADLateralMovement:
     """Tests for lateral/ad_lateral.py"""
 
@@ -351,11 +330,7 @@ class TestADLateralMovement:
         """Test ADLateralConfig"""
         from aipt_v2.lateral.ad_lateral import ADLateralConfig
 
-        config = ADLateralConfig(
-            domain="test.local",
-            username="admin",
-            password="password"
-        )
+        config = ADLateralConfig(domain="test.local", username="admin", password="password")
         assert config.domain == "test.local"
 
     def test_exec_method_enum(self):
@@ -369,14 +344,14 @@ class TestADLateralMovement:
 
     def test_exec_result_dataclass(self):
         """Test ExecResult dataclass"""
-        from aipt_v2.lateral.ad_lateral import ExecResult, ExecMethod
+        from aipt_v2.lateral.ad_lateral import ExecMethod, ExecResult
 
         result = ExecResult(
             target="192.168.1.20",
             method=ExecMethod.WMIEXEC,
             command="whoami",
             stdout="TEST\\admin",
-            success=True
+            success=True,
         )
         assert result.success
         assert result.method == ExecMethod.WMIEXEC
@@ -386,6 +361,7 @@ class TestADLateralMovement:
 # =============================================================================
 # Test AD Attack Planner Module
 # =============================================================================
+
 
 class TestADAttackPlanner:
     """Tests for intelligence/ad_attack_planner.py"""
@@ -400,21 +376,18 @@ class TestADAttackPlanner:
         """Test ADEnvironment dataclass"""
         from aipt_v2.intelligence.ad_attack_planner import ADEnvironment
 
-        env = ADEnvironment(
-            domain="test.local",
-            dc_ip="192.168.1.10"
-        )
+        env = ADEnvironment(domain="test.local", dc_ip="192.168.1.10")
         assert env.domain == "test.local"
 
     def test_attack_step_dataclass(self):
         """Test AttackStep dataclass"""
-        from aipt_v2.intelligence.ad_attack_planner import AttackStep, AttackPhase
+        from aipt_v2.intelligence.ad_attack_planner import AttackPhase, AttackStep
 
         step = AttackStep(
             phase=AttackPhase.RECONNAISSANCE,
             action="Enumerate SPNs",
             description="Find service accounts with SPNs",
-            tool="GetUserSPNs.py"
+            tool="GetUserSPNs.py",
         )
         assert step.action == "Enumerate SPNs"
         assert "GetUserSPNs" in step.tool
@@ -423,6 +396,7 @@ class TestADAttackPlanner:
 # =============================================================================
 # Test AD Evasion Module
 # =============================================================================
+
 
 class TestADEvasion:
     """Tests for evasion/ad_evasion.py"""
@@ -460,7 +434,7 @@ class TestADEvasion:
 
     def test_get_evasion_profile(self):
         """Test get_evasion_profile function"""
-        from aipt_v2.evasion.ad_evasion import get_evasion_profile, StealthLevel
+        from aipt_v2.evasion.ad_evasion import StealthLevel, get_evasion_profile
 
         profile = get_evasion_profile("stealth")
         assert profile.stealth_level == StealthLevel.HIGH
@@ -471,7 +445,7 @@ class TestADEvasion:
 
     def test_create_stealth_wrapper(self):
         """Test create_stealth_wrapper convenience function"""
-        from aipt_v2.evasion.ad_evasion import create_stealth_wrapper, StealthLevel
+        from aipt_v2.evasion.ad_evasion import StealthLevel, create_stealth_wrapper
 
         wrapper = create_stealth_wrapper("paranoid")
         assert wrapper.config.stealth_level == StealthLevel.PARANOID

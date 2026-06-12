@@ -7,6 +7,7 @@ useful for:
 - Distributed scanning from multiple locations
 - Using tools not available locally
 """
+
 from __future__ import annotations
 
 import asyncio

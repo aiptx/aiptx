@@ -28,26 +28,29 @@ logger = logging.getLogger(__name__)
 
 class FindingSeverity(str, Enum):
     """Severity levels aligned with CVSS."""
+
     CRITICAL = "critical"  # CVSS 9.0-10.0
-    HIGH = "high"          # CVSS 7.0-8.9
-    MEDIUM = "medium"      # CVSS 4.0-6.9
-    LOW = "low"            # CVSS 0.1-3.9
-    INFO = "info"          # Informational only
+    HIGH = "high"  # CVSS 7.0-8.9
+    MEDIUM = "medium"  # CVSS 4.0-6.9
+    LOW = "low"  # CVSS 0.1-3.9
+    INFO = "info"  # Informational only
 
 
 class FindingStatus(str, Enum):
     """Finding validation status."""
-    NEW = "new"                    # Just discovered
-    PENDING_VALIDATION = "pending" # Queued for PoC validation
-    VALIDATING = "validating"      # Currently being validated
-    VALIDATED = "validated"        # PoC confirmed exploitable
+
+    NEW = "new"  # Just discovered
+    PENDING_VALIDATION = "pending"  # Queued for PoC validation
+    VALIDATING = "validating"  # Currently being validated
+    VALIDATED = "validated"  # PoC confirmed exploitable
     FALSE_POSITIVE = "false_positive"  # PoC failed, not exploitable
     NEEDS_MANUAL = "needs_manual"  # Requires manual verification
-    DUPLICATE = "duplicate"        # Duplicate of another finding
+    DUPLICATE = "duplicate"  # Duplicate of another finding
 
 
 class VulnerabilityType(str, Enum):
     """Common vulnerability types for categorization."""
+
     # Injection
     SQLI = "sql_injection"
     XSS = "xss"
@@ -101,6 +104,7 @@ class VulnerabilityType(str, Enum):
 @dataclass
 class Evidence:
     """Evidence collected during finding discovery or validation."""
+
     request: Optional[str] = None
     response: Optional[str] = None
     screenshot_path: Optional[str] = None
@@ -114,6 +118,7 @@ class Evidence:
 @dataclass
 class PoCInfo:
     """Proof-of-concept validation information."""
+
     validated: bool = False
     validation_time: Optional[datetime] = None
     poc_code: str = ""
@@ -136,6 +141,7 @@ class Finding:
     - PoC validation status
     - Agent attribution
     """
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
 
     # Core identification
@@ -168,7 +174,7 @@ class Finding:
 
     # Agent attribution
     discovered_by: str = ""  # Agent ID
-    agent_name: str = ""     # Agent name
+    agent_name: str = ""  # Agent name
     discovered_at: datetime = field(default_factory=datetime.now)
 
     # Correlation
@@ -342,16 +348,18 @@ class FindingRepository:
         """Publish finding to message bus."""
         try:
             from aipt_v2.agents.shared.message_bus import (
-                get_message_bus,
                 AgentMessage,
-                MessageType,
                 MessagePriority,
+                MessageType,
+                get_message_bus,
             )
 
             bus = get_message_bus()
-            priority = MessagePriority.HIGH if finding.severity in [
-                FindingSeverity.CRITICAL, FindingSeverity.HIGH
-            ] else MessagePriority.NORMAL
+            priority = (
+                MessagePriority.HIGH
+                if finding.severity in [FindingSeverity.CRITICAL, FindingSeverity.HIGH]
+                else MessagePriority.NORMAL
+            )
 
             message = AgentMessage(
                 topic="findings.new",
@@ -436,10 +444,10 @@ class FindingRepository:
         """Publish validation result to message bus."""
         try:
             from aipt_v2.agents.shared.message_bus import (
-                get_message_bus,
                 AgentMessage,
-                MessageType,
                 MessagePriority,
+                MessageType,
+                get_message_bus,
             )
 
             bus = get_message_bus()
@@ -511,26 +519,17 @@ class FindingRepository:
     async def get_by_type(self, vuln_type: VulnerabilityType) -> list[Finding]:
         """Get findings by vulnerability type."""
         async with self._lock:
-            return [
-                f for f in self._findings.values()
-                if f.vuln_type == vuln_type
-            ]
+            return [f for f in self._findings.values() if f.vuln_type == vuln_type]
 
     async def get_by_status(self, status: FindingStatus) -> list[Finding]:
         """Get findings by validation status."""
         async with self._lock:
-            return [
-                f for f in self._findings.values()
-                if f.status == status
-            ]
+            return [f for f in self._findings.values() if f.status == status]
 
     async def get_by_agent(self, agent_id: str) -> list[Finding]:
         """Get findings discovered by a specific agent."""
         async with self._lock:
-            return [
-                f for f in self._findings.values()
-                if f.discovered_by == agent_id
-            ]
+            return [f for f in self._findings.values() if f.discovered_by == agent_id]
 
     async def get_validated(self) -> list[Finding]:
         """Get only validated findings."""
@@ -540,7 +539,8 @@ class FindingRepository:
         """Get findings pending PoC validation."""
         async with self._lock:
             return [
-                f for f in self._findings.values()
+                f
+                for f in self._findings.values()
                 if f.status in [FindingStatus.NEW, FindingStatus.PENDING_VALIDATION]
             ]
 
@@ -583,9 +583,8 @@ class FindingRepository:
 
         stats["validated_count"] = stats["by_status"].get("validated", 0)
         stats["false_positive_count"] = stats["by_status"].get("false_positive", 0)
-        stats["pending_validation"] = (
-            stats["by_status"].get("new", 0) +
-            stats["by_status"].get("pending", 0)
+        stats["pending_validation"] = stats["by_status"].get("new", 0) + stats["by_status"].get(
+            "pending", 0
         )
 
         return stats

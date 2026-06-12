@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 import threading
 from datetime import datetime, timezone
-from typing import Any, Literal, Optional
+from typing import Any, Literal
 from uuid import uuid4
 
 logger = logging.getLogger(__name__)
@@ -45,7 +45,9 @@ def reset_graph() -> None:
     logger.info("Agent graph reset")
 
 
-def register_root_agent(agent_id: str, agent_name: str, task: str, agent_instance: Any = None) -> None:
+def register_root_agent(
+    agent_id: str, agent_name: str, task: str, agent_instance: Any = None
+) -> None:
     """
     Register the root/main agent in the graph.
 
@@ -160,7 +162,9 @@ def _run_agent_in_thread(
         else:
             _agent_graph["nodes"][state.agent_id]["status"] = "completed"
 
-        _agent_graph["nodes"][state.agent_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _agent_graph["nodes"][state.agent_id]["finished_at"] = datetime.now(
+            timezone.utc
+        ).isoformat()
         _agent_graph["nodes"][state.agent_id]["result"] = result
 
         # Cleanup
@@ -173,7 +177,9 @@ def _run_agent_in_thread(
     except Exception as e:
         logger.exception(f"Agent {state.agent_id} failed")
         _agent_graph["nodes"][state.agent_id]["status"] = "error"
-        _agent_graph["nodes"][state.agent_id]["finished_at"] = datetime.now(timezone.utc).isoformat()
+        _agent_graph["nodes"][state.agent_id]["finished_at"] = datetime.now(
+            timezone.utc
+        ).isoformat()
         _agent_graph["nodes"][state.agent_id]["result"] = {"error": str(e)}
         _running_agents.pop(state.agent_id, None)
         _agent_instances.pop(state.agent_id, None)
@@ -281,12 +287,14 @@ def create_agent(
         }
 
         # Add delegation edge
-        _agent_graph["edges"].append({
-            "from": parent_id,
-            "to": agent_id,
-            "type": "delegation",
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _agent_graph["edges"].append(
+            {
+                "from": parent_id,
+                "to": agent_id,
+                "type": "delegation",
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         # Get inherited messages
         inherited_messages = []
@@ -404,15 +412,17 @@ def send_message_to_agent(
         _agent_messages[target_agent_id].append(message_data)
 
         # Record in graph edges
-        _agent_graph["edges"].append({
-            "from": sender_id,
-            "to": target_agent_id,
-            "type": "message",
-            "message_id": message_id,
-            "message_type": message_type,
-            "priority": priority,
-            "created_at": datetime.now(timezone.utc).isoformat(),
-        })
+        _agent_graph["edges"].append(
+            {
+                "from": sender_id,
+                "to": target_agent_id,
+                "type": "message",
+                "message_id": message_id,
+                "message_type": message_type,
+                "priority": priority,
+                "created_at": datetime.now(timezone.utc).isoformat(),
+            }
+        )
 
         message_data["delivered"] = True
 
@@ -572,17 +582,19 @@ def agent_finish(
             if parent_id not in _agent_messages:
                 _agent_messages[parent_id] = []
 
-            _agent_messages[parent_id].append({
-                "id": f"report_{uuid4().hex[:8]}",
-                "from": agent_id,
-                "to": parent_id,
-                "content": report_message,
-                "message_type": "completion_report",
-                "priority": "high",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "delivered": True,
-                "read": False,
-            })
+            _agent_messages[parent_id].append(
+                {
+                    "id": f"report_{uuid4().hex[:8]}",
+                    "from": agent_id,
+                    "to": parent_id,
+                    "content": report_message,
+                    "message_type": "completion_report",
+                    "priority": "high",
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "delivered": True,
+                    "read": False,
+                }
+            )
 
             parent_notified = True
             logger.info(f"Agent {agent_id} reported completion to parent {parent_id}")
@@ -632,9 +644,13 @@ def view_agent_graph(agent_state: Any) -> dict[str, Any]:
             indent = "  " * depth
 
             you_indicator = " ← (YOU)" if agent_id == current_agent_id else ""
-            skills_str = f" [skills: {', '.join(node.get('skills', []))}]" if node.get("skills") else ""
+            skills_str = (
+                f" [skills: {', '.join(node.get('skills', []))}]" if node.get("skills") else ""
+            )
 
-            structure_lines.append(f"{indent}* {node['name']} ({agent_id}){you_indicator}{skills_str}")
+            structure_lines.append(
+                f"{indent}* {node['name']} ({agent_id}){you_indicator}{skills_str}"
+            )
             structure_lines.append(f"{indent}  Task: {node['task'][:80]}...")
             structure_lines.append(f"{indent}  Status: {node['status']}")
 

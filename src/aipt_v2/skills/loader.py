@@ -17,12 +17,10 @@ Integrated from Strix's skills library.
 from __future__ import annotations
 
 import logging
-from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
 from jinja2 import Environment, FileSystemLoader, select_autoescape
-
 
 logger = logging.getLogger(__name__)
 
@@ -271,9 +269,7 @@ def load_skill(skill_name: str, context: dict[str, Any] | None = None) -> str | 
     return _get_loader().load(skill_name, context)
 
 
-def load_skills(
-    skill_names: list[str], context: dict[str, Any] | None = None
-) -> dict[str, str]:
+def load_skills(skill_names: list[str], context: dict[str, Any] | None = None) -> dict[str, str]:
     """
     Load multiple skills by name.
 
@@ -292,9 +288,7 @@ def load_skills(
     return _get_loader().load_multiple(skill_names, context)
 
 
-def load_skills_for_phase(
-    phase: str, vulnerability_hints: list[str] | None = None
-) -> str:
+def load_skills_for_phase(phase: str, vulnerability_hints: list[str] | None = None) -> str:
     """
     Load relevant skills for a pentest phase.
 

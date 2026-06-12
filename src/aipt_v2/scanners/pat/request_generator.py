@@ -4,21 +4,22 @@ PAT Request Generator
 Generates HTTP requests with payloads injected at various injection points.
 Handles URL parameters, POST body, headers, cookies, and more.
 """
+
 from __future__ import annotations
 
 import json
 import logging
 import re
 import urllib.parse
+from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Iterator, Optional
-from copy import deepcopy
 
 from .config import (
-    InjectionPoint,
-    VulnerabilityType,
-    PATScanConfig,
     EnhancedPATScanConfig,
+    InjectionPoint,
+    PATScanConfig,
+    VulnerabilityType,
 )
 from .payload_parser import ParsedPayload
 
@@ -43,6 +44,7 @@ def _get_sqli_mutator(dbms: str = "mysql"):
     if _sqli_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.sqli_mutations import SQLiMutator
+
             _sqli_mutator = SQLiMutator
         except ImportError:
             return None
@@ -55,6 +57,7 @@ def _get_xss_mutator(context: str = "html_body"):
     if _xss_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.xss_mutations import XSSMutator
+
             _xss_mutator = XSSMutator
         except ImportError:
             return None
@@ -67,6 +70,7 @@ def _get_cmd_mutator(os_type: str = "linux"):
     if _cmd_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.cmd_mutations import CMDMutator
+
             _cmd_mutator = CMDMutator
         except ImportError:
             return None
@@ -79,6 +83,7 @@ def _get_http_smuggling_mutator():
     if _http_smuggling_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import HTTPSmugglingMutator
+
             _http_smuggling_mutator = HTTPSmugglingMutator
         except ImportError:
             return None
@@ -90,7 +95,10 @@ def _get_prototype_pollution_mutator():
     global _prototype_pollution_mutator
     if _prototype_pollution_mutator is None:
         try:
-            from aipt_v2.exploitation.mutations.specialized_mutations import PrototypePollutionMutator
+            from aipt_v2.exploitation.mutations.specialized_mutations import (
+                PrototypePollutionMutator,
+            )
+
             _prototype_pollution_mutator = PrototypePollutionMutator
         except ImportError:
             return None
@@ -103,6 +111,7 @@ def _get_cache_poison_mutator():
     if _cache_poison_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import CachePoisonMutator
+
             _cache_poison_mutator = CachePoisonMutator
         except ImportError:
             return None
@@ -115,6 +124,7 @@ def _get_hpp_mutator():
     if _hpp_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import HPPMutator
+
             _hpp_mutator = HPPMutator
         except ImportError:
             return None
@@ -127,6 +137,7 @@ def _get_ssrf_mutator():
     if _ssrf_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import SSRFMutator
+
             _ssrf_mutator = SSRFMutator
         except ImportError:
             return None
@@ -139,6 +150,7 @@ def _get_ssti_mutator(engine: str = "jinja2"):
     if _ssti_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import SSTIMutator
+
             _ssti_mutator = SSTIMutator
         except ImportError:
             return None
@@ -151,6 +163,7 @@ def _get_nosql_mutator():
     if _nosql_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import NoSQLMutator
+
             _nosql_mutator = NoSQLMutator
         except ImportError:
             return None
@@ -163,6 +176,7 @@ def _get_cors_mutator():
     if _cors_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import CORSMutator
+
             _cors_mutator = CORSMutator
         except ImportError:
             return None
@@ -175,10 +189,12 @@ def _get_race_condition_mutator():
     if _race_condition_mutator is None:
         try:
             from aipt_v2.exploitation.mutations.specialized_mutations import RaceConditionMutator
+
             _race_condition_mutator = RaceConditionMutator
         except ImportError:
             return None
     return _race_condition_mutator()
+
 
 logger = logging.getLogger(__name__)
 
@@ -186,6 +202,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class InjectionRequest:
     """An HTTP request with a payload injected."""
+
     # Request details
     method: str = "GET"
     url: str = ""
@@ -196,8 +213,8 @@ class InjectionRequest:
     # Injection metadata
     payload: Optional[ParsedPayload] = None
     injection_point: InjectionPoint = InjectionPoint.URL_PARAM
-    parameter_name: str = ""              # Which parameter was injected
-    original_value: str = ""              # Value that was replaced
+    parameter_name: str = ""  # Which parameter was injected
+    original_value: str = ""  # Value that was replaced
 
     # Request settings
     timeout: float = 30.0
@@ -244,7 +261,10 @@ class RequestGenerator:
     ENCODINGS = {
         "url": lambda x: urllib.parse.quote(x, safe=""),
         "url_plus": lambda x: urllib.parse.quote_plus(x),
-        "html": lambda x: x.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;"),
+        "html": lambda x: x.replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;"),
         "double_url": lambda x: urllib.parse.quote(urllib.parse.quote(x, safe=""), safe=""),
         "none": lambda x: x,
     }
@@ -294,7 +314,9 @@ class RequestGenerator:
         if not parameters:
             parameters = self._detect_parameters(target_url, body)
 
-        logger.debug(f"Generating requests for {len(payloads)} payloads × {len(parameters)} params × {len(injection_points)} points")
+        logger.debug(
+            f"Generating requests for {len(payloads)} payloads × {len(parameters)} params × {len(injection_points)} points"
+        )
 
         for payload in payloads:
             for param in parameters:
@@ -442,14 +464,16 @@ class RequestGenerator:
 
         # Rebuild query string
         query = urllib.parse.urlencode(params, doseq=True)
-        new_url = urllib.parse.urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            parsed.path,
-            parsed.params,
-            query,
-            parsed.fragment,
-        ))
+        new_url = urllib.parse.urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                parsed.path,
+                parsed.params,
+                query,
+                parsed.fragment,
+            )
+        )
 
         return new_url, original_value
 
@@ -471,14 +495,16 @@ class RequestGenerator:
                 break
 
         new_path = "/".join(path_segments)
-        new_url = urllib.parse.urlunparse((
-            parsed.scheme,
-            parsed.netloc,
-            new_path,
-            parsed.params,
-            parsed.query,
-            parsed.fragment,
-        ))
+        new_url = urllib.parse.urlunparse(
+            (
+                parsed.scheme,
+                parsed.netloc,
+                new_path,
+                parsed.params,
+                parsed.query,
+                parsed.fragment,
+            )
+        )
 
         return new_url, original_value
 
@@ -621,14 +647,16 @@ class RequestGenerator:
         """
         requests = []
         for _ in range(count):
-            requests.append(InjectionRequest(
-                method=method,
-                url=target_url,
-                headers=headers or {},
-                body=body,
-                timeout=self.config.executor.timeout,
-                follow_redirects=self.config.executor.follow_redirects,
-            ))
+            requests.append(
+                InjectionRequest(
+                    method=method,
+                    url=target_url,
+                    headers=headers or {},
+                    body=body,
+                    timeout=self.config.executor.timeout,
+                    follow_redirects=self.config.executor.follow_redirects,
+                )
+            )
         return requests
 
     def create_time_based_request(
@@ -812,7 +840,11 @@ class EnhancedRequestGenerator(RequestGenerator):
                 category=payload.category,
                 subcategory=payload.subcategory,
                 technique=payload.technique,
-                source_file=f"{payload.source_file}+{mutation_name}" if payload.source_file else mutation_name,
+                source_file=(
+                    f"{payload.source_file}+{mutation_name}"
+                    if payload.source_file
+                    else mutation_name
+                ),
                 tags=payload.tags + [mutation_name] if payload.tags else [mutation_name],
             )
             variants.append(variant)
@@ -883,11 +915,17 @@ class EnhancedRequestGenerator(RequestGenerator):
             mutator = _get_sqli_mutator("generic")
             if mutator:
                 all_mutations = mutator.mutate(payload_content)
-                mutations = [m for m in all_mutations if "encode" in m[1].lower() or "comment" in m[1].lower()]
+                mutations = [
+                    m
+                    for m in all_mutations
+                    if "encode" in m[1].lower() or "comment" in m[1].lower()
+                ]
 
         # ===== TEMPLATE INJECTION =====
         elif vuln_type == VulnerabilityType.SSTI:
-            mutator = _get_ssti_mutator(getattr(self.enhanced_config, 'mutation_template_engine', 'jinja2'))
+            mutator = _get_ssti_mutator(
+                getattr(self.enhanced_config, "mutation_template_engine", "jinja2")
+            )
             if mutator:
                 mutations = mutator.mutate(payload_content)
 
@@ -953,10 +991,16 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.XXE:
             # XXE uses encoding mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
                 (payload_content.replace("SYSTEM", "PUBLIC"), "public_entity"),
-                (payload_content.replace("file://", "php://filter/read=convert.base64-encode/resource="), "php_filter"),
+                (
+                    payload_content.replace(
+                        "file://", "php://filter/read=convert.base64-encode/resource="
+                    ),
+                    "php_filter",
+                ),
             ]
 
         # ===== FILE & PATH ATTACKS =====
@@ -972,6 +1016,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.FILE_UPLOAD:
             # File upload uses encoding mutations
             import urllib.parse
+
             mutations = [
                 (payload_content + "%00.jpg", "null_byte_ext"),
                 (payload_content.replace(".php", ".pHp"), "case_variation"),
@@ -995,6 +1040,7 @@ class EnhancedRequestGenerator(RequestGenerator):
 
         elif vuln_type == VulnerabilityType.CRLF:
             import urllib.parse
+
             mutations = [
                 (payload_content.replace("\r\n", "%0d%0a"), "percent_encode"),
                 (payload_content.replace("\r\n", "%0D%0A"), "upper_percent"),
@@ -1011,6 +1057,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.LATEX_INJECTION:
             # LaTeX uses encoding mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
                 (payload_content.replace("\\", "\\\\"), "double_backslash"),
@@ -1026,6 +1073,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.XSLT_INJECTION:
             # XSLT uses XML-like mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
                 (payload_content.replace("&", "&amp;"), "xml_entity"),
@@ -1043,6 +1091,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.JAVA_RMI:
             # Java RMI uses serialization mutations
             import base64
+
             mutations = [
                 (base64.b64encode(payload_content.encode()).decode(), "base64_encode"),
             ]
@@ -1064,8 +1113,14 @@ class EnhancedRequestGenerator(RequestGenerator):
             # IDOR uses numeric/encoding variations
             mutations = [
                 (payload_content + "1", "increment"),
-                (str(int(payload_content) - 1) if payload_content.isdigit() else payload_content, "decrement"),
-                (payload_content.zfill(10) if payload_content.isdigit() else payload_content, "zero_pad"),
+                (
+                    str(int(payload_content) - 1) if payload_content.isdigit() else payload_content,
+                    "decrement",
+                ),
+                (
+                    payload_content.zfill(10) if payload_content.isdigit() else payload_content,
+                    "zero_pad",
+                ),
             ]
 
         elif vuln_type == VulnerabilityType.MASS_ASSIGNMENT:
@@ -1104,6 +1159,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.SAML_INJECTION:
             # SAML uses XML encoding mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
                 (payload_content.replace("&", "&amp;"), "xml_entity"),
@@ -1140,6 +1196,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.GWT_VULN:
             # GWT uses base64/serialization mutations
             import base64
+
             mutations = [
                 (base64.b64encode(payload_content.encode()).decode(), "base64_encode"),
             ]
@@ -1151,6 +1208,7 @@ class EnhancedRequestGenerator(RequestGenerator):
         elif vuln_type == VulnerabilityType.CVE_EXPLOITS:
             # CVE exploits use encoding mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
             ]
@@ -1167,9 +1225,13 @@ class EnhancedRequestGenerator(RequestGenerator):
         else:
             # For any unhandled types, apply basic encoding mutations
             import urllib.parse
+
             mutations = [
                 (urllib.parse.quote(payload_content, safe=""), "url_encode"),
-                (urllib.parse.quote(urllib.parse.quote(payload_content, safe=""), safe=""), "double_url_encode"),
+                (
+                    urllib.parse.quote(urllib.parse.quote(payload_content, safe=""), safe=""),
+                    "double_url_encode",
+                ),
             ]
 
         return mutations
@@ -1180,10 +1242,13 @@ class EnhancedRequestGenerator(RequestGenerator):
 
         # URL encoding
         import urllib.parse
+
         mutations.append((urllib.parse.quote(payload, safe=""), "url_encode"))
 
         # Double URL encoding
-        mutations.append((urllib.parse.quote(urllib.parse.quote(payload, safe=""), safe=""), "double_url_encode"))
+        mutations.append(
+            (urllib.parse.quote(urllib.parse.quote(payload, safe=""), safe=""), "double_url_encode")
+        )
 
         # Dot alternatives
         if ".." in payload:
@@ -1225,6 +1290,7 @@ class EnhancedRequestGenerator(RequestGenerator):
     def _hash_payload(self, payload: str) -> str:
         """Generate hash for payload deduplication."""
         import hashlib
+
         return hashlib.md5(payload.encode()).hexdigest()
 
     def get_mutation_stats(self) -> dict:

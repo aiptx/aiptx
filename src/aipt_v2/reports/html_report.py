@@ -12,8 +12,8 @@ Supports two formats:
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from .generator import ReportData
     from ..pipeline.persistence import CanonicalFindings
+    from .generator import ReportData
 
 
 def generate_html_report(data: "ReportData") -> str:
@@ -393,7 +393,6 @@ def generate_html_report_v2(
 
     This is the preferred format for the new pipeline.
     """
-    from ..models.finding_v2 import SeverityV2, VerificationStatusV2
 
     severity_counts = data.get_severity_counts()
     risk_score = data.get_risk_score()
@@ -451,15 +450,19 @@ def generate_html_report_v2(
     for name, entry in canonical.tool_status.items():
         status_color = "#22c55e" if entry.status == "completed" else "#dc2626"
         status_icon = "✓" if entry.status == "completed" else "✗"
-        error_html = f'<span class="tool-error">{_escape_html(entry.error or "")}</span>' if entry.error else ""
-        tool_status_html += f'''
+        error_html = (
+            f'<span class="tool-error">{_escape_html(entry.error or "")}</span>'
+            if entry.error
+            else ""
+        )
+        tool_status_html += f"""
         <div class="tool-status-item">
             <span class="tool-name">{_escape_html(name)}</span>
             <span class="tool-status" style="color: {status_color};">{status_icon} {entry.status}</span>
             <span class="tool-count">{entry.finding_count} findings</span>
             {error_html}
         </div>
-        '''
+        """
 
     html = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1222,14 +1225,13 @@ def _build_findings_section_v2(
 
         # Build verification badge with icon
         v_label, v_bg, v_color = verification_styles.get(
-            finding.verification_status,
-            ("Unknown", "#6b7280", "white")
+            finding.verification_status, ("Unknown", "#6b7280", "white")
         )
-        verification_badge = f'''
+        verification_badge = f"""
         <span class="badge verification-badge" style="background: {v_bg}; color: {v_color};">
             {v_label}
         </span>
-        '''
+        """
 
         # Evidence section with enhanced formatting
         evidence_html = ""
@@ -1238,12 +1240,14 @@ def _build_findings_section_v2(
 
             # Text evidence
             if finding.evidence:
-                evidence_parts.append(f'''
+                evidence_parts.append(
+                    f"""
                 <div class="evidence-block">
                     <div class="evidence-header">📋 Evidence</div>
                     <pre class="evidence-content">{_escape_html(finding.evidence[:3000])}</pre>
                 </div>
-                ''')
+                """
+                )
 
             # HTTP Request/Response
             if finding.raw_request or finding.raw_response:
@@ -1251,27 +1255,28 @@ def _build_findings_section_v2(
                 http_evidence += '<div class="evidence-header">🔗 HTTP Exchange</div>'
 
                 if finding.raw_request:
-                    http_evidence += f'''
+                    http_evidence += f"""
                     <div class="http-block">
                         <div class="http-label">Request</div>
                         <pre class="http-content">{_escape_html(finding.raw_request[:2000])}</pre>
                     </div>
-                    '''
+                    """
 
                 if finding.raw_response:
-                    http_evidence += f'''
+                    http_evidence += f"""
                     <div class="http-block">
                         <div class="http-label">Response</div>
                         <pre class="http-content">{_escape_html(finding.raw_response[:2000])}</pre>
                     </div>
-                    '''
+                    """
 
-                http_evidence += '</div>'
+                http_evidence += "</div>"
                 evidence_parts.append(http_evidence)
 
             # PoC Command (curl)
             if finding.poc_command:
-                evidence_parts.append(f'''
+                evidence_parts.append(
+                    f"""
                 <div class="poc-block">
                     <div class="evidence-header">🔧 Reproduction Command</div>
                     <div class="copy-wrapper">
@@ -1279,7 +1284,8 @@ def _build_findings_section_v2(
                         <button class="copy-btn" onclick="copyToClipboard(this)" data-text="{_escape_html(finding.poc_command)}">📋 Copy</button>
                     </div>
                 </div>
-                ''')
+                """
+                )
 
             # Verification evidence list
             if finding.verification_evidence:
@@ -1287,84 +1293,95 @@ def _build_findings_section_v2(
                 v_evidence += '<div class="evidence-header">🔍 Verification Evidence</div>'
                 v_evidence += '<ul class="v-evidence-list">'
                 for ve in finding.verification_evidence[:5]:
-                    v_evidence += f'<li>{_escape_html(ve)}</li>'
-                v_evidence += '</ul></div>'
+                    v_evidence += f"<li>{_escape_html(ve)}</li>"
+                v_evidence += "</ul></div>"
                 evidence_parts.append(v_evidence)
 
             # Screenshots (embedded as data URIs)
-            if hasattr(finding, 'screenshots') and finding.screenshots:
+            if hasattr(finding, "screenshots") and finding.screenshots:
                 screenshot_html = '<div class="screenshots">'
                 screenshot_html += '<div class="evidence-header">📸 Screenshots</div>'
                 screenshot_html += '<div class="screenshot-gallery">'
                 for idx, screenshot in enumerate(finding.screenshots[:3]):
                     if isinstance(screenshot, dict):
-                        data_uri = screenshot.get('data_uri', '')
-                        caption = screenshot.get('description', f'Screenshot {idx + 1}')
+                        data_uri = screenshot.get("data_uri", "")
+                        caption = screenshot.get("description", f"Screenshot {idx + 1}")
                     else:
                         data_uri = screenshot
-                        caption = f'Screenshot {idx + 1}'
+                        caption = f"Screenshot {idx + 1}"
                     if data_uri:
-                        screenshot_html += f'''
+                        screenshot_html += f"""
                         <div class="screenshot-item">
                             <img src="{data_uri}" alt="{_escape_html(caption)}" class="screenshot-img" onclick="openLightbox(this.src)"/>
                             <div class="screenshot-caption">{_escape_html(caption)}</div>
                         </div>
-                        '''
-                screenshot_html += '</div></div>'
+                        """
+                screenshot_html += "</div></div>"
                 evidence_parts.append(screenshot_html)
 
             if evidence_parts:
-                evidence_html = f'''
+                evidence_html = f"""
                 <div class="evidence-section">
                     {''.join(evidence_parts)}
                 </div>
-                '''
+                """
 
         # Remediation
         remediation_html = ""
         if finding.remediation and include_remediation:
-            remediation_html = f'''
+            remediation_html = f"""
             <div class="remediation">
                 <div class="evidence-header">🛠 Remediation</div>
                 <p>{_escape_html(finding.remediation)}</p>
             </div>
-            '''
+            """
 
         # AI Analysis
         ai_html = ""
         if finding.ai_reasoning and include_ai_reasoning:
-            ai_html = f'''
+            ai_html = f"""
             <div class="ai-reasoning">
                 <div class="evidence-header">🤖 AI Analysis</div>
                 <p>{_escape_html(finding.ai_reasoning[:500])}</p>
             </div>
-            '''
+            """
 
         # CVE/CWE references
         refs_html = ""
         if finding.cve_ids or finding.cwe_id:
             refs_parts = []
             if finding.cve_ids:
-                cve_links = ', '.join([f'<a href="https://nvd.nist.gov/vuln/detail/{cve}" target="_blank">{cve}</a>' for cve in finding.cve_ids[:3]])
-                refs_parts.append(f'<span class="ref-item"><strong>CVE:</strong> {cve_links}</span>')
+                cve_links = ", ".join(
+                    [
+                        f'<a href="https://nvd.nist.gov/vuln/detail/{cve}" target="_blank">{cve}</a>'
+                        for cve in finding.cve_ids[:3]
+                    ]
+                )
+                refs_parts.append(
+                    f'<span class="ref-item"><strong>CVE:</strong> {cve_links}</span>'
+                )
             if finding.cwe_id:
-                refs_parts.append(f'<span class="ref-item"><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/{finding.cwe_id.replace("CWE-", "")}.html" target="_blank">{finding.cwe_id}</a></span>')
+                refs_parts.append(
+                    f'<span class="ref-item"><strong>CWE:</strong> <a href="https://cwe.mitre.org/data/definitions/{finding.cwe_id.replace("CWE-", "")}.html" target="_blank">{finding.cwe_id}</a></span>'
+                )
             if finding.cvss_score:
-                refs_parts.append(f'<span class="ref-item"><strong>CVSS:</strong> {finding.cvss_score}</span>')
+                refs_parts.append(
+                    f'<span class="ref-item"><strong>CVSS:</strong> {finding.cvss_score}</span>'
+                )
             refs_html = f'<div class="references">{" | ".join(refs_parts)}</div>'
 
         # Confidence indicator
         confidence_html = ""
-        if hasattr(finding, 'ai_confidence') and finding.ai_confidence:
+        if hasattr(finding, "ai_confidence") and finding.ai_confidence:
             conf_pct = int(finding.ai_confidence * 100)
             conf_color = "#22c55e" if conf_pct >= 80 else "#eab308" if conf_pct >= 50 else "#f97316"
-            confidence_html = f'''
+            confidence_html = f"""
             <div class="confidence-indicator">
                 <span style="color: {conf_color};">●</span> Confidence: {conf_pct}%
             </div>
-            '''
+            """
 
-        findings_html += f'''
+        findings_html += f"""
         <div class="finding {severity_class}" data-verification="{finding.verification_status.value}">
             <h3>{i}. {_escape_html(finding.title)}</h3>
             <div class="finding-meta">
@@ -1385,11 +1402,11 @@ def _build_findings_section_v2(
                 {ai_html}
             </div>
         </div>
-        '''
+        """
 
     collapsed_class = "collapsed" if collapsed else ""
 
-    return f'''
+    return f"""
     <div class="findings-section">
         <div id="{section_id}-header" class="section-header {section_id} {collapsed_class}" onclick="toggleSection('{section_id}')">
             <h2>
@@ -1402,4 +1419,4 @@ def _build_findings_section_v2(
             {findings_html}
         </div>
     </div>
-    '''
+    """

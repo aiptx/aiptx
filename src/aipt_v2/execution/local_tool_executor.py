@@ -17,18 +17,18 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, AsyncIterator
-from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
 
-from .tool_registry import ToolRegistry, ToolConfig, ToolPhase, get_registry
-from .parser import OutputParser, Finding
-from .terminal import Terminal, ExecutionResult
+from .parser import Finding, OutputParser
+from .terminal import ExecutionResult, Terminal
+from .tool_registry import ToolConfig, ToolPhase, ToolRegistry, get_registry
 
 logger = logging.getLogger(__name__)
 
 
 class ExecutionState(str, Enum):
     """State of a tool execution."""
+
     PENDING = "pending"
     RUNNING = "running"
     COMPLETED = "completed"
@@ -42,6 +42,7 @@ class ToolExecution:
     """
     Represents a single tool execution with full lifecycle tracking.
     """
+
     id: str
     tool: ToolConfig
     target: str
@@ -95,6 +96,7 @@ class ExecutionBatch:
     """
     A batch of tool executions to run together.
     """
+
     id: str
     phase: ToolPhase
     executions: List[ToolExecution] = field(default_factory=list)
@@ -266,7 +268,7 @@ class LocalToolExecutor:
             except Exception as e:
                 if attempt < self.max_retries:
                     logger.warning(f"Retry {attempt + 1}/{self.max_retries} for {tool_name}: {e}")
-                    await asyncio.sleep(2 ** attempt)  # Exponential backoff
+                    await asyncio.sleep(2**attempt)  # Exponential backoff
                 else:
                     execution.state = ExecutionState.FAILED
                     execution.error = str(e)
@@ -534,10 +536,7 @@ class LocalToolExecutor:
         )
         batch.start_time = datetime.utcnow()
 
-        tasks = [
-            self.run_tool(tool.name, target)
-            for tool in tools
-        ]
+        tasks = [self.run_tool(tool.name, target) for tool in tools]
 
         batch.executions = await asyncio.gather(*tasks, return_exceptions=False)
         batch.end_time = datetime.utcnow()

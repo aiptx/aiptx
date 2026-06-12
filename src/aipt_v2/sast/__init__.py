@@ -32,25 +32,25 @@ from aipt_v2.sast.analyzer import (
 )
 from aipt_v2.sast.parsers import (
     BaseParser,
+    GoParser,
+    JavaParser,
+    JavaScriptParser,
     ParsedFile,
     PythonParser,
-    JavaScriptParser,
-    JavaParser,
-    GoParser,
     get_parser_for_file,
     get_supported_extensions,
 )
 from aipt_v2.sast.rules import (
-    Rule,
-    RuleMatch,
-    RuleSeverity,
-    RuleCategory,
-    RuleSet,
-    SecretDetectionRules,
-    PythonSecurityRules,
+    GoSecurityRules,
     JavaScriptSecurityRules,
     JavaSecurityRules,
-    GoSecurityRules,
+    PythonSecurityRules,
+    Rule,
+    RuleCategory,
+    RuleMatch,
+    RuleSet,
+    RuleSeverity,
+    SecretDetectionRules,
     get_rules_for_language,
 )
 

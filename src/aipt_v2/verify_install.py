@@ -25,27 +25,26 @@ import importlib
 import json
 import os
 import shutil
-import subprocess
 import sys
 import time
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Any
+from typing import Dict, List, Optional
 
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
-from rich.table import Table
 from rich.progress import Progress, SpinnerColumn, TextColumn
-from rich import box
-
+from rich.table import Table
 
 console = Console()
 
 
 class CheckStatus(Enum):
     """Status of a verification check."""
+
     PASS = "pass"
     WARN = "warn"
     FAIL = "fail"
@@ -55,6 +54,7 @@ class CheckStatus(Enum):
 @dataclass
 class CheckResult:
     """Result of a single verification check."""
+
     name: str
     status: CheckStatus
     message: str
@@ -66,6 +66,7 @@ class CheckResult:
 @dataclass
 class VerificationReport:
     """Complete verification report."""
+
     timestamp: datetime = field(default_factory=datetime.now)
     system_info: Dict[str, str] = field(default_factory=dict)
     checks: List[CheckResult] = field(default_factory=list)
@@ -114,12 +115,14 @@ class InstallVerifier:
     async def run_all_checks(self) -> VerificationReport:
         """Run all verification checks."""
         console.print()
-        console.print(Panel(
-            "[bold cyan]AIPTX Installation Verification[/bold cyan]\n\n"
-            "Running comprehensive checks to verify your installation...",
-            title="🔍 Verification",
-            border_style="cyan"
-        ))
+        console.print(
+            Panel(
+                "[bold cyan]AIPTX Installation Verification[/bold cyan]\n\n"
+                "Running comprehensive checks to verify your installation...",
+                title="🔍 Verification",
+                border_style="cyan",
+            )
+        )
         console.print()
 
         # Collect system info
@@ -140,11 +143,13 @@ class InstallVerifier:
         ]
 
         if not self.quick:
-            checks.extend([
-                ("All Security Tools", self._check_all_tools),
-                ("Network Connectivity", self._check_network),
-                ("LLM Connectivity", self._check_llm_connectivity),
-            ])
+            checks.extend(
+                [
+                    ("All Security Tools", self._check_all_tools),
+                    ("Network Connectivity", self._check_network),
+                    ("LLM Connectivity", self._check_llm_connectivity),
+                ]
+            )
 
         with Progress(
             SpinnerColumn(),
@@ -162,12 +167,14 @@ class InstallVerifier:
                     result.duration_ms = (time.time() - start_time) * 1000
                     self.report.add_check(result)
                 except Exception as e:
-                    self.report.add_check(CheckResult(
-                        name=check_name,
-                        status=CheckStatus.FAIL,
-                        message=f"Check failed with error: {str(e)}",
-                        duration_ms=(time.time() - start_time) * 1000,
-                    ))
+                    self.report.add_check(
+                        CheckResult(
+                            name=check_name,
+                            status=CheckStatus.FAIL,
+                            message=f"Check failed with error: {str(e)}",
+                            duration_ms=(time.time() - start_time) * 1000,
+                        )
+                    )
 
                 progress.advance(task)
 
@@ -222,8 +229,14 @@ class InstallVerifier:
     async def _check_python_deps(self) -> CheckResult:
         """Check required Python dependencies."""
         required = [
-            "rich", "typer", "httpx", "pydantic", "litellm",
-            "sqlalchemy", "structlog", "fastapi",
+            "rich",
+            "typer",
+            "httpx",
+            "pydantic",
+            "litellm",
+            "sqlalchemy",
+            "structlog",
+            "fastapi",
         ]
 
         missing = []
@@ -251,6 +264,7 @@ class InstallVerifier:
         """Check AIPTX package installation."""
         try:
             import aipt_v2
+
             version = getattr(aipt_v2, "__version__", "unknown")
             return CheckResult(
                 name="AIPTX Package",
@@ -630,12 +644,7 @@ class InstallVerifier:
             else:
                 status = "[dim]○ SKIP[/dim]"
 
-            table.add_row(
-                check.name,
-                status,
-                check.message,
-                f"{check.duration_ms:.0f}ms"
-            )
+            table.add_row(check.name, status, check.message, f"{check.duration_ms:.0f}ms")
 
         console.print(table)
 
@@ -644,23 +653,29 @@ class InstallVerifier:
         console.print()
 
         if s["failed"] == 0:
-            console.print(Panel(
-                f"[bold green]✓ Verification Passed[/bold green]\n\n"
-                f"Passed: {s['passed']}  Warnings: {s['warnings']}  Skipped: {s['skipped']}",
-                title="Summary",
-                border_style="green"
-            ))
+            console.print(
+                Panel(
+                    f"[bold green]✓ Verification Passed[/bold green]\n\n"
+                    f"Passed: {s['passed']}  Warnings: {s['warnings']}  Skipped: {s['skipped']}",
+                    title="Summary",
+                    border_style="green",
+                )
+            )
         else:
-            console.print(Panel(
-                f"[bold red]✗ Verification Failed[/bold red]\n\n"
-                f"Passed: {s['passed']}  Warnings: {s['warnings']}  "
-                f"[red]Failed: {s['failed']}[/red]  Skipped: {s['skipped']}",
-                title="Summary",
-                border_style="red"
-            ))
+            console.print(
+                Panel(
+                    f"[bold red]✗ Verification Failed[/bold red]\n\n"
+                    f"Passed: {s['passed']}  Warnings: {s['warnings']}  "
+                    f"[red]Failed: {s['failed']}[/red]  Skipped: {s['skipped']}",
+                    title="Summary",
+                    border_style="red",
+                )
+            )
 
             # Show fix commands
-            failed_checks = [c for c in self.report.checks if c.status == CheckStatus.FAIL and c.fix_command]
+            failed_checks = [
+                c for c in self.report.checks if c.status == CheckStatus.FAIL and c.fix_command
+            ]
             if failed_checks:
                 console.print("\n[bold]Suggested fixes:[/bold]")
                 for check in failed_checks:
@@ -682,13 +697,15 @@ class InstallVerifier:
         for key, value in self.report.system_info.items():
             lines.append(f"- **{key}**: {value}")
 
-        lines.extend([
-            "",
-            "## Verification Checks",
-            "",
-            "| Check | Status | Message |",
-            "|-------|--------|---------|",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Verification Checks",
+                "",
+                "| Check | Status | Message |",
+                "|-------|--------|---------|",
+            ]
+        )
 
         for check in self.report.checks:
             status_emoji = {
@@ -698,31 +715,37 @@ class InstallVerifier:
                 CheckStatus.SKIP: "⏭️",
             }.get(check.status, "?")
 
-            lines.append(f"| {check.name} | {status_emoji} {check.status.value.upper()} | {check.message} |")
+            lines.append(
+                f"| {check.name} | {status_emoji} {check.status.value.upper()} | {check.message} |"
+            )
 
         s = self.report.summary
-        lines.extend([
-            "",
-            "## Summary",
-            "",
-            f"- **Total Checks**: {s['total']}",
-            f"- **Passed**: {s['passed']}",
-            f"- **Warnings**: {s['warnings']}",
-            f"- **Failed**: {s['failed']}",
-            f"- **Skipped**: {s['skipped']}",
-            "",
-        ])
+        lines.extend(
+            [
+                "",
+                "## Summary",
+                "",
+                f"- **Total Checks**: {s['total']}",
+                f"- **Passed**: {s['passed']}",
+                f"- **Warnings**: {s['warnings']}",
+                f"- **Failed**: {s['failed']}",
+                f"- **Skipped**: {s['skipped']}",
+                "",
+            ]
+        )
 
         # Tool status
         if self.report.tool_status:
             installed = sum(1 for v in self.report.tool_status.values() if v)
             total = len(self.report.tool_status)
-            lines.extend([
-                "## Security Tools",
-                "",
-                f"Installed: {installed}/{total} ({installed/total*100:.0f}%)",
-                "",
-            ])
+            lines.extend(
+                [
+                    "## Security Tools",
+                    "",
+                    f"Installed: {installed}/{total} ({installed/total*100:.0f}%)",
+                    "",
+                ]
+            )
 
         return "\n".join(lines)
 
@@ -763,28 +786,19 @@ def main():
     import argparse
 
     parser = argparse.ArgumentParser(description="Verify AIPTX installation")
-    parser.add_argument(
-        "--quick", "-q",
-        action="store_true",
-        help="Run quick checks only"
-    )
-    parser.add_argument(
-        "--fix",
-        action="store_true",
-        help="Attempt to auto-fix issues"
-    )
-    parser.add_argument(
-        "--report", "-r",
-        help="Save markdown report to file"
-    )
+    parser.add_argument("--quick", "-q", action="store_true", help="Run quick checks only")
+    parser.add_argument("--fix", action="store_true", help="Attempt to auto-fix issues")
+    parser.add_argument("--report", "-r", help="Save markdown report to file")
 
     args = parser.parse_args()
 
-    exit_code = asyncio.run(verify_installation(
-        quick=args.quick,
-        auto_fix=args.fix,
-        report_file=args.report,
-    ))
+    exit_code = asyncio.run(
+        verify_installation(
+            quick=args.quick,
+            auto_fix=args.fix,
+            report_file=args.report,
+        )
+    )
 
     sys.exit(exit_code)
 

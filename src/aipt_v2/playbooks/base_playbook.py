@@ -7,8 +7,8 @@ penetration testing.
 """
 
 from dataclasses import dataclass, field
-from typing import List, Optional
 from enum import Enum
+from typing import List, Optional
 
 
 class PlaybookMode(str, Enum):

@@ -8,28 +8,51 @@ this script opens the browser to the yank page for each affected version.
 Run: python3 scripts/yank_pypi_versions.py
 """
 
-import webbrowser
 import time
+import webbrowser
 
 # All affected versions with hardcoded credentials
 AFFECTED_VERSIONS = [
     # v2.x series
-    "2.0.0", "2.0.1", "2.0.2", "2.0.3", "2.0.4",
-    "2.0.5", "2.0.6", "2.0.7", "2.0.9", "2.0.10",
+    "2.0.0",
+    "2.0.1",
+    "2.0.2",
+    "2.0.3",
+    "2.0.4",
+    "2.0.5",
+    "2.0.6",
+    "2.0.7",
+    "2.0.9",
+    "2.0.10",
     # v3.x series
-    "3.0.0", "3.0.1", "3.0.2", "3.0.3",
-    "3.1.0", "3.1.1", "3.1.2",
-    "3.2.0", "3.2.1",
-    "3.3.0", "3.3.1",
-    "3.4.0", "3.4.1", "3.4.2", "3.4.3", "3.4.4", "3.4.5",
-    "3.5.1", "3.5.2",
+    "3.0.0",
+    "3.0.1",
+    "3.0.2",
+    "3.0.3",
+    "3.1.0",
+    "3.1.1",
+    "3.1.2",
+    "3.2.0",
+    "3.2.1",
+    "3.3.0",
+    "3.3.1",
+    "3.4.0",
+    "3.4.1",
+    "3.4.2",
+    "3.4.3",
+    "3.4.4",
+    "3.4.5",
+    "3.5.1",
+    "3.5.2",
     "3.6.0",
     # v4.x and v5.x
-    "4.0.0", "4.0.1",
+    "4.0.0",
+    "4.0.1",
     "5.0.0",
 ]
 
 PACKAGE_NAME = "aiptx"
+
 
 def main():
     print("=" * 60)
@@ -55,7 +78,7 @@ def main():
 
     response = input("Open each URL in browser? (y/n): ").strip().lower()
 
-    if response == 'y':
+    if response == "y":
         print()
         print("Opening browser tabs (one every 2 seconds to avoid rate limiting)...")
         print()
@@ -78,6 +101,7 @@ def main():
         print()
         print("Alternative: Open PyPI manage page directly:")
         print(f"  https://pypi.org/manage/project/{PACKAGE_NAME}/releases/")
+
 
 if __name__ == "__main__":
     main()

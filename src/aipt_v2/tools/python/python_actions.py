@@ -32,7 +32,6 @@ import sys
 from dataclasses import dataclass
 from typing import Any
 
-
 logger = logging.getLogger(__name__)
 
 
@@ -177,9 +176,7 @@ async def install_package(
         )
 
         try:
-            stdout, stderr = await asyncio.wait_for(
-                process.communicate(), timeout=timeout
-            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
         except asyncio.TimeoutError:
             process.kill()
             await process.wait()

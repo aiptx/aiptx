@@ -7,9 +7,8 @@ Provides accurate token estimation and dynamic budget allocation.
 """
 
 import logging
-import re
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple
+from dataclasses import dataclass
+from typing import Dict, List, Optional, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -104,13 +103,13 @@ class TokenEstimator:
 
     # Token estimation multipliers (chars per token varies by model)
     MODEL_MULTIPLIERS = {
-        "llama": 1.1,      # Llama tokenizes slightly more
-        "mistral": 1.0,    # Baseline
-        "codellama": 0.95, # Code-optimized, slightly fewer tokens
+        "llama": 1.1,  # Llama tokenizes slightly more
+        "mistral": 1.0,  # Baseline
+        "codellama": 0.95,  # Code-optimized, slightly fewer tokens
         "deepseek": 0.95,  # Similar to codellama
-        "phi": 1.05,       # Microsoft's tokenizer
-        "qwen": 1.0,       # Standard
-        "gemma": 1.0,      # Standard
+        "phi": 1.05,  # Microsoft's tokenizer
+        "qwen": 1.0,  # Standard
+        "gemma": 1.0,  # Standard
     }
 
     def __init__(self, model: str = "mistral:7b"):
@@ -175,21 +174,11 @@ class TokenEstimator:
 
         return total
 
-    def fits_in_context(
-        self,
-        text: str,
-        budget: int,
-        model: Optional[str] = None
-    ) -> bool:
+    def fits_in_context(self, text: str, budget: int, model: Optional[str] = None) -> bool:
         """Check if text fits within budget."""
         return self.estimate_tokens(text) <= budget
 
-    def truncate_to_budget(
-        self,
-        text: str,
-        budget: int,
-        preserve_end: bool = False
-    ) -> str:
+    def truncate_to_budget(self, text: str, budget: int, preserve_end: bool = False) -> str:
         """
         Truncate text to fit within token budget.
 
@@ -224,8 +213,8 @@ class BudgetAllocator:
     # Default allocation percentages (of available tokens after fixed allocations)
     DEFAULT_ALLOCATIONS = {
         "conversation_history": 0.40,  # 40%
-        "current_findings": 0.40,       # 40%
-        "phase_context": 0.20,          # 20%
+        "current_findings": 0.40,  # 40%
+        "phase_context": 0.20,  # 20%
     }
 
     # Fixed allocations
@@ -362,9 +351,17 @@ class BudgetAllocator:
         # Proportional redistribution
         redistribution_ratio = min(1.0, total_unused / total_overflow)
 
-        new_conversation = budget.conversation_history + int(conv_overflow * redistribution_ratio) - conv_unused
-        new_findings = budget.current_findings + int(findings_overflow * redistribution_ratio) - findings_unused
-        new_context = budget.phase_context + int(context_overflow * redistribution_ratio) - context_unused
+        new_conversation = (
+            budget.conversation_history + int(conv_overflow * redistribution_ratio) - conv_unused
+        )
+        new_findings = (
+            budget.current_findings
+            + int(findings_overflow * redistribution_ratio)
+            - findings_unused
+        )
+        new_context = (
+            budget.phase_context + int(context_overflow * redistribution_ratio) - context_unused
+        )
 
         return TokenBudget(
             total=budget.total,

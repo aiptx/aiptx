@@ -13,6 +13,7 @@ Key features:
 
 The deduplicated findings are passed to the Verification Policy Engine.
 """
+
 from __future__ import annotations
 
 import logging
@@ -34,6 +35,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class DeduplicationStats:
     """Statistics from deduplication process"""
+
     total_input: int
     total_output: int
     duplicates_merged: int
@@ -136,14 +138,16 @@ class Deduplicator:
                 deduplicated.append(merged)
 
                 # Track merge details
-                merge_details.append({
-                    "fingerprint": fingerprint,
-                    "merged_count": len(group),
-                    "merged_ids": [f.id for f in group],
-                    "result_id": merged.id,
-                    "result_title": merged.title,
-                    "result_severity": merged.severity.value,
-                })
+                merge_details.append(
+                    {
+                        "fingerprint": fingerprint,
+                        "merged_count": len(group),
+                        "merged_ids": [f.id for f in group],
+                        "result_id": merged.id,
+                        "result_title": merged.title,
+                        "result_severity": merged.severity.value,
+                    }
+                )
 
                 largest_group = max(largest_group, len(group))
                 total_merged += len(group) - 1  # -1 because one becomes the result
@@ -170,7 +174,13 @@ class Deduplicator:
 
         deduplicated.sort(
             key=lambda f: (
-                -[SeverityV2.INFO, SeverityV2.LOW, SeverityV2.MEDIUM, SeverityV2.HIGH, SeverityV2.CRITICAL].index(f.severity),
+                -[
+                    SeverityV2.INFO,
+                    SeverityV2.LOW,
+                    SeverityV2.MEDIUM,
+                    SeverityV2.HIGH,
+                    SeverityV2.CRITICAL,
+                ].index(f.severity),
                 normalize_dt(f.discovered_at),
             )
         )
@@ -233,7 +243,7 @@ class Deduplicator:
             key=lambda f: (
                 status_priority.get(f.verification_status, 99),
                 severity_priority.get(f.severity, 99),
-            )
+            ),
         )
 
         # Start with best finding
@@ -249,7 +259,9 @@ class Deduplicator:
         """Get statistics from the last deduplication run"""
         return self.stats
 
-    def deduplicate_with_report(self, findings: list[FindingV2]) -> tuple[list[FindingV2], dict[str, Any]]:
+    def deduplicate_with_report(
+        self, findings: list[FindingV2]
+    ) -> tuple[list[FindingV2], dict[str, Any]]:
         """
         Deduplicate and return both results and a detailed report.
 
@@ -266,8 +278,7 @@ class Deduplicator:
             "total_input": self.stats.total_input if self.stats else 0,
             "total_output": self.stats.total_output if self.stats else 0,
             "reduction_percent": (
-                round((1 - len(deduplicated) / len(findings)) * 100, 1)
-                if findings else 0
+                round((1 - len(deduplicated) / len(findings)) * 100, 1) if findings else 0
             ),
             "duplicates_merged": self.stats.duplicates_merged if self.stats else 0,
             "by_category": self.stats.by_category if self.stats else {},
@@ -289,9 +300,7 @@ class CrossTargetDeduplicator(Deduplicator):
     """
 
     def deduplicate_cross_target(
-        self,
-        findings: list[FindingV2],
-        normalize_target: bool = True
+        self, findings: list[FindingV2], normalize_target: bool = True
     ) -> tuple[list[FindingV2], list[dict[str, Any]]]:
         """
         Deduplicate while identifying cross-target patterns.
@@ -325,16 +334,18 @@ class CrossTargetDeduplicator(Deduplicator):
         for pattern_key, group in pattern_groups.items():
             targets = set(f.target for f in group)
             if len(targets) > 1:
-                patterns.append({
-                    "pattern": pattern_key,
-                    "category": group[0].category.value,
-                    "vuln_type": group[0].vuln_type,
-                    "affected_targets": list(targets),
-                    "affected_count": len(targets),
-                    "total_findings": len(group),
-                    "severity": max(f.severity for f in group).value,
-                    "example_title": group[0].title,
-                })
+                patterns.append(
+                    {
+                        "pattern": pattern_key,
+                        "category": group[0].category.value,
+                        "vuln_type": group[0].vuln_type,
+                        "affected_targets": list(targets),
+                        "affected_count": len(targets),
+                        "total_findings": len(group),
+                        "severity": max(f.severity for f in group).value,
+                        "example_title": group[0].title,
+                    }
+                )
 
         # Sort by affected count
         patterns.sort(key=lambda p: -p["affected_count"])

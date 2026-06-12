@@ -4,6 +4,7 @@ PAT Response Analyzer
 Analyzes HTTP responses to detect successful vulnerability exploitation.
 Supports multiple detection methods: error-based, time-based, content-diff, reflection.
 """
+
 from __future__ import annotations
 
 import difflib
@@ -15,16 +16,13 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 from .config import (
-    VulnerabilityType,
-    DetectionMethod,
     AnalyzerConfig,
+    DetectionMethod,
+    VulnerabilityType,
 )
 from .detection_patterns import (
-    get_detection_patterns,
     match_any_pattern,
-    DetectionPattern,
 )
-from .request_generator import InjectionRequest
 from .executor import ExecutionResult
 
 logger = logging.getLogger(__name__)
@@ -33,8 +31,9 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AnalysisResult:
     """Result of response analysis."""
+
     vulnerable: bool = False
-    confidence: float = 0.0                # 0.0 to 1.0
+    confidence: float = 0.0  # 0.0 to 1.0
     detection_method: DetectionMethod = DetectionMethod.ERROR_BASED
     vuln_type: Optional[VulnerabilityType] = None
 
@@ -43,7 +42,7 @@ class AnalysisResult:
     matched_patterns: list[str] = field(default_factory=list)
 
     # Quality indicators
-    false_positive_risk: str = "unknown"   # low, medium, high
+    false_positive_risk: str = "unknown"  # low, medium, high
     requires_manual_verification: bool = False
 
     # Context
@@ -68,6 +67,7 @@ class AnalysisResult:
 @dataclass
 class BaselineData:
     """Baseline response data for comparison."""
+
     status_codes: list[int] = field(default_factory=list)
     response_lengths: list[int] = field(default_factory=list)
     response_hashes: list[str] = field(default_factory=list)
@@ -249,8 +249,7 @@ class ResponseAnalyzer:
 
             # Flag for manual verification if needed
             analysis.requires_manual_verification = (
-                analysis.confidence < 0.85 or
-                analysis.false_positive_risk in ("medium", "high")
+                analysis.confidence < 0.85 or analysis.false_positive_risk in ("medium", "high")
             )
 
         return analysis
@@ -376,7 +375,10 @@ class ResponseAnalyzer:
 
         # Always include timing summary
         if confidence > 0:
-            evidence.insert(0, f"Response: {elapsed:.0f}ms | Baseline: {baseline_avg:.0f}ms ± {baseline_std:.0f}ms")
+            evidence.insert(
+                0,
+                f"Response: {elapsed:.0f}ms | Baseline: {baseline_avg:.0f}ms ± {baseline_std:.0f}ms",
+            )
 
         return DetectionMethod.TIME_BASED, confidence, evidence
 
@@ -512,7 +514,7 @@ class ResponseAnalyzer:
             for pattern in internal_patterns:
                 if re.search(pattern, body):
                     confidence = max(confidence, 0.7)
-                    evidence.append(f"Internal IP/host in response")
+                    evidence.append("Internal IP/host in response")
                     break
 
         return DetectionMethod.HEADER_BASED, confidence, evidence
@@ -537,6 +539,7 @@ class ResponseAnalyzer:
 
         # Check for URL-encoded reflection
         import urllib.parse
+
         encoded = urllib.parse.quote(payload)
         if encoded in body:
             return True
@@ -549,7 +552,7 @@ class ResponseAnalyzer:
         # Check for partial matches (significant portion of payload)
         min_length = max(5, len(payload) // 2)
         for i in range(len(payload) - min_length + 1):
-            chunk = payload[i:i + min_length]
+            chunk = payload[i : i + min_length]
             if chunk in body:
                 return True
 
@@ -630,14 +633,14 @@ class EnhancedResponseAnalyzer(ResponseAnalyzer):
         no_delay_var = sum((t - no_delay_mean) ** 2 for t in no_delay_times) / len(no_delay_times)
 
         pooled_std = math.sqrt(
-            (delay_var * len(delay_times) + no_delay_var * len(no_delay_times)) /
-            (len(delay_times) + len(no_delay_times))
+            (delay_var * len(delay_times) + no_delay_var * len(no_delay_times))
+            / (len(delay_times) + len(no_delay_times))
         )
 
         # Perform t-statistic calculation
         t_statistic = 0.0
         if pooled_std > 0:
-            se = pooled_std * math.sqrt(1/len(delay_times) + 1/len(no_delay_times))
+            se = pooled_std * math.sqrt(1 / len(delay_times) + 1 / len(no_delay_times))
             t_statistic = mean_diff / se if se > 0 else 0
 
         evidence = [

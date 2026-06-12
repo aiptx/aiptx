@@ -10,7 +10,6 @@ Performs comprehensive security analysis of source code to identify:
 - OWASP Top 10 vulnerabilities
 """
 
-import os
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -21,9 +20,6 @@ from aipt_v2.skills.agents.base import (
     AgentConfig,
     AgentResult,
     BaseSecurityAgent,
-    Finding,
-    Severity,
-    VulnCategory,
     register_tool,
 )
 
@@ -34,10 +30,8 @@ logger = structlog.get_logger()
 @register_tool(
     name="read_file",
     description="Read the contents of a source code file",
-    parameters={
-        "file_path": {"type": "string", "description": "Path to the file to read"}
-    },
-    category="code_review"
+    parameters={"file_path": {"type": "string", "description": "Path to the file to read"}},
+    category="code_review",
 )
 async def read_file(file_path: str) -> str:
     """Read a source code file."""
@@ -52,7 +46,7 @@ async def read_file(file_path: str) -> str:
         if path.stat().st_size > 1_000_000:  # 1MB limit
             return f"Error: File too large (>1MB): {file_path}"
 
-        content = path.read_text(encoding='utf-8', errors='replace')
+        content = path.read_text(encoding="utf-8", errors="replace")
         return f"File: {file_path}\n\n{content}"
 
     except Exception as e:
@@ -64,9 +58,12 @@ async def read_file(file_path: str) -> str:
     description="List files in a directory with optional filtering by extension",
     parameters={
         "directory": {"type": "string", "description": "Directory path to list"},
-        "extension": {"type": "string", "description": "Optional file extension filter (e.g., '.py', '.js')"}
+        "extension": {
+            "type": "string",
+            "description": "Optional file extension filter (e.g., '.py', '.js')",
+        },
     },
-    category="code_review"
+    category="code_review",
 )
 async def list_files(directory: str, extension: Optional[str] = None) -> str:
     """List files in a directory."""
@@ -84,7 +81,9 @@ async def list_files(directory: str, extension: Optional[str] = None) -> str:
                     files.append(str(item.relative_to(path)))
 
         if not files:
-            return f"No files found in {directory}" + (f" with extension {extension}" if extension else "")
+            return f"No files found in {directory}" + (
+                f" with extension {extension}" if extension else ""
+            )
 
         return f"Files in {directory}:\n" + "\n".join(sorted(files)[:200])  # Limit to 200 files
 
@@ -98,9 +97,9 @@ async def list_files(directory: str, extension: Optional[str] = None) -> str:
     parameters={
         "directory": {"type": "string", "description": "Directory to search in"},
         "pattern": {"type": "string", "description": "Regex pattern to search for"},
-        "file_extension": {"type": "string", "description": "Optional file extension filter"}
+        "file_extension": {"type": "string", "description": "Optional file extension filter"},
     },
-    category="code_review"
+    category="code_review",
 )
 async def search_code(directory: str, pattern: str, file_extension: Optional[str] = None) -> str:
     """Search for a pattern in code files."""
@@ -119,8 +118,8 @@ async def search_code(directory: str, pattern: str, file_extension: Optional[str
                 continue
 
             try:
-                content = item.read_text(encoding='utf-8', errors='replace')
-                for i, line in enumerate(content.split('\n'), 1):
+                content = item.read_text(encoding="utf-8", errors="replace")
+                for i, line in enumerate(content.split("\n"), 1):
                     if regex.search(line):
                         matches.append(f"{item}:{i}: {line.strip()[:100]}")
 
@@ -143,10 +142,8 @@ async def search_code(directory: str, pattern: str, file_extension: Optional[str
 @register_tool(
     name="analyze_dependencies",
     description="Analyze project dependencies for known vulnerabilities",
-    parameters={
-        "directory": {"type": "string", "description": "Project directory"}
-    },
-    category="code_review"
+    parameters={"directory": {"type": "string", "description": "Project directory"}},
+    category="code_review",
 )
 async def analyze_dependencies(directory: str) -> str:
     """Analyze project dependencies."""
@@ -171,7 +168,7 @@ async def analyze_dependencies(directory: str) -> str:
         for dep_file, lang in dep_files.items():
             dep_path = path / dep_file
             if dep_path.exists():
-                content = dep_path.read_text(encoding='utf-8', errors='replace')
+                content = dep_path.read_text(encoding="utf-8", errors="replace")
                 results.append(f"\n=== {dep_file} ({lang}) ===\n{content[:2000]}")
 
         if not results:
@@ -188,15 +185,18 @@ async def analyze_dependencies(directory: str) -> str:
     description="Report a security vulnerability finding",
     parameters={
         "title": {"type": "string", "description": "Title of the vulnerability"},
-        "severity": {"type": "string", "description": "Severity: critical, high, medium, low, info"},
+        "severity": {
+            "type": "string",
+            "description": "Severity: critical, high, medium, low, info",
+        },
         "category": {"type": "string", "description": "Vulnerability category"},
         "description": {"type": "string", "description": "Detailed description"},
         "evidence": {"type": "string", "description": "Code snippet or evidence"},
         "location": {"type": "string", "description": "File path and line number"},
         "remediation": {"type": "string", "description": "How to fix"},
-        "cwe_id": {"type": "string", "description": "CWE identifier (e.g., CWE-89)"}
+        "cwe_id": {"type": "string", "description": "CWE identifier (e.g., CWE-89)"},
     },
-    category="code_review"
+    category="code_review",
 )
 async def report_finding(
     title: str,
@@ -206,7 +206,7 @@ async def report_finding(
     evidence: str,
     location: str,
     remediation: str,
-    cwe_id: Optional[str] = None
+    cwe_id: Optional[str] = None,
 ) -> str:
     """Report a security finding."""
     return f"""Finding Recorded:
@@ -320,7 +320,7 @@ class CodeReviewAgent(BaseSecurityAgent):
         target_path: str,
         config: Optional[AgentConfig] = None,
         focus_areas: Optional[List[str]] = None,
-        exclude_patterns: Optional[List[str]] = None
+        exclude_patterns: Optional[List[str]] = None,
     ):
         """
         Initialize the code review agent.
@@ -335,8 +335,14 @@ class CodeReviewAgent(BaseSecurityAgent):
         self.target_path = Path(target_path).resolve()
         self.focus_areas = focus_areas or []
         self.exclude_patterns = exclude_patterns or [
-            "node_modules/*", "venv/*", ".venv/*", "__pycache__/*",
-            "*.min.js", "*.bundle.js", "dist/*", "build/*"
+            "node_modules/*",
+            "venv/*",
+            ".venv/*",
+            "__pycache__/*",
+            "*.min.js",
+            "*.bundle.js",
+            "dist/*",
+            "build/*",
         ]
 
         if not self.target_path.exists():
@@ -361,16 +367,19 @@ class CodeReviewAgent(BaseSecurityAgent):
                 "parameters": {
                     "file_path": {"type": "string", "description": "Path to the file to read"}
                 },
-                "required": ["file_path"]
+                "required": ["file_path"],
             },
             {
                 "name": "list_files",
                 "description": "List files in a directory with optional filtering by extension",
                 "parameters": {
                     "directory": {"type": "string", "description": "Directory path to list"},
-                    "extension": {"type": "string", "description": "Optional file extension filter"}
+                    "extension": {
+                        "type": "string",
+                        "description": "Optional file extension filter",
+                    },
                 },
-                "required": ["directory"]
+                "required": ["directory"],
             },
             {
                 "name": "search_code",
@@ -378,33 +387,45 @@ class CodeReviewAgent(BaseSecurityAgent):
                 "parameters": {
                     "directory": {"type": "string", "description": "Directory to search in"},
                     "pattern": {"type": "string", "description": "Regex pattern to search for"},
-                    "file_extension": {"type": "string", "description": "Optional file extension filter"}
+                    "file_extension": {
+                        "type": "string",
+                        "description": "Optional file extension filter",
+                    },
                 },
-                "required": ["directory", "pattern"]
+                "required": ["directory", "pattern"],
             },
             {
                 "name": "analyze_dependencies",
                 "description": "Analyze project dependencies for known vulnerabilities",
-                "parameters": {
-                    "directory": {"type": "string", "description": "Project directory"}
-                },
-                "required": ["directory"]
+                "parameters": {"directory": {"type": "string", "description": "Project directory"}},
+                "required": ["directory"],
             },
             {
                 "name": "report_finding",
                 "description": "Report a security vulnerability finding",
                 "parameters": {
                     "title": {"type": "string", "description": "Title of the vulnerability"},
-                    "severity": {"type": "string", "description": "Severity: critical, high, medium, low, info"},
+                    "severity": {
+                        "type": "string",
+                        "description": "Severity: critical, high, medium, low, info",
+                    },
                     "category": {"type": "string", "description": "Vulnerability category"},
                     "description": {"type": "string", "description": "Detailed description"},
                     "evidence": {"type": "string", "description": "Code snippet or evidence"},
                     "location": {"type": "string", "description": "File path and line number"},
                     "remediation": {"type": "string", "description": "How to fix"},
-                    "cwe_id": {"type": "string", "description": "CWE identifier"}
+                    "cwe_id": {"type": "string", "description": "CWE identifier"},
                 },
-                "required": ["title", "severity", "category", "description", "evidence", "location", "remediation"]
-            }
+                "required": [
+                    "title",
+                    "severity",
+                    "category",
+                    "description",
+                    "evidence",
+                    "location",
+                    "remediation",
+                ],
+            },
         ]
 
     async def run(self, initial_message: Optional[str] = None) -> AgentResult:

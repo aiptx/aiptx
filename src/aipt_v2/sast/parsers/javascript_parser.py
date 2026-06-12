@@ -8,20 +8,19 @@ code analysis since Python doesn't have a native JS AST parser.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from aipt_v2.sast.parsers.base import (
     BaseParser,
+    CodeLocation,
+    DataFlow,
     Language,
+    ParsedClass,
     ParsedFile,
     ParsedFunction,
-    ParsedClass,
-    ParsedVariable,
     ParsedImport,
     ParsedParameter,
-    CodeLocation,
+    ParsedVariable,
     SecurityPattern,
-    DataFlow,
 )
 
 
@@ -86,9 +85,7 @@ class JavaScriptParser(BaseParser):
         )
 
         # Default import: import x from 'module'
-        default_pattern = re.compile(
-            r"import\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]"
-        )
+        default_pattern = re.compile(r"import\s+(\w+)\s+from\s+['\"]([^'\"]+)['\"]")
 
         # CommonJS require: const x = require('module')
         require_pattern = re.compile(
@@ -149,9 +146,7 @@ class JavaScriptParser(BaseParser):
         lines = content.split("\n")
 
         # Regular function: function name(params) { or async function name(params) {
-        func_pattern = re.compile(
-            r"(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)"
-        )
+        func_pattern = re.compile(r"(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)")
 
         # Arrow function: const name = (params) => or const name = async (params) =>
         arrow_pattern = re.compile(
@@ -159,9 +154,7 @@ class JavaScriptParser(BaseParser):
         )
 
         # Method pattern (simplified): name(params) { inside class
-        method_pattern = re.compile(
-            r"^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{"
-        )
+        method_pattern = re.compile(r"^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{")
 
         for i, line in enumerate(lines, 1):
             # Regular functions
@@ -207,9 +200,7 @@ class JavaScriptParser(BaseParser):
         lines = content.split("\n")
 
         # Class pattern: class Name extends Base {
-        class_pattern = re.compile(
-            r"(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?"
-        )
+        class_pattern = re.compile(r"(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?")
 
         in_class = False
         current_class = None
@@ -232,10 +223,7 @@ class JavaScriptParser(BaseParser):
                 brace_count += line.count("{") - line.count("}")
 
                 # Look for methods
-                method_match = re.search(
-                    r"^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{",
-                    line
-                )
+                method_match = re.search(r"^\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{", line)
                 if method_match and current_class:
                     method_name = method_match.group(1)
                     if method_name not in ["if", "for", "while", "switch", "catch"]:
@@ -333,9 +321,7 @@ class JavaScriptParser(BaseParser):
 
         return params
 
-    def _find_js_security_patterns(
-        self, content: str, file_path: str
-    ) -> list[SecurityPattern]:
+    def _find_js_security_patterns(self, content: str, file_path: str) -> list[SecurityPattern]:
         """Find JavaScript-specific security patterns."""
         patterns = self._find_security_patterns(content, file_path)
         lines = content.split("\n")
@@ -372,7 +358,10 @@ class JavaScriptParser(BaseParser):
                 (r"require\s*\(['\"]child_process['\"]\)", "child_process import"),
             ],
             "path_traversal": [
-                (r"fs\.(readFile|writeFile|readdir)\s*\([^)]*\+", "fs operation with concatenation"),
+                (
+                    r"fs\.(readFile|writeFile|readdir)\s*\([^)]*\+",
+                    "fs operation with concatenation",
+                ),
                 (r"path\.join\s*\([^)]*req\.", "path.join with user input"),
                 (r"res\.sendFile\s*\([^)]*\+", "sendFile with concatenation"),
             ],
@@ -383,7 +372,10 @@ class JavaScriptParser(BaseParser):
             ],
             "hardcoded_secret": [
                 (r'(?i)(password|passwd|pwd)\s*[=:]\s*["\'][^"\']+["\']', "Hardcoded password"),
-                (r'(?i)(api_key|apikey|api_secret)\s*[=:]\s*["\'][^"\']+["\']', "Hardcoded API key"),
+                (
+                    r'(?i)(api_key|apikey|api_secret)\s*[=:]\s*["\'][^"\']+["\']',
+                    "Hardcoded API key",
+                ),
                 (r'(?i)(secret|token)\s*[=:]\s*["\'][A-Za-z0-9+/=]{20,}["\']', "Hardcoded secret"),
                 (r'(?i)jwt\s*[=:]\s*["\']eyJ[A-Za-z0-9_-]+', "Hardcoded JWT"),
             ],

@@ -11,10 +11,10 @@ Provides comprehensive SPA security testing:
 """
 
 from aipt_v2.scanners.spa.scanner import (
-    SPAScanner,
-    SPAScanConfig,
-    SPAScanResult,
     DOMXSSFinding,
+    SPAScanConfig,
+    SPAScanner,
+    SPAScanResult,
 )
 
 __all__ = [

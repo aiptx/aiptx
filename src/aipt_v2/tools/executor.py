@@ -6,7 +6,6 @@ from typing import Any
 
 import httpx
 
-
 if os.getenv("AIPT_SANDBOX_MODE", "false").lower() == "false":
     from aipt_v2.runtime import get_runtime
 

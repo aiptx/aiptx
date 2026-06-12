@@ -8,20 +8,19 @@ focusing on security-relevant patterns.
 from __future__ import annotations
 
 import re
-from typing import Optional
 
 from aipt_v2.sast.parsers.base import (
     BaseParser,
+    CodeLocation,
+    DataFlow,
     Language,
+    ParsedClass,
     ParsedFile,
     ParsedFunction,
-    ParsedClass,
-    ParsedVariable,
     ParsedImport,
     ParsedParameter,
-    CodeLocation,
+    ParsedVariable,
     SecurityPattern,
-    DataFlow,
 )
 
 
@@ -231,9 +230,7 @@ class GoParser(BaseParser):
         lines = content.split("\n")
 
         # var/const patterns
-        var_pattern = re.compile(
-            r"(?:var|const)\s+(\w+)\s+(?:(\S+)\s*)?=\s*(.+?)$"
-        )
+        var_pattern = re.compile(r"(?:var|const)\s+(\w+)\s+(?:(\S+)\s*)?=\s*(.+?)$")
 
         # Short declaration
         short_pattern = re.compile(r"(\w+)\s*:=\s*(.+?)$")
@@ -312,9 +309,7 @@ class GoParser(BaseParser):
 
         return params
 
-    def _find_go_security_patterns(
-        self, content: str, file_path: str
-    ) -> list[SecurityPattern]:
+    def _find_go_security_patterns(self, content: str, file_path: str) -> list[SecurityPattern]:
         """Find Go-specific security patterns."""
         patterns = self._find_security_patterns(content, file_path)
         lines = content.split("\n")
@@ -322,26 +317,26 @@ class GoParser(BaseParser):
         # Go-specific dangerous patterns
         dangerous_patterns = {
             "sql_injection": [
-                (r'db\.(Query|Exec)\s*\([^,)]*\+', "SQL with string concatenation"),
-                (r'fmt\.Sprintf\s*\([^)]*SELECT', "SQL with Sprintf"),
-                (r'fmt\.Sprintf\s*\([^)]*INSERT', "SQL with Sprintf"),
-                (r'fmt\.Sprintf\s*\([^)]*UPDATE', "SQL with Sprintf"),
-                (r'fmt\.Sprintf\s*\([^)]*DELETE', "SQL with Sprintf"),
+                (r"db\.(Query|Exec)\s*\([^,)]*\+", "SQL with string concatenation"),
+                (r"fmt\.Sprintf\s*\([^)]*SELECT", "SQL with Sprintf"),
+                (r"fmt\.Sprintf\s*\([^)]*INSERT", "SQL with Sprintf"),
+                (r"fmt\.Sprintf\s*\([^)]*UPDATE", "SQL with Sprintf"),
+                (r"fmt\.Sprintf\s*\([^)]*DELETE", "SQL with Sprintf"),
             ],
             "command_injection": [
-                (r'exec\.Command\s*\([^)]*\+', "exec.Command with concatenation"),
-                (r'exec\.CommandContext\s*\([^)]*\+', "exec.CommandContext with concatenation"),
-                (r'os\.StartProcess', "os.StartProcess - command execution"),
+                (r"exec\.Command\s*\([^)]*\+", "exec.Command with concatenation"),
+                (r"exec\.CommandContext\s*\([^)]*\+", "exec.CommandContext with concatenation"),
+                (r"os\.StartProcess", "os.StartProcess - command execution"),
             ],
             "path_traversal": [
-                (r'os\.Open\s*\([^)]*\+', "os.Open with concatenation"),
-                (r'ioutil\.ReadFile\s*\([^)]*\+', "ReadFile with concatenation"),
-                (r'filepath\.Join\s*\([^)]*\.\.', "filepath.Join with .."),
+                (r"os\.Open\s*\([^)]*\+", "os.Open with concatenation"),
+                (r"ioutil\.ReadFile\s*\([^)]*\+", "ReadFile with concatenation"),
+                (r"filepath\.Join\s*\([^)]*\.\.", "filepath.Join with .."),
             ],
             "ssrf": [
-                (r'http\.Get\s*\([^)]*\+', "http.Get with dynamic URL"),
-                (r'http\.Post\s*\([^)]*\+', "http.Post with dynamic URL"),
-                (r'http\.NewRequest\s*\([^)]*\+', "http.NewRequest with dynamic URL"),
+                (r"http\.Get\s*\([^)]*\+", "http.Get with dynamic URL"),
+                (r"http\.Post\s*\([^)]*\+", "http.Post with dynamic URL"),
+                (r"http\.NewRequest\s*\([^)]*\+", "http.NewRequest with dynamic URL"),
             ],
             "hardcoded_secret": [
                 (r'(?i)password\s*[=:]\s*"[^"]+"', "Hardcoded password"),
@@ -350,27 +345,27 @@ class GoParser(BaseParser):
                 (r'(?i)token\s*[=:]\s*"[A-Za-z0-9+/=]{20,}"', "Hardcoded token"),
             ],
             "weak_crypto": [
-                (r'md5\.New\(', "MD5 - weak hash"),
-                (r'sha1\.New\(', "SHA1 - weak hash"),
-                (r'des\.NewCipher', "DES - weak encryption"),
-                (r'rc4\.NewCipher', "RC4 - weak encryption"),
+                (r"md5\.New\(", "MD5 - weak hash"),
+                (r"sha1\.New\(", "SHA1 - weak hash"),
+                (r"des\.NewCipher", "DES - weak encryption"),
+                (r"rc4\.NewCipher", "RC4 - weak encryption"),
             ],
             "tls_config": [
-                (r'InsecureSkipVerify:\s*true', "TLS verification disabled"),
-                (r'MinVersion:\s*tls\.VersionSSL', "SSL version allowed"),
-                (r'MinVersion:\s*tls\.VersionTLS10', "TLS 1.0 allowed"),
+                (r"InsecureSkipVerify:\s*true", "TLS verification disabled"),
+                (r"MinVersion:\s*tls\.VersionSSL", "SSL version allowed"),
+                (r"MinVersion:\s*tls\.VersionTLS10", "TLS 1.0 allowed"),
             ],
             "race_condition": [
-                (r'go\s+\w+\s*\(', "Goroutine - check for race conditions"),
+                (r"go\s+\w+\s*\(", "Goroutine - check for race conditions"),
             ],
             "template_injection": [
-                (r'template\.HTML\s*\(', "template.HTML - bypasses escaping"),
-                (r'template\.JS\s*\(', "template.JS - bypasses escaping"),
-                (r'template\.URL\s*\(', "template.URL - bypasses escaping"),
+                (r"template\.HTML\s*\(", "template.HTML - bypasses escaping"),
+                (r"template\.JS\s*\(", "template.JS - bypasses escaping"),
+                (r"template\.URL\s*\(", "template.URL - bypasses escaping"),
             ],
             "error_handling": [
-                (r'_\s*=\s*\w+\(', "Ignored error return"),
-                (r'defer\s+\w+\.Close\(\)', "Deferred close without error check"),
+                (r"_\s*=\s*\w+\(", "Ignored error return"),
+                (r"defer\s+\w+\.Close\(\)", "Deferred close without error check"),
             ],
         }
 

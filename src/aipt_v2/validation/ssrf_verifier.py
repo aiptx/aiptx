@@ -16,6 +16,7 @@ Usage:
         result = await verifier.verify(finding, session)
         finding.mark_verified(result.status, result.evidence)
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -23,7 +24,6 @@ import logging
 import re
 import time
 from dataclasses import dataclass, field
-from datetime import datetime
 from enum import Enum
 from typing import Any, Optional
 
@@ -34,6 +34,7 @@ logger = logging.getLogger(__name__)
 # Try to import aiohttp
 try:
     import aiohttp
+
     AIOHTTP_AVAILABLE = True
 except ImportError:
     AIOHTTP_AVAILABLE = False
@@ -42,16 +43,18 @@ except ImportError:
 
 class SSRFType(Enum):
     """Type of SSRF vulnerability for targeted verification."""
-    BASIC = "basic"                    # Standard URL fetch
+
+    BASIC = "basic"  # Standard URL fetch
     CLOUD_METADATA = "cloud_metadata"  # AWS/GCP/Azure metadata
-    INTERNAL_SERVICE = "internal"      # Internal services (redis, mysql, etc.)
-    BLIND = "blind"                    # No content returned, needs callback
-    FILE_READ = "file_read"            # file:// protocol abuse
+    INTERNAL_SERVICE = "internal"  # Internal services (redis, mysql, etc.)
+    BLIND = "blind"  # No content returned, needs callback
+    FILE_READ = "file_read"  # file:// protocol abuse
 
 
 @dataclass
 class VerificationResult:
     """Result of SSRF verification attempt."""
+
     status: VerificationStatus
     ssrf_type: SSRFType = SSRFType.BASIC
     evidence: str = ""
@@ -221,6 +224,7 @@ class SSRFVerifier:
         if self.callback_manager is None:
             # Create our own callback manager
             from aipt_v2.validation.callback_server import CallbackManager
+
             self.callback_manager = CallbackManager()
             await self.callback_manager.start()
             self._owned_callback_manager = True
@@ -277,7 +281,9 @@ class SSRFVerifier:
         if self.enable_timing_analysis and session:
             timing_result = await self._verify_with_timing(finding, session)
             if timing_result.status in [VerificationStatus.CONFIRMED, VerificationStatus.LIKELY]:
-                logger.info(f"SSRF detected via timing: {finding.url} ({timing_result.timing_ms}ms)")
+                logger.info(
+                    f"SSRF detected via timing: {finding.url} ({timing_result.timing_ms}ms)"
+                )
                 return timing_result
 
         # If we have partial evidence from content analysis, return that
@@ -357,7 +363,9 @@ class SSRFVerifier:
             if len(detected_patterns) >= 3:
                 max_confidence = min(max_confidence + 0.05, 1.0)
 
-            status = VerificationStatus.CONFIRMED if max_confidence >= 0.9 else VerificationStatus.LIKELY
+            status = (
+                VerificationStatus.CONFIRMED if max_confidence >= 0.9 else VerificationStatus.LIKELY
+            )
 
             return VerificationResult(
                 status=status,
@@ -412,18 +420,21 @@ class SSRFVerifier:
             if param:
                 # Parameter-based SSRF
                 import urllib.parse
+
                 parsed = urllib.parse.urlparse(target_url)
                 query_params = urllib.parse.parse_qs(parsed.query)
                 query_params[param] = [callback_url]
                 new_query = urllib.parse.urlencode(query_params, doseq=True)
-                target_url = urllib.parse.urlunparse((
-                    parsed.scheme,
-                    parsed.netloc,
-                    parsed.path,
-                    parsed.params,
-                    new_query,
-                    parsed.fragment,
-                ))
+                target_url = urllib.parse.urlunparse(
+                    (
+                        parsed.scheme,
+                        parsed.netloc,
+                        parsed.path,
+                        parsed.params,
+                        new_query,
+                        parsed.fragment,
+                    )
+                )
             else:
                 # URL might already contain the payload - can't inject
                 logger.debug("No parameter specified, cannot inject callback URL")
@@ -459,8 +470,8 @@ class SSRFVerifier:
                     status=VerificationStatus.CONFIRMED,
                     ssrf_type=SSRFType.BLIND,
                     evidence=f"OOB callback received from {result.source_ip}. "
-                             f"Callback ID: {callback_id}. "
-                             f"Time: {result.received_at.isoformat()}",
+                    f"Callback ID: {callback_id}. "
+                    f"Time: {result.received_at.isoformat()}",
                     confidence=1.0,
                     callback_received=True,
                     callback_id=callback_id,
@@ -543,18 +554,21 @@ class SSRFVerifier:
 
             for slow_target in slow_targets:
                 import urllib.parse
+
                 parsed = urllib.parse.urlparse(finding.url)
                 query_params = urllib.parse.parse_qs(parsed.query)
                 query_params[param] = [slow_target]
                 new_query = urllib.parse.urlencode(query_params, doseq=True)
-                target_url = urllib.parse.urlunparse((
-                    parsed.scheme,
-                    parsed.netloc,
-                    parsed.path,
-                    parsed.params,
-                    new_query,
-                    parsed.fragment,
-                ))
+                target_url = urllib.parse.urlunparse(
+                    (
+                        parsed.scheme,
+                        parsed.netloc,
+                        parsed.path,
+                        parsed.params,
+                        new_query,
+                        parsed.fragment,
+                    )
+                )
 
                 start = time.perf_counter()
                 try:
@@ -580,9 +594,9 @@ class SSRFVerifier:
                         status=VerificationStatus.LIKELY,
                         ssrf_type=SSRFType.BLIND,
                         evidence=f"Timing analysis suggests SSRF. "
-                                 f"Baseline: {avg_baseline:.0f}ms, "
-                                 f"With slow target: {elapsed:.0f}ms, "
-                                 f"Difference: {timing_diff:.0f}ms",
+                        f"Baseline: {avg_baseline:.0f}ms, "
+                        f"With slow target: {elapsed:.0f}ms, "
+                        f"Difference: {timing_diff:.0f}ms",
                         confidence=confidence,
                         timing_ms=timing_diff,
                     )
@@ -645,16 +659,12 @@ class SSRFVerifier:
         payloads = [
             # Direct callback
             (callback_url, "direct_callback", 1.0),
-
             # URL with path
             (f"{callback_url}/ssrf-verify", "callback_with_path", 1.0),
-
             # Bypass techniques with callback
             (f"http://localhost@{callback_url.replace('http://', '')}", "userinfo_bypass", 0.9),
-
             # Double encoding
             (callback_url.replace(":", "%3A").replace("/", "%2F"), "url_encoded", 0.8),
-
             # With port confusion
             (f"{callback_url}:80", "port_suffix", 0.9),
         ]

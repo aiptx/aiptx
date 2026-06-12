@@ -8,11 +8,9 @@ These tests verify that platform-specific code paths work correctly.
 Run with: pytest tests/test_cross_platform.py -v
 """
 
-import asyncio
 import platform
-import sys
-import unittest
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
+
 import pytest
 
 
@@ -40,7 +38,7 @@ class TestTerminalCrossPlatform:
 
     def test_shell_selection(self):
         """Test correct shell selection for platform."""
-        from aipt_v2.execution.terminal import Terminal, IS_WINDOWS
+        from aipt_v2.execution.terminal import IS_WINDOWS, Terminal
 
         terminal = Terminal()
 
@@ -52,8 +50,9 @@ class TestTerminalCrossPlatform:
     @pytest.mark.skipif(platform.system() != "Windows", reason="Windows-only test")
     def test_popen_kwargs_windows(self):
         """Test Popen kwargs generation for Windows."""
-        from aipt_v2.execution.terminal import Terminal
         import subprocess
+
+        from aipt_v2.execution.terminal import Terminal
 
         terminal = Terminal()
         kwargs = terminal._get_popen_kwargs("/tmp", {})
@@ -65,10 +64,10 @@ class TestTerminalCrossPlatform:
 
     def test_popen_kwargs_unix(self):
         """Test Popen kwargs generation for Unix."""
-        from aipt_v2.execution.terminal import Terminal
-        import os
 
-        with patch('aipt_v2.execution.terminal.IS_WINDOWS', False):
+        from aipt_v2.execution.terminal import Terminal
+
+        with patch("aipt_v2.execution.terminal.IS_WINDOWS", False):
             terminal = Terminal()
             terminal.shell = "/bin/bash"  # Force Unix shell
             kwargs = terminal._get_popen_kwargs("/tmp", {})
@@ -100,7 +99,9 @@ class TestTerminalCrossPlatform:
         terminal = Terminal()
 
         # Python should be available on all platforms
-        is_available = terminal.check_tool_available("python3") or terminal.check_tool_available("python")
+        is_available = terminal.check_tool_available("python3") or terminal.check_tool_available(
+            "python"
+        )
         assert is_available is True
 
     def test_streaming_methods_exist(self):
@@ -109,9 +110,9 @@ class TestTerminalCrossPlatform:
 
         terminal = Terminal()
 
-        assert hasattr(terminal, '_streaming_windows')
-        assert hasattr(terminal, '_streaming_unix')
-        assert hasattr(terminal, '_stream_reader_thread')
+        assert hasattr(terminal, "_streaming_windows")
+        assert hasattr(terminal, "_streaming_unix")
+        assert hasattr(terminal, "_stream_reader_thread")
 
 
 class TestInteractiveShellCrossPlatform:
@@ -133,12 +134,14 @@ class TestInteractiveShellCrossPlatform:
         if IS_WINDOWS:
             # On Windows, Unix modules should not be imported at module level
             import aipt_v2.interactive_shell as shell_module
+
             # pty, termios, tty should not be in the module namespace
-            assert not hasattr(shell_module, 'termios')
-            assert not hasattr(shell_module, 'tty')
+            assert not hasattr(shell_module, "termios")
+            assert not hasattr(shell_module, "tty")
         else:
             # On Unix, these modules should be available
             import aipt_v2.interactive_shell as shell_module
+
             # They are imported into the module globals when not Windows
             pass  # Just verify no import errors
 
@@ -163,9 +166,9 @@ class TestInteractiveShellCrossPlatform:
 
         shell = InteractiveShell()
 
-        assert hasattr(shell, '_run_command_windows')
-        assert hasattr(shell, '_run_command_unix')
-        assert hasattr(shell, 'run_command')
+        assert hasattr(shell, "_run_command_windows")
+        assert hasattr(shell, "_run_command_unix")
+        assert hasattr(shell, "run_command")
 
 
 class TestPrerequisitesChecker:
@@ -252,16 +255,24 @@ class TestPrerequisitesChecker:
 
     def test_report_json_output(self):
         """Test report can be serialized to JSON."""
-        from aipt_v2.prerequisites import PrerequisitesReport, CheckResult, CheckStatus, CheckCategory
         import json
 
+        from aipt_v2.prerequisites import (
+            CheckCategory,
+            CheckResult,
+            CheckStatus,
+            PrerequisitesReport,
+        )
+
         report = PrerequisitesReport()
-        report.checks.append(CheckResult(
-            name="Test Check",
-            status=CheckStatus.PASSED,
-            category=CheckCategory.CORE,
-            message="Test passed",
-        ))
+        report.checks.append(
+            CheckResult(
+                name="Test Check",
+                status=CheckStatus.PASSED,
+                category=CheckCategory.CORE,
+                message="Test passed",
+            )
+        )
 
         json_output = report.to_json()
         parsed = json.loads(json_output)
@@ -276,11 +287,11 @@ class TestCLIIntegration:
 
     def test_check_command_parser(self):
         """Test check command is registered in CLI parser."""
-        import argparse
+
         from aipt_v2 import cli
 
         # The parser setup happens in main(), so we verify the command handler exists
-        assert hasattr(cli, 'run_check')
+        assert hasattr(cli, "run_check")
 
     def test_run_check_function_exists(self):
         """Test run_check function is defined."""
@@ -295,9 +306,10 @@ class TestEdgeCases:
 
     def test_terminal_with_nonexistent_dir(self):
         """Test Terminal handles nonexistent working directory gracefully."""
-        from aipt_v2.execution.terminal import Terminal
-        import tempfile
         import os
+        import tempfile
+
+        from aipt_v2.execution.terminal import Terminal
 
         # Create and delete a temp dir to get a nonexistent path
         temp_dir = tempfile.mkdtemp()

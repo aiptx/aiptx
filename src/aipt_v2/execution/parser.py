@@ -10,16 +10,18 @@ Supports:
 - hydra (credential brute-forcing)
 - Custom patterns
 """
+
 from __future__ import annotations
 
 import re
-from typing import Optional, List, Dict, Any, Callable
 from dataclasses import dataclass, field
+from typing import Any, Callable, Dict, List, Optional
 
 
 @dataclass
 class Finding:
     """A structured finding from tool output"""
+
     type: str  # port, service, vuln, credential, host, path, info
     value: str
     description: str
@@ -50,84 +52,38 @@ class OutputParser:
     # Regex patterns for common tools
     PATTERNS = {
         # nmap patterns
-        "nmap_port": re.compile(
-            r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.*))?",
-            re.MULTILINE
-        ),
+        "nmap_port": re.compile(r"(\d+)/(tcp|udp)\s+(\w+)\s+(\S+)(?:\s+(.*))?", re.MULTILINE),
         "nmap_host": re.compile(
-            r"Nmap scan report for\s+(\S+)(?:\s+\((\d+\.\d+\.\d+\.\d+)\))?",
-            re.MULTILINE
+            r"Nmap scan report for\s+(\S+)(?:\s+\((\d+\.\d+\.\d+\.\d+)\))?", re.MULTILINE
         ),
-        "nmap_os": re.compile(
-            r"OS details?:\s*(.+)",
-            re.MULTILINE
-        ),
-
+        "nmap_os": re.compile(r"OS details?:\s*(.+)", re.MULTILINE),
         # masscan patterns
         "masscan_port": re.compile(
-            r"Discovered open port\s+(\d+)/(tcp|udp)\s+on\s+(\S+)",
-            re.MULTILINE
+            r"Discovered open port\s+(\d+)/(tcp|udp)\s+on\s+(\S+)", re.MULTILINE
         ),
-
         # gobuster/ffuf patterns
-        "directory": re.compile(
-            r"(/\S+)\s+\(Status:\s*(\d+)\)",
-            re.MULTILINE
-        ),
-        "ffuf_result": re.compile(
-            r'"url":\s*"([^"]+)".*?"status":\s*(\d+)',
-            re.MULTILINE
-        ),
-
+        "directory": re.compile(r"(/\S+)\s+\(Status:\s*(\d+)\)", re.MULTILINE),
+        "ffuf_result": re.compile(r'"url":\s*"([^"]+)".*?"status":\s*(\d+)', re.MULTILINE),
         # nuclei patterns
         "nuclei_vuln": re.compile(
-            r"\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)",
-            re.MULTILINE
+            r"\[([^\]]+)\]\s+\[([^\]]+)\]\s+\[([^\]]+)\]\s+(.+)", re.MULTILINE
         ),
-
         # hydra patterns
         "hydra_cred": re.compile(
-            r"\[(\d+)\]\[(\w+)\]\s+host:\s+(\S+)\s+login:\s+(\S+)\s+password:\s+(\S+)",
-            re.MULTILINE
+            r"\[(\d+)\]\[(\w+)\]\s+host:\s+(\S+)\s+login:\s+(\S+)\s+password:\s+(\S+)", re.MULTILINE
         ),
-
         # sqlmap patterns
-        "sqlmap_injectable": re.compile(
-            r"Parameter:\s+(\S+)\s+\(([^)]+)\)",
-            re.MULTILINE
-        ),
-        "sqlmap_dbms": re.compile(
-            r"back-end DBMS:\s+(.+)",
-            re.MULTILINE
-        ),
-
+        "sqlmap_injectable": re.compile(r"Parameter:\s+(\S+)\s+\(([^)]+)\)", re.MULTILINE),
+        "sqlmap_dbms": re.compile(r"back-end DBMS:\s+(.+)", re.MULTILINE),
         # generic patterns
-        "ip_address": re.compile(
-            r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b"
-        ),
-        "domain": re.compile(
-            r"\b([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}\b"
-        ),
-        "email": re.compile(
-            r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"
-        ),
-        "hash_md5": re.compile(
-            r"\b[a-fA-F0-9]{32}\b"
-        ),
-        "hash_sha1": re.compile(
-            r"\b[a-fA-F0-9]{40}\b"
-        ),
-        "hash_sha256": re.compile(
-            r"\b[a-fA-F0-9]{64}\b"
-        ),
-        "cve": re.compile(
-            r"CVE-\d{4}-\d{4,}",
-            re.IGNORECASE
-        ),
-        "url": re.compile(
-            r"https?://[^\s<>\"']+",
-            re.IGNORECASE
-        ),
+        "ip_address": re.compile(r"\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b"),
+        "domain": re.compile(r"\b([a-zA-Z0-9][-a-zA-Z0-9]*\.)+[a-zA-Z]{2,}\b"),
+        "email": re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b"),
+        "hash_md5": re.compile(r"\b[a-fA-F0-9]{32}\b"),
+        "hash_sha1": re.compile(r"\b[a-fA-F0-9]{40}\b"),
+        "hash_sha256": re.compile(r"\b[a-fA-F0-9]{64}\b"),
+        "cve": re.compile(r"CVE-\d{4}-\d{4,}", re.IGNORECASE),
+        "url": re.compile(r"https?://[^\s<>\"']+", re.IGNORECASE),
     }
 
     # Custom parsers for specific tools
@@ -221,13 +177,15 @@ class OutputParser:
         for match in self.PATTERNS["nmap_host"].finditer(output):
             hostname = match.group(1)
             ip = match.group(2) or hostname
-            findings.append(Finding(
-                type="host",
-                value=ip,
-                description=f"Host discovered: {hostname} ({ip})",
-                metadata={"hostname": hostname, "ip": ip},
-                raw_line=match.group(0),
-            ))
+            findings.append(
+                Finding(
+                    type="host",
+                    value=ip,
+                    description=f"Host discovered: {hostname} ({ip})",
+                    metadata={"hostname": hostname, "ip": ip},
+                    raw_line=match.group(0),
+                )
+            )
 
         # Parse ports
         for match in self.PATTERNS["nmap_port"].finditer(output):
@@ -238,29 +196,33 @@ class OutputParser:
             version = match.group(5) or ""
 
             if state == "open":
-                findings.append(Finding(
-                    type="port",
-                    value=f"{port}/{protocol}",
-                    description=f"Open port {port}/{protocol}: {service} {version}".strip(),
-                    severity="low" if service in ["http", "https", "ftp", "ssh"] else "info",
-                    metadata={
-                        "port": int(port),
-                        "protocol": protocol,
-                        "service": service,
-                        "version": version,
-                    },
-                    raw_line=match.group(0),
-                ))
+                findings.append(
+                    Finding(
+                        type="port",
+                        value=f"{port}/{protocol}",
+                        description=f"Open port {port}/{protocol}: {service} {version}".strip(),
+                        severity="low" if service in ["http", "https", "ftp", "ssh"] else "info",
+                        metadata={
+                            "port": int(port),
+                            "protocol": protocol,
+                            "service": service,
+                            "version": version,
+                        },
+                        raw_line=match.group(0),
+                    )
+                )
 
         # Parse OS detection
         for match in self.PATTERNS["nmap_os"].finditer(output):
             os_info = match.group(1)
-            findings.append(Finding(
-                type="info",
-                value=os_info,
-                description=f"OS detected: {os_info}",
-                metadata={"os": os_info},
-            ))
+            findings.append(
+                Finding(
+                    type="info",
+                    value=os_info,
+                    description=f"OS detected: {os_info}",
+                    metadata={"os": os_info},
+                )
+            )
 
         return findings
 
@@ -273,12 +235,14 @@ class OutputParser:
             protocol = match.group(2)
             ip = match.group(3)
 
-            findings.append(Finding(
-                type="port",
-                value=f"{ip}:{port}/{protocol}",
-                description=f"Open port {port}/{protocol} on {ip}",
-                metadata={"ip": ip, "port": int(port), "protocol": protocol},
-            ))
+            findings.append(
+                Finding(
+                    type="port",
+                    value=f"{ip}:{port}/{protocol}",
+                    description=f"Open port {port}/{protocol} on {ip}",
+                    metadata={"ip": ip, "port": int(port), "protocol": protocol},
+                )
+            )
 
         return findings
 
@@ -294,29 +258,35 @@ class OutputParser:
             severity = "info"
             if status in ["200", "301", "302"]:
                 severity = "low"
-            if any(kw in path.lower() for kw in ["admin", "backup", "config", "upload", "api", "debug"]):
+            if any(
+                kw in path.lower() for kw in ["admin", "backup", "config", "upload", "api", "debug"]
+            ):
                 severity = "medium"
 
-            findings.append(Finding(
-                type="path",
-                value=path,
-                description=f"Directory found: {path} (Status: {status})",
-                severity=severity,
-                metadata={"status_code": int(status)},
-            ))
+            findings.append(
+                Finding(
+                    type="path",
+                    value=path,
+                    description=f"Directory found: {path} (Status: {status})",
+                    severity=severity,
+                    metadata={"status_code": int(status)},
+                )
+            )
 
         # ffuf JSON format
         for match in self.PATTERNS["ffuf_result"].finditer(output):
             url = match.group(1)
             status = match.group(2)
 
-            findings.append(Finding(
-                type="path",
-                value=url,
-                description=f"Endpoint found: {url} (Status: {status})",
-                severity="low",
-                metadata={"status_code": int(status)},
-            ))
+            findings.append(
+                Finding(
+                    type="path",
+                    value=url,
+                    description=f"Endpoint found: {url} (Status: {status})",
+                    severity="low",
+                    metadata={"status_code": int(status)},
+                )
+            )
 
         return findings
 
@@ -333,17 +303,19 @@ class OutputParser:
             if severity not in ["info", "low", "medium", "high", "critical"]:
                 severity = "info"
 
-            findings.append(Finding(
-                type="vuln",
-                value=template_id,
-                description=f"Vulnerability: {template_id} on {target}",
-                severity=severity,
-                metadata={
-                    "template": template_id,
-                    "protocol": protocol,
-                    "target": target,
-                },
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=template_id,
+                    description=f"Vulnerability: {template_id} on {target}",
+                    severity=severity,
+                    metadata={
+                        "template": template_id,
+                        "protocol": protocol,
+                        "target": target,
+                    },
+                )
+            )
 
         return findings
 
@@ -358,19 +330,21 @@ class OutputParser:
             username = match.group(4)
             password = match.group(5)
 
-            findings.append(Finding(
-                type="credential",
-                value=f"{username}:{password}",
-                description=f"Valid credentials found for {service} on {host}:{port}",
-                severity="critical",
-                metadata={
-                    "host": host,
-                    "port": int(port),
-                    "service": service,
-                    "username": username,
-                    "password": password,
-                },
-            ))
+            findings.append(
+                Finding(
+                    type="credential",
+                    value=f"{username}:{password}",
+                    description=f"Valid credentials found for {service} on {host}:{port}",
+                    severity="critical",
+                    metadata={
+                        "host": host,
+                        "port": int(port),
+                        "service": service,
+                        "username": username,
+                        "password": password,
+                    },
+                )
+            )
 
         return findings
 
@@ -383,23 +357,27 @@ class OutputParser:
             param = match.group(1)
             injection_type = match.group(2)
 
-            findings.append(Finding(
-                type="vuln",
-                value=f"SQLi: {param}",
-                description=f"SQL Injection in parameter '{param}' ({injection_type})",
-                severity="high",
-                metadata={"parameter": param, "injection_type": injection_type},
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=f"SQLi: {param}",
+                    description=f"SQL Injection in parameter '{param}' ({injection_type})",
+                    severity="high",
+                    metadata={"parameter": param, "injection_type": injection_type},
+                )
+            )
 
         # DBMS detection
         for match in self.PATTERNS["sqlmap_dbms"].finditer(output):
             dbms = match.group(1)
-            findings.append(Finding(
-                type="info",
-                value=dbms,
-                description=f"Backend DBMS: {dbms}",
-                metadata={"dbms": dbms},
-            ))
+            findings.append(
+                Finding(
+                    type="info",
+                    value=dbms,
+                    description=f"Backend DBMS: {dbms}",
+                    metadata={"dbms": dbms},
+                )
+            )
 
         return findings
 
@@ -410,13 +388,15 @@ class OutputParser:
         # Look for CVEs
         for match in self.PATTERNS["cve"].finditer(output):
             cve = match.group(0).upper()
-            findings.append(Finding(
-                type="vuln",
-                value=cve,
-                description=f"CVE detected: {cve}",
-                severity="high",
-                metadata={"cve": cve},
-            ))
+            findings.append(
+                Finding(
+                    type="vuln",
+                    value=cve,
+                    description=f"CVE detected: {cve}",
+                    severity="high",
+                    metadata={"cve": cve},
+                )
+            )
 
         # Look for common vulnerability keywords
         vuln_keywords = [
@@ -439,13 +419,15 @@ class OutputParser:
         output_lower = output.lower()
         for keyword, severity, vuln_type in vuln_keywords:
             if keyword.lower() in output_lower:
-                findings.append(Finding(
-                    type="vuln",
-                    value=keyword,
-                    description=f"Potential vulnerability: {keyword}",
-                    severity=severity,
-                    metadata={"vuln_type": vuln_type},
-                ))
+                findings.append(
+                    Finding(
+                        type="vuln",
+                        value=keyword,
+                        description=f"Potential vulnerability: {keyword}",
+                        severity=severity,
+                        metadata={"vuln_type": vuln_type},
+                    )
+                )
 
         return findings
 
@@ -459,12 +441,14 @@ class OutputParser:
             cve = match.group(0).upper()
             if cve not in cves_found:
                 cves_found.add(cve)
-                findings.append(Finding(
-                    type="vuln",
-                    value=cve,
-                    description=f"CVE reference: {cve}",
-                    severity="medium",
-                ))
+                findings.append(
+                    Finding(
+                        type="vuln",
+                        value=cve,
+                        description=f"CVE reference: {cve}",
+                        severity="medium",
+                    )
+                )
 
         # Extract emails
         emails_found = set()
@@ -472,11 +456,13 @@ class OutputParser:
             email = match.group(0)
             if email not in emails_found:
                 emails_found.add(email)
-                findings.append(Finding(
-                    type="info",
-                    value=email,
-                    description=f"Email discovered: {email}",
-                ))
+                findings.append(
+                    Finding(
+                        type="info",
+                        value=email,
+                        description=f"Email discovered: {email}",
+                    )
+                )
 
         return findings
 
@@ -517,12 +503,19 @@ Extract findings in this JSON format:
 Only return valid JSON array. If no findings, return []."""
 
         try:
-            response = self.llm.invoke([
-                {"role": "system", "content": "You are a security findings parser. Return only valid JSON."},
-                {"role": "user", "content": prompt},
-            ], max_tokens=1000)
+            response = self.llm.invoke(
+                [
+                    {
+                        "role": "system",
+                        "content": "You are a security findings parser. Return only valid JSON.",
+                    },
+                    {"role": "user", "content": prompt},
+                ],
+                max_tokens=1000,
+            )
 
             import json
+
             content = response.content.strip()
             if content.startswith("```"):
                 content = content.split("```")[1]

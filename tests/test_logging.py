@@ -5,18 +5,19 @@ Unit Tests for AIPT v2 Logging Module
 Tests for utils/logging.py - Structured logging with secret redaction.
 """
 
-import pytest
 import logging
-from unittest.mock import patch, Mock
+from unittest.mock import Mock, patch
+
+import pytest
 
 from aipt_v2.utils.logging import (
-    setup_logging,
-    get_logger,
-    create_logger,
-    LoggerAdapter,
-    _should_redact,
-    _redact_value,
     SECRET_PATTERNS,
+    LoggerAdapter,
+    _redact_value,
+    _should_redact,
+    create_logger,
+    get_logger,
+    setup_logging,
 )
 
 
@@ -219,6 +220,7 @@ class TestSecretRedactionIntegration:
         """Test that values with sk- prefix are detected."""
         # sk- prefix in value (like Anthropic keys)
         import re
+
         pattern = re.compile("|".join(SECRET_PATTERNS), re.IGNORECASE)
 
         assert pattern.search("sk-ant-api-key-12345") is not None

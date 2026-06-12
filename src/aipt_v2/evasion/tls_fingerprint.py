@@ -14,15 +14,16 @@ Usage:
     context = tls.get_randomized_context()
 """
 
-import ssl
 import random
+import ssl
 from dataclasses import dataclass
-from typing import List, Optional, Dict, Any
+from typing import Dict, List
 
 
 @dataclass
 class TLSProfile:
     """TLS connection profile."""
+
     name: str
     ciphers: List[str]
     protocols: List[str]
@@ -104,28 +105,28 @@ class TLSFingerprint:
                 ciphers=self.BROWSER_PROFILES["chrome"],
                 protocols=["TLSv1.2", "TLSv1.3"],
                 extensions=["server_name", "ec_point_formats", "supported_groups"],
-                alpn=["h2", "http/1.1"]
+                alpn=["h2", "http/1.1"],
             ),
             "firefox": TLSProfile(
                 name="Firefox",
                 ciphers=self.BROWSER_PROFILES["firefox"],
                 protocols=["TLSv1.2", "TLSv1.3"],
                 extensions=["server_name", "supported_groups", "ec_point_formats"],
-                alpn=["h2", "http/1.1"]
+                alpn=["h2", "http/1.1"],
             ),
             "safari": TLSProfile(
                 name="Safari",
                 ciphers=self.BROWSER_PROFILES["safari"],
                 protocols=["TLSv1.2", "TLSv1.3"],
                 extensions=["server_name", "ec_point_formats", "supported_groups"],
-                alpn=["h2", "http/1.1"]
+                alpn=["h2", "http/1.1"],
             ),
             "random": TLSProfile(
                 name="Random",
                 ciphers=self.CIPHER_SUITES.copy(),
                 protocols=["TLSv1.2", "TLSv1.3"],
                 extensions=["server_name"],
-                alpn=["h2", "http/1.1"]
+                alpn=["h2", "http/1.1"],
             ),
         }
 
@@ -173,11 +174,7 @@ class TLSFingerprint:
             alpn.reverse()
         return alpn
 
-    def create_ssl_context(
-        self,
-        profile: str = "random",
-        verify: bool = True
-    ) -> ssl.SSLContext:
+    def create_ssl_context(self, profile: str = "random", verify: bool = True) -> ssl.SSLContext:
         """
         Create SSL context with randomized fingerprint.
 
